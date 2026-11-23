@@ -3,7 +3,7 @@
  *
  * Covers:
  * - loadFile: normal file loading path
- * - loadFile: workspace (in-memory) buffers
+ * - loadFile: project folder (in-memory) buffers
  * - loadFile: error handling
  * - loadFile: cursor/scroll position restoration
  * - loadFile: git diff fetching after load
@@ -12,7 +12,7 @@
  * - handleSave: normal save path
  * - handleSave: format-on-save handling
  * - handleSave: error handling
- * - handleSave: workspace buffers are skipped
+ * - handleSave: project folder buffers are skipped
  * - handleSave: re-fetch diagnostics and diff after save
  * - Return type verification
  */
@@ -55,7 +55,7 @@ const mockSaveBuffer = vi.fn();
 const mockSetBufferOriginalContent = vi.fn();
 const mockSetBufferExternallyModified = vi.fn();
 const mockClearBufferExternallyModified = vi.fn();
-const mockOpenWorkspaceBuffer = vi.fn();
+const mockOpenProjectFolderBuffer = vi.fn();
 
 vi.mock('../contexts/EditorManagerContext', () => ({
   useEditorManager: vi.fn(() => ({
@@ -64,7 +64,7 @@ vi.mock('../contexts/EditorManagerContext', () => ({
     setBufferOriginalContent: (...a) => mockSetBufferOriginalContent(...a),
     setBufferExternallyModified: (...a) => mockSetBufferExternallyModified(...a),
     clearBufferExternallyModified: (...a) => mockClearBufferExternallyModified(...a),
-    openWorkspaceBuffer: (...a) => mockOpenWorkspaceBuffer(...a),
+    openWorkspaceBuffer: (...a) => mockOpenProjectFolderBuffer(...a),
   })),
 }));
 
@@ -388,7 +388,7 @@ describe('loadFile — normal file loading', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Tests: loadFile — workspace (in-memory) buffers
+// Tests: loadFile — project folder (in-memory) buffers
 // ---------------------------------------------------------------------------
 
 describe('loadFile — workspace buffers', () => {

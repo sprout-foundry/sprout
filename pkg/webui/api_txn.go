@@ -21,7 +21,7 @@ import (
 //
 // The method IS the security boundary (see authTokenMiddleware): GET/HEAD is
 // status-only and reachable unauthenticated; the three POSTs mutate the
-// workspace and sit behind the Bearer boundary whenever SPROUT_AUTH_TOKEN is
+// project folder and sit behind the Bearer boundary whenever SPROUT_AUTH_TOKEN is
 // configured. With no token configured (localhost/dev) the middleware is a
 // no-op and everything stays open — intended.
 //
@@ -31,7 +31,7 @@ import (
 // 400 for a body that is not the contract at all, 413 for an oversized one,
 // 500 only for catastrophic failure.
 
-// handleAPITxnPush applies a push manifest to the request's workspace.
+// handleAPITxnPush applies a push manifest to the request's project folder.
 func (ws *ReactWebServer) handleAPITxnPush(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodPost) {
 		return
@@ -46,7 +46,7 @@ func (ws *ReactWebServer) handleAPITxnPush(w http.ResponseWriter, r *http.Reques
 	// cancelling r.Context() would abort ApplyDelta between files and leave
 	// the tree in a state no later phase can reason about. Detached from
 	// the request cancellation, the operation is bounded by its own caps.
-	result, err := txn.ApplyDelta(context.WithoutCancel(r.Context()), ws.getWorkspaceRootForRequest(r), manifest)
+	result, err := txn.ApplyDelta(context.WithoutCancel(r.Context()), ws.getProjectFolderForRequest(r), manifest)
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "txn_push_failed", err.Error())
 		return
@@ -54,7 +54,7 @@ func (ws *ReactWebServer) handleAPITxnPush(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, result)
 }
 
-// handleAPITxnRun executes a command in the request's workspace.
+// handleAPITxnRun executes a command in the request's project folder.
 func (ws *ReactWebServer) handleAPITxnRun(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodPost) {
 		return
@@ -69,7 +69,7 @@ func (ws *ReactWebServer) handleAPITxnRun(w http.ResponseWriter, r *http.Request
 	// runs in its own process group and its own timeout, and neither may be
 	// short-circuited by a browser tab closing mid-build. The timeout is
 	// the only canceller.
-	result, err := txn.RunCommand(context.WithoutCancel(r.Context()), ws.getWorkspaceRootForRequest(r), request)
+	result, err := txn.RunCommand(context.WithoutCancel(r.Context()), ws.getProjectFolderForRequest(r), request)
 	if err != nil {
 		// An unusable workdir is the one thing that is not reportable in
 		// the run shape — there is no subprocess to speak of.
@@ -87,7 +87,7 @@ func (ws *ReactWebServer) handleAPITxnStatus(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	status, err := txn.BuildStatus(r.Context(), ws.getWorkspaceRootForRequest(r))
+	status, err := txn.BuildStatus(r.Context(), ws.getProjectFolderForRequest(r))
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "txn_status_failed", err.Error())
 		return
@@ -95,7 +95,7 @@ func (ws *ReactWebServer) handleAPITxnStatus(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, status)
 }
 
-// handleAPITxnPull builds the pull manifest for the request's workspace.
+// handleAPITxnPull builds the pull manifest for the request's project folder.
 func (ws *ReactWebServer) handleAPITxnPull(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodPost) {
 		return
@@ -103,7 +103,7 @@ func (ws *ReactWebServer) handleAPITxnPull(w http.ResponseWriter, r *http.Reques
 
 	// Read-only against the tree, but the response body is assembled from
 	// many file reads; a hangup halfway must not tear the encoding down.
-	manifest, err := txn.BuildPull(context.WithoutCancel(r.Context()), ws.getWorkspaceRootForRequest(r))
+	manifest, err := txn.BuildPull(context.WithoutCancel(r.Context()), ws.getProjectFolderForRequest(r))
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "txn_pull_failed", err.Error())
 		return

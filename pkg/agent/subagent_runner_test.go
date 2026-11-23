@@ -42,7 +42,7 @@ func TestSubagentRunner_NewSubagentRunner(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: agent.configManager,
-		WorkspaceRoot: agent.workspaceRoot,
+		ProjectFolder: agent.projectFolder,
 	}
 
 	runner := NewSubagentRunner(agent, shared)
@@ -66,7 +66,7 @@ func TestSubagentRunner_RunWithNilConfigManager(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: nil, // nil config manager
-		WorkspaceRoot: agent.workspaceRoot,
+		ProjectFolder: agent.projectFolder,
 	}
 
 	runner := NewSubagentRunner(agent, shared)
@@ -91,7 +91,7 @@ func TestSubagentRunner_GetActiveSubagentsEmpty(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: agent.configManager,
-		WorkspaceRoot: agent.workspaceRoot,
+		ProjectFolder: agent.projectFolder,
 	}
 
 	runner := NewSubagentRunner(agent, shared)
@@ -109,7 +109,7 @@ func TestSubagentRunner_CancelSubagentNotFound(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: agent.configManager,
-		WorkspaceRoot: agent.workspaceRoot,
+		ProjectFolder: agent.projectFolder,
 	}
 
 	runner := NewSubagentRunner(agent, shared)
@@ -127,7 +127,7 @@ func TestSubagentRunner_CancelAll_NoOp(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: agent.configManager,
-		WorkspaceRoot: agent.workspaceRoot,
+		ProjectFolder: agent.projectFolder,
 	}
 
 	runner := NewSubagentRunner(agent, shared)
@@ -143,7 +143,7 @@ func TestSubagentRunner_RunParallelEmpty(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: agent.configManager,
-		WorkspaceRoot: agent.workspaceRoot,
+		ProjectFolder: agent.projectFolder,
 	}
 
 	runner := NewSubagentRunner(agent, shared)
@@ -168,7 +168,7 @@ func TestSubagentRunner_RunParallel_ReturnsCorrectCount(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: nil, // causes createSubagent to fail
-		WorkspaceRoot: agent.workspaceRoot,
+		ProjectFolder: agent.projectFolder,
 	}
 
 	runner := NewSubagentRunner(agent, shared)
@@ -209,7 +209,7 @@ func TestSubagentRunner_Run_Timeout(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: agent.configManager,
-		WorkspaceRoot: agent.workspaceRoot,
+		ProjectFolder: agent.projectFolder,
 	}
 
 	runner := NewSubagentRunner(agent, shared)
@@ -668,7 +668,7 @@ func TestSubagentRunner_PrefixFormat_SingleSubagent(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: nil, // Nil config so subagent creation fails quickly
-		WorkspaceRoot: agent.workspaceRoot,
+		ProjectFolder: agent.projectFolder,
 	}
 
 	runner := NewSubagentRunner(agent, shared)
@@ -710,7 +710,7 @@ func TestSubagentRunner_PrefixFormat_ParallelTask(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: nil, // Nil config so subagent creation fails quickly
-		WorkspaceRoot: agent.workspaceRoot,
+		ProjectFolder: agent.projectFolder,
 	}
 
 	runner := NewSubagentRunner(agent, shared)
@@ -956,7 +956,7 @@ func TestSubagentRunner_OutputRouterSet(t *testing.T) {
 		EventBus:      testEventBus,
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: nil, // Causes creation to fail, but we verify the pattern
-		WorkspaceRoot: agent.workspaceRoot,
+		ProjectFolder: agent.projectFolder,
 	}
 
 	runner := NewSubagentRunner(agent, shared)
@@ -986,7 +986,7 @@ func TestSubagentRunner_OrderPreservedUnderBatching(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: nil, // causes subagent creation to fail, so all results will have errors
-		WorkspaceRoot: agent.workspaceRoot,
+		ProjectFolder: agent.projectFolder,
 	}
 
 	runner := NewSubagentRunner(agent, shared)
@@ -1074,7 +1074,7 @@ func TestSubagentRunner_publishLifecycleEvent_WritesToRunlog(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: nil, // causes createSubagent to fail quickly
-		WorkspaceRoot: agent.workspaceRoot,
+		ProjectFolder: agent.projectFolder,
 	}
 
 	runner := NewSubagentRunner(agent, shared)
@@ -1284,7 +1284,7 @@ func TestCreateSubagent_FallsBackToProviderStringForUnknownProviders(t *testing.
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	runner := NewSubagentRunner(parent, shared)
 
@@ -1316,7 +1316,7 @@ func TestCreateSubagent_StampsDepthAndPersonaIntoEventMetadata(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	runner := NewSubagentRunner(parent, shared)
 
@@ -1349,7 +1349,7 @@ func TestCreateSubagent_GrandchildDepthIsTwo(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 
 	// Spawn child (depth 1)
@@ -1391,7 +1391,7 @@ func TestCreateSubagent_PreservesParentMetadata(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 
 	subAgent, err := NewSubagentRunner(parent, shared).createSubagent(SubagentOptions{Persona: "coder"}, context.Background())
@@ -1425,7 +1425,7 @@ func TestCreateSubagent_SharesClarificationManager(t *testing.T) {
 		EventBus:      parent.eventBus,
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 
 	runner := NewSubagentRunner(parent, shared)
@@ -1464,7 +1464,7 @@ func TestCreateSubagent_InterruptCtxDerivedFromParent(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	runner := NewSubagentRunner(parent, shared)
 
@@ -1513,7 +1513,7 @@ func TestCreateSubagent_DefaultMaxIterationsBounded(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	runner := NewSubagentRunner(parent, shared)
 
@@ -1548,7 +1548,7 @@ func TestResolveSubagentTimeout(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	runner := NewSubagentRunner(parent, shared)
 
@@ -1594,7 +1594,7 @@ func TestResolveSubagentTimeoutEnvOverride(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	runner := NewSubagentRunner(parent, shared)
 

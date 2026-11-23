@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { getWebUIClientId, persistTabWorkspacePath, getTabWorkspacePath } from './clientSession';
+import { getWebUIClientId, persistTabProjectFolderPath, getTabProjectFolderPath } from './clientSession';
 
 // Mock window with isolated storage per "tab"
 function createMockWindow(sessionStore: Record<string, string>, localStore: Record<string, string>) {
@@ -124,12 +124,12 @@ describe('clientSession tab isolation', () => {
     const win = createMockWindow(session, local);
     Object.defineProperty(global, 'window', { value: win, writable: true });
 
-    expect(getTabWorkspacePath()).toBe('');
+    expect(getTabProjectFolderPath()).toBe('');
 
-    persistTabWorkspacePath('/home/user/project-a');
+    persistTabProjectFolderPath('/home/user/project-a');
     expect(win.localStorage.setItem).toHaveBeenCalledWith('sprout.workspaceTabPath', '/home/user/project-a');
 
-    const retrieved = getTabWorkspacePath();
+    const retrieved = getTabProjectFolderPath();
     expect(retrieved).toBe('/home/user/project-a');
   });
 
@@ -139,7 +139,7 @@ describe('clientSession tab isolation', () => {
     const win = createMockWindow(session, local);
     Object.defineProperty(global, 'window', { value: win, writable: true });
 
-    persistTabWorkspacePath('');
+    persistTabProjectFolderPath('');
     expect(win.localStorage.setItem).not.toHaveBeenCalled();
   });
 
@@ -204,16 +204,16 @@ describe('clientSession tab isolation', () => {
     const winA = createMockWindow(sessionA, sharedLocal);
     Object.defineProperty(global, 'window', { value: winA, writable: true });
     getWebUIClientId(); // assigns window.name / claim
-    persistTabWorkspacePath('/home/user/project-a');
-    expect(getTabWorkspacePath()).toBe('/home/user/project-a');
+    persistTabProjectFolderPath('/home/user/project-a');
+    expect(getTabProjectFolderPath()).toBe('/home/user/project-a');
 
     // Window B — same origin (shared localStorage), different browsing
-    // context. It must not read A's workspace path.
+    // context. It must not read A's project folder path.
     const sessionB: Record<string, string> = {};
     const winB = createMockWindow(sessionB, sharedLocal);
     Object.defineProperty(global, 'window', { value: winB, writable: true });
     getWebUIClientId();
-    expect(getTabWorkspacePath()).toBe('');
+    expect(getTabProjectFolderPath()).toBe('');
   });
 });
 

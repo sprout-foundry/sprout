@@ -1,10 +1,10 @@
 /**
- * gitFs — isomorphic-git filesystem adapter over the workspaceFs seam.
+ * gitFs — isomorphic-git filesystem adapter over the projectFolderFs seam.
  *
  * isomorphic-git takes a POSIX-ish fs object (readFile, writeFile, unlink,
  * readdir, mkdir, rmdir, stat, lstat, symlink…). Implementing that over
  * the seam means clone/pull/push/commit run DIRECTLY against the active
- * workspace — whatever backend is live (native bridge on iOS/Android,
+ * project folder — whatever backend is live (native bridge on iOS/Android,
  * REST on desktop, memory in tests) — with no lightning-fs sidecar and no
  * export/import fan-out afterwards.
  *
@@ -18,7 +18,7 @@
  * keeping the ~3k-object clone from becoming ~3k bridge messages.
  */
 
-import type { WorkspaceFs, WriteEntry } from './types';
+import type { ProjectFolderFs, WriteEntry } from './types';
 import { normalizeFsPath } from './types';
 
 /** Stats shape isomorphic-git expects (subset of node:fs Stats). */
@@ -52,7 +52,7 @@ export interface GitFs {
 
 const SEAM_ENCODING = 'utf8';
 
-export function createGitFs(fs: WorkspaceFs): GitFs {
+export function createGitFs(fs: ProjectFolderFs): GitFs {
   // ── Write coalescing ────────────────────────────────────────────────
   // isomorphic-git writes loose objects one at a time during clone
   // (objects/, packs, index…). Coalesce a bounded window of consecutive

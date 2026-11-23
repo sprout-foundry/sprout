@@ -93,7 +93,7 @@ export function useSecurityHandlers({
       // ask_user response must be delivered to the in-process
       // AskUserManager via the wasm-local endpoint (no backend is
       // listening for the WebSocket event). A daemon — local, or a hosted
-      // workspace's reached through the host — takes it over the socket.
+      // project folder's reached through the host — takes it over the socket.
       if (inBrowserAgent) {
         clientFetch('/api/ask-user/response', {
           method: 'POST',

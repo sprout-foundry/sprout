@@ -19,7 +19,7 @@ type gitFixReviewJob struct {
 	ID            string
 	SessionID     string
 	ClientID      string
-	WorkspaceRoot string
+	ProjectFolder string
 	Status        string
 	Logs          []string
 	Result        string
@@ -73,14 +73,14 @@ func findGitRoot(dir string) string {
 	return dir
 }
 
-func (ws *ReactWebServer) getGitStatusForWorkspace(workspaceRoot string) (*GitStatus, error) {
+func (ws *ReactWebServer) getGitStatusForProjectFolder(projectFolder string) (*GitStatus, error) {
 	// Walk up the directory tree to find the nearest git repo, matching git's
-	// own behavior. The workspace root may be the user's home dir or a parent
+	// own behavior. The project folder may be the user's home dir or a parent
 	// of the actual project, so we need to locate the repo first.
-	gitRoot := findGitRoot(workspaceRoot)
+	gitRoot := findGitRoot(projectFolder)
 
 	// Check if we're in a git repository
-	cmd := ws.gitCommandForWorkspace(gitRoot, "rev-parse", "--git-dir")
+	cmd := ws.gitCommandForProjectFolder(gitRoot, "rev-parse", "--git-dir")
 	if err := cmd.Run(); err != nil {
 		// Not in a git repository
 		return &GitStatus{
@@ -97,14 +97,14 @@ func (ws *ReactWebServer) getGitStatusForWorkspace(workspaceRoot string) (*GitSt
 	status := &GitStatus{InGitRepo: true}
 
 	// Get current branch
-	cmd = ws.gitCommandForWorkspace(gitRoot, "branch", "--show-current")
+	cmd = ws.gitCommandForProjectFolder(gitRoot, "branch", "--show-current")
 	output, err := cmd.Output()
 	if err == nil {
 		status.Branch = strings.TrimSpace(string(output))
 	}
 
 	// Get ahead/behind info
-	cmd = ws.gitCommandForWorkspace(gitRoot, "rev-list", "--count", "--left-right", "@{u}...HEAD")
+	cmd = ws.gitCommandForProjectFolder(gitRoot, "rev-list", "--count", "--left-right", "@{u}...HEAD")
 	output, err = cmd.Output()
 	if err == nil {
 		parts := strings.Fields(string(output))
@@ -116,7 +116,7 @@ func (ws *ReactWebServer) getGitStatusForWorkspace(workspaceRoot string) (*GitSt
 
 	// Get staged changes.
 	// Use tab-separated parsing so file names with spaces are preserved.
-	cmd = ws.gitCommandForWorkspace(gitRoot, "diff", "--name-status", "--cached")
+	cmd = ws.gitCommandForProjectFolder(gitRoot, "diff", "--name-status", "--cached")
 	output, err = cmd.Output()
 	if err == nil {
 		allStaged := []GitFile{}
@@ -139,7 +139,7 @@ func (ws *ReactWebServer) getGitStatusForWorkspace(workspaceRoot string) (*GitSt
 
 	// Get unstaged changes.
 	// Use tab-separated parsing so file names with spaces are preserved.
-	cmd = ws.gitCommandForWorkspace(gitRoot, "diff", "--name-status")
+	cmd = ws.gitCommandForProjectFolder(gitRoot, "diff", "--name-status")
 	output, err = cmd.Output()
 	if err == nil {
 		allModified := []GitFile{}
@@ -195,7 +195,7 @@ func (ws *ReactWebServer) getGitStatusForWorkspace(workspaceRoot string) (*GitSt
 	}
 
 	// Get untracked files
-	cmd = ws.gitCommandForWorkspace(gitRoot, "ls-files", "--others", "--exclude-standard")
+	cmd = ws.gitCommandForProjectFolder(gitRoot, "ls-files", "--others", "--exclude-standard")
 	output, err = cmd.Output()
 	if err == nil {
 		allUntracked := []GitFile{}
@@ -234,10 +234,10 @@ func getAllGitFiles(status *GitStatus) []GitFile {
 // Maximum number of files to return per section in git status to prevent UI hangs
 const maxFilesPerSection = 500
 
-func (ws *ReactWebServer) gitCommandForWorkspace(workspaceRoot string, args ...string) *exec.Cmd {
+func (ws *ReactWebServer) gitCommandForProjectFolder(projectFolder string, args ...string) *exec.Cmd {
 	cmd := exec.Command("git", args...)
-	if strings.TrimSpace(workspaceRoot) != "" {
-		cmd.Dir = workspaceRoot
+	if strings.TrimSpace(projectFolder) != "" {
+		cmd.Dir = projectFolder
 	}
 	return cmd
 }
@@ -276,12 +276,12 @@ func normalizeGitPath(path string) string {
 	return filepath.ToSlash(cleaned)
 }
 
-// makeGitRelativePath converts absolute paths to workspace-relative paths
+// makeGitRelativePath converts absolute paths to project-folder-relative paths
 // for git operations. If the path is already relative or outside the
-// workspace, it is returned unchanged.
-func makeGitRelativePath(path, workspaceRoot string) string {
+// project folder, it is returned unchanged.
+func makeGitRelativePath(path, projectFolder string) string {
 	if filepath.IsAbs(path) {
-		rel, err := filepath.Rel(workspaceRoot, path)
+		rel, err := filepath.Rel(projectFolder, path)
 		if err == nil && !strings.HasPrefix(rel, "..") {
 			return filepath.ToSlash(rel)
 		}
@@ -311,8 +311,8 @@ func containsPath(files []GitFile, path string) bool {
 	return false
 }
 
-func (ws *ReactWebServer) gitDiffAllowExitOneForWorkspace(workspaceRoot string, args ...string) (string, error) {
-	cmd := ws.gitCommandForWorkspace(workspaceRoot, args...)
+func (ws *ReactWebServer) gitDiffAllowExitOneForProjectFolder(projectFolder string, args ...string) (string, error) {
+	cmd := ws.gitCommandForProjectFolder(projectFolder, args...)
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		return string(output), nil
@@ -334,8 +334,8 @@ func truncateDiffOutput(diff string, maxBytes int) string {
 	return diff[:maxBytes] + "\n\n... [diff truncated]"
 }
 
-func gitOutputStringForWorkspace(ws *ReactWebServer, workspaceRoot string, args ...string) (string, error) {
-	cmd := ws.gitCommandForWorkspace(workspaceRoot, args...)
+func gitOutputStringForProjectFolder(ws *ReactWebServer, projectFolder string, args ...string) (string, error) {
+	cmd := ws.gitCommandForProjectFolder(projectFolder, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("git: %w: %s", err, strings.TrimSpace(string(output)))

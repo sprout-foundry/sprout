@@ -1,7 +1,7 @@
 /**
- * workspaceFs — THE filesystem seam (Track R).
+ * projectFolderFs — THE filesystem seam (Track R).
  *
- * One typed contract for every workspace filesystem operation the webui
+ * One typed contract for every project folder filesystem operation the webui
  * performs, with three interchangeable backends:
  *
  *   - `nativeBridgeFs`  — studio shells (iOS/Android) via the `files` bridge
@@ -14,7 +14,7 @@
  * isomorphic-git adapter, zip import/export, agent file tools) must not
  * each invent their own fs-shaped plumbing. They program against
  * `WorkspaceFs`, pick a backend once at startup, and the same code runs
- * against the native workspace, the daemon API, or a test double.
+ * against the native project folder, the daemon API, or a test double.
  *
  * Conventions (mirroring bridge-protocol.md §10.1):
  *   - Paths are workspace-relative POSIX (`src/lib/a.ts`, `repos/…`),
@@ -58,13 +58,13 @@ export const WRITE_BATCH_CAP = 5000;
 /**
  * The seam. Every method resolves; nothing throws for expected failures.
  */
-export interface WorkspaceFs {
+export interface ProjectFolderFs {
   /** Read one file. UTF-8 → `content`, binary → `contentBase64`. */
   read(path: string): Promise<ReadResult>;
   /** Write one file, creating parent dirs. */
   write(path: string, payload: string | WriteEntry): Promise<FsOk>;
   /**
-   * List workspace files under `path` (default: workspace root).
+   * List project folder files under `path` (default: project folder).
    * `maxDepth` is a hint; backends may return MORE depth than asked but
    * never less for the native backend (it lists root deep and filters).
    */
@@ -75,14 +75,14 @@ export interface WorkspaceFs {
   mkdir(path: string): Promise<FsOk>;
   /** Delete a file or directory (recursive). */
   remove(path: string): Promise<FsOk>;
-  /** Rename/move within the workspace. Creates `to`'s missing parents. */
+  /** Rename/move within the project folder. Creates `to`'s missing parents. */
   rename(from: string, to: string): Promise<FsOk>;
   /** Write many files, continuing past per-entry failures. */
   writeBatch(files: WriteEntry[]): Promise<BatchResult>;
 }
 
 /** Structural check so features can assert they got a usable backend. */
-export function isWorkspaceFs(obj: unknown): obj is WorkspaceFs {
+export function isProjectFolderFs(obj: unknown): obj is ProjectFolderFs {
   if (!obj || typeof obj !== 'object') return false;
   const c = obj as Record<string, unknown>;
   return (

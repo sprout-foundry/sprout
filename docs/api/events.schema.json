@@ -382,10 +382,6 @@
         "request_id": {
           "type": "string"
         },
-        "secret": {
-          "type": "boolean",
-          "description": "True when the answer is a credential (masked input, redacted value); false for an ordinary confirmation or value."
-        },
         "status": {
           "type": "string"
         },
@@ -618,7 +614,7 @@
       "type": "object"
     },
     "PasswordRequestData": {
-      "description": "Payload for a password_request event. Covers any interactive prompt a running shell command is blocked on. Password responses are never included.",
+      "description": "Payload for a password_request event. Password responses are never included.",
       "properties": {
         "chat_id": {
           "type": "string"
@@ -631,6 +627,9 @@
         },
         "request_id": {
           "type": "string"
+        },
+        "secret": {
+          "type": "boolean"
         },
         "status": {
           "type": "string"
@@ -1332,13 +1331,13 @@
         "daemon_root": {
           "type": "string"
         },
-        "previous_workspace_root": {
+        "previous_project_folder": {
+          "type": "string"
+        },
+        "project_folder": {
           "type": "string"
         },
         "source": {
-          "type": "string"
-        },
-        "workspace_root": {
           "type": "string"
         }
       },
@@ -1381,7 +1380,7 @@
       "type": "object"
     },
     "WorkspaceStoppingData": {
-      "description": "A warning that the hosting platform is about to stop the workspace.",
+      "description": "A warning that the hosting platform is about to stop the project folder.",
       "properties": {
         "at": {
           "type": "string"
@@ -1452,6 +1451,9 @@
     "delegated_task_outcome": {
       "$ref": "#/$defs/DelegatedTaskOutcomeData"
     },
+    "dev_space_stopping": {
+      "$ref": "#/$defs/WorkspaceStoppingData"
+    },
     "edit_approval_request": {
       "$ref": "#/$defs/EditApprovalRequestData"
     },
@@ -1493,6 +1495,12 @@
     },
     "progress_verification": {
       "$ref": "#/$defs/ProgressVerificationData"
+    },
+    "project_folder_changed": {
+      "$ref": "#/$defs/WorkspaceChangedData"
+    },
+    "project_folder_patch": {
+      "$ref": "#/$defs/WorkspacePatchData"
     },
     "provider_no_credential": {
       "$ref": "#/$defs/ProviderNoCredentialData"
@@ -1560,15 +1568,6 @@
     "validation": {
       "additionalProperties": true,
       "type": "object"
-    },
-    "workspace_changed": {
-      "$ref": "#/$defs/WorkspaceChangedData"
-    },
-    "workspace_patch": {
-      "$ref": "#/$defs/WorkspacePatchData"
-    },
-    "workspace_stopping": {
-      "$ref": "#/$defs/WorkspaceStoppingData"
     }
   },
   "x-sprout-generated-by": "packages/events/scripts/generate-events-schema.mjs",

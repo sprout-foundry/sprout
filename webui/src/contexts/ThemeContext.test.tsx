@@ -2,7 +2,7 @@
  * host.7 — the theme follows `host.theme` live.
  *
  * (d) A host-provided `theme.mode` (light/dark) selects the applied mode and
- *     pack; nothing is written to the document (the workspace root applies
+ *     pack; nothing is written to the document (the project folder applies
  *     the theme — see `hostThemeScope.test.tsx`); `'system'` follows the OS
  *     media query; and a host with no theme leaves the localStorage-driven
  *     pack selection intact (regression guard).
@@ -76,7 +76,7 @@ describe('host theme drives the applied mode', () => {
     render(createElement(ThemeProvider as never, null, createElement(Probe)));
 
     // The provider publishes the resolved theme through its context; the
-    // workspace root applies it. `documentElement` belongs to the host in an
+    // project folder applies it. `documentElement` belongs to the host in an
     // embedded page, so neither the pack nor the host's token overrides may
     // land there — and nothing is left behind on unmount.
     expect(document.documentElement.getAttribute('data-theme')).toBeNull();

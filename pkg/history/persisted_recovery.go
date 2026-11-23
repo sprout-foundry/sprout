@@ -48,7 +48,7 @@ type PersistedOriginal struct {
 // at the first recoverable original. fetchAllChanges here would read
 // and base64-decode the ENTIRE store — every file ever changed — to
 // serve one path, which made the WebUI diff fallback noticeably slow on
-// workspaces with a long history.
+// project folders with a long history.
 func FindPersistedOriginal(filename string) (PersistedOriginal, bool, error) {
 	if err := ensureChangesDirs(); err != nil {
 		return PersistedOriginal{}, false, fmt.Errorf("get changes directory: %w", err)

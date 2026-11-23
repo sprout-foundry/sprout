@@ -222,7 +222,7 @@ describe('the web UI consumes the design tokens from the package', () => {
 
   it('declares the package dependency in webui/package.json', () => {
     const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../package.json'), 'utf-8'));
-    // The same `file:` form the sibling internal packages use, so the workspace
+    // The same `file:` form the sibling internal packages use, so the project folder
     // symlink resolves it in dev and the build bundles it.
     expect(pkg.dependencies['@sprout-foundry/design']).toBe('file:../packages/design');
   });

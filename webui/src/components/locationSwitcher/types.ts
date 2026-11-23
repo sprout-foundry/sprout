@@ -9,7 +9,7 @@ export interface LocationSwitcherProps {
   sidebarCollapsed?: boolean;
 }
 
-export interface WorkspaceDirectory {
+export interface ProjectFolderDirectory {
   name: string;
   path: string;
 }
@@ -26,7 +26,7 @@ export interface SSHFailureState {
   logPath?: string;
 }
 
-export interface RemoteWorkspaceContext {
+export interface RemoteProjectFolderContext {
   hostAlias: string;
   sessionKey?: string;
   launcherUrl?: string;

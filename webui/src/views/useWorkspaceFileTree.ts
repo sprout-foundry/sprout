@@ -23,7 +23,12 @@ import { useCallback, useMemo } from 'react';
 import { useOptionalBufferManager } from '../contexts/BufferManagerContext';
 import * as filesApi from '../services/api/filesApi';
 import { clientFetch } from '../services/clientSession';
-import { detectSproutStudio, mapWorkspaceListing, nativeFsGate, workspaceListDepth } from '../services/nativeFs';
+import {
+  detectSproutStudio,
+  mapProjectFolderListing,
+  nativeFsGate,
+  projectFolderListDepth,
+} from '../services/nativeFs';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 
 export interface UseWorkspaceFileTreeOptions {
@@ -64,11 +69,11 @@ interface ApiFileEntry {
  * `path` for adapters (the WASM file bridge) that only send one, stripping a
  * known workspace root when the fallback is absolute.
  */
-function toFileInfo(file: ApiFileEntry, workspaceRoot?: string): FileInfo {
+function toFileInfo(file: ApiFileEntry, projectFolder?: string): FileInfo {
   const isDir = Boolean(file.isDir ?? file.is_dir);
   return {
     name: file.name,
-    path: workspaceRelativePath(file, workspaceRoot),
+    path: projectFolderRelativePath(file, projectFolder),
     size: file.size || 0,
     modified: file.modified ?? file.mod_time ?? 0,
     isDir,
@@ -77,11 +82,11 @@ function toFileInfo(file: ApiFileEntry, workspaceRoot?: string): FileInfo {
   };
 }
 
-function workspaceRelativePath(file: ApiFileEntry, workspaceRoot?: string): string {
+function projectFolderRelativePath(file: ApiFileEntry, projectFolder?: string): string {
   const relative = (file.relative || '').replace(/^\.\//, '').replace(/\/+$/, '');
   if (relative) return relative;
   const raw = (file.path || '').replace(/\\/g, '/');
-  const root = (workspaceRoot || '').replace(/\\/g, '/').replace(/\/+$/, '');
+  const root = (projectFolder || '').replace(/\\/g, '/').replace(/\/+$/, '');
   if (root && raw.startsWith(`${root}/`)) return raw.slice(root.length + 1);
   return raw.replace(/^\.\//, '');
 }
@@ -99,7 +104,7 @@ function compareEntries(a: FileInfo, b: FileInfo): number {
 export async function fetchWorkspaceFiles(
   path: string,
   fetchFn: typeof fetch = clientFetch,
-  workspaceRoot?: string,
+  projectFolder?: string,
 ): Promise<FileInfo[]> {
   // The default build compiles NATIVE_FS_ENABLED to `false`, so the native
   // files channel is a dead branch there.
@@ -108,8 +113,8 @@ export async function fetchWorkspaceFiles(
     if (gate.active) {
       const bridge = detectSproutStudio();
       if (bridge) {
-        const result = await bridge.listWorkspace(workspaceListDepth(path));
-        return mapWorkspaceListing(result, path);
+        const result = await bridge.listWorkspace(projectFolderListDepth(path));
+        return mapProjectFolderListing(result, path);
       }
     }
     // Gate active but bridge vanished (or failed): degrade to the client path.
@@ -118,7 +123,7 @@ export async function fetchWorkspaceFiles(
   if (!response.ok) throw new Error(`Failed to fetch files: ${response.statusText}`);
   const data = await response.json();
   if (data.message !== 'success') throw new Error(data.message);
-  return ((data.files || []) as ApiFileEntry[]).map((f) => toFileInfo(f, workspaceRoot)).sort(compareEntries);
+  return ((data.files || []) as ApiFileEntry[]).map((f) => toFileInfo(f, projectFolder)).sort(compareEntries);
 }
 
 function childPath(parentPath: string, name: string): string {
@@ -127,12 +132,12 @@ function childPath(parentPath: string, name: string): string {
 
 /** The `FileTreeProps` for a tree backed by the workspace's file API. */
 export function useWorkspaceFileTree(options: UseWorkspaceFileTreeOptions = {}): FileTreeProps {
-  const { onFileSelect, selectedFile, rootPath = '.', workspaceRoot, fetchFn = clientFetch } = options;
+  const { onFileSelect, selectedFile, rootPath = '.', workspaceRoot: projectFolder, fetchFn = clientFetch } = options;
   const bufferManager = useOptionalBufferManager();
 
   const onFetchFiles = useCallback(
-    (path: string) => fetchWorkspaceFiles(path, fetchFn, workspaceRoot),
-    [fetchFn, workspaceRoot],
+    (path: string) => fetchWorkspaceFiles(path, fetchFn, projectFolder),
+    [fetchFn, projectFolder],
   );
   const onCreateFile = useCallback(
     async (parentPath: string, name: string) => {
@@ -167,7 +172,7 @@ export function useWorkspaceFileTree(options: UseWorkspaceFileTreeOptions = {}):
       onFileSelect: handleFileSelect,
       selectedFile,
       rootPath,
-      workspaceRoot,
+      workspaceRoot: projectFolder,
       onFetchFiles,
       onCreateFile,
       onCreateFolder,
@@ -178,7 +183,7 @@ export function useWorkspaceFileTree(options: UseWorkspaceFileTreeOptions = {}):
       handleFileSelect,
       selectedFile,
       rootPath,
-      workspaceRoot,
+      projectFolder,
       onFetchFiles,
       onCreateFile,
       onCreateFolder,

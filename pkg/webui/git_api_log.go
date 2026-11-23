@@ -25,10 +25,10 @@ func (ws *ReactWebServer) handleAPIGitLog(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 
 	// Verify git repo
-	checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir")
+	checkCmd := ws.gitCommandForProjectFolder(projectFolder, "rev-parse", "--git-dir")
 	if err := checkCmd.Run(); err != nil {
 		writeJSONErr(w, http.StatusBadRequest, "not_a_git_repository", "Not a git repository")
 		return
@@ -65,7 +65,7 @@ func (ws *ReactWebServer) handleAPIGitLog(w http.ResponseWriter, r *http.Request
 		fmt.Sprintf("--format=%s", format),
 	}
 
-	cmd := ws.gitCommandForWorkspace(workspaceRoot, args...)
+	cmd := ws.gitCommandForProjectFolder(projectFolder, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_get_git_log", fmt.Sprintf("Failed to get git log: %v", err))
@@ -102,7 +102,7 @@ func (ws *ReactWebServer) handleAPIGitLog(w http.ResponseWriter, r *http.Request
 	// Get total commit count for pagination — only needed when we received a full page.
 	totalCount := 0
 	if len(commits) == limit {
-		countCmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-list", "--count", "HEAD")
+		countCmd := ws.gitCommandForProjectFolder(projectFolder, "rev-list", "--count", "HEAD")
 		countOutput, countErr := countCmd.Output()
 		if countErr == nil {
 			fmt.Sscanf(strings.TrimSpace(string(countOutput)), "%d", &totalCount)
@@ -124,7 +124,7 @@ func (ws *ReactWebServer) handleAPIGitCommitShow(w http.ResponseWriter, r *http.
 		return
 	}
 
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 
 	hash := strings.TrimSpace(r.URL.Query().Get("hash"))
 	if hash == "" {
@@ -133,7 +133,7 @@ func (ws *ReactWebServer) handleAPIGitCommitShow(w http.ResponseWriter, r *http.
 	}
 
 	// Validate that the hash refers to an actual commit.
-	validateCmd := ws.gitCommandForWorkspace(workspaceRoot, "cat-file", "-t", hash)
+	validateCmd := ws.gitCommandForProjectFolder(projectFolder, "cat-file", "-t", hash)
 	if output, err := validateCmd.CombinedOutput(); err != nil {
 		writeJSONErr(w, http.StatusBadRequest, "invalid_commit_hash", fmt.Sprintf("Invalid commit hash: %s", strings.TrimSpace(string(output))))
 		return
@@ -144,7 +144,7 @@ func (ws *ReactWebServer) handleAPIGitCommitShow(w http.ResponseWriter, r *http.
 
 	// Get commit metadata.
 	format := "%H%x00%an%x00%aI%x00%D%x00%s"
-	metaCmd := ws.gitCommandForWorkspace(workspaceRoot, "log", "-1", fmt.Sprintf("--format=%s", format), hash)
+	metaCmd := ws.gitCommandForProjectFolder(projectFolder, "log", "-1", fmt.Sprintf("--format=%s", format), hash)
 	metaOutput, err := metaCmd.CombinedOutput()
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_get_commit_metadata", fmt.Sprintf("Failed to get commit metadata: %v", err))
@@ -164,7 +164,7 @@ func (ws *ReactWebServer) handleAPIGitCommitShow(w http.ResponseWriter, r *http.
 	}
 
 	// Get the diff.
-	showCmd := ws.gitCommandForWorkspace(workspaceRoot, "show", "--format=", "--patch", hash)
+	showCmd := ws.gitCommandForProjectFolder(projectFolder, "show", "--format=", "--patch", hash)
 	showOutput, err := showCmd.CombinedOutput()
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_get_commit_diff", fmt.Sprintf("Failed to get commit diff: %v", err))
@@ -174,7 +174,7 @@ func (ws *ReactWebServer) handleAPIGitCommitShow(w http.ResponseWriter, r *http.
 	diff = truncateDiffOutput(diff, 500000)
 
 	// Get file list with name-status.
-	nameStatusCmd := ws.gitCommandForWorkspace(workspaceRoot, "diff-tree", "--no-commit-id", "--name-status", "-r", hash)
+	nameStatusCmd := ws.gitCommandForProjectFolder(projectFolder, "diff-tree", "--no-commit-id", "--name-status", "-r", hash)
 	nameStatusOutput, err := nameStatusCmd.CombinedOutput()
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_get_commit_files", fmt.Sprintf("Failed to get commit files: %v", err))
@@ -192,7 +192,7 @@ func (ws *ReactWebServer) handleAPIGitCommitShow(w http.ResponseWriter, r *http.
 	}
 
 	// Get stat summary.
-	statCmd := ws.gitCommandForWorkspace(workspaceRoot, "diff-tree", "--no-commit-id", "--stat", "-r", hash)
+	statCmd := ws.gitCommandForProjectFolder(projectFolder, "diff-tree", "--no-commit-id", "--stat", "-r", hash)
 	statOutput, err := statCmd.CombinedOutput()
 	stats := ""
 	if err == nil {
@@ -219,7 +219,7 @@ func (ws *ReactWebServer) handleAPIGitCommitFileDiff(w http.ResponseWriter, r *h
 		return
 	}
 
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 
 	hash := strings.TrimSpace(r.URL.Query().Get("hash"))
 	if hash == "" {
@@ -233,8 +233,8 @@ func (ws *ReactWebServer) handleAPIGitCommitFileDiff(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Convert absolute paths to workspace-relative for git operations.
-	reqPath = makeGitRelativePath(reqPath, workspaceRoot)
+	// Convert absolute paths to project-folder-relative for git operations.
+	reqPath = makeGitRelativePath(reqPath, projectFolder)
 
 	// Path traversal protection. Redundant after normalizeGitPath's Clean
 	// (defense-in-depth) but kept for the raw-input signal it provides.
@@ -244,7 +244,7 @@ func (ws *ReactWebServer) handleAPIGitCommitFileDiff(w http.ResponseWriter, r *h
 	}
 
 	// Validate that the hash refers to an actual commit.
-	validateCmd := ws.gitCommandForWorkspace(workspaceRoot, "cat-file", "-t", hash)
+	validateCmd := ws.gitCommandForProjectFolder(projectFolder, "cat-file", "-t", hash)
 	if output, err := validateCmd.CombinedOutput(); err != nil {
 		writeJSONErr(w, http.StatusBadRequest, "invalid_commit_hash", fmt.Sprintf("Invalid commit hash: %s", strings.TrimSpace(string(output))))
 		return
@@ -254,7 +254,7 @@ func (ws *ReactWebServer) handleAPIGitCommitFileDiff(w http.ResponseWriter, r *h
 	}
 
 	// Get the diff for just the requested file within this commit.
-	showCmd := ws.gitCommandForWorkspace(workspaceRoot, "show", "--format=", "--patch", hash, "--", reqPath)
+	showCmd := ws.gitCommandForProjectFolder(projectFolder, "show", "--format=", "--patch", hash, "--", reqPath)
 	showOutput, err := showCmd.CombinedOutput()
 	if err != nil {
 		errStr := strings.TrimSpace(string(showOutput))
@@ -272,7 +272,7 @@ func (ws *ReactWebServer) handleAPIGitCommitFileDiff(w http.ResponseWriter, r *h
 	// documents — the hunk fragment reconstruction corrupts the view
 	// (disjoint hunks concatenated). old = parent version, new = commit
 	// version; either may be "" (new/deleted file).
-	originalContent, modifiedContent, contentsTruncated := ws.gitCommitFileContents(workspaceRoot, hash, reqPath)
+	originalContent, modifiedContent, contentsTruncated := ws.gitCommitFileContents(projectFolder, hash, reqPath)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":            "success",
@@ -290,11 +290,11 @@ func (ws *ReactWebServer) handleAPIGitCommitFileDiff(w http.ResponseWriter, r *h
 // either side was omitted for exceeding maxDiffFileContentBytes or being
 // binary (NUL-byte heuristic — raw binary bytes would ship as garbage
 // UTF-8 into the editor).
-func (ws *ReactWebServer) gitCommitFileContents(workspaceRoot, hash, reqPath string) (string, string, bool) {
+func (ws *ReactWebServer) gitCommitFileContents(projectFolder, hash, reqPath string) (string, string, bool) {
 	truncated := false
 
 	showSide := func(rev string) string {
-		cmd := ws.gitCommandForWorkspace(workspaceRoot, "show", rev+":"+reqPath)
+		cmd := ws.gitCommandForProjectFolder(projectFolder, "show", rev+":"+reqPath)
 		if cmd == nil {
 			return ""
 		}

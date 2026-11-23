@@ -19,7 +19,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
-func TestMultiWindowClientIsolationForWorkspaceSessionAndModel(t *testing.T) {
+func TestMultiWindowClientIsolationForProjectFolderSessionAndModel(t *testing.T) {
 	isolatedHome := t.TempDir()
 	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
@@ -29,13 +29,13 @@ func TestMultiWindowClientIsolationForWorkspaceSessionAndModel(t *testing.T) {
 	credentials.ResetStorageBackend()
 
 	daemonRoot := t.TempDir()
-	workspaceA := filepath.Join(daemonRoot, "workspace-a")
-	workspaceB := filepath.Join(daemonRoot, "workspace-b")
-	if err := os.MkdirAll(workspaceA, 0o755); err != nil {
-		t.Fatalf("mkdir workspaceA: %v", err)
+	projectFolderA := filepath.Join(daemonRoot, "workspace-a")
+	projectFolderB := filepath.Join(daemonRoot, "workspace-b")
+	if err := os.MkdirAll(projectFolderA, 0o755); err != nil {
+		t.Fatalf("mkdir projectFolderA: %v", err)
 	}
-	if err := os.MkdirAll(workspaceB, 0o755); err != nil {
-		t.Fatalf("mkdir workspaceB: %v", err)
+	if err := os.MkdirAll(projectFolderB, 0o755); err != nil {
+		t.Fatalf("mkdir projectFolderB: %v", err)
 	}
 
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
@@ -43,18 +43,18 @@ func TestMultiWindowClientIsolationForWorkspaceSessionAndModel(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.SetWorkspaceRoot(daemonRoot)
+	ws.SetProjectFolder(daemonRoot)
 	ws.terminalManager = NewTerminalManager(daemonRoot)
 	ws.fileConsents = newFileConsentManager()
 
 	clientA := "window-a"
 	clientB := "window-b"
 
-	if _, err := ws.setClientWorkspaceRoot(clientA, workspaceA); err != nil {
-		t.Fatalf("set clientA workspace: %v", err)
+	if _, err := ws.setClientProjectFolder(clientA, projectFolderA); err != nil {
+		t.Fatalf("set clientA project folder: %v", err)
 	}
-	if _, err := ws.setClientWorkspaceRoot(clientB, workspaceB); err != nil {
-		t.Fatalf("set clientB workspace: %v", err)
+	if _, err := ws.setClientProjectFolder(clientB, projectFolderB); err != nil {
+		t.Fatalf("set clientB project folder: %v", err)
 	}
 
 	agentA, err := ws.getClientAgent(clientA)
@@ -95,27 +95,27 @@ func TestMultiWindowClientIsolationForWorkspaceSessionAndModel(t *testing.T) {
 	ws.setAgentStateForClient(clientA, snapshotA)
 	ws.setAgentStateForClient(clientB, snapshotB)
 
-	assertWorkspace := func(clientID, expected string) {
+	assertProjectFolder := func(clientID, expected string) {
 		t.Helper()
 		// Resolve symlinks on expected to match server behavior (macOS /var → /private/var)
 		if evaled, err := filepath.EvalSymlinks(expected); err == nil {
 			expected = evaled
 		}
-		req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 		req.Header.Set(webClientIDHeader, clientID)
 		rec := httptest.NewRecorder()
-		ws.handleAPIWorkspace(rec, req)
+		ws.handleAPIProjectFolder(rec, req)
 		if rec.Code != http.StatusOK {
-			t.Fatalf("workspace status for %s: %d (%s)", clientID, rec.Code, rec.Body.String())
+			t.Fatalf("project folder status for %s: %d (%s)", clientID, rec.Code, rec.Body.String())
 		}
 		var payload struct {
-			WorkspaceRoot string `json:"workspace_root"`
+			ProjectFolder string `json:"project_folder"`
 		}
 		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-			t.Fatalf("workspace decode for %s: %v", clientID, err)
+			t.Fatalf("project folder decode for %s: %v", clientID, err)
 		}
-		if payload.WorkspaceRoot != expected {
-			t.Fatalf("workspace mismatch for %s: got %q want %q", clientID, payload.WorkspaceRoot, expected)
+		if payload.ProjectFolder != expected {
+			t.Fatalf("project folder mismatch for %s: got %q want %q", clientID, payload.ProjectFolder, expected)
 		}
 	}
 
@@ -163,15 +163,15 @@ func TestMultiWindowClientIsolationForWorkspaceSessionAndModel(t *testing.T) {
 		}
 	}
 
-	assertWorkspace(clientA, workspaceA)
-	assertWorkspace(clientB, workspaceB)
+	assertProjectFolder(clientA, projectFolderA)
+	assertProjectFolder(clientB, projectFolderB)
 	assertProviderModel(clientA, modelA)
 	assertProviderModel(clientB, agentB.GetModel())
 	assertSession(clientA, "session-a")
 	assertSession(clientB, "session-b")
 }
 
-func TestActiveQueryIsolationAllowsOtherWindowWorkspaceSwitch(t *testing.T) {
+func TestActiveQueryIsolationAllowsOtherWindowProjectFolderSwitch(t *testing.T) {
 	daemonRoot := t.TempDir()
 	clientAStart := filepath.Join(daemonRoot, "a-start")
 	clientBStart := filepath.Join(daemonRoot, "b-start")
@@ -188,17 +188,17 @@ func TestActiveQueryIsolationAllowsOtherWindowWorkspaceSwitch(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.SetWorkspaceRoot(daemonRoot)
+	ws.SetProjectFolder(daemonRoot)
 	ws.terminalManager = NewTerminalManager(daemonRoot)
 	ws.fileConsents = newFileConsentManager()
 
 	clientA := "window-a"
 	clientB := "window-b"
-	if _, err := ws.setClientWorkspaceRoot(clientA, clientAStart); err != nil {
-		t.Fatalf("set clientA workspace: %v", err)
+	if _, err := ws.setClientProjectFolder(clientA, clientAStart); err != nil {
+		t.Fatalf("set clientA project folder: %v", err)
 	}
-	if _, err := ws.setClientWorkspaceRoot(clientB, clientBStart); err != nil {
-		t.Fatalf("set clientB workspace: %v", err)
+	if _, err := ws.setClientProjectFolder(clientB, clientBStart); err != nil {
+		t.Fatalf("set clientB project folder: %v", err)
 	}
 
 	// Simulate a running query in client A only.
@@ -206,24 +206,24 @@ func TestActiveQueryIsolationAllowsOtherWindowWorkspaceSwitch(t *testing.T) {
 	ws.activeQueries = 1
 
 	bodyA, _ := json.Marshal(map[string]string{"path": clientATarget})
-	reqA := httptest.NewRequest(http.MethodPost, "/api/workspace", bytes.NewReader(bodyA))
+	reqA := httptest.NewRequest(http.MethodPost, "/api/project-folder", bytes.NewReader(bodyA))
 	reqA.Header.Set(webClientIDHeader, clientA)
 	recA := httptest.NewRecorder()
-	ws.handleAPIWorkspace(recA, reqA)
+	ws.handleAPIProjectFolder(recA, reqA)
 	if recA.Code != http.StatusConflict {
-		t.Fatalf("expected clientA workspace switch to be blocked with 409, got %d: %s", recA.Code, recA.Body.String())
+		t.Fatalf("expected clientA project folder switch to be blocked with 409, got %d: %s", recA.Code, recA.Body.String())
 	}
 
 	bodyB, _ := json.Marshal(map[string]string{"path": clientBTarget})
-	reqB := httptest.NewRequest(http.MethodPost, "/api/workspace", bytes.NewReader(bodyB))
+	reqB := httptest.NewRequest(http.MethodPost, "/api/project-folder", bytes.NewReader(bodyB))
 	reqB.Header.Set(webClientIDHeader, clientB)
 	recB := httptest.NewRecorder()
-	ws.handleAPIWorkspace(recB, reqB)
+	ws.handleAPIProjectFolder(recB, reqB)
 	if recB.Code != http.StatusOK {
-		t.Fatalf("expected clientB workspace switch to succeed, got %d: %s", recB.Code, recB.Body.String())
+		t.Fatalf("expected clientB project folder switch to succeed, got %d: %s", recB.Code, recB.Body.String())
 	}
 
-	// Resolve expected paths for comparison (server resolves symlinks via getWorkspaceRootForRequest)
+	// Resolve expected paths for comparison (server resolves symlinks via getProjectFolderForRequest)
 	evaledClientAStart := clientAStart
 	if evaled, err := filepath.EvalSymlinks(clientAStart); err == nil {
 		evaledClientAStart = evaled
@@ -232,26 +232,26 @@ func TestActiveQueryIsolationAllowsOtherWindowWorkspaceSwitch(t *testing.T) {
 	if evaled, err := filepath.EvalSymlinks(clientBTarget); err == nil {
 		evaledClientBTarget = evaled
 	}
-	if got := ws.getWorkspaceRootForRequest(reqA); got != evaledClientAStart {
-		t.Fatalf("clientA workspace should remain unchanged, got %q want %q", got, evaledClientAStart)
+	if got := ws.getProjectFolderForRequest(reqA); got != evaledClientAStart {
+		t.Fatalf("clientA project folder should remain unchanged, got %q want %q", got, evaledClientAStart)
 	}
-	if got := ws.getWorkspaceRootForRequest(reqB); got != evaledClientBTarget {
-		t.Fatalf("clientB workspace should move to target, got %q want %q", got, evaledClientBTarget)
+	if got := ws.getProjectFolderForRequest(reqB); got != evaledClientBTarget {
+		t.Fatalf("clientB project folder should move to target, got %q want %q", got, evaledClientBTarget)
 	}
 }
 
-func TestSetClientWorkspaceRootResetsAgentSessionState(t *testing.T) {
+func TestSetClientProjectFolderResetsAgentSessionState(t *testing.T) {
 	daemonRoot := t.TempDir()
 	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	t.Cleanup(func() { credentials.ResetStorageBackend() })
 	credentials.ResetStorageBackend()
-	startWorkspace := filepath.Join(daemonRoot, "start")
-	nextWorkspace := filepath.Join(daemonRoot, "next")
-	if err := os.MkdirAll(startWorkspace, 0o755); err != nil {
-		t.Fatalf("mkdir start workspace: %v", err)
+	startProjectFolder := filepath.Join(daemonRoot, "start")
+	nextProjectFolder := filepath.Join(daemonRoot, "next")
+	if err := os.MkdirAll(startProjectFolder, 0o755); err != nil {
+		t.Fatalf("mkdir start project folder: %v", err)
 	}
-	if err := os.MkdirAll(nextWorkspace, 0o755); err != nil {
-		t.Fatalf("mkdir next workspace: %v", err)
+	if err := os.MkdirAll(nextProjectFolder, 0o755); err != nil {
+		t.Fatalf("mkdir next project folder: %v", err)
 	}
 
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
@@ -259,11 +259,11 @@ func TestSetClientWorkspaceRootResetsAgentSessionState(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.SetWorkspaceRoot(daemonRoot)
+	ws.SetProjectFolder(daemonRoot)
 
 	clientID := "window-reset"
-	if _, err := ws.setClientWorkspaceRoot(clientID, startWorkspace); err != nil {
-		t.Fatalf("set start workspace: %v", err)
+	if _, err := ws.setClientProjectFolder(clientID, startProjectFolder); err != nil {
+		t.Fatalf("set start project folder: %v", err)
 	}
 
 	agentInst, err := ws.getClientAgent(clientID)
@@ -271,18 +271,18 @@ func TestSetClientWorkspaceRootResetsAgentSessionState(t *testing.T) {
 		t.Fatalf("get client agent: %v", err)
 	}
 	if agentInst == nil {
-		t.Fatal("expected non-nil agent before workspace reset")
+		t.Fatal("expected non-nil agent before project folder reset")
 	}
 
 	snapshot, _ := json.Marshal(agent.AgentState{SessionID: "session-before-reset", Messages: []api.Message{{Role: "user", Content: "hello"}}})
 	ws.setAgentStateForClient(clientID, snapshot)
 	ws.setClientQueryActive(clientID, true)
 
-	if _, err := ws.setClientWorkspaceRoot(clientID, nextWorkspace); err != nil {
-		t.Fatalf("set next workspace: %v", err)
+	if _, err := ws.setClientProjectFolder(clientID, nextProjectFolder); err != nil {
+		t.Fatalf("set next project folder: %v", err)
 	}
-	// Switching workspaces shuts the outgoing agent down asynchronously, and
-	// that shutdown writes history back under the old workspace. Wait for it
+	// Switching project folders shuts the outgoing agent down asynchronously, and
+	// that shutdown writes history back under the old project folder. Wait for it
 	// so those writes land before t.TempDir cleanup, not after.
 	ws.waitForAgentTeardown()
 
@@ -290,16 +290,16 @@ func TestSetClientWorkspaceRootResetsAgentSessionState(t *testing.T) {
 	ctx := ws.clientContexts[clientID]
 	ws.mutex.RUnlock()
 	if ctx == nil {
-		t.Fatal("expected client context after workspace reset")
+		t.Fatal("expected client context after project folder reset")
 	}
 	if ctx.Agent != nil {
-		t.Fatal("expected live agent to be cleared on workspace reset")
+		t.Fatal("expected live agent to be cleared on project folder reset")
 	}
 	if ctx.CurrentSessionID != "" {
 		t.Fatalf("expected current session id to be cleared, got %q", ctx.CurrentSessionID)
 	}
 	if ctx.ActiveQuery {
-		t.Fatal("expected active query flag to be cleared on workspace reset")
+		t.Fatal("expected active query flag to be cleared on project folder reset")
 	}
 
 	var state agent.AgentState
@@ -419,7 +419,7 @@ func TestStopSSHSessionLockedClearsMatchingClientSSHContext(t *testing.T) {
 	}
 	ws.clientContexts = map[string]*webClientContext{
 		"client-a": {
-			WorkspaceRoot:  "/tmp/a",
+			ProjectFolder:  "/tmp/a",
 			SSHHostAlias:   "host-a",
 			SSHSessionKey:  "host-a::$HOME",
 			SSHLauncherURL: "http://launcher-a",
@@ -427,7 +427,7 @@ func TestStopSSHSessionLockedClearsMatchingClientSSHContext(t *testing.T) {
 			AgentState:     emptyAgentStateSnapshot(),
 		},
 		"client-b": {
-			WorkspaceRoot:  "/tmp/b",
+			ProjectFolder:  "/tmp/b",
 			SSHHostAlias:   "host-b",
 			SSHSessionKey:  "host-b::$HOME",
 			SSHLauncherURL: "http://launcher-b",
@@ -462,38 +462,38 @@ func TestCleanupInactiveClientContextsRemovesOnlyStaleInactiveDisconnectedClient
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.SetWorkspaceRoot(daemonRoot)
+	ws.SetProjectFolder(daemonRoot)
 
 	old := time.Now().Add(-2 * time.Hour)
 	recent := time.Now().Add(-5 * time.Minute)
 
 	ws.clientContexts = map[string]*webClientContext{
 		defaultWebClientID: {
-			WorkspaceRoot: daemonRoot,
+			ProjectFolder: daemonRoot,
 			LastSeenAt:    old,
 			AgentState:    emptyAgentStateSnapshot(),
 		},
 		"stale-client": {
-			WorkspaceRoot: filepath.Join(daemonRoot, "stale"),
+			ProjectFolder: filepath.Join(daemonRoot, "stale"),
 			LastSeenAt:    old,
 			Terminal:      NewTerminalManager(daemonRoot),
 			AgentState:    emptyAgentStateSnapshot(),
 		},
 		"recent-client": {
-			WorkspaceRoot: filepath.Join(daemonRoot, "recent"),
+			ProjectFolder: filepath.Join(daemonRoot, "recent"),
 			LastSeenAt:    recent,
 			Terminal:      NewTerminalManager(daemonRoot),
 			AgentState:    emptyAgentStateSnapshot(),
 		},
 		"active-client": {
-			WorkspaceRoot: filepath.Join(daemonRoot, "active"),
+			ProjectFolder: filepath.Join(daemonRoot, "active"),
 			LastSeenAt:    old,
 			Terminal:      NewTerminalManager(daemonRoot),
 			ActiveQuery:   true,
 			AgentState:    emptyAgentStateSnapshot(),
 		},
 		"connected-client": {
-			WorkspaceRoot: filepath.Join(daemonRoot, "connected"),
+			ProjectFolder: filepath.Join(daemonRoot, "connected"),
 			LastSeenAt:    old,
 			Terminal:      NewTerminalManager(daemonRoot),
 			AgentState:    emptyAgentStateSnapshot(),

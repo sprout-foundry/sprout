@@ -62,7 +62,7 @@ type SessionInfo struct {
 // same configuration it would have used in-process: the daemon is a
 // long-lived process whose environment (and therefore its resolved config
 // root) was fixed at its start, which may not match the invoking CLI's (an
-// --isolated-config run, for instance, points the CLI at the workspace's
+// --isolated-config run, for instance, points the CLI at the project folder's
 // ./.sprout while the daemon may still be running against the user's main
 // config).
 type DaemonIdentity struct {
@@ -146,7 +146,7 @@ type AgentService interface {
 	SwitchSession(ctx context.Context, sessionID string) (*SessionInfo, error)
 	// Query runs a one-shot query scoped to workDir and returns the final
 	// response. Implementations must not let query state (conversation
-	// history, workspace root) leak between calls with different workDir —
+	// history, project folder) leak between calls with different workDir —
 	// each call may be for an unrelated project.
 	Query(ctx context.Context, prompt, workDir string, opts QueryOptions) (string, error)
 	// StreamQuery is Query with streamed events instead of a single result.

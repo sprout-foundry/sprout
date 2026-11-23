@@ -97,8 +97,8 @@ By default the positional argument is treated as a shell command. Use
 --tool to classify another tool (e.g. write_file with --path, git with
 --operation).
 
-It uses the static classifier only — no LLM, provider, or workspace context
-is required. Runtime-gated checks (persona risk profile, workspace security
+It uses the static classifier only — no LLM, provider, or project folder context
+is required. Runtime-gated checks (persona risk profile, project folder security
 policy) are noted as context-dependent.
 
 Examples:

@@ -9,7 +9,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent"
 )
 
-// handleAPISyncOp handles POST /api/sync/op — apply a single SyncOp to the workspace.
+// handleAPISyncOp handles POST /api/sync/op — apply a single SyncOp to the project folder.
 func (ws *ReactWebServer) handleAPISyncOp(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
@@ -35,7 +35,7 @@ func (ws *ReactWebServer) handleAPISyncOp(w http.ResponseWriter, r *http.Request
 	}
 
 	// Resolve the agent for this request. Prefer the server-level agent
-	// (ws.agent) for workspace-level operations like sync — the file metadata
+	// (ws.agent) for project-folder-level operations like sync — the file metadata
 	// tracked by ApplySyncOp lives on the agent instance that created the
 	// files, which is ws.agent in CLI mode. In daemon mode (ws.agent == nil),
 	// fall back to the per-client agent.
@@ -48,8 +48,8 @@ func (ws *ReactWebServer) handleAPISyncOp(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	result := ag.ApplySyncOp(op, workspaceRoot)
+	projectFolder := ws.getProjectFolderForRequest(r)
+	result := ag.ApplySyncOp(op, projectFolder)
 
 	status := http.StatusOK
 	if !result.Accepted {
@@ -85,7 +85,7 @@ func (ws *ReactWebServer) handleAPISyncBatch(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Resolve the agent for this request. Prefer the server-level agent
-	// (ws.agent) for workspace-level operations like sync — the file metadata
+	// (ws.agent) for project-folder-level operations like sync — the file metadata
 	// tracked by ApplySyncOp lives on the agent instance that created the
 	// files, which is ws.agent in CLI mode. In daemon mode (ws.agent == nil),
 	// fall back to the per-client agent.
@@ -98,8 +98,8 @@ func (ws *ReactWebServer) handleAPISyncBatch(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	results := ag.ApplySyncOpBatch(req.Ops, workspaceRoot)
+	projectFolder := ws.getProjectFolderForRequest(r)
+	results := ag.ApplySyncOpBatch(req.Ops, projectFolder)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"results": results,
@@ -114,7 +114,7 @@ func (ws *ReactWebServer) handleAPISyncStatus(w http.ResponseWriter, r *http.Req
 	}
 
 	// Resolve the agent for this request. Prefer the server-level agent
-	// (ws.agent) for workspace-level operations like sync. In daemon mode
+	// (ws.agent) for project-folder-level operations like sync. In daemon mode
 	// (ws.agent == nil), fall back to the per-client agent.
 	ag := ws.agent
 	if ag == nil {

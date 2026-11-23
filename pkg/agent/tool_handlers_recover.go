@@ -34,12 +34,12 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 		return recoverBulk(a, rawPath)
 	}
 
-	// Resolve a relative path against the workspace root, as the file
+	// Resolve a relative path against the project folder, as the file
 	// tools do — not the process CWD, which differs in daemon/WebUI use
 	// and made recover_file miss every relative path there.
 	resolved := rawPath
 	if !filepath.IsAbs(rawPath) {
-		resolved = filepath.Join(a.currentWorkspaceRoot(), rawPath)
+		resolved = filepath.Join(a.currentProjectFolder(), rawPath)
 	}
 	abs, err := filepath.Abs(resolved)
 	if err != nil {
@@ -69,13 +69,13 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 		return recoverFromPersistedStore(a, abs)
 	}
 
-	// C1: Refuse to touch anything outside the workspace root. A crafted
+	// C1: Refuse to touch anything outside the project folder. A crafted
 	// or mis-recorded tracker entry (e.g. a shell-mutation diff that
-	// escaped the workspace) must not be able to write or delete files
+	// escaped the project folder) must not be able to write or delete files
 	// in arbitrary directories via the recovery path. The doc comment
 	// has always claimed this guarantee; this enforces it.
-	if a.IsPathOutsideWorkspace(abs) {
-		return jsonRecoverResult(false, abs, "", "path is outside the workspace — refusing cross-workspace restore"), nil
+	if a.IsPathOutsideProjectFolder(abs) {
+		return jsonRecoverResult(false, abs, "", "path is outside the project folder — refusing cross-project-folder restore"), nil
 	}
 
 	// Staleness guard: if the file on disk no longer matches what the
@@ -115,7 +115,7 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 	// Past the create branch, an empty original is a genuinely empty file
 	// (existence is recorded explicitly), so it restores as empty.
 	if match.OriginalCode != "" && !isRecoverableOriginal(match.OriginalCode) {
-		reason := "original content was not captured (file too large, binary, or outside workspace)"
+		reason := "original content was not captured (file too large, binary, or outside project folder)"
 		return jsonRecoverResult(false, abs, "", reason), nil
 	}
 
@@ -159,8 +159,8 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 // cross-session recovery work: previous sessions' changes live only in
 // the persisted store once the agent process restarted. The staleness
 // guard (IsRevertSafeWithOriginal) applies exactly as for
-// session-buffer restores; the workspace boundary is enforced by the
-// caller's IsPathOutsideWorkspace check upstream.
+// session-buffer restores; the project folder boundary is enforced by the
+// caller's IsPathOutsideProjectFolder check upstream.
 func recoverFromPersistedStore(a *Agent, abs string) (string, error) {
 	rec, found, err := history.FindPersistedOriginal(abs)
 	if err != nil {
@@ -178,8 +178,8 @@ func recoverFromPersistedStore(a *Agent, abs string) (string, error) {
 		return jsonRecoverResult(false, abs, "stale_skip", "file was modified since the recorded change — refusing to overwrite"), nil
 	}
 
-	if a.IsPathOutsideWorkspace(abs) {
-		return jsonRecoverResult(false, abs, "", "path is outside the workspace — refusing cross-workspace restore"), nil
+	if a.IsPathOutsideProjectFolder(abs) {
+		return jsonRecoverResult(false, abs, "", "path is outside the project folder — refusing cross-project-folder restore"), nil
 	}
 	if match, statErr := os.Stat(abs); statErr == nil && match.IsDir() {
 		return jsonRecoverResult(false, abs, "", "path is a directory — refusing to overwrite"), nil

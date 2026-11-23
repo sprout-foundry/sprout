@@ -287,18 +287,18 @@ func TestEvaluateOperationRisk_CriticalShortCircuits(t *testing.T) {
 	}
 }
 
-// TestPerWorkspaceRiskProfileOverride verifies that a workspace-local
+// TestPerProjectFolderRiskProfileOverride verifies that a project-folder-local
 // .sprout/config.json with a risk_profile field overrides the global
 // user setting via LoadConfigWithLayers + MergeConfig. This is the
-// per-workspace override pattern documented in the README and SECURITY.md.
-func TestPerWorkspaceRiskProfileOverride(t *testing.T) {
+// per-project-folder override pattern documented in the README and SECURITY.md.
+func TestPerProjectFolderRiskProfileOverride(t *testing.T) {
 	tmpRoot := t.TempDir()
 	globalDir := filepath.Join(tmpRoot, "global")
-	workspaceDir := filepath.Join(tmpRoot, "workspace", ".sprout")
+	projectFolderDir := filepath.Join(tmpRoot, "workspace", ".sprout")
 	if err := os.MkdirAll(globalDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+	if err := os.MkdirAll(projectFolderDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -319,8 +319,8 @@ func TestPerWorkspaceRiskProfileOverride(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Workspace config: locked down to readonly + adds another custom profile
-	workspaceCfg := Config{
+	// Project folder config: locked down to readonly + adds another custom profile
+	projectFolderCfg := Config{
 		RiskProfile: "readonly",
 		RiskProfiles: map[string]AutoApproveRules{
 			"sandbox": {
@@ -329,46 +329,46 @@ func TestPerWorkspaceRiskProfileOverride(t *testing.T) {
 			},
 		},
 	}
-	workspaceData, _ := json.Marshal(workspaceCfg)
-	workspacePath := filepath.Join(workspaceDir, "config.json")
-	if err := os.WriteFile(workspacePath, workspaceData, 0o644); err != nil {
+	projectFolderData, _ := json.Marshal(projectFolderCfg)
+	projectFolderPath := filepath.Join(projectFolderDir, "config.json")
+	if err := os.WriteFile(projectFolderPath, projectFolderData, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	merged, err := LoadConfigWithLayers(globalPath, workspacePath, "", globalDir)
+	merged, err := LoadConfigWithLayers(globalPath, projectFolderPath, "", globalDir)
 	if err != nil {
 		t.Fatalf("LoadConfigWithLayers: %v", err)
 	}
 
-	// Workspace overrides the single-value RiskProfile selector.
+	// Project folder overrides the single-value RiskProfile selector.
 	if merged.RiskProfile != "readonly" {
-		t.Errorf("merged RiskProfile = %q, want %q (workspace should override global)", merged.RiskProfile, "readonly")
+		t.Errorf("merged RiskProfile = %q, want %q (project folder should override global)", merged.RiskProfile, "readonly")
 	}
 
 	// RiskProfiles map should contain BOTH custom entries (global +
-	// workspace are merged per-key, not replaced).
+	// project folder are merged per-key, not replaced).
 	if _, ok := merged.RiskProfiles["my_custom"]; !ok {
 		t.Errorf("merged RiskProfiles missing global entry 'my_custom': %v", keys(merged.RiskProfiles))
 	}
 	if _, ok := merged.RiskProfiles["sandbox"]; !ok {
-		t.Errorf("merged RiskProfiles missing workspace entry 'sandbox': %v", keys(merged.RiskProfiles))
+		t.Errorf("merged RiskProfiles missing project folder entry 'sandbox': %v", keys(merged.RiskProfiles))
 	}
 	if merged.RiskProfiles["sandbox"].DefaultRisk != RiskLevelLow {
-		t.Errorf("workspace 'sandbox' DefaultRisk = %q, want Low", merged.RiskProfiles["sandbox"].DefaultRisk)
+		t.Errorf("project folder 'sandbox' DefaultRisk = %q, want Low", merged.RiskProfiles["sandbox"].DefaultRisk)
 	}
 }
 
-// TestPerWorkspaceRiskProfileSameKey verifies that when the same
-// profile key exists in BOTH global and workspace, the workspace
+// TestPerProjectFolderRiskProfileSameKey verifies that when the same
+// profile key exists in BOTH global and project folder, the project folder
 // version wins.
-func TestPerWorkspaceRiskProfileSameKey(t *testing.T) {
+func TestPerProjectFolderRiskProfileSameKey(t *testing.T) {
 	tmpRoot := t.TempDir()
 	globalDir := filepath.Join(tmpRoot, "global")
-	workspaceDir := filepath.Join(tmpRoot, "workspace", ".sprout")
+	projectFolderDir := filepath.Join(tmpRoot, "workspace", ".sprout")
 	if err := os.MkdirAll(globalDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+	if err := os.MkdirAll(projectFolderDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -384,25 +384,25 @@ func TestPerWorkspaceRiskProfileSameKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Workspace: default profile overridden to be strict
-	workspaceCfg := Config{
+	// Project folder: default profile overridden to be strict
+	projectFolderCfg := Config{
 		RiskProfiles: map[string]AutoApproveRules{
 			"default": {DefaultRisk: RiskLevelHigh},
 		},
 	}
-	workspaceData, _ := json.Marshal(workspaceCfg)
-	workspacePath := filepath.Join(workspaceDir, "config.json")
-	if err := os.WriteFile(workspacePath, workspaceData, 0o644); err != nil {
+	projectFolderData, _ := json.Marshal(projectFolderCfg)
+	projectFolderPath := filepath.Join(projectFolderDir, "config.json")
+	if err := os.WriteFile(projectFolderPath, projectFolderData, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	merged, err := LoadConfigWithLayers(globalPath, workspacePath, "", globalDir)
+	merged, err := LoadConfigWithLayers(globalPath, projectFolderPath, "", globalDir)
 	if err != nil {
 		t.Fatalf("LoadConfigWithLayers: %v", err)
 	}
 
 	if got := merged.RiskProfiles["default"].DefaultRisk; got != RiskLevelHigh {
-		t.Errorf("workspace should override global for same key: got DefaultRisk=%q, want High", got)
+		t.Errorf("project folder should override global for same key: got DefaultRisk=%q, want High", got)
 	}
 }
 

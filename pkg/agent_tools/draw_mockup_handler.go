@@ -93,7 +93,7 @@ func (h *drawMockupHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 	if err := h.Validate(args); err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}
-	root := env.WorkspaceRoot
+	root := env.ProjectFolder
 	if root == "" {
 		return mockupFailure("no project folder is available to draw the mockup in"), nil
 	}
@@ -136,7 +136,7 @@ func (h *drawMockupHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 		// change to an existing product is drawn in its colours rather than a
 		// palette of the kit's.
 		Root:    root,
-		Files:   newWorkspaceFiles(root),
+		Files:   newProjectFolderFiles(root),
 		Content: content,
 	}, d.publish)
 	if err != nil {

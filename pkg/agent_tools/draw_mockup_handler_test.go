@@ -116,7 +116,7 @@ func mockupProject(t *testing.T, plan bool, current string) string {
 
 func runDrawMockup(t *testing.T, root string, model *stubMockupModel, args map[string]any) ToolResult {
 	t.Helper()
-	res, err := (&drawMockupHandler{}).Execute(context.Background(), ToolEnv{WorkspaceRoot: root, ToolFuncs: model.funcs()}, args)
+	res, err := (&drawMockupHandler{}).Execute(context.Background(), ToolEnv{ProjectFolder: root, ToolFuncs: model.funcs()}, args)
 	if err != nil {
 		t.Fatalf("Execute returned an error (failures must be tool results): %v", err)
 	}
@@ -317,7 +317,7 @@ func TestDrawMockup_Failures(t *testing.T) {
 		}
 	})
 	t.Run("no model", func(t *testing.T) {
-		res, _ := (&drawMockupHandler{}).Execute(context.Background(), ToolEnv{WorkspaceRoot: mockupProject(t, true, ""), ToolFuncs: &ToolFuncSet{}}, map[string]any{})
+		res, _ := (&drawMockupHandler{}).Execute(context.Background(), ToolEnv{ProjectFolder: mockupProject(t, true, ""), ToolFuncs: &ToolFuncSet{}}, map[string]any{})
 		if !res.IsError || !strings.Contains(res.Output, "no model") {
 			t.Fatalf("res = %q", res.Output)
 		}

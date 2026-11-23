@@ -91,7 +91,7 @@ func checkpointWorkingTree(ctx context.Context, root string, ts int64, updateLat
 		return nil, nil
 	}
 
-	args := []string{"commit-tree", tree, "-m", "sprout: checkpoint uncommitted work before workspace stop (" + reason + ")"}
+	args := []string{"commit-tree", tree, "-m", "sprout: checkpoint uncommitted work before project folder stop (" + reason + ")"}
 	if hasHead {
 		args = append(args, "-p", head)
 	}

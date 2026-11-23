@@ -21,7 +21,7 @@ import (
 // or delete files in it from the browser. The fix routes all
 // externally-targeting file ops through ws.allowExternalAccessForRequest.
 func TestFileOps_AllowlistCoversCreateDeleteRename(t *testing.T) {
-	workspaceRoot := t.TempDir()
+	projectFolder := t.TempDir()
 	externalDir := t.TempDir()
 
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
@@ -30,7 +30,7 @@ func TestFileOps_AllowlistCoversCreateDeleteRename(t *testing.T) {
 	}
 	clientID := "test-client"
 	ctx := ws.getOrCreateClientContext(clientID)
-	ctx.WorkspaceRoot = workspaceRoot
+	ctx.ProjectFolder = projectFolder
 	chat := ctx.getOrCreateChatSession("default")
 
 	// Baseline: create with no allowlist — must be forbidden.
@@ -95,7 +95,7 @@ func TestFileOps_AllowlistCoversCreateDeleteRename(t *testing.T) {
 // TestListDirectory_AllowlistCovers lists an external folder once
 // allowlisted, mirroring the read/write parity check.
 func TestListDirectory_AllowlistCovers(t *testing.T) {
-	workspaceRoot := t.TempDir()
+	projectFolder := t.TempDir()
 	externalDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(externalDir, "a.txt"), []byte("a"), 0o644); err != nil {
 		t.Fatal(err)
@@ -107,7 +107,7 @@ func TestListDirectory_AllowlistCovers(t *testing.T) {
 	}
 	clientID := "test-client"
 	ctx := ws.getOrCreateClientContext(clientID)
-	ctx.WorkspaceRoot = workspaceRoot
+	ctx.ProjectFolder = projectFolder
 	chat := ctx.getOrCreateChatSession("default")
 
 	// Baseline: forbidden without allowlist.

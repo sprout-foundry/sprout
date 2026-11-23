@@ -33,7 +33,7 @@ func TestPosixTmpPath_FollowsGitBash(t *testing.T) {
 
 func TestSafeResolveAbs_TmpMatchesGitBash(t *testing.T) {
 	ws := t.TempDir()
-	ctx := WithWorkspaceRoot(context.Background(), ws)
+	ctx := WithProjectFolder(context.Background(), ws)
 	got, err := SafeResolveAbs(ctx, "/tmp/sprout-probe.json")
 	if err != nil {
 		t.Fatal(err)

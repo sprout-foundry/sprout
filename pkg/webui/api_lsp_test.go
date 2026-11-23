@@ -42,8 +42,8 @@ func TestHandleLSPStatus(t *testing.T) {
 		if _, ok := resp["active"]; !ok {
 			t.Error("expected active field in response")
 		}
-		if _, ok := resp["workspace"]; !ok {
-			t.Error("expected workspace field in response")
+		if _, ok := resp["project_folder"]; !ok {
+			t.Error("expected project folder field in response")
 		}
 	})
 

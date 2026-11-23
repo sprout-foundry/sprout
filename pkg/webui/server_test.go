@@ -341,7 +341,7 @@ func TestFormatListenAddr(t *testing.T) {
 // TestLooksLikeUserHome locks the heuristic that decides whether a daemonRoot
 // candidate is plausibly a per-user home directory. The runtime uses this to
 // trigger a /etc/passwd fallback when a stale launchd/systemd plist leaks a
-// system path as $HOME (the failure mode that scoped the workspace browser
+// system path as $HOME (the failure mode that scoped the project folder browser
 // to the wrong directory in service mode).
 func TestLooksLikeUserHome(t *testing.T) {
 	cases := []struct {
@@ -1347,7 +1347,7 @@ func TestQueryCoverage_IncrementActiveQueriesWithQuery_ExistingContext(t *testin
 	// Seed an existing context
 	ws.mutex.Lock()
 	ws.clientContexts["c1"] = &webClientContext{
-		WorkspaceRoot: "/tmp",
+		ProjectFolder: "/tmp",
 	}
 	ws.mutex.Unlock()
 

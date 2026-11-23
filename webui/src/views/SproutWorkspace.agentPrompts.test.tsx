@@ -112,8 +112,8 @@ beforeEach(() => {
     const url = String(input);
     const body = url.includes('/api/shell-approvals/')
       ? { delivered: true }
-      : url.includes('/api/workspace')
-        ? { workspace_root: '', daemon_root: '' }
+      : url.includes('/api/project-folder')
+        ? { project_folder: '', daemon_root: '' }
         : { chat_sessions: [{ id: 'default', name: 'Chat' }], active_chat_id: 'default' };
     return {
       ok: true,

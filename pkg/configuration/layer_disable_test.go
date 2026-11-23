@@ -20,19 +20,19 @@ func TestLayerCanDisableFlatBooleans(t *testing.T) {
 	writeFile(t, filepath.Join(globalDir, ConfigFileName),
 		`{"version":"2.0","skip_prompt":true,"disable_thinking":true,"vision_fallback_to_ocr":true,"mcp":{"enabled":true}}`)
 
-	workspaceDir := filepath.Join(home, "proj", ".sprout")
-	writeFile(t, filepath.Join(workspaceDir, WorkspaceConfigFileName),
+	projectFolderDir := filepath.Join(home, "proj", ".sprout")
+	writeFile(t, filepath.Join(projectFolderDir, ProjectFolderConfigFileName),
 		`{"skip_prompt":false,"disable_thinking":false,"mcp":{"enabled":false}}`)
 
 	cfg, err := LoadConfigWithLayers(
 		filepath.Join(globalDir, ConfigFileName),
-		filepath.Join(workspaceDir, WorkspaceConfigFileName),
+		filepath.Join(projectFolderDir, ProjectFolderConfigFileName),
 		"", globalDir)
 	require.NoError(t, err)
 
-	assert.False(t, cfg.SkipPrompt, "workspace skip_prompt:false must win")
-	assert.False(t, cfg.DisableThinking, "workspace disable_thinking:false must win")
-	assert.False(t, cfg.MCP.Enabled, "workspace mcp.enabled:false must win")
+	assert.False(t, cfg.SkipPrompt, "project folder skip_prompt:false must win")
+	assert.False(t, cfg.DisableThinking, "project folder disable_thinking:false must win")
+	assert.False(t, cfg.MCP.Enabled, "project folder mcp.enabled:false must win")
 }
 
 // Presence tracking must not make silence destructive: a layer that never names
@@ -45,13 +45,13 @@ func TestSilentLayerDoesNotClearFlatBooleans(t *testing.T) {
 	writeFile(t, filepath.Join(globalDir, ConfigFileName),
 		`{"version":"2.0","skip_prompt":true,"disable_thinking":true,"mcp":{"enabled":true}}`)
 
-	workspaceDir := filepath.Join(home, "proj", ".sprout")
-	writeFile(t, filepath.Join(workspaceDir, WorkspaceConfigFileName),
+	projectFolderDir := filepath.Join(home, "proj", ".sprout")
+	writeFile(t, filepath.Join(projectFolderDir, ProjectFolderConfigFileName),
 		`{"reasoning_effort":"high"}`)
 
 	cfg, err := LoadConfigWithLayers(
 		filepath.Join(globalDir, ConfigFileName),
-		filepath.Join(workspaceDir, WorkspaceConfigFileName),
+		filepath.Join(projectFolderDir, ProjectFolderConfigFileName),
 		"", globalDir)
 	require.NoError(t, err)
 

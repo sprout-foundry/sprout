@@ -8,29 +8,29 @@ import (
 	"testing"
 )
 
-// Dead entries must not reach the picker: a recent workspace that no longer
+// Dead entries must not reach the picker: a recent project folder that no longer
 // exists is indistinguishable from a real one in the UI and cannot be selected.
 // In practice the user's picker showed ten leaked test temp paths and nothing
 // else, with no way to tell they were stale.
-func TestGetRecentWorkspacesFiltersMissingPaths(t *testing.T) {
-	defer setupRecentWorkspaces(t)()
+func TestGetRecentProjectFoldersFiltersMissingPaths(t *testing.T) {
+	defer setupRecentProjectFolders(t)()
 
 	live := t.TempDir()
-	RecordWorkspace(live)
+	RecordProjectFolder(live)
 
 	gone := filepath.Join(t.TempDir(), "deleted-project")
 	if err := os.MkdirAll(gone, 0755); err != nil {
 		t.Fatal(err)
 	}
-	RecordWorkspace(gone)
+	RecordProjectFolder(gone)
 	if err := os.RemoveAll(gone); err != nil {
 		t.Fatal(err)
 	}
 
-	got := GetRecentWorkspaces()
+	got := GetRecentProjectFolders()
 	for _, w := range got {
 		if w.Path == gone {
-			t.Errorf("a workspace that no longer exists should not be offered: %s", gone)
+			t.Errorf("a project folder that no longer exists should not be offered: %s", gone)
 		}
 	}
 	found := false
@@ -40,22 +40,22 @@ func TestGetRecentWorkspacesFiltersMissingPaths(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("an existing workspace must still be listed; got %v", got)
+		t.Errorf("an existing project folder must still be listed; got %v", got)
 	}
 }
 
 // A file (rather than a directory) at the recorded path is equally unusable.
-func TestGetRecentWorkspacesFiltersNonDirectories(t *testing.T) {
-	defer setupRecentWorkspaces(t)()
+func TestGetRecentProjectFoldersFiltersNonDirectories(t *testing.T) {
+	defer setupRecentProjectFolders(t)()
 
 	dir := t.TempDir()
 	file := filepath.Join(dir, "not-a-dir")
 	if err := os.WriteFile(file, []byte("x"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	RecordWorkspace(file)
+	RecordProjectFolder(file)
 
-	for _, w := range GetRecentWorkspaces() {
+	for _, w := range GetRecentProjectFolders() {
 		if w.Path == file {
 			t.Errorf("a non-directory path should not be offered: %s", file)
 		}

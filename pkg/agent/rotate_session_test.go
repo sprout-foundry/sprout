@@ -214,11 +214,11 @@ func TestRotateSessionResetsChangeTracker(t *testing.T) {
 
 	a := newTestAgent(t)
 	a.SetSessionID("session_prior_tracker_test")
-	// History persistence is project-scoped under the agent's workspace
+	// History persistence is project-scoped under the agent's project folder
 	// root (.sprout/changes). Without this the commit below writes into
 	// pkg/agent/.sprout/ in the SOURCE TREE, which every later
 	// include_persisted test in this package then reads back.
-	a.SetWorkspaceRoot(t.TempDir())
+	a.SetProjectFolder(t.TempDir())
 	a.EnableChangeTracking("rotate test")
 	setHistory()
 

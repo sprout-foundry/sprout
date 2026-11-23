@@ -63,7 +63,7 @@ var familyRules = []struct {
 			strings.HasPrefix(p, "/api/lsp/")
 	}},
 	{"workspace/instances", func(p string) bool {
-		return strings.HasPrefix(p, "/api/workspace") || strings.HasPrefix(p, "/api/instances")
+		return strings.HasPrefix(p, "/api/project-folder") || strings.HasPrefix(p, "/api/instances")
 	}},
 	{"sync/txn", func(p string) bool {
 		return strings.HasPrefix(p, "/api/sync") || strings.HasPrefix(p, "/api/txn") ||

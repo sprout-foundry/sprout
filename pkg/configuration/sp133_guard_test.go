@@ -9,7 +9,7 @@ import (
 
 // TestNoLegacyHomeDotSprout is a CI guard: no non-test Go file should
 // construct a path via filepath.Join(home..., ".sprout") for user-level
-// state/cache/data. Workspace-level .sprout paths are fine.
+// state/cache/data. Project-folder-level .sprout paths are fine.
 //
 // This catches regressions where a new file resolves a user-level path
 // to the old ~/.sprout location instead of the SP-133 category roots.
@@ -71,8 +71,8 @@ func TestNoLegacyHomeDotSprout(t *testing.T) {
 				if strings.Contains(line, "filepath.Join(") &&
 					strings.Contains(line, `".sprout"`) &&
 					(strings.Contains(line, "home") || strings.Contains(line, "HOME") || strings.Contains(line, "homeDir")) {
-					// Allow workspace-level paths (relative ".sprout" under cwd/workspace)
-					if strings.Contains(line, `cwd`) || strings.Contains(line, `workspace`) || strings.Contains(line, `rootDir`) || strings.Contains(line, `projectRoot`) || strings.Contains(line, `gitRoot`) || strings.Contains(line, `baseDir`) {
+					// Allow project-folder-level paths (relative ".sprout" under cwd/workspace)
+					if strings.Contains(line, `cwd`) || strings.Contains(line, `projectFolder`) || strings.Contains(line, `rootDir`) || strings.Contains(line, `projectRoot`) || strings.Contains(line, `gitRoot`) || strings.Contains(line, `baseDir`) {
 						continue
 					}
 					t.Errorf("%s:%d: user-level filepath.Join(home..., \".sprout\") — use envutil.StateDir()/CacheDir()/ConfigDir() instead: %s",
@@ -95,9 +95,9 @@ func TestNoLegacyHomeDotSprout(t *testing.T) {
 	misrouted := map[string]string{
 		"sessions":  "envutil.StateDir()",
 		"logs":      "envutil.StateDir()",
-		"changes":   "the workspace root",
-		"revisions": "the workspace root",
-		"runlogs":   "the workspace root",
+		"changes":   "the project folder",
+		"revisions": "the project folder",
+		"runlogs":   "the project folder",
 	}
 	checkConfigRootMisrouting := func(dir string) {
 		root := filepath.Join(repoRoot, dir)

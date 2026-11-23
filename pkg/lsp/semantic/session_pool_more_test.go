@@ -9,30 +9,30 @@ import (
 // Additional SessionPool tests beyond existing ones.
 
 func TestSessionPoolEvictIdleZeroTTL(t *testing.T) {
-	pool := NewSessionPool(func(workspaceRoot string) (SessionAdapter, error) {
+	pool := NewSessionPool(func(projectFolder string) (SessionAdapter, error) {
 		return &fakeSessionAdapter{healthy: true}, nil
 	}, 0)
 
 	// Run to create a session
-	_, _ = pool.Run(ToolInput{WorkspaceRoot: "/repo-a"})
+	_, _ = pool.Run(ToolInput{ProjectFolder: "/repo-a"})
 
 	// EvictIdle with zero TTL should do nothing
 	pool.EvictIdle()
 
 	// Session should still be usable
-	if _, err := pool.Run(ToolInput{WorkspaceRoot: "/repo-a"}); err != nil {
+	if _, err := pool.Run(ToolInput{ProjectFolder: "/repo-a"}); err != nil {
 		t.Fatal("expected session to still be usable after EvictIdle with 0 TTL")
 	}
 }
 
 func TestSessionPoolEvictIdleRemovesExpired(t *testing.T) {
 	created := 0
-	pool := NewSessionPool(func(workspaceRoot string) (SessionAdapter, error) {
+	pool := NewSessionPool(func(projectFolder string) (SessionAdapter, error) {
 		created++
 		return &fakeSessionAdapter{healthy: true}, nil
 	}, 50*time.Millisecond)
 
-	_, _ = pool.Run(ToolInput{WorkspaceRoot: "/repo-a"})
+	_, _ = pool.Run(ToolInput{ProjectFolder: "/repo-a"})
 	if created != 1 {
 		t.Fatalf("expected 1 factory call, got %d", created)
 	}
@@ -42,7 +42,7 @@ func TestSessionPoolEvictIdleRemovesExpired(t *testing.T) {
 	pool.EvictIdle()
 
 	// Next run should create a new session
-	_, _ = pool.Run(ToolInput{WorkspaceRoot: "/repo-a"})
+	_, _ = pool.Run(ToolInput{ProjectFolder: "/repo-a"})
 	if created != 2 {
 		t.Fatalf("expected 2 factory calls after eviction, got %d", created)
 	}
@@ -64,14 +64,14 @@ func (a *closeTrackingAdapter) Close() error {
 
 func TestSessionPoolCloseRemovesAll(t *testing.T) {
 	adapters := []*closeTrackingAdapter{}
-	pool := NewSessionPool(func(workspaceRoot string) (SessionAdapter, error) {
+	pool := NewSessionPool(func(projectFolder string) (SessionAdapter, error) {
 		a := &closeTrackingAdapter{healthy: true}
 		adapters = append(adapters, a)
 		return a, nil
 	}, 0)
 
-	_, _ = pool.Run(ToolInput{WorkspaceRoot: "/repo-a"})
-	_, _ = pool.Run(ToolInput{WorkspaceRoot: "/repo-b"})
+	_, _ = pool.Run(ToolInput{ProjectFolder: "/repo-a"})
+	_, _ = pool.Run(ToolInput{ProjectFolder: "/repo-b"})
 
 	pool.Close()
 
@@ -87,11 +87,11 @@ func TestSessionPoolCloseRemovesAll(t *testing.T) {
 }
 
 func TestSessionPoolFactoryError(t *testing.T) {
-	pool := NewSessionPool(func(workspaceRoot string) (SessionAdapter, error) {
+	pool := NewSessionPool(func(projectFolder string) (SessionAdapter, error) {
 		return nil, errors.New("factory failed")
 	}, 0)
 
-	_, err := pool.Run(ToolInput{WorkspaceRoot: "/repo-a"})
+	_, err := pool.Run(ToolInput{ProjectFolder: "/repo-a"})
 	if err == nil {
 		t.Fatal("expected factory error to propagate")
 	}
@@ -105,7 +105,7 @@ func TestSessionPoolUnhealthySessionReplaced(t *testing.T) {
 	second := &fakeSessionAdapter{healthy: true}
 	factoryCalls := 0
 
-	pool := NewSessionPool(func(workspaceRoot string) (SessionAdapter, error) {
+	pool := NewSessionPool(func(projectFolder string) (SessionAdapter, error) {
 		factoryCalls++
 		if factoryCalls == 1 {
 			return first, nil
@@ -114,7 +114,7 @@ func TestSessionPoolUnhealthySessionReplaced(t *testing.T) {
 	}, 0)
 
 	// First call creates healthy adapter
-	_, err := pool.Run(ToolInput{WorkspaceRoot: "/repo-a"})
+	_, err := pool.Run(ToolInput{ProjectFolder: "/repo-a"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestSessionPoolUnhealthySessionReplaced(t *testing.T) {
 	first.healthy = false
 
 	// Second call should detect unhealthy and replace
-	_, err = pool.Run(ToolInput{WorkspaceRoot: "/repo-a"})
+	_, err = pool.Run(ToolInput{ProjectFolder: "/repo-a"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

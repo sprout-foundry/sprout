@@ -217,7 +217,7 @@ func TestBeginTurnJournal_SnapshotsBaseAndSkipsSubagents(t *testing.T) {
 		api.Message{Role: "assistant", Content: "prior answer"},
 	)
 	a.SetSessionID("jbase")
-	a.SetWorkspaceRoot(workingDir)
+	a.SetProjectFolder(workingDir)
 
 	a.beginTurnJournal("new query")
 	if a.turnJournal == nil {
@@ -252,7 +252,7 @@ func TestJournalMessagesSnapshot_RecordsNewMessagesOnly(t *testing.T) {
 
 	a := newScopedStateAgent(api.Message{Role: "user", Content: "base"})
 	a.SetSessionID("jsnap")
-	a.SetWorkspaceRoot(workingDir)
+	a.SetProjectFolder(workingDir)
 
 	a.beginTurnJournal("query")
 
@@ -311,7 +311,7 @@ func TestEndTurnJournalKeepsFileForFinalizeToRemove(t *testing.T) {
 
 	a := newScopedStateAgent(api.Message{Role: "user", Content: "crash sim"})
 	a.SetSessionID("jcrash")
-	a.SetWorkspaceRoot(workingDir)
+	a.SetProjectFolder(workingDir)
 
 	a.beginTurnJournal("work")
 	seedSt := core.NewState()

@@ -32,7 +32,7 @@ type pendingShellMutation struct {
 	op     string // "create" | "edit" | "delete"
 }
 
-// emitBuildBulkRollup adapts walkWorkspace's pendingShellChange slice into
+// emitBuildBulkRollup adapts walkProjectFolder's pendingShellChange slice into
 // the pendingShellMutation shape and routes through emitWithBulkRollup —
 // the build-output rollup (one bulk row per fat directory + auto-skip
 // learning). Called by TrackShellTurn when a non-destructive command
@@ -50,7 +50,7 @@ func (ct *ChangeTracker) emitBuildBulkRollup(pending []pendingShellChange, toolC
 // every file that materially changed. Deduplicates against direct-tool
 // hooks. Above shellBulkThreshold, collapses into bulk rollup.
 //
-// Production diffing now happens inside TrackShellTurn (walkWorkspace
+// Production diffing now happens inside TrackShellTurn (walkProjectFolder
 // computes pending changes against the live cache), so this exists for
 // callers that hold explicit before/after snapshot pairs — the tests,
 // and any future caller that captures snapshots out-of-band.
@@ -137,37 +137,37 @@ func (ct *ChangeTracker) RecordShellMutations(before, after map[string]*shellSna
 
 // emitWithBulkRollup is the rollup path taken when a single shell
 // command exceeded shellBulkThreshold. Buckets mutations by top-level
-// workspace directory. Root-level files and light buckets emit per-file;
+// project folder. Root-level files and light buckets emit per-file;
 // heavy buckets collapse into a single rollup row.
 //
 // Caller must hold ct.shellCacheMu (TrackShellTurn does; this function
 // and its addAutoSkipDirLocked callee touch autoSkipDirs, which walks
 // read under that lock).
 func (ct *ChangeTracker) emitWithBulkRollup(pending []pendingShellMutation, toolCall string) {
-	workspaceRoot := ""
+	projectFolder := ""
 	if ct.view != nil {
-		workspaceRoot = ct.view.GetWorkspaceRoot()
+		projectFolder = ct.view.GetProjectFolder()
 	}
-	absWorkspace := workspaceRoot
-	if workspaceRoot != "" {
-		if abs, err := filepath.Abs(workspaceRoot); err == nil {
+	absProjectFolder := projectFolder
+	if projectFolder != "" {
+		if abs, err := filepath.Abs(projectFolder); err == nil {
 			if resolved, rerr := filepath.EvalSymlinks(abs); rerr == nil {
-				absWorkspace = resolved
+				absProjectFolder = resolved
 			} else {
-				absWorkspace = abs
+				absProjectFolder = abs
 			}
 		}
 	}
 
 	type bucket struct {
-		topDir string // workspace-relative top-level dir, "" for root-level
+		topDir string // project-folder-relative top-level dir, "" for root-level
 		items  []pendingShellMutation
 	}
 	buckets := map[string]*bucket{}
 	bucketOrder := []string{} // preserve deterministic emit order
 
 	for _, p := range pending {
-		topDir := topLevelDirRelativeTo(absWorkspace, p.path)
+		topDir := topLevelDirRelativeTo(absProjectFolder, p.path)
 		b, ok := buckets[topDir]
 		if !ok {
 			b = &bucket{topDir: topDir}
@@ -186,7 +186,7 @@ func (ct *ChangeTracker) emitWithBulkRollup(pending []pendingShellMutation, tool
 			}
 			continue
 		}
-		label := deepestCommonAncestorRel(absWorkspace, b.items)
+		label := deepestCommonAncestorRel(absProjectFolder, b.items)
 		if label == "" {
 			label = b.topDir
 		}
@@ -197,25 +197,25 @@ func (ct *ChangeTracker) emitWithBulkRollup(pending []pendingShellMutation, tool
 		for i, it := range b.items {
 			asChanges[i] = pendingShellChange{Path: it.path, Op: it.op, Before: it.before, After: it.after}
 		}
-		ct.appendBulkRollup(label, asChanges, absWorkspace, toolCall)
+		ct.appendBulkRollup(label, asChanges, absProjectFolder, toolCall)
 		// Caller holds shellCacheMu — use the Locked body. Re-locking
 		// here would self-deadlock (sync.Mutex is not re-entrant).
-		ct.addAutoSkipDirLocked(absWorkspace, filepath.Join(absWorkspace, b.topDir))
+		ct.addAutoSkipDirLocked(absProjectFolder, filepath.Join(absProjectFolder, b.topDir))
 	}
 }
 
 // topLevelDirRelativeTo returns the first path component of `path`
-// relative to `workspaceRoot`, or "" when the path is at the
-// workspace root (no nested directory) or outside it.
-func topLevelDirRelativeTo(workspaceRoot, path string) string {
-	if workspaceRoot == "" {
+// relative to `projectFolder`, or "" when the path is at the
+// project folder (no nested directory) or outside it.
+func topLevelDirRelativeTo(projectFolder, path string) string {
+	if projectFolder == "" {
 		return ""
 	}
 	absPath := path
 	if abs, err := filepath.Abs(path); err == nil {
 		absPath = abs
 	}
-	rel, err := filepath.Rel(workspaceRoot, absPath)
+	rel, err := filepath.Rel(projectFolder, absPath)
 	if err != nil {
 		return ""
 	}
@@ -224,19 +224,19 @@ func topLevelDirRelativeTo(workspaceRoot, path string) string {
 	}
 	idx := strings.IndexRune(rel, filepath.Separator)
 	if idx < 0 {
-		return "" // file lives directly at workspace root
+		return "" // file lives directly at project folder
 	}
 	return rel[:idx]
 }
 
-// deepestCommonAncestorRel returns the deepest workspace-relative
+// deepestCommonAncestorRel returns the deepest project-folder-relative
 // directory that contains every path in `items`. Operates on the
 // parent directory of each path (because rollups represent the
 // containing folder, not the files themselves). Falls back to "" if
-// any path can't be made workspace-relative or if there's no shared
-// prefix beyond the workspace root.
-func deepestCommonAncestorRel(workspaceRoot string, items []pendingShellMutation) string {
-	if workspaceRoot == "" || len(items) == 0 {
+// any path can't be made project-folder-relative or if there's no shared
+// prefix beyond the project folder.
+func deepestCommonAncestorRel(projectFolder string, items []pendingShellMutation) string {
+	if projectFolder == "" || len(items) == 0 {
 		return ""
 	}
 	sep := string(filepath.Separator)
@@ -247,7 +247,7 @@ func deepestCommonAncestorRel(workspaceRoot string, items []pendingShellMutation
 		if abs, err := filepath.Abs(it.path); err == nil {
 			absPath = abs
 		}
-		rel, err := filepath.Rel(workspaceRoot, absPath)
+		rel, err := filepath.Rel(projectFolder, absPath)
 		if err != nil {
 			return ""
 		}
@@ -286,7 +286,7 @@ func deepestCommonAncestorRel(workspaceRoot string, items []pendingShellMutation
 }
 
 // appendBulkRollup records a single TrackedFileChange that stands in
-// for the files churned under `dir`. The path stored is workspace-
+// for the files churned under `dir`. The path stored is project-folder-
 // relative with a trailing slash so the UI can recognise the entry as
 // a directory rollup at a glance.
 //
@@ -295,7 +295,7 @@ func deepestCommonAncestorRel(workspaceRoot string, items []pendingShellMutation
 // payload cap, BulkItems is left empty and the entry behaves as the
 // historical count-only row — the UI/tools can detect this via
 // BulkCount > 0 && len(BulkItems) == 0.
-func (ct *ChangeTracker) appendBulkRollup(dir string, items []pendingShellChange, workspaceRoot, toolCall string) {
+func (ct *ChangeTracker) appendBulkRollup(dir string, items []pendingShellChange, projectFolder, toolCall string) {
 	displayPath := dir + string(filepath.Separator)
 	packed, overBudget := ct.packBulkItems(items)
 	if overBudget {
@@ -319,7 +319,7 @@ func (ct *ChangeTracker) appendBulkRollup(dir string, items []pendingShellChange
 	// real file, so it never went through the agent's event-metadata
 	// decoration.
 	if ct.view != nil {
-		absDir := filepath.Join(workspaceRoot, dir)
+		absDir := filepath.Join(projectFolder, dir)
 		ct.view.PublishRawFileChanged(
 			events.EventTypeFileChanged,
 			events.FileChangedEvent(absDir, "shell_bulk", toolCall),
@@ -358,7 +358,7 @@ const shellDestructiveBulkMaxPayloadBytes = shellSnapshotMaxTotalBytes
 // degrades to a count-only bulk (BulkItems == nil) and we log a warning
 // — the user can still see "300 files reverted" but per-file recovery
 // is out of reach. This is the same upper bound the walker applies, so
-// hitting it means we ran into a workspace that's outside the change
+// hitting it means we ran into a project folder that's outside the change
 // tracker's overall budget regardless of bulk shape.
 func (ct *ChangeTracker) appendDestructiveBulkRollup(pending []pendingShellChange, label, toolCall string) {
 	items, overBudget := ct.packBulkItems(pending)
@@ -415,7 +415,7 @@ func (ct *ChangeTracker) packBulkItems(pending []pendingShellChange) ([]TrackedB
 				newer = "[CONTENT NOT CAPTURED: " + p.After.Skipped + "]"
 			}
 		}
-		if ct.IsOutsideWorkspace(p.Path) {
+		if ct.IsOutsideProjectFolder(p.Path) {
 			original = RedactedContentMarker
 			newer = RedactedContentMarker
 		}
@@ -458,7 +458,7 @@ func (ct *ChangeTracker) appendShellMutation(path string, before, after *shellSn
 		}
 	}
 
-	if ct.IsOutsideWorkspace(path) {
+	if ct.IsOutsideProjectFolder(path) {
 		originalCode = RedactedContentMarker
 		newCode = RedactedContentMarker
 	}

@@ -8,7 +8,7 @@
 import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { clientFetch } from '../services/clientSession';
-import { getWorkspaceCwd } from '../services/workspaceCwd';
+import { getProjectFolderCwd } from '../services/workspaceCwd';
 import { debugLog } from '../utils/log';
 
 export interface UseGitHandlersOptions {
@@ -29,7 +29,7 @@ export interface UseGitHandlersReturn {
  * entirely when unset so the request stays byte-identical to today's.
  */
 function withCwdDir(body: Record<string, unknown>): Record<string, unknown> {
-  const cwd = getWorkspaceCwd();
+  const cwd = getProjectFolderCwd();
   return cwd ? { ...body, dir: cwd } : body;
 }
 

@@ -27,7 +27,7 @@ func (h *reviewChangesHandler) Definition() ToolDefinition {
 			{
 				Name:        "repo_dir",
 				Type:        "string",
-				Description: "Repository root to review: a subdirectory of the workspace, or a git worktree of the workspace repository even when checked out outside the workspace root. Required when the change under review lives in a worktree other than the workspace root — without it the tool resolves HEAD in the workspace root and reviews the wrong tree. Defaults to workspace root if omitted.",
+				Description: "Repository root to review: a subdirectory of the project folder, or a git worktree of the project folder repository even when checked out outside the project folder. Required when the change under review lives in a worktree other than the project folder — without it the tool resolves HEAD in the project folder and reviews the wrong tree. Defaults to project folder if omitted.",
 			},
 			{
 				Name:        "scope",

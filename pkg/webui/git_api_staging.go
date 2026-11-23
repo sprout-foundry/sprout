@@ -14,13 +14,13 @@ import (
 
 // handleAPIGitStage handles staging a file
 func (ws *ReactWebServer) handleAPIGitStage(w http.ResponseWriter, r *http.Request) {
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
 	// Reject requests when not in a git repository.
-	if checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir"); checkCmd.Run() != nil {
+	if checkCmd := ws.gitCommandForProjectFolder(projectFolder, "rev-parse", "--git-dir"); checkCmd.Run() != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"message": "not_git_repo",
 		})
@@ -46,10 +46,10 @@ func (ws *ReactWebServer) handleAPIGitStage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Convert absolute paths to workspace-relative for git operations.
-	req.Path = makeGitRelativePath(req.Path, workspaceRoot)
+	// Convert absolute paths to project-folder-relative for git operations.
+	req.Path = makeGitRelativePath(req.Path, projectFolder)
 
-	status, err := ws.getGitStatusForWorkspace(workspaceRoot)
+	status, err := ws.getGitStatusForProjectFolder(projectFolder)
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_validate_path", fmt.Sprintf("Failed to validate path: %v", err))
 		return
@@ -60,7 +60,7 @@ func (ws *ReactWebServer) handleAPIGitStage(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Stage the file
-	cmd := ws.gitCommandForWorkspace(workspaceRoot, "add", "--", req.Path)
+	cmd := ws.gitCommandForProjectFolder(projectFolder, "add", "--", req.Path)
 	if err := cmd.Run(); err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_stage_file", fmt.Sprintf("Failed to stage file: %v", err))
 		return
@@ -76,13 +76,13 @@ func (ws *ReactWebServer) handleAPIGitStage(w http.ResponseWriter, r *http.Reque
 
 // handleAPIGitUnstage handles unstaging a file
 func (ws *ReactWebServer) handleAPIGitUnstage(w http.ResponseWriter, r *http.Request) {
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
 	// Reject requests when not in a git repository.
-	if checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir"); checkCmd.Run() != nil {
+	if checkCmd := ws.gitCommandForProjectFolder(projectFolder, "rev-parse", "--git-dir"); checkCmd.Run() != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"message": "not_git_repo",
 		})
@@ -108,10 +108,10 @@ func (ws *ReactWebServer) handleAPIGitUnstage(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Convert absolute paths to workspace-relative for git operations.
-	req.Path = makeGitRelativePath(req.Path, workspaceRoot)
+	// Convert absolute paths to project-folder-relative for git operations.
+	req.Path = makeGitRelativePath(req.Path, projectFolder)
 
-	status, err := ws.getGitStatusForWorkspace(workspaceRoot)
+	status, err := ws.getGitStatusForProjectFolder(projectFolder)
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_validate_path", fmt.Sprintf("Failed to validate path: %v", err))
 		return
@@ -122,7 +122,7 @@ func (ws *ReactWebServer) handleAPIGitUnstage(w http.ResponseWriter, r *http.Req
 	}
 
 	// Unstage the file
-	cmd := ws.gitCommandForWorkspace(workspaceRoot, "reset", "HEAD", "--", req.Path)
+	cmd := ws.gitCommandForProjectFolder(projectFolder, "reset", "HEAD", "--", req.Path)
 	if err := cmd.Run(); err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_unstage_file", fmt.Sprintf("Failed to unstage file: %v", err))
 		return
@@ -138,13 +138,13 @@ func (ws *ReactWebServer) handleAPIGitUnstage(w http.ResponseWriter, r *http.Req
 
 // handleAPIGitDiscard handles discarding changes to a file
 func (ws *ReactWebServer) handleAPIGitDiscard(w http.ResponseWriter, r *http.Request) {
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 
 	// Reject requests when not in a git repository.
-	if checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir"); checkCmd.Run() != nil {
+	if checkCmd := ws.gitCommandForProjectFolder(projectFolder, "rev-parse", "--git-dir"); checkCmd.Run() != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"message": "not_git_repo",
 		})
@@ -170,10 +170,10 @@ func (ws *ReactWebServer) handleAPIGitDiscard(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Convert absolute paths to workspace-relative for git operations.
-	req.Path = makeGitRelativePath(req.Path, workspaceRoot)
+	// Convert absolute paths to project-folder-relative for git operations.
+	req.Path = makeGitRelativePath(req.Path, projectFolder)
 
-	status, err := ws.getGitStatusForWorkspace(workspaceRoot)
+	status, err := ws.getGitStatusForProjectFolder(projectFolder)
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_validate_path", fmt.Sprintf("Failed to validate path: %v", err))
 		return
@@ -193,7 +193,7 @@ func (ws *ReactWebServer) handleAPIGitDiscard(w http.ResponseWriter, r *http.Req
 	case containsPath(status.Untracked, req.Path):
 		// Untracked: nothing to restore from HEAD, so just delete the file.
 		// This matches what `git clean -f -- <path>` would do.
-		abs := filepath.Join(workspaceRoot, req.Path)
+		abs := filepath.Join(projectFolder, req.Path)
 		if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
 			writeJSONErr(w, http.StatusInternalServerError, "failed_to_delete_untracked_file", fmt.Sprintf("Failed to delete untracked file: %v", err))
 			return
@@ -201,7 +201,7 @@ func (ws *ReactWebServer) handleAPIGitDiscard(w http.ResponseWriter, r *http.Req
 	default:
 		// Modified / staged / deleted / renamed: restore both index and
 		// worktree back to HEAD so partial-stage cases also revert fully.
-		cmd := ws.gitCommandForWorkspace(workspaceRoot, "restore", "--staged", "--worktree", "--", req.Path)
+		cmd := ws.gitCommandForProjectFolder(projectFolder, "restore", "--staged", "--worktree", "--", req.Path)
 		if err := cmd.Run(); err != nil {
 			writeJSONErr(w, http.StatusInternalServerError, "failed_to_discard_changes", fmt.Sprintf("Failed to discard changes: %v", err))
 			return
@@ -222,10 +222,10 @@ func (ws *ReactWebServer) handleAPIGitStageAll(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 
 	// Reject requests when not in a git repository.
-	if checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir"); checkCmd.Run() != nil {
+	if checkCmd := ws.gitCommandForProjectFolder(projectFolder, "rev-parse", "--git-dir"); checkCmd.Run() != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"message": "not_git_repo",
 		})
@@ -233,7 +233,7 @@ func (ws *ReactWebServer) handleAPIGitStageAll(w http.ResponseWriter, r *http.Re
 	}
 
 	// Stage all changes
-	cmd := ws.gitCommandForWorkspace(workspaceRoot, "add", "-A")
+	cmd := ws.gitCommandForProjectFolder(projectFolder, "add", "-A")
 	if err := cmd.Run(); err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_stage_all", fmt.Sprintf("Failed to stage all: %v", err))
 		return
@@ -252,10 +252,10 @@ func (ws *ReactWebServer) handleAPIGitUnstageAll(w http.ResponseWriter, r *http.
 		return
 	}
 
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 
 	// Reject requests when not in a git repository.
-	if checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir"); checkCmd.Run() != nil {
+	if checkCmd := ws.gitCommandForProjectFolder(projectFolder, "rev-parse", "--git-dir"); checkCmd.Run() != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"message": "not_git_repo",
 		})
@@ -263,7 +263,7 @@ func (ws *ReactWebServer) handleAPIGitUnstageAll(w http.ResponseWriter, r *http.
 	}
 
 	// Unstage all changes
-	cmd := ws.gitCommandForWorkspace(workspaceRoot, "reset", "HEAD")
+	cmd := ws.gitCommandForProjectFolder(projectFolder, "reset", "HEAD")
 	if err := cmd.Run(); err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_unstage_all", fmt.Sprintf("Failed to unstage all: %v", err))
 		return

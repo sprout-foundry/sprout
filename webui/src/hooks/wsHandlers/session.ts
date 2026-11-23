@@ -53,25 +53,25 @@ function endStepParagraph(messages: Message[]): Message[] {
   return [...messages.slice(0, -1), { ...last, content: `${last.content}\n\n` }];
 }
 
-// Handle workspace_changed event
+// Handle project_folder_changed event
 //
-// When the workspace root changes (e.g. switching to a git worktree via the
+// When the project folder changes (e.g. switching to a git worktree via the
 // Worktrees panel), we refresh workspace-dependent UI in place instead of
 // doing a hard page reload.  A reload destroys all in-memory React state
 // (chat messages, open files, terminal sessions) and in service mode the
-// per-client server context is re-initialised from ws.workspaceRoot — which,
+// per-client server context is re-initialised from ws.projectFolder — which,
 // combined with the old unconditional reload, caused the "lands in home
 // directory" bug.
 //
 // The in-place refresh does three things:
 //   1. Tears down cached LSP clients (their WebSocket URLs are keyed by the
-//      old workspace root).
+//      old project folder).
 //   2. Clears the recentLogs cache in React state so stale data
-//      from the previous workspace doesn't linger.
+//      from the previous project folder doesn't linger.
 //   3. Dispatches a `sprout:workspace-changed` DOM event so other components
 //      (WorkspaceBar, FileBrowser, editor tabs, etc.) can re-fetch fresh data
-//      from the server's new workspace root.
-export const handleWorkspaceChanged = (ctx: EventHandlerContext): void => {
+//      from the server's new project folder.
+export const handleProjectFolderChanged = (ctx: EventHandlerContext): void => {
   const { event, setState } = ctx;
   const data = (event.data ?? {}) as WorkspaceChangedData;
   debugLog('[workspace] Workspace changed:', data);
@@ -86,7 +86,7 @@ export const handleWorkspaceChanged = (ctx: EventHandlerContext): void => {
   logEntry.category = 'system';
   logEntry.level = 'info';
 
-  // Tear down cached LSP clients whose connections reference the old workspace.
+  // Tear down cached LSP clients whose connections reference the old project folder.
   try {
     LSPClientService.getInstance().cleanup();
   } catch (err) {
@@ -96,19 +96,19 @@ export const handleWorkspaceChanged = (ctx: EventHandlerContext): void => {
   // Clear workspace-derived caches so they re-fetch from the new root.
   // (recentFiles state was removed with the dead recents pipeline; the
   // palette's recents are workspace-scoped in localStorage and don't need
-  // clearing — the bucket IS the workspace.)
+  // clearing — the bucket IS the project folder.)
   setState((prev) => ({
     recentLogs: [],
     logs: appendCappedLog(prev.logs, logEntry),
   }));
 
   // Notify other components to refresh their workspace-dependent data.
-  const workspaceRoot = (data as Record<string, unknown>).workspace_root;
+  const projectFolder = (data as Record<string, unknown>).project_folder;
   const daemonRoot = (data as Record<string, unknown>).daemon_root;
   window.dispatchEvent(
     new CustomEvent('sprout:workspace-changed', {
       detail: {
-        workspaceRoot: typeof workspaceRoot === 'string' ? workspaceRoot : '',
+        workspaceRoot: typeof projectFolder === 'string' ? projectFolder : '',
         daemonRoot: typeof daemonRoot === 'string' ? daemonRoot : '',
       },
     }),
@@ -223,11 +223,11 @@ export const handleCompactCompleted = (ctx: EventHandlerContext): void => {
   );
 };
 
-// Handle workspace_patch event (log-only; full VFS integration is a follow-up).
-// Redact file contents from the log entry — workspace_patch carries the full
+// Handle project_folder_patch event (log-only; full VFS integration is a follow-up).
+// Redact file contents from the log entry — project_folder_patch carries the full
 // written `content`, which may include secrets/PII and should not persist in
 // React state. Only path/action/seq are safe to log.
-export const handleWorkspacePatch = (ctx: EventHandlerContext): void => {
+export const handleProjectFolderPatch = (ctx: EventHandlerContext): void => {
   const { event, setState } = ctx;
   const raw = (event.data ?? {}) as { path?: unknown; action?: unknown; seq?: unknown; content?: unknown };
   const logEntry = createLogEntry({

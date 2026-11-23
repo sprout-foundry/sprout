@@ -299,7 +299,7 @@ func TestLSPProcessContextCancellation(t *testing.T) {
 	})
 }
 
-func TestLSPProcessWithWorkspacePath(t *testing.T) {
+func TestLSPProcessWithProjectFolderPath(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("process runs in correct directory", func(t *testing.T) {

@@ -45,7 +45,7 @@ export function installAdapter(adapter: APIAdapter): void {
  * Uninstall the active adapter, clearing the singleton.
  *
  * Pass the adapter instance to clear only if it is the one currently
- * installed — this is how a mounted workspace uninstalls the adapter its own
+ * installed — this is how a mounted project folder uninstalls the adapter its own
  * wiring installed without touching one the host (or the app's bootstrap)
  * installed for the page. Omit it to clear whatever is installed. Like
  * installAdapter, it notifies adapter-aware providers so they re-read the
@@ -81,7 +81,7 @@ export function hasAdapter(): boolean {
  * adapter's requiresBackendHealthCheck property is not explicitly true.
  *
  * Read at call time: the singleton normally changes once at startup, but a
- * mounted workspace that swaps its agent backend in place uninstalls the
+ * mounted project folder that swaps its agent backend in place uninstalls the
  * in-browser adapter when it moves to a daemon, so a cached answer can go
  * stale.
  */

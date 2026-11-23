@@ -1,8 +1,8 @@
-import type { UseGitWorkspaceOptions, UseGitWorkspaceResult } from '../../hooks/useGitWorkspace';
+import type { UseGitWorkspaceOptions, UseGitProjectFolderResult } from '../../hooks/useGitWorkspace';
 import type { GitCommitDetail, GitCommitSummary } from '../../types/git-types';
 import type { GitSidebarPanelProps } from '../GitSidebarPanel';
 
-/** Opens a workspace tab (a diff, a review, a compare view) and returns its buffer id. */
+/** Opens a project folder tab (a diff, a review, a compare view) and returns its buffer id. */
 export type OpenWorkspaceBuffer = UseGitWorkspaceOptions['openWorkspaceBuffer'];
 
 /**
@@ -40,12 +40,12 @@ export interface GitPanelPropsExtras {
 }
 
 /**
- * Map the git workspace state (`useGitWorkspace`) onto the git section's
- * props. The app's sidebar and the composed workspace's `git` view both build
+ * Map the git project folder state (`useGitWorkspace`) onto the git section's
+ * props. The app's sidebar and the composed project folder's `git` view both build
  * their panel through it, so the two cannot drift apart.
  */
 export function buildGitPanelProps(
-  git: UseGitWorkspaceResult,
+  git: UseGitProjectFolderResult,
   { openWorkspaceBuffer, onOpenFile }: GitPanelPropsExtras,
 ): SidebarGitPanelProps {
   return {

@@ -1,7 +1,7 @@
 //go:build !js
 
 // requiretest_hook_test.go — the require-a-test-for-new-behavior acceptance
-// tests, end to end through a full agent turn (scripted model, real workspace
+// tests, end to end through a full agent turn (scripted model, real project folder
 // fixture, real shell execution of the manifest's build command). They pin
 // the opt-in gate and its enforcement through the verification run:
 //

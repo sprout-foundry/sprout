@@ -153,7 +153,7 @@ export function useEditorUpdate(params: UseEditorUpdateParams): UseEditorUpdateR
             updateBufferContent(buf.id, newContent);
             setBufferModified(buf.id, newContent !== buf.originalContent);
 
-            // Trigger diagnostics for file buffers (excluding workspace buffers)
+            // Trigger diagnostics for file buffers (excluding project folder buffers)
             if (buf.kind === 'file' && buf.file && !buf.file.path.startsWith('__workspace/')) {
               fetchDiagnosticsRef.current(buf.file.path, newContent, 'edit');
             }

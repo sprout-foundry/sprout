@@ -23,8 +23,8 @@ func registerGitHumaOperations(api huma.API, ws *ReactWebServer) {
 		OperationID: "gitStatus",
 		Method:      http.MethodGet,
 		Path:        "/api/git/status",
-		Summary:     "Report the workspace's git status.",
-		Description: "Reports the workspace's git status: staged, unstaged, and untracked changes, plus branch and ahead/behind counts.",
+		Summary:     "Report the project folder's git status.",
+		Description: "Reports the project folder's git status: staged, unstaged, and untracked changes, plus branch and ahead/behind counts.",
 		Tags:        []string{"git"},
 	}, ws.gitStatusHumaHandler)
 
@@ -186,7 +186,7 @@ func registerGitHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodPost,
 		Path:        "/api/git/worktree/checkout",
 		Summary:     "Switch to an existing worktree.",
-		Description: "Switches the client's active workspace to the git worktree at `path`.",
+		Description: "Switches the client's active project folder to the git worktree at `path`.",
 		Tags:        []string{"git"},
 	}, ws.gitWorktreeCheckoutHumaHandler)
 
@@ -195,7 +195,7 @@ func registerGitHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodPost,
 		Path:        "/api/git/checkout",
 		Summary:     "Switch to an existing branch.",
-		Description: "Checks out the branch at `branch` in the workspace.",
+		Description: "Checks out the branch at `branch` in the project folder.",
 		Tags:        []string{"git"},
 	}, ws.gitCheckoutHumaHandler)
 

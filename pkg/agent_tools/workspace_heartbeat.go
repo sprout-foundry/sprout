@@ -3,7 +3,7 @@
 // This file implements the heartbeat monitor for long-running jobs (SP-046-4).
 // The browser sends periodic heartbeats over the WebSocket; the container
 // monitors them and terminates abandoned sessions after the threshold.
-// See roadmap/SP-046-workspace-sync-model.md §4 for the full specification.
+// See roadmap/SP-046-project-folder-sync-model.md §4 for the full specification.
 
 package tools
 
@@ -13,9 +13,9 @@ import (
 	"time"
 )
 
-// eventWorkspaceHeartbeatLost mirrors events.EventTypeWorkspaceHeartbeatLost.
+// eventProjectFolderHeartbeatLost mirrors events.EventTypeProjectFolderHeartbeatLost.
 // Defined locally to avoid an import-cycle dependency.
-const eventWorkspaceHeartbeatLost = "workspace.heartbeat_lost"
+const eventProjectFolderHeartbeatLost = "workspace.heartbeat_lost"
 
 // SessionHeartbeat tracks the heartbeat state for a single session.
 type SessionHeartbeat struct {
@@ -35,7 +35,7 @@ type SessionHeartbeat struct {
 // The monitor runs a background goroutine (started via StartMonitor) that
 // periodically checks all registered sessions. When a session's last
 // heartbeat exceeds the threshold, the monitor:
-//  1. Publishes an EventTypeWorkspaceHeartbeatLost event (if publisher is set)
+//  1. Publishes an EventTypeProjectFolderHeartbeatLost event (if publisher is set)
 //  2. Calls the session's JobTerminated callback (if registered)
 //  3. Removes the session from the map
 type HeartbeatMonitor struct {
@@ -162,7 +162,7 @@ func (m *HeartbeatMonitor) checkSessions(threshold time.Duration) {
 	// Execute outside the lock to avoid holding mutex during I/O and callbacks.
 	for _, a := range actions {
 		if publisher != nil {
-			publisher.Publish(eventWorkspaceHeartbeatLost, map[string]interface{}{
+			publisher.Publish(eventProjectFolderHeartbeatLost, map[string]interface{}{
 				"session_id":     a.sessionID,
 				"last_heartbeat": a.lastHeartbeat.Format(time.RFC3339),
 			})

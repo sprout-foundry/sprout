@@ -36,7 +36,7 @@ type ReviewChangesOptions struct {
 	// Focus is optional guidance passed to every reviewer.
 	Focus string
 	// Dir overrides the directory whose repository is reviewed; empty uses
-	// the agent's workspace root.
+	// the agent's project folder.
 	Dir string
 
 	// taskPrefix prefixes reviewer task IDs; a background review uses its
@@ -118,13 +118,13 @@ func (a *Agent) ReviewChanges(ctx context.Context, opts ReviewChangesOptions) (*
 	}
 	dir := opts.Dir
 	if dir == "" {
-		dir = a.currentWorkspaceRoot()
+		dir = a.currentProjectFolder()
 	}
-	workspaceRoot, err := filepath.Abs(dir)
+	projectFolder, err := filepath.Abs(dir)
 	if err != nil {
-		return nil, agenterrors.NewConfig("failed to resolve absolute workspace path", err)
+		return nil, agenterrors.NewConfig("failed to resolve absolute project folder path", err)
 	}
-	repoRoot := reviewRepoRoot(ctx, workspaceRoot)
+	repoRoot := reviewRepoRoot(ctx, projectFolder)
 	if repoRoot == "" {
 		return nil, agenterrors.NewValidation("review_changes requires a git repository", nil)
 	}
@@ -135,7 +135,7 @@ func (a *Agent) ReviewChanges(ctx context.Context, opts ReviewChangesOptions) (*
 	reviewHead, _ := runReviewGit(ctx, repoRoot, "rev-parse", "--short", "HEAD")
 	resolvedHead := strings.TrimSpace(reviewHead)
 
-	provider, model, role, systemPrompt, err := resolveSubagentProviderModel(a, personas.IDReviewer, true, workspaceRoot)
+	provider, model, role, systemPrompt, err := resolveSubagentProviderModel(a, personas.IDReviewer, true, projectFolder)
 	if err != nil {
 		return nil, err
 	}
@@ -583,13 +583,13 @@ func handleReviewChanges(ctx context.Context, a *Agent, args map[string]any) (st
 	opts.Range, _ = args["range"].(string)
 	opts.Focus, _ = args["focus"].(string)
 	// repo_dir lets the caller point the review at a worktree of the
-	// workspace repository that lives outside the workspace root. Without
-	// it the review resolves HEAD in the workspace root and — in a
+	// project folder repository that lives outside the project folder. Without
+	// it the review resolves HEAD in the project folder and — in a
 	// multi-worktree setup — reviews the wrong tree: main's unrelated
 	// in-progress work surfaced as "the change", with the branch's own
 	// files reported as deleted.
 	if rd, ok := args["repo_dir"].(string); ok && strings.TrimSpace(rd) != "" {
-		resolved, err := tools.ValidateRepoDir(strings.TrimSpace(rd), a.currentWorkspaceRoot())
+		resolved, err := tools.ValidateRepoDir(strings.TrimSpace(rd), a.currentProjectFolder())
 		if err != nil {
 			return "", err
 		}

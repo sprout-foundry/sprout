@@ -7,12 +7,12 @@ import (
 	"strings"
 )
 
-// offWorkspacePathPattern lexically extracts absolute and ~-rooted path
+// offProjectFolderPathPattern lexically extracts absolute and ~-rooted path
 // tokens from a shell command line. Shell separators and quotes act as
 // token boundaries so "cat /etc/passwd|wc", ">/home/x", "--flag=/etc/y"
 // all yield their path arguments. Drive-letter (C:\x, C:/x) and UNC
 // (\\host\share) tokens are matched too so Windows paths are not skipped.
-var offWorkspacePathPattern = regexp.MustCompile(`(?:^|[\s|&;()<>'"=])(/[^\s|&;<>\"']*|~/?[^\s|&;<>\"']*|[A-Za-z]:[\\/][^\s|&;<>\"']*|\\\\[^\s|&;<>\"']+)`)
+var offProjectFolderPathPattern = regexp.MustCompile(`(?:^|[\s|&;()<>'"=])(/[^\s|&;<>\"']*|~/?[^\s|&;<>\"']*|[A-Za-z]:[\\/][^\s|&;<>\"']*|\\\\[^\s|&;<>\"']+)`)
 
 var shellPathAlwaysAllowed = map[string]bool{
 	"/dev/null":    true,
@@ -42,13 +42,13 @@ func isSystemBinLibPath(p string) bool {
 	return false
 }
 
-// ClassifyToolCallWithWorkspace augments ClassifyToolCall with workspace
+// ClassifyToolCallWithProjectFolder augments ClassifyToolCall with project folder
 // containment for shell commands. Any absolute or ~-rooted path (and any
-// ../-relative escape) that resolves outside the workspace root, /tmp,
+// ../-relative escape) that resolves outside the project folder, /tmp,
 // or one of extraAllowed prompts for approval: Safe results escalate to
 // Caution (ShouldPrompt), while already-prompting/blocking results are
 // returned unchanged. Non-shell tools return the base classification.
-func ClassifyToolCallWithWorkspace(toolName string, args map[string]interface{}, workspaceRoot string, extraAllowed ...string) SecurityResult {
+func ClassifyToolCallWithProjectFolder(toolName string, args map[string]interface{}, projectFolder string, extraAllowed ...string) SecurityResult {
 	base := ClassifyToolCall(toolName, args)
 	if toolName != "shell_command" {
 		return base
@@ -60,35 +60,35 @@ func ClassifyToolCallWithWorkspace(toolName string, args map[string]interface{},
 	if base.Risk >= SecurityCaution || base.IsHardBlock {
 		return base
 	}
-	if offWorkspacePathInCommand(cmd, workspaceRoot, extraAllowed) {
+	if offProjectFolderPathInCommand(cmd, projectFolder, extraAllowed) {
 		return SecurityResult{
 			Risk:         SecurityCaution,
-			Reasoning:    "Command references paths outside the workspace root — approval required",
+			Reasoning:    "Command references paths outside the project folder — approval required",
 			ShouldPrompt: true,
-			RiskType:     "filesystem_outside_workspace",
+			RiskType:     "filesystem_outside_project_folder",
 			Category:     RiskCategoryFileWrite,
 		}
 	}
 	return base
 }
 
-// offWorkspacePathInCommand reports whether cmd references any path that
-// resolves outside workspaceRoot, /tmp, or extraAllowed. Path resolution is
+// offProjectFolderPathInCommand reports whether cmd references any path that
+// resolves outside projectFolder, /tmp, or extraAllowed. Path resolution is
 // lexical (no symlink following, so it cannot be fooled by symlink swaps
 // between check and execution). The single filesystem touch is an existence
 // probe of a rooted token's top-level directory, used to tell a real outside
 // path (/etc/hosts) from a route string or search pattern that merely starts
 // with "/" (grep -n "/api/git/"): a token whose top-level directory does not
 // exist on this machine is not a file target.
-func offWorkspacePathInCommand(cmd, workspaceRoot string, extraAllowed []string) bool {
-	wsAbs := absPathLexical(workspaceRoot)
+func offProjectFolderPathInCommand(cmd, projectFolder string, extraAllowed []string) bool {
+	wsAbs := absPathLexical(projectFolder)
 	allowed := make([]string, 0, len(extraAllowed))
 	for _, ex := range extraAllowed {
 		if ex != "" {
 			allowed = append(allowed, absPathLexical(ex))
 		}
 	}
-	for _, tok := range offWorkspacePathPattern.FindAllStringSubmatch(cmd, -1) {
+	for _, tok := range offProjectFolderPathPattern.FindAllStringSubmatch(cmd, -1) {
 		raw := strings.Trim(tok[1], `"'`)
 		if raw == "" {
 			continue
@@ -114,7 +114,7 @@ func offWorkspacePathInCommand(cmd, workspaceRoot string, extraAllowed []string)
 			// machine cannot be a real file target — it is a route string,
 			// search pattern (@see grep -n "/api/git/"), URL path, or similar
 			// pattern argument. Ignoring it keeps such tokens from triggering a
-			// spurious "outside the workspace root" prompt. Genuine outside
+			// spurious "outside the project folder" prompt. Genuine outside
 			// paths (e.g. /etc/hosts) have an existing top-level directory and
 			// are still flagged; a path under a nonexistent tree is untraversable
 			// and so is not a real escape either.
@@ -122,7 +122,7 @@ func offWorkspacePathInCommand(cmd, workspaceRoot string, extraAllowed []string)
 			// The shortcut is skipped when the token contains a ".." segment:
 			// such a token must be flagged regardless of whether its (cleaned)
 			// top-level directory exists, because the shell resolves it against
-			// the filesystem root, not the workspace — e.g.
+			// the filesystem root, not the project folder — e.g.
 			// `cat /nonexistent/../etc/hosts` reaches /etc/hosts even though
 			// /nonexistent does not exist. Skipping the `..` case would reopen
 			// exactly the escape this fix is meant to help catch.
@@ -133,7 +133,7 @@ func offWorkspacePathInCommand(cmd, workspaceRoot string, extraAllowed []string)
 		}
 	}
 	// ../ escapes anywhere in a relative token (leading or mid-path, e.g.
-	// "sub/../../other"), resolved lexically against the workspace root.
+	// "sub/../../other"), resolved lexically against the project folder.
 	if wsAbs != "" {
 		for _, field := range strings.Fields(cmd) {
 			clean := strings.Trim(field, `"'`)

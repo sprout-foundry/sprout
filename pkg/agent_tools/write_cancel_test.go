@@ -24,7 +24,7 @@ func TestEditFile_CancelledContextDoesNotWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithCancel(filesystem.WithWorkspaceRoot(context.Background(), dir))
+	ctx, cancel := context.WithCancel(filesystem.WithProjectFolder(context.Background(), dir))
 	cancel()
 
 	_, err := EditFile(ctx, path, "func a() {\n\treturn\n}", "func b() {\n\treturn\n}")
@@ -55,7 +55,7 @@ func TestEditFile_DeadlineExceededDoesNotWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithTimeout(filesystem.WithWorkspaceRoot(context.Background(), dir), 0)
+	ctx, cancel := context.WithTimeout(filesystem.WithProjectFolder(context.Background(), dir), 0)
 	defer cancel()
 	<-ctx.Done()
 
@@ -84,7 +84,7 @@ func TestWriteFile_CancelledContextDoesNotWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithCancel(filesystem.WithWorkspaceRoot(context.Background(), dir))
+	ctx, cancel := context.WithCancel(filesystem.WithProjectFolder(context.Background(), dir))
 	cancel()
 
 	_, err := WriteFile(ctx, path, "package other\n")
@@ -138,7 +138,7 @@ func TestEditFile_LiveContextWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), dir)
+	ctx := filesystem.WithProjectFolder(context.Background(), dir)
 	if _, err := EditFile(ctx, path, "package store", "package other"); err != nil {
 		t.Fatalf("live-context edit failed: %v", err)
 	}

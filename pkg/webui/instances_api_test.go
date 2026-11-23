@@ -233,13 +233,13 @@ func TestPersistedSSHSessionRegistryRoundTrip(t *testing.T) {
 	_tmpCfg := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", _tmpCfg)
 
-	session := &sshWorkspaceSession{
-		Key:                 "devbox::$HOME",
-		HostAlias:           "devbox",
-		RemoteWorkspacePath: "$HOME",
-		RemotePort:          55421,
-		RemotePID:           4321,
-		StartedAt:           time.Now().UTC().Truncate(time.Second),
+	session := &sshProjectFolderSession{
+		Key:                     "devbox::$HOME",
+		HostAlias:               "devbox",
+		RemoteProjectFolderPath: "$HOME",
+		RemotePort:              55421,
+		RemotePID:               4321,
+		StartedAt:               time.Now().UTC().Truncate(time.Second),
 	}
 
 	if err := persistSSHSession(session); err != nil {
@@ -253,7 +253,7 @@ func TestPersistedSSHSessionRegistryRoundTrip(t *testing.T) {
 	if persisted == nil {
 		t.Fatalf("expected persisted session, got nil")
 	}
-	if persisted.HostAlias != session.HostAlias || persisted.RemoteWorkspacePath != session.RemoteWorkspacePath || persisted.RemotePort != session.RemotePort || persisted.RemotePID != session.RemotePID {
+	if persisted.HostAlias != session.HostAlias || persisted.RemoteProjectFolderPath != session.RemoteProjectFolderPath || persisted.RemotePort != session.RemotePort || persisted.RemotePID != session.RemotePID {
 		t.Fatalf("unexpected persisted session: %+v", persisted)
 	}
 
@@ -274,14 +274,14 @@ func TestHandleAPISSHSessionsReturnsPersistedEntries(t *testing.T) {
 	_tmpCfg := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", _tmpCfg)
 
-	if err := writePersistedSSHSessionRegistry(map[string]persistedSSHWorkspaceSession{
+	if err := writePersistedSSHSessionRegistry(map[string]persistedSSHProjectFolderSession{
 		"devbox::$HOME": {
-			Key:                 "devbox::$HOME",
-			HostAlias:           "devbox",
-			RemoteWorkspacePath: "$HOME",
-			RemotePort:          55421,
-			RemotePID:           4321,
-			StartedAt:           time.Now().UTC().Truncate(time.Second),
+			Key:                     "devbox::$HOME",
+			HostAlias:               "devbox",
+			RemoteProjectFolderPath: "$HOME",
+			RemotePort:              55421,
+			RemotePID:               4321,
+			StartedAt:               time.Now().UTC().Truncate(time.Second),
 		},
 	}); err != nil {
 		t.Fatalf("writePersistedSSHSessionRegistry failed: %v", err)
@@ -290,7 +290,7 @@ func TestHandleAPISSHSessionsReturnsPersistedEntries(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/instances/ssh-sessions", nil)
 	w := httptest.NewRecorder()
 
-	server := &ReactWebServer{sshSessions: make(map[string]*sshWorkspaceSession)}
+	server := &ReactWebServer{sshSessions: make(map[string]*sshProjectFolderSession)}
 	server.handleAPISSHSessions(w, req)
 
 	if w.Code != http.StatusOK {
@@ -315,14 +315,14 @@ func TestHandleAPISSHSessionDeleteRemovesPersistedEntry(t *testing.T) {
 	_tmpCfg := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", _tmpCfg)
 
-	if err := writePersistedSSHSessionRegistry(map[string]persistedSSHWorkspaceSession{
+	if err := writePersistedSSHSessionRegistry(map[string]persistedSSHProjectFolderSession{
 		"devbox::$HOME": {
-			Key:                 "devbox::$HOME",
-			HostAlias:           "devbox",
-			RemoteWorkspacePath: "$HOME",
-			RemotePort:          55421,
-			RemotePID:           4321,
-			StartedAt:           time.Now().UTC().Truncate(time.Second),
+			Key:                     "devbox::$HOME",
+			HostAlias:               "devbox",
+			RemoteProjectFolderPath: "$HOME",
+			RemotePort:              55421,
+			RemotePID:               4321,
+			StartedAt:               time.Now().UTC().Truncate(time.Second),
 		},
 	}); err != nil {
 		t.Fatalf("writePersistedSSHSessionRegistry failed: %v", err)
@@ -331,7 +331,7 @@ func TestHandleAPISSHSessionDeleteRemovesPersistedEntry(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/instances/ssh-close", bytes.NewReader([]byte(`{"key":"devbox::$HOME"}`)))
 	w := httptest.NewRecorder()
 
-	server := &ReactWebServer{sshSessions: make(map[string]*sshWorkspaceSession)}
+	server := &ReactWebServer{sshSessions: make(map[string]*sshProjectFolderSession)}
 	server.handleAPISSHSessionDelete(w, req)
 
 	if w.Code != http.StatusOK {

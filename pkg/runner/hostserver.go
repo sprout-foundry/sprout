@@ -15,8 +15,8 @@ import (
 const maxProxyBody = 100 << 20
 
 // HostServer is the only surface the platform reaches on a runner:
-// /daemon/{workspaceID}/... proxied to that workspace's daemon on loopback,
-// after checking the per-workspace bearer secret. The daemon checks the same
+// /daemon/{devSpaceID}/... proxied to that dev space's daemon on loopback,
+// after checking the per-dev-space bearer secret. The daemon checks the same
 // secret again (its SPROUT_AUTH_TOKEN), so the runner is not the only gate.
 type HostServer struct {
 	mu       sync.RWMutex
@@ -33,24 +33,24 @@ func NewHostServer() *HostServer {
 	return &HostServer{bindings: make(map[string]binding)}
 }
 
-// Bind routes a workspace to its daemon port, authenticated by secret.
-func (h *HostServer) Bind(workspaceID string, port int, secret string) {
+// Bind routes a dev space to its daemon port, authenticated by secret.
+func (h *HostServer) Bind(devSpaceID string, port int, secret string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.bindings[workspaceID] = binding{port: port, secret: secret}
+	h.bindings[devSpaceID] = binding{port: port, secret: secret}
 }
 
-// Unbind removes a workspace; later calls for it get 404.
-func (h *HostServer) Unbind(workspaceID string) {
+// Unbind removes a dev space; later calls for it get 404.
+func (h *HostServer) Unbind(devSpaceID string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	delete(h.bindings, workspaceID)
+	delete(h.bindings, devSpaceID)
 }
 
-func (h *HostServer) lookup(workspaceID string) (binding, bool) {
+func (h *HostServer) lookup(devSpaceID string) (binding, bool) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	b, ok := h.bindings[workspaceID]
+	b, ok := h.bindings[devSpaceID]
 	return b, ok
 }
 
@@ -65,12 +65,12 @@ func (h *HostServer) Handler() http.Handler {
 }
 
 func (h *HostServer) handleDaemon(w http.ResponseWriter, r *http.Request) {
-	workspaceID, daemonPath, ok := strings.Cut(strings.TrimPrefix(r.URL.Path, "/daemon/"), "/")
-	if !ok || workspaceID == "" || daemonPath == "" {
+	devSpaceID, daemonPath, ok := strings.Cut(strings.TrimPrefix(r.URL.Path, "/daemon/"), "/")
+	if !ok || devSpaceID == "" || daemonPath == "" {
 		http.NotFound(w, r)
 		return
 	}
-	b, found := h.lookup(workspaceID)
+	b, found := h.lookup(devSpaceID)
 	if !found {
 		http.NotFound(w, r)
 		return

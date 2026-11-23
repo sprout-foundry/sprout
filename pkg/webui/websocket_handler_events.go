@@ -173,7 +173,7 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 	// No client_id and no chat_id - only allow known global event types
 	// or events with user_id (user-scoped broadcasts after passing user filtering above)
 	switch event.Type {
-	case events.EventTypeMetricsUpdate, events.EventTypeFileContentChanged, events.EventTypeSecurityPromptRequest, events.EventTypeSecurityApprovalRequest, events.EventTypeAskUserRequest, events.EventTypeWorkspaceStopping:
+	case events.EventTypeMetricsUpdate, events.EventTypeFileContentChanged, events.EventTypeSecurityPromptRequest, events.EventTypeSecurityApprovalRequest, events.EventTypeAskUserRequest, events.EventTypeDevSpaceStopping:
 		return true
 	default:
 		// Allow events with a non-empty user_id (user-scoped broadcasts)
@@ -397,10 +397,10 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 		})
 
 	case AllowedMessageTypeHydrateRequest:
-		// SP-046: client requests cold-hydrate of workspace files.
+		// SP-046: client requests cold-hydrate of project folder files.
 		// Runs in a goroutine so the read loop stays responsive.
 		ws.safeHandleGoroutine(safeConn, sessionID, clientID, userID, chatID, daemon, func() {
-			ws.handleColdHydrateRequest(safeConn, ws.getWorkspaceRootForClient(clientID))
+			ws.handleColdHydrateRequest(safeConn, ws.getProjectFolderForClient(clientID))
 		})
 
 	case AllowedMessageTypeSyncRecover:

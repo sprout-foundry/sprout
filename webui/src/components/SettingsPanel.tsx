@@ -273,10 +273,10 @@ function SettingsPanel({
     setProviderBillingType: state.setProviderBillingType,
     providerModelContextSizes: state.providerModelContextSizes,
     setProviderModelContextSizes: state.setProviderModelContextSizes,
-    // Refs and workspace
+    // Refs and project folder
     settingsRef,
-    creatingWorkspaceConfig: state.creatingWorkspaceConfig,
-    setCreatingWorkspaceConfig: state.setCreatingWorkspaceConfig,
+    creatingProjectFolderConfig: state.creatingProjectFolderConfig,
+    setCreatingProjectFolderConfig: state.setCreatingProjectFolderConfig,
     setLayerData: state.setLayerData,
     refreshProviderCatalog: state.refreshSubagentProviders,
   });
@@ -514,7 +514,7 @@ function SettingsPanel({
 
   const scopeTitle: Record<SectionDef['scope'], string> = {
     session: 'Session-scoped — applies to this chat session only.',
-    workspace: 'Workspace-scoped — saved in this project directory.',
+    project_folder: 'Project-folder-scoped — saved in this project folder.',
     global: 'Global — saved in ~/.config/sprout, applies everywhere.',
     runtime: 'Runtime — this browser session only, not persisted to disk.',
   };
@@ -572,8 +572,11 @@ function SettingsPanel({
             aria-expanded={expandedSections.has(section.id)}
           >
             <span className="settings-section-label">{section.label}</span>
-            <span className={`settings-scope-badge scope-${section.scope}`} title={scopeTitle[section.scope]}>
-              {section.scope}
+            <span
+              className={`settings-scope-badge scope-${section.scope.replace('_', '-')}`}
+              title={scopeTitle[section.scope]}
+            >
+              {section.scope.replace('_', ' ')}
             </span>
             <ChevronRight className="settings-section-chevron" size={14} />
           </button>

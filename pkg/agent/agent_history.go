@@ -189,7 +189,7 @@ func (a *Agent) saveHistoryToConfig() {
 }
 
 func (a *Agent) historyPathKey() string {
-	root := a.currentWorkspaceRoot()
+	root := a.currentProjectFolder()
 	if strings.TrimSpace(root) == "" || root == "." {
 		return "unknown"
 	}

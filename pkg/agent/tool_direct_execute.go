@@ -7,7 +7,7 @@ import (
 	core "github.com/sprout-foundry/seed/core"
 )
 
-// ExecuteToolByName runs a single named tool against this agent's workspace
+// ExecuteToolByName runs a single named tool against this agent's project folder
 // and returns its content, or an error string when the tool failed.
 //
 // It builds a fresh seed ToolRegistry (with the security PreExecuteHook) per

@@ -164,24 +164,24 @@ func (cs *chatSession) getWorktreePath() string {
 // When the session has a Provider/Model set, those are applied to the agent
 // after creation, providing per-session provider/model scoping.
 //
-// The agent's workspace root is set to the chat's worktree path if set,
-// otherwise it falls back to the provided workspaceRoot parameter.
+// The agent's project folder is set to the chat's worktree path if set,
+// otherwise it falls back to the provided projectFolder parameter.
 //
-// The optional workspaceChdir function, when non-nil, wraps the
+// The optional projectFolderChdir function, when non-nil, wraps the
 // agent.NewAgentWithLayers call so that initialization-time os.Getwd() and
-// relative-path resolution observe the correct workspace directory (critical
-// in daemon mode where the process CWD may differ from the client workspace).
-func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string, workspaceDir string, eventBus *events.EventBus, clientID, userID string, workspaceChdir func(string, func() error) error) (*agent.Agent, error) {
+// relative-path resolution observe the correct project folder (critical
+// in daemon mode where the process CWD may differ from the client project folder).
+func (cs *chatSession) getOrCreateAgent(projectFolder string, configBase string, projectFolderDir string, eventBus *events.EventBus, clientID, userID string, projectFolderChdir func(string, func() error) error) (*agent.Agent, error) {
 	cs.mu.Lock()
 	if cs.Agent != nil {
-		agentWorkspace := cs.WorktreePath
-		if agentWorkspace == "" {
-			agentWorkspace = workspaceRoot
+		agentProjectFolder := cs.WorktreePath
+		if agentProjectFolder == "" {
+			agentProjectFolder = projectFolder
 		}
 		agentInst := cs.Agent
 		cs.mu.Unlock()
 		rearmWebUIAgent(agentInst, nil, agentSetupConfig{
-			WorkspaceRoot: agentWorkspace,
+			ProjectFolder: agentProjectFolder,
 			ClientID:      clientID,
 			ChatID:        cs.ID,
 			UserID:        userID,
@@ -196,10 +196,10 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 	sessionSnapshot := append([]byte(nil), cs.AgentState...)
 	cs.mu.Unlock()
 
-	// Use chat's worktree path if set, otherwise use provided workspaceRoot
-	agentWorkspace := sessionWorktree
-	if agentWorkspace == "" {
-		agentWorkspace = workspaceRoot
+	// Use chat's worktree path if set, otherwise use provided projectFolder
+	agentProjectFolder := sessionWorktree
+	if agentProjectFolder == "" {
+		agentProjectFolder = projectFolder
 	}
 
 	// Fast check: if no provider is configured, return immediately with a
@@ -207,7 +207,7 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 	// NOTE: A narrow TOCTOU race exists between this config read and the
 	// config read inside agent.NewAgentWithLayers. Acceptable since the worst
 	// case is a single unnecessary retry after the user configures a provider.
-	if !isProviderAvailableInWorkspace(agentWorkspace) {
+	if !isProviderAvailableInProjectFolder(agentProjectFolder) {
 		return nil, ErrNoProviderConfigured
 	}
 
@@ -215,7 +215,7 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 	snapshot := sessionSnapshot
 	var created *agent.Agent
 	var createErr error
-	created, createErr = buildWebUIAgent(configBase, workspaceDir, agentWorkspace, "")
+	created, createErr = buildWebUIAgent(configBase, projectFolderDir, agentProjectFolder, "")
 	if createErr != nil {
 		if errors.Is(createErr, agent.ErrModelNotAvailable) || errors.Is(createErr, agent.ErrProviderNotConfigured) {
 			return nil, createErr
@@ -225,7 +225,7 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 
 	setupWebUIAgent(created, agentSetupConfig{
 		EventBus:      eventBus,
-		WorkspaceRoot: agentWorkspace,
+		ProjectFolder: agentProjectFolder,
 		ClientID:      clientID,
 		ChatID:        cs.ID,
 		UserID:        userID,
@@ -309,12 +309,12 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 		utils.SafeGo(slog.Default(), "agent-shutdown", func() {
 			orphan.Shutdown()
 		}, slog.String("reason", "chat_agent_creation_race"))
-		agentWorkspace := cs.WorktreePath
-		if agentWorkspace == "" {
-			agentWorkspace = workspaceRoot
+		agentProjectFolder := cs.WorktreePath
+		if agentProjectFolder == "" {
+			agentProjectFolder = projectFolder
 		}
 		rearmWebUIAgent(created, nil, agentSetupConfig{
-			WorkspaceRoot: agentWorkspace,
+			ProjectFolder: agentProjectFolder,
 			ClientID:      clientID,
 			ChatID:        cs.ID,
 			UserID:        userID,
@@ -606,15 +606,15 @@ func (cc *webClientContext) hasActiveQueryForChat(chatID string) bool {
 	return cs.ActiveQuery
 }
 
-// busyChatInWorkspace returns another chat in this client context that has a
-// query running (SP-142 §3), or nil when the workspace is free. The chats in
-// one client context share one workspace file tree, so a query from a second
+// busyChatInProjectFolder returns another chat in this client context that has a
+// query running (SP-142 §3), or nil when the project folder is free. The chats in
+// one client context share one project folder file tree, so a query from a second
 // chat must serialize behind the running one. excludeChatID ("" = the active
 // chat) is never reported — a same-chat submit follows the existing
 // query_in_progress semantics instead. Read-side gate: callers check this at
 // submit time; release is the existing query_completed lifecycle (no explicit
 // release action). Caller holds ws.mutex.
-func (cc *webClientContext) busyChatInWorkspace(excludeChatID string) *chatSession {
+func (cc *webClientContext) busyChatInProjectFolder(excludeChatID string) *chatSession {
 	if cc.ChatSessions == nil {
 		return nil
 	}
@@ -740,22 +740,22 @@ func (cc *webClientContext) getChatSessionWorktree(chatID string) string {
 	return cs.getWorktreePath()
 }
 
-// rootForChatWithoutWorktree is the workspace root for a chat that has no
-// worktree of its own. WorkspaceRoot follows the active chat into its
+// rootForChatWithoutWorktree is the project folder for a chat that has no
+// worktree of its own. ProjectFolder follows the active chat into its
 // worktree; when it currently points at some chat's worktree, a chat without
 // one must use the project root instead, or its agent reads and edits files
 // in the other chat's worktree. fallback is used when no project root was
 // recorded (the daemon's root).
 func (cc *webClientContext) rootForChatWithoutWorktree(fallback string) string {
 	for _, cs := range cc.ChatSessions {
-		if wt := cs.getWorktreePath(); wt != "" && wt == cc.WorkspaceRoot {
+		if wt := cs.getWorktreePath(); wt != "" && wt == cc.ProjectFolder {
 			if cc.ProjectRoot != "" {
 				return cc.ProjectRoot
 			}
 			return fallback
 		}
 	}
-	return cc.WorkspaceRoot
+	return cc.ProjectFolder
 }
 
 // generateChatID generates a unique chat session ID.

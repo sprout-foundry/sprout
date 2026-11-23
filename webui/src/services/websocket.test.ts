@@ -1336,7 +1336,7 @@ describe('WebSocketService - in-browser agent connection state', () => {
 describe('WebSocketService - daemon agent backend', () => {
   it("connects to the daemon backend's own socket, not the host transport's", () => {
     // The platform's transport.wsURL is the platform's socket, which does not
-    // carry the workspace's agent events; the daemon backend names its own.
+    // carry the project folder's agent events; the daemon backend names its own.
     activeHostRef.value = {
       transport: {
         apiBaseURL: 'https://platform.test',

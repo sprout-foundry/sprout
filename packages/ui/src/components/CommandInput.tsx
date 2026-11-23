@@ -696,7 +696,7 @@ function CommandInput({
   }, []);
 
   // Attach one image file: object URL for the preview chip; the auto-upload
-  // effect sends it to the workspace. Shared by the file input and the
+  // effect sends it to the project folder. Shared by the file input and the
   // drag-and-drop dropzone so both paths behave identically.
   const attachFile = useCallback((file: File) => {
     const preview = URL.createObjectURL(file);
@@ -777,7 +777,7 @@ function CommandInput({
     setPreviewImageId((current) => (current === id ? null : current));
   }, []);
 
-  // Attach image: copy it into the workspace so the model can read it
+  // Attach image: copy it into the project folder so the model can read it
   const uploadImageAsync = useCallback(
     async (imageId: string, imageFile: File) => {
       if (uploadInProgressRef.current.has(imageId)) return;

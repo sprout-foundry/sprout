@@ -8,7 +8,7 @@
  */
 
 import { FileWriteTracker, mapAgentEvent, type RawAgentEvent } from './events';
-import { createAgentFiles, readWorkspaceFile, workspaceRootOf } from './files';
+import { createAgentFiles, readProjectFolderFile, projectFolderOf } from './files';
 import { registerHostTools, unregisterHostTools } from './hostTools';
 import { PersonaDefinitionError } from './persona';
 import { loadSproutWasm } from './runtime';
@@ -167,7 +167,7 @@ export async function createAgent(options: CreateAgentOptions): Promise<Headless
     // Several chats share the module; keep only this chat's events.
     const eventChat = raw.data?.chat_id;
     if (typeof eventChat === 'string' && eventChat !== '' && eventChat !== chatId) return;
-    const ctx = { workspaceRoot: workspaceRootOf(bridge), readFile: (p: string) => readWorkspaceFile(bridge, p) };
+    const ctx = { workspaceRoot: projectFolderOf(bridge), readFile: (p: string) => readProjectFolderFile(bridge, p) };
     const event = mapAgentEvent(raw, ctx);
     if (event?.type === 'steer_delivered') {
       steers.shift();

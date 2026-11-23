@@ -19,7 +19,7 @@ func TestWriteHandler_TracksPreWriteOriginal(t *testing.T) {
 
 	var trackedOriginal string
 	env := ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		ToolFuncs: &ToolFuncSet{
 			TrackFileWrite: func(filePath string, originalContent string, content string) error {
 				trackedOriginal = originalContent
@@ -52,7 +52,7 @@ func TestWriteHandler_TracksOverwriteOfEmptyFile(t *testing.T) {
 
 	var trackedOriginal, trackedNew string
 	env := ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		ToolFuncs: &ToolFuncSet{
 			TrackFileWrite: func(filePath string, originalContent string, content string) error {
 				trackedOriginal = originalContent
@@ -92,7 +92,7 @@ func TestEditHandler_TracksEditOfWhitespaceOnlyFile(t *testing.T) {
 
 	var trackedOriginal, trackedNew string
 	env := ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		ToolFuncs: &ToolFuncSet{
 			TrackFileEdit: func(filePath string, originalContent string, newContent string) error {
 				trackedOriginal = originalContent

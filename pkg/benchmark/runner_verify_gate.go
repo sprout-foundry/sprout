@@ -41,7 +41,7 @@ import (
 // "prompt" is therefore declined — with nobody to ask, the approval
 // adapter's headless path returns a rejection — and the model's edit never
 // lands, so the run is scored on a copy that was never changed. The run's
-// workspace is a throwaway copy of the starter, so the runner lifts the
+// project folder is a throwaway copy of the starter, so the runner lifts the
 // CAUTION-tier shell prompts only: unsafe-shell mode auto-approves the
 // shell_command prompts the classifier escalates (the --unsafe-shell
 // posture), while DANGEROUS classification and the classifier's hard blocks
@@ -100,7 +100,7 @@ func runGit(runDir string, args ...string) error {
 	return cmd.Run()
 }
 
-// gitChangedApplicationPaths returns the workspace-relative paths the
+// gitChangedApplicationPaths returns the project-folder-relative paths the
 // copy changed since the baseline commit that count as application code
 // (agent.IsApplicationCodePath). It reads `git status --porcelain` and
 // parses each entry's path, handling renames ("old -> new") by taking the

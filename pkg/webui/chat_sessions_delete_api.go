@@ -118,7 +118,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 	ctx.ActiveQuery = true
 	ctx.CurrentQuery = ""
 
-	workspaceRoot := ctx.WorkspaceRoot
+	projectFolder := ctx.ProjectFolder
 	// Tombstone the chat so a query arriving after the map removal (but
 	// before the ActiveQuery recompute below) cannot start on a deleted
 	// chat. Cleared when a new chat with this ID is created.
@@ -189,9 +189,9 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 	if req.RemoveWorktree && worktreePath != "" {
 		absWorktree, absErr := filepath.Abs(worktreePath)
 		if absErr == nil {
-			absWorkspace, _ := filepath.Abs(workspaceRoot)
-			if absWorktree != absWorkspace {
-				removeCmd := ws.gitCommandForWorkspace(absWorkspace, "worktree", "remove", absWorktree)
+			absProjectFolder, _ := filepath.Abs(projectFolder)
+			if absWorktree != absProjectFolder {
+				removeCmd := ws.gitCommandForProjectFolder(absProjectFolder, "worktree", "remove", absWorktree)
 				removeOutput, removeErr := removeCmd.CombinedOutput()
 				if removeErr != nil {
 					ws.log().Error("failed to remove chat session worktree",
@@ -205,8 +205,8 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 					resp["worktree_removed"] = true
 				}
 			} else {
-				ws.log().Warn("skipping removal of current workspace", slog.String("worktree_path", absWorktree))
-				resp["worktree_error"] = "Cannot remove the current workspace"
+				ws.log().Warn("skipping removal of current project folder", slog.String("worktree_path", absWorktree))
+				resp["worktree_error"] = "Cannot remove the current project folder"
 			}
 		}
 	}
@@ -255,7 +255,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsDeleteAll(w http.ResponseWriter, 
 	rootChanged := false
 	for _, chatID := range chatIDsToDelete {
 		if cs := ctx.ChatSessions[chatID]; cs != nil {
-			if wt := cs.getWorktreePath(); wt != "" && wt == ctx.WorkspaceRoot {
+			if wt := cs.getWorktreePath(); wt != "" && wt == ctx.ProjectFolder {
 				rootWasDeletedWorktree = true
 			}
 			cs.mu.Lock()
@@ -292,19 +292,19 @@ func (ws *ReactWebServer) handleAPIChatSessionsDeleteAll(w http.ResponseWriter, 
 		ctx.AgentState = append([]byte(nil), snapshot...)
 		ctx.CurrentSessionID = currentSessionID
 
-		// Switch workspace root to the default chat's worktree if it has one;
+		// Switch project folder to the default chat's worktree if it has one;
 		// if the root was a deleted chat's worktree, return it to the project.
 		if wtPath == "" && rootWasDeletedWorktree {
 			wtPath = ctx.projectRootOr(ws.daemonRoot)
 		}
 		previousRoot, rootChanged = ws.setClientActiveRootLocked(clientID, ctx, wtPath)
-		newRoot = ctx.WorkspaceRoot
+		newRoot = ctx.ProjectFolder
 	}
 
 	ws.mutex.Unlock()
 
 	if rootChanged {
-		ws.publishWorkspaceChanged(clientID, previousRoot, newRoot, "chat_delete_all")
+		ws.publishProjectFolderChanged(clientID, previousRoot, newRoot, "chat_delete_all")
 	}
 
 	ws.releaseAgents("chat_sessions_deleted_all", releasing...)
@@ -345,7 +345,7 @@ func (ws *ReactWebServer) syncAgentStateForClientWithChat(clientID, chatID strin
 		ctx.setChatSessionState(chatID, snapshot)
 		ctx.LastSeenAt = time.Now()
 		if clientID == defaultWebClientID {
-			ws.workspaceRoot = ctx.WorkspaceRoot
+			ws.projectFolder = ctx.ProjectFolder
 		}
 		return nil
 	}
@@ -372,7 +372,7 @@ func (ws *ReactWebServer) syncAgentStateForClientWithChat(clientID, chatID strin
 	ctx.setChatSessionState(chatID, snapshot)
 	ctx.LastSeenAt = time.Now()
 	if clientID == defaultWebClientID {
-		ws.workspaceRoot = ctx.WorkspaceRoot
+		ws.projectFolder = ctx.ProjectFolder
 	}
 	return nil
 }

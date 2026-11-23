@@ -39,7 +39,7 @@ import {
  *   - handleWebuiFileDelete            → POST,DELETE /api/delete
  *   - handleWebuiFileRename            → POST /api/rename
  *   - handleWebuiBrowse                → GET  /api/browse
- *   - handleWebuiBrowse (alias)        → GET  /api/workspace/browse
+ *   - handleWebuiBrowse (alias)        → GET  /api/project-folder/browse
  *   - handleWebuiOpenInFileBrowser     → POST /api/open-in-file-browser
  *   - handleWebuiFileCheckModified     → GET,POST /api/file/check-modified
  *   - handleWebuiFileGet               → GET  /api/file
@@ -70,7 +70,7 @@ const wasmLocalEndpointSpecs: WasmLocalEndpointSpec[] = [
   { path: '/api/delete', method: 'DELETE', handler: 'handleWebuiFileDelete' },
   { path: '/api/rename', method: 'POST', handler: 'handleWebuiFileRename' },
   { path: '/api/browse', method: 'GET', handler: 'handleWebuiBrowse' },
-  { path: '/api/workspace/browse', method: 'GET', handler: 'handleWebuiBrowse (alias)' },
+  { path: '/api/project-folder/browse', method: 'GET', handler: 'handleWebuiBrowse (alias)' },
   { path: '/api/open-in-file-browser', method: 'POST', handler: 'handleWebuiOpenInFileBrowser' },
 
   // ── File metadata (WASM manages locally) ─────────────────────────
@@ -201,7 +201,7 @@ describe('WASM-local endpoint cross-validation (Go server ↔ TypeScript registr
       // /api/file-index (bulk quick-open index),
       // /api/file/check-modified, /api/file/consent, /api/terminal/sessions,
       // /api/terminal/shells, /api/terminal/history, /api/search/replace,
-      // /api/file, /api/files/prettier-config, /api/workspace/browse, /api/search,
+      // /api/file, /api/files/prettier-config, /api/project-folder/browse, /api/search,
       // /api/query (the in-browser agent loop endpoint),
       // /api/query/stop (in-browser interrupt), /api/query/steer (in-browser steer),
       // /api/ask-user/response (deliver ask_user response to WASM agent),

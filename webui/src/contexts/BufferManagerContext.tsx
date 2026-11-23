@@ -355,7 +355,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
     [activateBuffer, switchToBuffer, paneBridge, setFocusedBuffer],
   );
 
-  // Open workspace buffer
+  // Open project folder buffer
   const openWorkspaceBuffer = useCallback(
     (options: {
       kind: 'chat' | 'diff' | 'review' | 'file' | 'compare' | 'preview';
@@ -773,7 +773,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
         return;
       }
 
-      // Handle virtual workspace buffers (untitled files created via Ctrl+N)
+      // Handle virtual project folder buffers (untitled files created via Ctrl+N)
       if (buffer.file.path.startsWith('__workspace/')) {
         const filePath = await showThemedPrompt('Enter a file path for the new file:', {
           title: 'Save As',
@@ -787,13 +787,13 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
 
         const trimmedPath = filePath.trim();
 
-        // Resolve the typed path against the workspace root before writing.
+        // Resolve the typed path against the project folder before writing.
         // The prompt's value is what the user sees in the tree — a
         // workspace-relative path like `src/new.ts` — while the file API
         // resolves relative paths against the daemon's process cwd. Writing
-        // the raw value would land the file outside the workspace tree
+        // the raw value would land the file outside the project folder tree
         // (and, for a synthetic buffer path, create a literal
-        // `__workspace/` directory inside the workspace).
+        // `__workspace/` directory inside the project folder).
         const resolvedPath = resolveEditorFilePath(trimmedPath);
 
         // Announce the save BEFORE the write, exactly as the normal-save
@@ -1165,7 +1165,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
   });
 
   // Saves and restores open file tabs and the pane layout across reloads,
-  // and drops stale file tabs on a workspace switch. Unmounted by an earlier
+  // and drops stale file tabs on a project folder switch. Unmounted by an earlier
   // hook consolidation, which left every reload with no open files.
   const panesRef = useRef(paneBridge.panes);
   panesRef.current = paneBridge.panes;

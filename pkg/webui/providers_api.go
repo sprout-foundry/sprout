@@ -87,14 +87,14 @@ func (ws *ReactWebServer) listProvidersCtx(ctx context.Context, clientID string)
 }
 
 // providerListingSource returns the config manager a provider listing reads
-// — the client's existing agent's, or a fresh layered (global + workspace)
+// — the client's existing agent's, or a fresh layered (global + project folder)
 // manager — plus that agent when there is one. It never builds an agent.
 func (ws *ReactWebServer) providerListingSource(clientID string) (*configuration.Manager, *agentpkg.Agent) {
 	if agentInst := ws.peekClientAgent(clientID); agentInst != nil && agentInst.GetConfigManager() != nil {
 		return agentInst.GetConfigManager(), agentInst
 	}
 	// Make sure the client context exists so the layered manager includes
-	// this client's workspace layer.
+	// this client's project folder layer.
 	ws.getOrCreateClientContext(clientID)
 	cm, err := ws.getLayeredConfigManager(clientID)
 	if err != nil {
@@ -245,11 +245,11 @@ func (ws *ReactWebServer) publishProviderState(clientID string) {
 
 	// Use the active chat's agent so each session reports its own provider/model.
 	activeChatID := ""
-	workspaceRoot := ""
+	projectFolder := ""
 	ws.mutex.RLock()
 	if ctx := ws.clientContexts[clientID]; ctx != nil {
 		activeChatID = ctx.getActiveChatID()
-		workspaceRoot = ctx.WorkspaceRoot
+		projectFolder = ctx.ProjectFolder
 	}
 	ws.mutex.RUnlock()
 
@@ -257,7 +257,7 @@ func (ws *ReactWebServer) publishProviderState(clientID string) {
 	// getChatAgent call and publish empty provider state immediately.
 	// Cost/token keys are dropped for the same reason as the nil-agent
 	// path below: zeroed/stale totals flash the status bar.
-	if !isProviderAvailableInWorkspace(workspaceRoot) {
+	if !isProviderAvailableInProjectFolder(projectFolder) {
 		stats := ws.gatherStatsForClientID(clientID)
 		stats["provider"] = ""
 		stats["model"] = ""

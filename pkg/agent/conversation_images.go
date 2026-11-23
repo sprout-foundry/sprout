@@ -171,7 +171,7 @@ func (a *Agent) buildNonVisionImageToolPrompt(query string, paths []string) stri
 
 // processImagesAsMultimodal extracts pasted-image references and returns image data for multimodal embedding.
 func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string, error) {
-	cwd := a.currentWorkspaceRoot()
+	cwd := a.currentProjectFolder()
 
 	caps := api.VisionCapabilitiesDefault()
 	if c := a.getClient(); c != nil {

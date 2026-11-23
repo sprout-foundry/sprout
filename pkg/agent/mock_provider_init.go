@@ -20,7 +20,7 @@ import (
 // MockLLMProvider is a test-only deterministic stand-in; it is excluded
 // from the WASM build (this file's `!js` tag), where the no-op stub in
 // mock_provider_init_js.go applies.
-func tryMockLLMAgent(model string, configManager *configuration.Manager, workspaceRoot string) (bool, *Agent, error) {
+func tryMockLLMAgent(model string, configManager *configuration.Manager, projectFolder string) (bool, *Agent, error) {
 	if !UseMockLLM {
 		return false, nil, nil
 	}
@@ -43,7 +43,7 @@ func tryMockLLMAgent(model string, configManager *configuration.Manager, workspa
 		clientType:      api.TestClientType,
 		systemPrompt:    systemPrompt,
 		configManager:   configManager,
-		workspaceRoot:   workspaceRoot,
+		projectFolder:   projectFolder,
 		debug:           isDebugEnvEnabled(),
 		interruptCtx:    context.Background(),
 		interruptCancel: func() { /* no-op */ },

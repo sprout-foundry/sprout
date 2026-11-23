@@ -45,7 +45,7 @@ func (r *recordingAskUser) lastQuestion() string {
 	return r.requests[len(r.requests)-1].Question
 }
 
-// trustTestEnv builds a ToolEnv rooted at a fresh temp workspace with an
+// trustTestEnv builds a ToolEnv rooted at a fresh temp project folder with an
 // isolated config manager, so a persisted decision never reaches the
 // developer's real config.
 func trustTestEnv(t *testing.T) (ToolEnv, string) {
@@ -53,7 +53,7 @@ func trustTestEnv(t *testing.T) (ToolEnv, string) {
 	mgr, cleanup := configuration.NewTestManager(t)
 	t.Cleanup(cleanup)
 	root := t.TempDir()
-	return ToolEnv{WorkspaceRoot: root, ConfigManager: mgr}, root
+	return ToolEnv{ProjectFolder: root, ConfigManager: mgr}, root
 }
 
 // TestResolveReadTrust_MarkerPathFramedWithoutAsking pins rule 1: a known
@@ -216,9 +216,9 @@ func TestResolveReadTrust_NilAskUserDefaultsToThirdParty(t *testing.T) {
 	}
 }
 
-// TestResolveReadTrust_OutsideWorkspaceIsThirdParty covers the "pulled in"
-// case with no repo marker at all: a path outside the workspace root.
-func TestResolveReadTrust_OutsideWorkspaceIsThirdParty(t *testing.T) {
+// TestResolveReadTrust_OutsideProjectFolderIsThirdParty covers the "pulled in"
+// case with no repo marker at all: a path outside the project folder.
+func TestResolveReadTrust_OutsideProjectFolderIsThirdParty(t *testing.T) {
 	env, _ := trustTestEnv(t)
 	env.AskUser = nil
 
@@ -242,7 +242,7 @@ func TestResolveReadTrust_FirstPartyPathNotFramed(t *testing.T) {
 	asker := &recordingAskUser{answer: trustThirdPartyOption}
 	env.AskUser = asker
 
-	// Make the workspace root itself a repo, so "nested" means nested.
+	// Make the project folder itself a repo, so "nested" means nested.
 	if err := os.MkdirAll(filepath.Join(root, ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -279,7 +279,7 @@ func TestReadFileHandler_ThirdPartyContentFramedAndDelivered(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), root)
+	ctx := filesystem.WithProjectFolder(context.Background(), root)
 	result, err := (&readFileHandler{}).Execute(ctx, env, map[string]any{"path": target})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -306,7 +306,7 @@ func TestReadFileHandler_FirstPartyContentNotFramed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), root)
+	ctx := filesystem.WithProjectFolder(context.Background(), root)
 	result, err := (&readFileHandler{}).Execute(ctx, env, map[string]any{"path": target})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)

@@ -18,7 +18,7 @@ func TestSetupWebUIAgent_AppliesAllSetters(t *testing.T) {
 
 	setupWebUIAgent(a, agentSetupConfig{
 		EventBus:      bus,
-		WorkspaceRoot: "/test/workspace",
+		ProjectFolder: "/test/workspace",
 		ClientID:      "client-123",
 		ChatID:        "chat-456",
 		UserID:        "user-789",
@@ -30,8 +30,8 @@ func TestSetupWebUIAgent_AppliesAllSetters(t *testing.T) {
 	if a.SlashCommands() == nil {
 		t.Error("SlashCommands not set — this is the regression that 4ae74bcc1 fixed")
 	}
-	if a.GetWorkspaceRoot() != "/test/workspace" {
-		t.Errorf("WorkspaceRoot = %q, want /test/workspace", a.GetWorkspaceRoot())
+	if a.GetProjectFolder() != "/test/workspace" {
+		t.Errorf("WorkspaceRoot = %q, want /test/workspace", a.GetProjectFolder())
 	}
 }
 
@@ -40,7 +40,7 @@ func TestSetupWebUIAgent_SkipsNilEventBus(t *testing.T) {
 
 	setupWebUIAgent(a, agentSetupConfig{
 		EventBus:      nil,
-		WorkspaceRoot: "/test",
+		ProjectFolder: "/test",
 		ClientID:      "c1",
 		ChatID:        "ch1",
 	})
@@ -49,7 +49,7 @@ func TestSetupWebUIAgent_SkipsNilEventBus(t *testing.T) {
 	if a.GetEventBus() != nil {
 		t.Error("EventBus should not be set when passed nil")
 	}
-	// SlashCommands and WorkspaceRoot should still be applied
+	// SlashCommands and ProjectFolder should still be applied
 	if a.SlashCommands() == nil {
 		t.Error("SlashCommands should be set regardless of EventBus")
 	}
@@ -61,7 +61,7 @@ func TestSetupWebUIAgent_SkipsEmptyUserID(t *testing.T) {
 
 	setupWebUIAgent(a, agentSetupConfig{
 		EventBus:      bus,
-		WorkspaceRoot: "/test",
+		ProjectFolder: "/test",
 		ClientID:      "c1",
 		ChatID:        "ch1",
 		UserID:        "",

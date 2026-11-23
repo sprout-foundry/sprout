@@ -34,9 +34,9 @@ func (g *stubReadCallGuard) ObserveRead(path string, startLine, endLine int) int
 
 // newTestEnvWithGuard returns a standard test env carrying the given
 // identical-call guard.
-func newTestEnvWithGuard(t *testing.T, workspaceRoot string, guard ReadCallGuard) ToolEnv {
+func newTestEnvWithGuard(t *testing.T, projectFolder string, guard ReadCallGuard) ToolEnv {
 	t.Helper()
-	env := newTestEnv(t, workspaceRoot)
+	env := newTestEnv(t, projectFolder)
 	env.ReadCallGuard = guard
 	env.OutputWriter = io.Discard
 	return env
@@ -343,7 +343,7 @@ func TestReadFile_HeadTailNoticeStatesTotalLinesAndRange(t *testing.T) {
 	}
 	require.NoError(t, os.WriteFile(path, []byte(b.String()), 0o644))
 
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), dir)
+	ctx := filesystem.WithProjectFolder(context.Background(), dir)
 	result, err := ReadFile(ctx, path)
 	require.NoError(t, err)
 	require.Contains(t, result, "[WARN]")
@@ -368,7 +368,7 @@ func TestReadFile_HeadTailNoticeSuggestedRangeCoversExactOmittedMiddle(t *testin
 	content := b.String()
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
 
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), dir)
+	ctx := filesystem.WithProjectFolder(context.Background(), dir)
 	result, err := ReadFileWithRange(ctx, path, 0, 0)
 	require.NoError(t, err)
 	require.Contains(t, result, "[WARN]")
@@ -427,7 +427,7 @@ func TestReadFile_LineRangeCapNoticeHonestAboutUnknownTotal(t *testing.T) {
 	}
 	require.NoError(t, os.WriteFile(path, []byte(b.String()), 0o644))
 
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), dir)
+	ctx := filesystem.WithProjectFolder(context.Background(), dir)
 	result, err := ReadFileWithRange(ctx, path, 1000, 1100)
 	require.NoError(t, err)
 	require.Contains(t, result, "[WARN]")

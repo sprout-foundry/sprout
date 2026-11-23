@@ -25,7 +25,7 @@ func TestDrawMockup_KitIsStreamedAndSaved(t *testing.T) {
 		system = sys
 		return inner(ctx, role, sys, user, onChunk)
 	}
-	res, err := (&drawMockupHandler{}).Execute(context.Background(), ToolEnv{WorkspaceRoot: root, ToolFuncs: funcs}, map[string]any{})
+	res, err := (&drawMockupHandler{}).Execute(context.Background(), ToolEnv{ProjectFolder: root, ToolFuncs: funcs}, map[string]any{})
 	if err != nil || res.IsError {
 		t.Fatalf("draw failed: %v %s", err, res.Output)
 	}

@@ -33,7 +33,7 @@ const (
 // FunctionComplexity is one function's branching-complexity proxy: 1 plus the
 // number of branch nodes in its body (the classic McCabe base).
 type FunctionComplexity struct {
-	// File is the workspace-relative path.
+	// File is the project-folder-relative path.
 	File string `json:"file"`
 	// Name is the function's name (as the parser reports it).
 	Name string `json:"name"`
@@ -45,7 +45,7 @@ type FunctionComplexity struct {
 
 // SourceStats summarises one source file.
 type SourceStats struct {
-	// File is the workspace-relative path.
+	// File is the project-folder-relative path.
 	File string `json:"file"`
 	// Lines is the file's line count.
 	Lines int `json:"lines"`

@@ -39,7 +39,7 @@ func PastedImageFiles(text string) ([]string, bool) {
 	return paths, true
 }
 
-// AttachPastedImageFile copies an image file into the workspace's pasted
+// AttachPastedImageFile copies an image file into the project folder's pasted
 // images directory and returns the in-query placeholder for it. Copying
 // matters: screenshot paths live in a temp directory macOS clears within
 // minutes, and their names carry a U+202F before AM/PM that trips up shells

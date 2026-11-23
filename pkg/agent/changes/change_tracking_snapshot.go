@@ -1,6 +1,6 @@
 // Snapshot walking and file I/O for ChangeTracker shell-mutation tracking.
 //
-// Walks the workspace tree before and after shell commands, capturing
+// Walks the project folder tree before and after shell commands, capturing
 // file bytes inside size/binary limits, then diffing the two snapshots.
 package changes
 
@@ -24,7 +24,7 @@ var shellSnapshotMaxFiles = 50000
 
 // shellSnapshotMaxDuration is the wall-clock budget for a single walk.
 // Same purpose as shellSnapshotMaxFiles: bound worst-case cost so a
-// misconfigured workspace can't hang the agent. Cold prime + first
+// misconfigured project folder can't hang the agent. Cold prime + first
 // walk of a sprout-sized repo runs in ~30 ms; 500 ms is a 15× safety
 // margin.
 var shellSnapshotMaxDuration = 500 * time.Millisecond
@@ -112,7 +112,7 @@ type shellSnapshotEntry struct {
 // recoverable).
 //
 // Not exhaustive — additions welcome. The 32 MiB total-bytes budget
-// in shellSnapshotMaxTotalBytes is the long-stop defense if a workspace
+// in shellSnapshotMaxTotalBytes is the long-stop defense if a project folder
 // has an unusual giant directory we don't recognize.
 var shellSnapshotSkipDirs = map[string]bool{
 	".git":          true,
@@ -155,17 +155,17 @@ var shellSnapshotSkipDirs = map[string]bool{
 // content of every file inside the size/binary limits, skipping
 // well-known bloat directories. Returns a map keyed by absolute path.
 //
-// Internally this is `walkWorkspace(workDir, nil)` — the cache-aware
+// Internally this is `walkProjectFolder(workDir, nil)` — the cache-aware
 // fast path collapses to a full read when no cache is supplied. The
 // standalone function survives so tests and the priming step have a
 // simple API; production hot-path callers should prefer
 // captureShellChangeDelta which reuses an existing baseline.
 func (ct *ChangeTracker) captureShellSnapshot(workDir string) map[string]*shellSnapshotEntry {
-	snap, _, _ := ct.walkWorkspace(workDir, nil, false)
+	snap, _, _ := ct.walkProjectFolder(workDir, nil, false)
 	return snap
 }
 
-// walkWorkspace walks workDir, returning (newSnapshot, changes).
+// walkProjectFolder walks workDir, returning (newSnapshot, changes).
 //
 //   - If `old` is nil, every file is read fresh (cold prime). No
 //     changes are computed — the caller treats the returned snapshot
@@ -181,7 +181,7 @@ func (ct *ChangeTracker) captureShellSnapshot(workDir string) map[string]*shellS
 // Walking a 5000-file tree with no changes takes ~5-20 ms (stat-only
 // fast path) instead of ~280 ms (full content read). Cold prime cost
 // is paid once per agent session.
-// walkWorkspace's `destructive` parameter switches the walker into the
+// walkProjectFolder's `destructive` parameter switches the walker into the
 // safer (slower) mode used for `git checkout .` and friends — see
 // shell_destructive.go for the classifier. In destructive mode:
 //
@@ -192,7 +192,7 @@ func (ct *ChangeTracker) captureShellSnapshot(workDir string) map[string]*shellS
 //     destructive walk's fan-out should bias future non-destructive walks.
 //   - Static shellSnapshotSkipDirs is still honored (`.git`, `node_modules`,
 //     `dist`, etc. — universally inappropriate to track).
-func (ct *ChangeTracker) walkWorkspace(workDir string, old map[string]*shellSnapshotEntry, destructive bool) (map[string]*shellSnapshotEntry, []pendingShellChange, bool) {
+func (ct *ChangeTracker) walkProjectFolder(workDir string, old map[string]*shellSnapshotEntry, destructive bool) (map[string]*shellSnapshotEntry, []pendingShellChange, bool) {
 	if ct == nil || !ct.IsEnabled() || workDir == "" {
 		return nil, nil, false
 	}
@@ -274,7 +274,7 @@ func (ct *ChangeTracker) walkWorkspace(workDir string, old map[string]*shellSnap
 			return nil
 		}
 
-		// Skip symlinks (could point outside workspace and leak content).
+		// Skip symlinks (could point outside project folder and leak content).
 		if d.Type()&fs.ModeSymlink != 0 {
 			return nil
 		}
@@ -349,8 +349,8 @@ func (ct *ChangeTracker) walkWorkspace(workDir string, old map[string]*shellSnap
 		// enough to be visible in logs but not as an error (the
 		// fallback behavior is graceful — coverage is partial, not
 		// broken). Common trigger: agent rooted in a huge directory
-		// like ~ where the workspace contains millions of files.
-		ct.logf("shell snapshot: walk truncated at %d files / %v (workspace too large for full coverage — run sprout in a smaller subdirectory or expand shellSnapshotSkipDirs)",
+		// like ~ where the project folder contains millions of files.
+		ct.logf("shell snapshot: walk truncated at %d files / %v (project folder too large for full coverage — run sprout in a smaller subdirectory or expand shellSnapshotSkipDirs)",
 			len(snap), shellSnapshotMaxDuration)
 	}
 
@@ -365,7 +365,7 @@ func (ct *ChangeTracker) walkWorkspace(workDir string, old map[string]*shellSnap
 	// Skipped entirely in destructive mode — a `git checkout .` that
 	// fans out across a previously-untracked dir shouldn't teach the
 	// walker to skip that dir on future (non-destructive) walks. The
-	// fan-out is an artifact of the destructive op, not the workspace.
+	// fan-out is an artifact of the destructive op, not the project folder.
 	//
 	// Critical follow-up: drop snap entries under any newly-learned
 	// auto-skip dir AND suppress deletion records for those paths.
@@ -453,7 +453,7 @@ func (ct *ChangeTracker) walkWorkspace(workDir string, old map[string]*shellSnap
 				delete(snap, path)
 			}
 		}
-		// Persist so the next agent session in the same workspace
+		// Persist so the next agent session in the same project folder
 		// starts pre-loaded — no need to re-learn. Best-effort: any
 		// I/O failure just means we re-learn next time, which is the
 		// pre-persistence behavior anyway.
@@ -506,7 +506,7 @@ func isUnderAnyAutoSkipDir(path string, skipDirs map[string]bool) bool {
 	return false
 }
 
-// pendingShellChange is an unattributed diff entry from walkWorkspace,
+// pendingShellChange is an unattributed diff entry from walkProjectFolder,
 // ready to be turned into a TrackedFileChange (after dedup against
 // direct-hook entries) via the caller.
 type pendingShellChange struct {

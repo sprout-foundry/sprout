@@ -128,7 +128,7 @@ func SaveCheckpoint(cp Checkpoint) (Checkpoint, error) {
 // revision group in the process history store, if any) and stores a
 // checkpoint for it. It is the on-demand entry point for callers (the
 // checkpoint tool) whose process history store is the project's — the CLI
-// runs in the project root, so the process store and the workspace store are
+// runs in the project root, so the process store and the project folder store are
 // the same. summary and scopeIDs are optional. A history with no revisions
 // still yields a checkpoint (with no captured revision); the checkpoint
 // records that the project was at a known state regardless.
@@ -136,19 +136,19 @@ func CreateCheckpoint(origin CheckpointOrigin, summary string, scopeIDs []string
 	return createCheckpointIn(GetCheckpointsDir(), origin, summary, scopeIDs)
 }
 
-// CreateCheckpointInWorkspace is CreateCheckpoint scoped to a specific
-// workspace: the checkpoint is stored under <workspace>/.sprout/checkpoints/.
+// CreateCheckpointInProjectFolder is CreateCheckpoint scoped to a specific
+// project folder: the checkpoint is stored under <project folder>/.sprout/checkpoints/.
 // Like CreateCheckpoint it captures the revision current in the process
 // history store; use CreateCheckpointForRevision when the caller knows the
 // exact revision that produced the state (the automatic verification and
 // deploy seams do), so the captured revision is the one that actually
 // produced the outcome rather than merely the most recent in the store. An
-// empty workspace falls back to the process-wide store.
-func CreateCheckpointInWorkspace(workspace string, origin CheckpointOrigin, summary string, scopeIDs []string) (Checkpoint, error) {
-	return createCheckpointIn(checkpointDirForWorkspace(workspace), origin, summary, scopeIDs)
+// empty project folder falls back to the process-wide store.
+func CreateCheckpointInProjectFolder(projectFolder string, origin CheckpointOrigin, summary string, scopeIDs []string) (Checkpoint, error) {
+	return createCheckpointIn(checkpointDirForProjectFolder(projectFolder), origin, summary, scopeIDs)
 }
 
-// CreateCheckpointForRevision stores a checkpoint under the workspace's
+// CreateCheckpointForRevision stores a checkpoint under the project folder's
 // checkpoint store that captures exactly revisionID — the revision the
 // caller knows produced the state — without consulting the process history
 // store. It is the form the automatic seams use: a passing verification or a
@@ -157,8 +157,8 @@ func CreateCheckpointInWorkspace(workspace string, origin CheckpointOrigin, summ
 // recent in the process store. An empty revisionID records a checkpoint with
 // no captured revision (nothing to restore), which is preferable to
 // capturing an unrelated revision. summary and scopeIDs are optional.
-func CreateCheckpointForRevision(workspace string, origin CheckpointOrigin, revisionID, summary string, scopeIDs []string) (Checkpoint, error) {
-	dir := checkpointDirForWorkspace(workspace)
+func CreateCheckpointForRevision(projectFolder string, origin CheckpointOrigin, revisionID, summary string, scopeIDs []string) (Checkpoint, error) {
+	dir := checkpointDirForProjectFolder(projectFolder)
 	cp := Checkpoint{
 		Origin:     origin,
 		Summary:    summary,
@@ -216,15 +216,15 @@ func ListCheckpoints(orderNewestFirst bool) ([]Checkpoint, error) {
 	return listCheckpointsIn(GetCheckpointsDir(), orderNewestFirst)
 }
 
-// ListCheckpointsInWorkspace is ListCheckpoints scoped to a specific
-// workspace: it reads the checkpoints stored under
-// <workspace>/.sprout/checkpoints/, the same store CreateCheckpointInWorkspace
-// writes to. An empty workspace falls back to the process-wide store. It is
+// ListCheckpointsInProjectFolder is ListCheckpoints scoped to a specific
+// project folder: it reads the checkpoints stored under
+// <project folder>/.sprout/checkpoints/, the same store CreateCheckpointInProjectFolder
+// writes to. An empty project folder falls back to the process-wide store. It is
 // the read side the timeline builder and the checkpoint tool use, so a
 // checkpoint the automatic seams captured appears to the reader that looks
 // for it.
-func ListCheckpointsInWorkspace(workspace string, orderNewestFirst bool) ([]Checkpoint, error) {
-	return listCheckpointsIn(checkpointDirForWorkspace(workspace), orderNewestFirst)
+func ListCheckpointsInProjectFolder(projectFolder string, orderNewestFirst bool) ([]Checkpoint, error) {
+	return listCheckpointsIn(checkpointDirForProjectFolder(projectFolder), orderNewestFirst)
 }
 
 func listCheckpointsIn(dir string, orderNewestFirst bool) ([]Checkpoint, error) {
@@ -263,10 +263,10 @@ func GetCheckpoint(id string) (Checkpoint, bool, error) {
 	return getCheckpointIn(GetCheckpointsDir(), id)
 }
 
-// GetCheckpointInWorkspace is GetCheckpoint scoped to a specific workspace's
-// checkpoint store. An empty workspace falls back to the process-wide store.
-func GetCheckpointInWorkspace(workspace, id string) (Checkpoint, bool, error) {
-	return getCheckpointIn(checkpointDirForWorkspace(workspace), id)
+// GetCheckpointInProjectFolder is GetCheckpoint scoped to a specific project folder's
+// checkpoint store. An empty project folder falls back to the process-wide store.
+func GetCheckpointInProjectFolder(projectFolder, id string) (Checkpoint, bool, error) {
+	return getCheckpointIn(checkpointDirForProjectFolder(projectFolder), id)
 }
 
 func getCheckpointIn(dir, id string) (Checkpoint, bool, error) {
@@ -290,18 +290,18 @@ func getCheckpointIn(dir, id string) (Checkpoint, bool, error) {
 // to the state it returned to and nothing is lost.
 //
 // The revert reuses the existing pkg/history revision revert
-// (RevertChangeByRevisionID), including its workspace and staleness guards.
+// (RevertChangeByRevisionID), including its project folder and staleness guards.
 func RestoreCheckpoint(id string) (Checkpoint, error) {
 	return restoreCheckpointIn(GetCheckpointsDir(), id)
 }
 
-// RestoreCheckpointInWorkspace is RestoreCheckpoint scoped to a specific
-// workspace's checkpoint store: the checkpoint is read from
-// <workspace>/.sprout/checkpoints/ (the store the automatic seams write to)
-// and the restore record is written back there. An empty workspace falls back
+// RestoreCheckpointInProjectFolder is RestoreCheckpoint scoped to a specific
+// project folder's checkpoint store: the checkpoint is read from
+// <project folder>/.sprout/checkpoints/ (the store the automatic seams write to)
+// and the restore record is written back there. An empty project folder falls back
 // to the process-wide store.
-func RestoreCheckpointInWorkspace(workspace, id string) (Checkpoint, error) {
-	return restoreCheckpointIn(checkpointDirForWorkspace(workspace), id)
+func RestoreCheckpointInProjectFolder(projectFolder, id string) (Checkpoint, error) {
+	return restoreCheckpointIn(checkpointDirForProjectFolder(projectFolder), id)
 }
 
 func restoreCheckpointIn(dir, id string) (Checkpoint, error) {
@@ -354,15 +354,15 @@ func ensureCheckpointsDir() error {
 	return nil
 }
 
-// checkpointDirForWorkspace resolves the checkpoint store directory for a
-// workspace: <workspace>/.sprout/checkpoints/ when a workspace is given, else
+// checkpointDirForProjectFolder resolves the checkpoint store directory for a
+// project folder: <project folder>/.sprout/checkpoints/ when a project folder is given, else
 // the process-wide store. It is the single place reads and writes agree on
-// which store a workspace uses.
-func checkpointDirForWorkspace(workspace string) string {
-	if strings.TrimSpace(workspace) == "" {
+// which store a project folder uses.
+func checkpointDirForProjectFolder(projectFolder string) string {
+	if strings.TrimSpace(projectFolder) == "" {
 		return GetCheckpointsDir()
 	}
-	return filepath.Join(workspace, ".sprout", "checkpoints")
+	return filepath.Join(projectFolder, ".sprout", "checkpoints")
 }
 
 func writeCheckpointFile(cp Checkpoint) error {

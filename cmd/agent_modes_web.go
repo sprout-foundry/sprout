@@ -57,10 +57,10 @@ func setupWebUIServer(ctx context.Context, cancel context.CancelFunc, chatAgent 
 
 		// Determine port strategy.
 		//
-		// IN VARIANT: The daemon serves ALL workspaces from a single port.
+		// IN VARIANT: The daemon serves ALL project folders from a single port.
 		//   When daemon mode is active and no explicit --web-port is given,
 		//   the port is always DaemonPort (56000).  The daemon handles
-		//   multiple workspaces by routing internally per-workspace via
+		//   multiple project folders by routing internally per-project-folder via
 		//   clientContext / chat_sessions — there are NO folder-scoped
 		//   daemon ports.  The single-port supervisor handles leadership
 		//   election so exactly one daemon process serves 56000; additional

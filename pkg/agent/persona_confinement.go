@@ -20,7 +20,7 @@ import (
 //     offered, and the low-context root path keeps its own allowlist.
 //  2. A file write (write_file, edit_file, the structured writers, and a
 //     browse_url screenshot_path) must land under one of write_paths,
-//     resolved against the workspace root with symlinks followed.
+//     resolved against the project folder with symlinks followed.
 //  3. browse_url only reads a page: no scripted steps, interact/inspect
 //     actions, persistent sessions, or file:// URLs.
 //
@@ -99,11 +99,11 @@ func (a *Agent) checkPersonaConfinement(toolName string, args map[string]interfa
 	if persona == nil {
 		return nil
 	}
-	return confinementViolation(persona, a.currentWorkspaceRoot(), toolName, args, a.resolveMCPToolIdentity)
+	return confinementViolation(persona, a.currentProjectFolder(), toolName, args, a.resolveMCPToolIdentity)
 }
 
 // confinementViolation applies the three confinement rules for one call.
-func confinementViolation(persona *configuration.SubagentType, workspaceRoot, toolName string, args map[string]interface{}, mcpResolver func(toolName string) (server, tool string, err error)) error {
+func confinementViolation(persona *configuration.SubagentType, projectFolder, toolName string, args map[string]interface{}, mcpResolver func(toolName string) (server, tool string, err error)) error {
 	if !personaAllowsTool(persona, toolName, mcpResolver) {
 		return agenterrors.NewPermission(
 			fmt.Sprintf("tool %s is not available to the %s persona", toolName, persona.ID),
@@ -112,7 +112,7 @@ func confinementViolation(persona *configuration.SubagentType, workspaceRoot, to
 
 	if argName, ok := confinedPathWriteTools[toolName]; ok {
 		path, _ := args[argName].(string)
-		return checkConfinedWritePath(persona, workspaceRoot, toolName, path)
+		return checkConfinedWritePath(persona, projectFolder, toolName, path)
 	}
 
 	if toolName == "browse_url" {
@@ -129,7 +129,7 @@ func confinementViolation(persona *configuration.SubagentType, workspaceRoot, to
 				map[string]any{"tool": toolName, "persona": persona.ID, "arg": "action"})
 		}
 		if shot, _ := args["screenshot_path"].(string); strings.TrimSpace(shot) != "" {
-			return checkConfinedWritePath(persona, workspaceRoot, toolName, shot)
+			return checkConfinedWritePath(persona, projectFolder, toolName, shot)
 		}
 	}
 	return nil
@@ -137,11 +137,11 @@ func confinementViolation(persona *configuration.SubagentType, workspaceRoot, to
 
 // checkConfinedWritePath refuses a write outside the persona's write_paths.
 // An empty path is left to the tool's own validation.
-func checkConfinedWritePath(persona *configuration.SubagentType, workspaceRoot, toolName, path string) error {
+func checkConfinedWritePath(persona *configuration.SubagentType, projectFolder, toolName, path string) error {
 	if strings.TrimSpace(path) == "" {
 		return nil
 	}
-	if confinedPathAllowed(workspaceRoot, path, persona.WritePaths) {
+	if confinedPathAllowed(projectFolder, path, persona.WritePaths) {
 		return nil
 	}
 	return agenterrors.NewPermission(
@@ -150,12 +150,12 @@ func checkConfinedWritePath(persona *configuration.SubagentType, workspaceRoot, 
 		map[string]any{"tool": toolName, "persona": persona.ID, "path": path})
 }
 
-// confinedPathAllowed reports whether path, resolved against workspaceRoot,
-// lies strictly inside one of the workspace-relative write roots. Symlinks
+// confinedPathAllowed reports whether path, resolved against projectFolder,
+// lies strictly inside one of the project-folder-relative write roots. Symlinks
 // on the existing part of the path are followed, so a link inside an allowed
 // directory cannot redirect a write elsewhere.
-func confinedPathAllowed(workspaceRoot, path string, writeRoots []string) bool {
-	root := strings.TrimSpace(workspaceRoot)
+func confinedPathAllowed(projectFolder, path string, writeRoots []string) bool {
+	root := strings.TrimSpace(projectFolder)
 	if root == "" {
 		wd, err := os.Getwd()
 		if err != nil {

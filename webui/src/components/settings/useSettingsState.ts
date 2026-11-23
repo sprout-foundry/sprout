@@ -23,16 +23,16 @@ interface UseSettingsStateReturn {
    *  after the ProviderSettingsTab CRUD form adds a custom provider so
    *  the new entry appears in the dropdowns immediately. */
   refreshSubagentProviders: () => void;
-  configViewLayer: 'session' | 'workspace' | 'global';
-  setConfigViewLayer: (v: 'session' | 'workspace' | 'global') => void;
+  configViewLayer: 'session' | 'project_folder' | 'global';
+  setConfigViewLayer: (v: 'session' | 'project_folder' | 'global') => void;
   layerLoading: string | null;
   setLayerLoading: (v: string | null) => void;
   layerData: Record<string, unknown> | null;
   setLayerData: (v: Record<string, unknown> | null) => void;
   layerError: string | null;
   setLayerError: (v: string | null) => void;
-  creatingWorkspaceConfig: boolean;
-  setCreatingWorkspaceConfig: (v: boolean) => void;
+  creatingProjectFolderConfig: boolean;
+  setCreatingProjectFolderConfig: (v: boolean) => void;
   provenanceSources: Record<string, string>;
   setProvenanceSources: (v: Record<string, string>) => void;
   displaySettingsRef: React.MutableRefObject<SproutSettings | null>;
@@ -132,13 +132,13 @@ export function useSettingsState(
   const [providersSectionActive, setProvidersSectionActive] = useState(false);
   const [textDrafts, setTextDrafts] = useState<Record<string, string>>({});
 
-  const [configViewLayer, setConfigViewLayer] = useState<'session' | 'workspace' | 'global'>('session');
+  const [configViewLayer, setConfigViewLayer] = useState<'session' | 'project_folder' | 'global'>('session');
   const [layerLoading, setLayerLoading] = useState<string | null>(null);
   const [layerData, setLayerData] = useState<Record<string, unknown> | null>(null);
   const [layerError, setLayerError] = useState<string | null>(null);
 
   const displaySettingsRef = useRef<SproutSettings | null>(null);
-  const [creatingWorkspaceConfig, setCreatingWorkspaceConfig] = useState(false);
+  const [creatingProjectFolderConfig, setCreatingProjectFolderConfig] = useState(false);
   const [provenanceSources, setProvenanceSources] = useState<Record<string, string>>({});
 
   const { addNotification } = useNotifications();
@@ -389,8 +389,8 @@ export function useSettingsState(
     setLayerData,
     layerError,
     setLayerError,
-    creatingWorkspaceConfig,
-    setCreatingWorkspaceConfig,
+    creatingProjectFolderConfig,
+    setCreatingProjectFolderConfig,
     provenanceSources,
     setProvenanceSources,
     displaySettingsRef,

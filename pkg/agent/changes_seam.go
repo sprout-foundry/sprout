@@ -49,7 +49,7 @@ type changesAgentView struct{ a *Agent }
 
 func (v changesAgentView) GetSessionID() string     { return v.a.GetSessionID() }
 func (v changesAgentView) GetModel() string         { return v.a.GetModel() }
-func (v changesAgentView) GetWorkspaceRoot() string { return v.a.GetWorkspaceRoot() }
+func (v changesAgentView) GetProjectFolder() string { return v.a.GetProjectFolder() }
 func (v changesAgentView) GenerateResponse(messages []api.Message) (string, error) {
 	return v.a.GenerateResponse(messages)
 }

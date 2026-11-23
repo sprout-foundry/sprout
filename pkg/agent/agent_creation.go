@@ -45,7 +45,7 @@ type agentInitParams struct {
 	clientType      api.ClientType
 	systemPrompt    string
 	configManager   *configuration.Manager
-	workspaceRoot   string
+	projectFolder   string
 	debug           bool
 	interruptCtx    context.Context
 	interruptCancel context.CancelFunc
@@ -78,7 +78,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		inputInjectionChan:  make(chan string, inputInjectionBufferSize),
 		interruptCtx:        params.interruptCtx,
 		interruptCancel:     params.interruptCancel,
-		workspaceRoot:       params.workspaceRoot,
+		projectFolder:       params.projectFolder,
 		state:               stateMgr,
 		output:              outputMgr,
 		security:            securityMgr,
@@ -226,7 +226,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 
 	// Coordinator persona is opt-in ('/persona coordinator', or
 	// 'coordinator_auto_activate' in config). It no longer auto-fires
-	// for $HOME workspaces: a capable orchestrator handles multi-project
+	// for $HOME project folders: a capable orchestrator handles multi-project
 	// triage directly, and the swap surprised more users than it helped.
 	if params.isProduction {
 		agent.maybeAutoActivateCoordinatorPersona()
@@ -241,10 +241,10 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 	// startup. The agent owns the handle; Shutdown closes it.
 	agent.initAuditLogger()
 
-	// Index the workspace's code in the background, so repo_map and the code
+	// Index the project folder's code in the background, so repo_map and the code
 	// graph tools answer from the index rather than parsing files.
 	if params.isProduction {
-		tools.StartCodeIndex(params.workspaceRoot)
+		tools.StartCodeIndex(params.projectFolder)
 	}
 
 	return agent, nil
@@ -262,7 +262,7 @@ func resolveProfileAndSystemPrompt(
 	configManager *configuration.Manager,
 	client api.ClientInterface,
 	clientType api.ClientType,
-	workspaceRoot string,
+	projectFolder string,
 ) (configuration.ContextProfile, string, error) {
 	providerName := api.GetProviderName(clientType)
 
@@ -287,7 +287,7 @@ func resolveProfileAndSystemPrompt(
 	// (3) Load the prompt matched to the resolved profile. The path is
 	// derived from profile.SystemPromptPath — the helper never hardcodes
 	// "prompts/system_prompt.md" or "prompts/system_prompt.lite.md".
-	systemPrompt, err := GetEmbeddedSystemPromptForProfile(profile, providerName, contextWindow, workspaceRoot)
+	systemPrompt, err := GetEmbeddedSystemPromptForProfile(profile, providerName, contextWindow, projectFolder)
 	if err != nil {
 		return profile, "", agenterrors.NewPermanentError("failed to load system prompt", err)
 	}
@@ -309,17 +309,17 @@ func NewAgentWithClient(client api.ClientInterface, clientType api.ClientType, c
 		return nil, agenterrors.NewPermanentError("configManager is required", nil)
 	}
 
-	workspaceRoot, err := os.Getwd()
+	projectFolder, err := os.Getwd()
 	if err != nil {
-		workspaceRoot = "."
+		projectFolder = "."
 	}
-	if absWorkspaceRoot, absErr := filepath.Abs(workspaceRoot); absErr == nil {
-		workspaceRoot = absWorkspaceRoot
+	if absProjectFolder, absErr := filepath.Abs(projectFolder); absErr == nil {
+		projectFolder = absProjectFolder
 	}
 
 	// Resolve the context profile and load the matching system prompt via the shared helper.
 	// The profile is also re-resolved inside initAgentFromResolvedProvider; the two resolutions agree because they use the same inputs.
-	_, systemPrompt, err := resolveProfileAndSystemPrompt(configManager, client, clientType, workspaceRoot)
+	_, systemPrompt, err := resolveProfileAndSystemPrompt(configManager, client, clientType, projectFolder)
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +331,7 @@ func NewAgentWithClient(client api.ClientInterface, clientType api.ClientType, c
 		clientType:      clientType,
 		systemPrompt:    systemPrompt,
 		configManager:   configManager,
-		workspaceRoot:   workspaceRoot,
+		projectFolder:   projectFolder,
 		debug:           isDebugEnvEnabled(),
 		interruptCtx:    interruptCtx,
 		interruptCancel: interruptCancel,
@@ -361,9 +361,9 @@ func NewAgentWithConfigDir(configDir, model string) (*Agent, error) {
 	return newAgentWithConfigManager(configManager, model)
 }
 
-// NewAgentWithLayers creates a new agent using layered configuration (global + workspace).
-func NewAgentWithLayers(globalDir, workspaceDir, model string) (*Agent, error) {
-	configManager, err := configuration.NewManagerWithLayers(globalDir, workspaceDir)
+// NewAgentWithLayers creates a new agent using layered configuration (global + project folder).
+func NewAgentWithLayers(globalDir, projectFolderDir, model string) (*Agent, error) {
+	configManager, err := configuration.NewManagerWithLayers(globalDir, projectFolderDir)
 	if err != nil {
 		return nil, agenterrors.NewPermanentError("failed to initialize layered configuration", err)
 	}
@@ -371,55 +371,55 @@ func NewAgentWithLayers(globalDir, workspaceDir, model string) (*Agent, error) {
 	return newAgentWithConfigManager(configManager, model)
 }
 
-// NewAgentWithLayersInWorkspace creates a new agent using layered configuration with an explicit workspace root.
-func NewAgentWithLayersInWorkspace(globalDir, workspaceDir, workspaceRoot, model string) (*Agent, error) {
-	configManager, err := configuration.NewManagerWithLayers(globalDir, workspaceDir)
+// NewAgentWithLayersInProjectFolder creates a new agent using layered configuration with an explicit project folder.
+func NewAgentWithLayersInProjectFolder(globalDir, projectFolderDir, projectFolder, model string) (*Agent, error) {
+	configManager, err := configuration.NewManagerWithLayers(globalDir, projectFolderDir)
 	if err != nil {
 		return nil, agenterrors.NewPermanentError("failed to initialize layered configuration", err)
 	}
 
-	return newAgentWithConfigManagerAndWorkspace(configManager, workspaceRoot, model)
+	return newAgentWithConfigManagerAndProjectFolder(configManager, projectFolder, model)
 }
 
-// newAgentWithConfigManagerAndWorkspace is like newAgentWithConfigManager but accepts an explicit workspace root.
-func newAgentWithConfigManagerAndWorkspace(configManager *configuration.Manager, workspaceRoot, model string) (*Agent, error) {
-	if workspaceRoot == "" {
+// newAgentWithConfigManagerAndProjectFolder is like newAgentWithConfigManager but accepts an explicit project folder.
+func newAgentWithConfigManagerAndProjectFolder(configManager *configuration.Manager, projectFolder, model string) (*Agent, error) {
+	if projectFolder == "" {
 		var err error
-		workspaceRoot, err = os.Getwd()
+		projectFolder, err = os.Getwd()
 		if err != nil {
-			workspaceRoot = "."
+			projectFolder = "."
 		}
 	}
-	if absWorkspaceRoot, absErr := filepath.Abs(workspaceRoot); absErr == nil {
-		workspaceRoot = absWorkspaceRoot
+	if absProjectFolder, absErr := filepath.Abs(projectFolder); absErr == nil {
+		projectFolder = absProjectFolder
 	}
 
-	return newAgentWithConfigManagerInner(configManager, workspaceRoot, model)
+	return newAgentWithConfigManagerInner(configManager, projectFolder, model)
 }
 
 // newAgentWithConfigManager is the internal implementation that creates an agent
 // with a pre-configured configuration manager.
 func newAgentWithConfigManager(configManager *configuration.Manager, model string) (*Agent, error) {
-	workspaceRoot, err := os.Getwd()
+	projectFolder, err := os.Getwd()
 	if err != nil {
-		workspaceRoot = "."
+		projectFolder = "."
 	}
-	if absWorkspaceRoot, absErr := filepath.Abs(workspaceRoot); absErr == nil {
-		workspaceRoot = absWorkspaceRoot
+	if absProjectFolder, absErr := filepath.Abs(projectFolder); absErr == nil {
+		projectFolder = absProjectFolder
 	}
 
-	return newAgentWithConfigManagerInner(configManager, workspaceRoot, model)
+	return newAgentWithConfigManagerInner(configManager, projectFolder, model)
 }
 
-// newAgentWithConfigManagerInner is the core implementation that accepts an explicit workspace root.
-func newAgentWithConfigManagerInner(configManager *configuration.Manager, workspaceRoot, model string) (*Agent, error) {
+// newAgentWithConfigManagerInner is the core implementation that accepts an explicit project folder.
+func newAgentWithConfigManagerInner(configManager *configuration.Manager, projectFolder, model string) (*Agent, error) {
 	var err error
 
 	var clientType api.ClientType
 	var finalModel string
 
 	// --mock-llm flag override: use a deterministic mock provider. Excluded from WASM build.
-	if handled, agent, err := tryMockLLMAgent(model, configManager, workspaceRoot); handled {
+	if handled, agent, err := tryMockLLMAgent(model, configManager, projectFolder); handled {
 		return agent, err
 	}
 
@@ -448,7 +448,7 @@ func newAgentWithConfigManagerInner(configManager *configuration.Manager, worksp
 			clientType:      clientType,
 			systemPrompt:    systemPrompt,
 			configManager:   configManager,
-			workspaceRoot:   workspaceRoot,
+			projectFolder:   projectFolder,
 			debug:           isDebugEnvEnabled(),
 			interruptCtx:    context.Background(),
 			interruptCancel: func() { /* no-op */ },
@@ -614,7 +614,7 @@ func newAgentWithConfigManagerInner(configManager *configuration.Manager, worksp
 	debug := isDebugEnvEnabled()
 
 	// Resolve the context profile and load the matching system prompt via the shared helper.
-	_, systemPrompt, err := resolveProfileAndSystemPrompt(configManager, client, clientType, workspaceRoot)
+	_, systemPrompt, err := resolveProfileAndSystemPrompt(configManager, client, clientType, projectFolder)
 	if err != nil {
 		return nil, err
 	}
@@ -628,7 +628,7 @@ func newAgentWithConfigManagerInner(configManager *configuration.Manager, worksp
 		clientType:      clientType,
 		systemPrompt:    systemPrompt,
 		configManager:   configManager,
-		workspaceRoot:   workspaceRoot,
+		projectFolder:   projectFolder,
 		debug:           debug,
 		interruptCtx:    interruptCtx,
 		interruptCancel: interruptCancel,
@@ -653,8 +653,8 @@ func isHomeDirPath(dir string) bool {
 
 // maybeAutoActivateCoordinatorPersona activates the Coordinator persona when
 // the user has explicitly opted in via 'coordinator_auto_activate' in config
-// and the workspace is the user's home directory. Coordinator used to
-// auto-activate for $HOME workspaces unconditionally; that default was
+// and the project folder is the user's home directory. Coordinator used to
+// auto-activate for $HOME project folders unconditionally; that default was
 // removed — the orchestrator handles multi-project triage directly, and the
 // silent persona swap surprised more users than it helped.
 func (a *Agent) maybeAutoActivateCoordinatorPersona() {
@@ -668,8 +668,8 @@ func (a *Agent) maybeAutoActivateCoordinatorPersona() {
 		return
 	}
 
-	// Only activate when workspace is home directory
-	if !isHomeDirPath(a.GetWorkspaceRoot()) {
+	// Only activate when project folder is home directory
+	if !isHomeDirPath(a.GetProjectFolder()) {
 		return
 	}
 
@@ -692,7 +692,7 @@ func (a *Agent) maybeAutoActivateCoordinatorPersona() {
 		return
 	}
 	// Surface the activation so users can see why behavior changed.
-	console.GlyphInfo.Fprintf(os.Stderr, "Activated coordinator persona because workspace is $HOME (disable with 'disable_coordinator_auto_activate' in config)")
+	console.GlyphInfo.Fprintf(os.Stderr, "Activated coordinator persona because project folder is $HOME (disable with 'disable_coordinator_auto_activate' in config)")
 }
 
 // isInteractiveTerminal returns true if stdin is a TTY, indicating the

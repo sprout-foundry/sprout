@@ -48,8 +48,8 @@ func buildCommitArgs(skipPrompt, dryRun, allowSecrets bool, trailers []string) [
 // the repo's .sprout settings (commit_trailers, commit provider, roles)
 // apply; elsewhere the plain global-config agent is used.
 func newCommitAgent(spec string) (*agent.Agent, error) {
-	if autoDetectedWorkspaceDir != "" && resolveGlobalConfigDir() != "" {
-		return agent.NewAgentWithLayers(resolveGlobalConfigDir(), autoDetectedWorkspaceDir, spec)
+	if autoDetectedProjectFolderDir != "" && resolveGlobalConfigDir() != "" {
+		return agent.NewAgentWithLayers(resolveGlobalConfigDir(), autoDetectedProjectFolderDir, spec)
 	}
 	if spec != "" {
 		return agent.NewAgentWithModel(spec)

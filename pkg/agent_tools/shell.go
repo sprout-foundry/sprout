@@ -161,7 +161,7 @@ func ExecuteShellCommandBackground(ctx context.Context, command string, sessionI
 	if bpm := BackgroundProcessManagerFromContext(ctx); bpm != nil {
 		// Resolve working directory from context
 		dir := ""
-		if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
+		if wd := filesystem.ProjectFolderFromContext(ctx); wd != "" {
 			dir = wd
 		} else if wd, err := os.Getwd(); err == nil {
 			dir = wd

@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react';
 import type { SproutEvent } from '../types/events';
-import { changesWorkspaceFiles } from './workspaceFileEvents';
+import { changesProjectFolderFiles } from './workspaceFileEvents';
 
 const DEBOUNCE_MS = 600;
 
 /**
- * Calls `refresh` after workspace files change (the agent's file tools, shell
+ * Calls `refresh` after project folder files change (the agent's file tools, shell
  * commands, saves), debounced so a burst of edits refreshes once. Listens on
  * the window event bridge, so it needs no events provider.
  */
@@ -16,7 +16,7 @@ export function useFileTreeAutoRefresh(refresh: () => void): void {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const onEvent = (e: Event) => {
-      if (!changesWorkspaceFiles((e as CustomEvent<SproutEvent>).detail)) return;
+      if (!changesProjectFolderFiles((e as CustomEvent<SproutEvent>).detail)) return;
       if (timer !== null) clearTimeout(timer);
       timer = setTimeout(() => {
         timer = null;

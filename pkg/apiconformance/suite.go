@@ -16,11 +16,11 @@ import (
 const defaultTimeout = 10 * time.Second
 
 // errMutatingRequiresDisposable is returned by RunMutating when no explicitly
-// disposable workspace has been set. It is the gate that keeps a conformance run
-// from writing to a real workspace: mutating checks are only ever run against a
-// workspace the caller declared disposable.
+// disposable project folder has been set. It is the gate that keeps a conformance run
+// from writing to a real project folder: mutating checks are only ever run against a
+// project folder the caller declared disposable.
 var errMutatingRequiresDisposable = errors.New(
-	"apiconformance: RunMutating requires an explicitly disposable workspace; set one with WithDisposableWorkspace")
+	"apiconformance: RunMutating requires an explicitly disposable project folder; set one with WithDisposableProjectFolder")
 
 // Option configures a Suite. Options are applied in order by New.
 type Option func(*Suite)
@@ -53,10 +53,10 @@ func WithHTTPHeader(name, value string) Option {
 	}
 }
 
-// WithDisposableWorkspace marks a workspace root as disposable, enabling
-// RunMutating. A conformance run only mutates state inside a workspace the
+// WithDisposableProjectFolder marks a project folder as disposable, enabling
+// RunMutating. A conformance run only mutates state inside a project folder the
 // caller has explicitly declared disposable.
-func WithDisposableWorkspace(root string) Option {
+func WithDisposableProjectFolder(root string) Option {
 	return func(s *Suite) {
 		s.disposableRoot = root
 	}
@@ -138,8 +138,8 @@ func (s *Suite) RunSafe(ctx context.Context) (*Report, error) {
 	return NewReport(results), nil
 }
 
-// RunMutating runs the mutating checks, but only when a disposable workspace was
-// explicitly set (WithDisposableWorkspace); otherwise it returns
+// RunMutating runs the mutating checks, but only when a disposable project folder was
+// explicitly set (WithDisposableProjectFolder); otherwise it returns
 // errMutatingRequiresDisposable. The mutating battery is deliberately a
 // documented no-op for now: the gate (not a full mutation set) is what this
 // package delivers, and a later consumer supplies the mutating probes. When the

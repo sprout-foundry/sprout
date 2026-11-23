@@ -336,12 +336,12 @@ func (t *scopeMilestoneTracker) cachedPlanSnapshot(a *Agent) (int, map[string]st
 	return t.planRev, t.scopeTitles
 }
 
-// refreshPlanLocked re-reads the plan from the agent's workspace and updates
+// refreshPlanLocked re-reads the plan from the agent's project folder and updates
 // the cached revision and titles when the loaded revision differs from the
 // cached one. planMu must be held.
 func (t *scopeMilestoneTracker) refreshPlanLocked(a *Agent) {
 	rev, titles := 0, map[string]string(nil)
-	if root := a.currentWorkspaceRoot(); root != "" {
+	if root := a.currentProjectFolder(); root != "" {
 		if plan, err := planstore.New().Load(root); err == nil {
 			rev = plan.Revision
 			if len(plan.Scope) > 0 {

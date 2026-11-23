@@ -8,7 +8,7 @@ import WorkspaceBar from './WorkspaceBar';
 
 vi.mock('../services/api', () => ({
   ApiService: {
-    getInstance: () => ({ getWorkspace: vi.fn().mockRejectedValue(new Error('not called in these tests')) }),
+    getInstance: () => ({ getProjectFolder: vi.fn().mockRejectedValue(new Error('not called in these tests')) }),
   },
 }));
 vi.mock('../services/clientSession', () => ({ getSSHProxyContext: () => null }));
@@ -31,9 +31,9 @@ afterEach(() => {
   container.remove();
 });
 
-// The bar names the workspace host. A shell with no workspace switching has no
+// The bar names the project folder host. A shell with no project folder switching has no
 // host to name unless it is attached to a remote one, so the early return is
-// keyed on workspaceSwitching. isConnected: false keeps the fetch path out of
+// keyed on projectFolderSwitching. isConnected: false keeps the fetch path out of
 // scope for this early-return flip.
 describe('WorkspaceBar host-name early return', () => {
   it('renders nothing in a hosted build, even with workspace switching', () => {

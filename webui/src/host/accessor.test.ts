@@ -4,7 +4,7 @@
  *
  * It records a host as the active one for the module-level services and
  * returns a restore function that puts the previous host back, so a mounted
- * workspace that registers its host does not leave it installed after unmount.
+ * project folder that registers its host does not leave it installed after unmount.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getActiveHost, registerActiveHost, setActiveHost } from './accessor';
@@ -40,7 +40,7 @@ describe('registerActiveHost', () => {
     const host = hostWithApiBase('https://host.test');
     const restore = registerActiveHost(host);
     restore();
-    // A second call must not re-register the workspace host or clobber a host
+    // A second call must not re-register the project folder host or clobber a host
     // another registration installed meanwhile.
     const later = hostWithApiBase('https://later.test');
     setActiveHost(later);
@@ -51,7 +51,7 @@ describe('registerActiveHost', () => {
   it('keeps the registered host when no host was active before (the embedding case)', () => {
     // A fresh module instance has no active host. The accessor has no null
     // setter, so the restore keeps the registered host rather than clearing
-    // the singleton — a mounted-then-unmounted workspace leaves a resolvable
+    // the singleton — a mounted-then-unmounted project folder leaves a resolvable
     // host, never none.
     vi.resetModules();
     return import('./accessor').then(({ getActiveHost: get, registerActiveHost: register }) => {

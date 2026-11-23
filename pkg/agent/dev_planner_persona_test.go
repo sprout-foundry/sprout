@@ -11,7 +11,7 @@ import (
 func TestDevPlannerPersona_ToolsResolveAndPromptLoads(t *testing.T) {
 	agent := newTestAgent(t)
 	t.Cleanup(agent.Shutdown)
-	agent.SetWorkspaceRoot(t.TempDir())
+	agent.SetProjectFolder(t.TempDir())
 	if err := agent.ApplyPersona(personas.IDDevPlanner); err != nil {
 		t.Fatalf("ApplyPersona(dev_planner): %v", err)
 	}

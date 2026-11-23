@@ -16,7 +16,7 @@ export interface UseTerminalWorkbenchOptions {
 /**
  * The terminal's session state — shells, panes, sessions and their exit
  * handling — independent of where the terminal is placed. The app's docked
- * terminal and the workspace's arranged terminal view both run on it, so the
+ * terminal and the project folder's arranged terminal view both run on it, so the
  * two surfaces behave the same.
  */
 export interface TerminalWorkbench extends UseTerminalPanesReturn, ReturnType<typeof useAvailableShells> {

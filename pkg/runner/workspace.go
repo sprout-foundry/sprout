@@ -17,30 +17,30 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 )
 
-// daemonPort is the port the workspace image's daemon listens on.
+// daemonPort is the port the dev space image's daemon listens on.
 const daemonPort = 56000
 
-// readyTimeout bounds how long a fresh workspace has to answer /health.
+// readyTimeout bounds how long a fresh dev space has to answer /health.
 const readyTimeout = 3 * time.Minute
 
-// Workspace is a running workspace's daemon, reachable on loopback.
-type Workspace struct {
+// Dev space is a running dev space's daemon, reachable on loopback.
+type DevSpace struct {
 	ID   string
 	Port int
 	// Handle identifies it to its launcher (a container name, or a pid).
 	Handle string
 }
 
-// Launcher starts and stops workspaces in one execution mode.
+// Launcher starts and stops dev spaces in one execution mode.
 type Launcher interface {
-	Start(ctx context.Context, task WorkspaceTask) (*Workspace, error)
-	Stop(ctx context.Context, ws *Workspace) error
-	Destroy(ctx context.Context, workspaceID string, ws *Workspace) error
+	Start(ctx context.Context, task DevSpaceTask) (*DevSpace, error)
+	Stop(ctx context.Context, ws *DevSpace) error
+	Destroy(ctx context.Context, devSpaceID string, ws *DevSpace) error
 }
 
 var (
-	envNameRe     = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	workspaceIDRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$`)
+	envNameRe    = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	devSpaceIDRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$`)
 )
 
 // reservedEnv is set by the runner and never by user env (GAP-2 filtering
@@ -56,21 +56,21 @@ func reservedEnv(name string) bool {
 	return false
 }
 
-// workspaceEnv is the environment a workspace daemon gets: its identity and
-// per-workspace secret, the platform URL, git and LLM credentials, then the
+// devSpaceEnv is the environment a dev space daemon gets: its identity and
+// per-dev-space secret, the platform URL, git and LLM credentials, then the
 // user's own variables (never overriding the runner's).
-func workspaceEnv(task WorkspaceTask) map[string]string {
+func devSpaceEnv(task DevSpaceTask) map[string]string {
 	env := map[string]string{
 		"SPROUT_MODE":  "daemon",
-		"WORKSPACE_ID": task.WorkspaceID,
+		"WORKSPACE_ID": task.DevSpaceID,
 	}
-	if task.WorkspaceDir != "" {
-		// A local-directory workspace runs in place: the directory is
-		// the workspace root and there is no repo (the launchers skip
+	if task.DevSpaceDir != "" {
+		// A local-directory dev space runs in place: the directory is
+		// the dev space root and there is no repo (the launchers skip
 		// the clone when workspace_dir is set; a task naming both is
 		// refused before it reaches a launcher). The daemon learns
 		// where its files live instead.
-		env["WORKSPACE_DIR"] = task.WorkspaceDir
+		env["WORKSPACE_DIR"] = task.DevSpaceDir
 	} else {
 		env["REPO_URL"] = task.RepoURL
 		if host := repoHost(task.RepoURL); host != "" {
@@ -158,16 +158,16 @@ func gitAuthEnv(repoURL, user, token string) []string {
 	}
 }
 
-// workspaceDir is the per-workspace directory under the runner's state.
-func workspaceDir(workspaceID string) (string, error) {
-	if !workspaceIDRe.MatchString(workspaceID) {
-		return "", fmt.Errorf("invalid workspace id %q", workspaceID)
+// devSpaceDir is the per-dev-space directory under the runner's state.
+func devSpaceDir(devSpaceID string) (string, error) {
+	if !devSpaceIDRe.MatchString(devSpaceID) {
+		return "", fmt.Errorf("invalid dev space id %q", devSpaceID)
 	}
-	base, err := WorkspacesDir()
+	base, err := DevSpacesDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(base, workspaceID), nil
+	return filepath.Join(base, devSpaceID), nil
 }
 
 // freePort asks the OS for an unused loopback port.
@@ -196,7 +196,7 @@ func waitReady(ctx context.Context, port int) error {
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("workspace daemon on port %d did not become ready: %w", port, ctx.Err())
+			return fmt.Errorf("dev space daemon on port %d did not become ready: %w", port, ctx.Err())
 		case <-time.After(time.Second):
 		}
 	}

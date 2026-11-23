@@ -37,7 +37,7 @@ type DuplicateMatch struct {
 
 // CodeLocation identifies one extracted code unit.
 type CodeLocation struct {
-	// File is the workspace-relative path.
+	// File is the project-folder-relative path.
 	File string `json:"file"`
 	// Name is the function or method name.
 	Name string `json:"name"`

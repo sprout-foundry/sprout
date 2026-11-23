@@ -13,7 +13,7 @@ import (
 )
 
 // newPreviewSourceServer builds a server with a started preview origin and a
-// default client context rooted at root, so getWorkspaceRootForRequest resolves
+// default client context rooted at root, so getProjectFolderForRequest resolves
 // the same root the origin serves from.
 func newPreviewSourceServer(t *testing.T, root string) *ReactWebServer {
 	t.Helper()
@@ -31,7 +31,7 @@ func newPreviewSourceServer(t *testing.T, root string) *ReactWebServer {
 		resolved = evaled
 	}
 	ws.clientContexts[defaultWebClientID] = &webClientContext{
-		WorkspaceRoot: resolved,
+		ProjectFolder: resolved,
 		FileConsents:  newFileConsentManager(),
 	}
 	return ws
@@ -112,7 +112,7 @@ func TestAPIPreviewSourceRequiresPath(t *testing.T) {
 	}
 }
 
-func TestAPIPreviewSourceRejectsOutsideWorkspace(t *testing.T) {
+func TestAPIPreviewSourceRejectsOutsideProjectFolder(t *testing.T) {
 	root := t.TempDir()
 	outside := filepath.Join(filepath.Dir(root), "outside-secret.html")
 	if err := os.WriteFile(outside, []byte("secret"), 0o600); err != nil {
@@ -124,7 +124,7 @@ func TestAPIPreviewSourceRejectsOutsideWorkspace(t *testing.T) {
 
 	code, body := callPreviewSource(t, ws, outside)
 	if code != http.StatusForbidden {
-		t.Errorf("status = %d, want 403 for a path outside the workspace (body %v)", code, body)
+		t.Errorf("status = %d, want 403 for a path outside the project folder (body %v)", code, body)
 	}
 	if body["url"] != nil {
 		t.Errorf("url = %v, want none for a rejected path", body["url"])

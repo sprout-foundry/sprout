@@ -192,7 +192,7 @@ describe('EditorManager tab pane management', () => {
     expect(chatBuffer.paneId).toBe(activePaneId);
     expect(chatBuffer.isActive).toBe(true);
 
-    // Open a diff workspace buffer (non-chat kind → targets activePaneId)
+    // Open a diff project folder buffer (non-chat kind → targets activePaneId)
     let diffId: string;
     await actAndUpdateWithDelay(() => {
       diffId = ctx().openWorkspaceBuffer({
@@ -471,14 +471,14 @@ describe('paneId preservation fix', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 3. openWorkspaceBuffer preserves paneId when opening workspace buffers
+  // 3. openWorkspaceBuffer preserves paneId when opening project folder buffers
   // -----------------------------------------------------------------------
   it('openWorkspaceBuffer preserves paneId when switching to a new workspace buffer', async () => {
     renderProvider();
 
     const paneId = ctx().activePaneId;
 
-    // Open a review workspace buffer (non-chat targets activePaneId)
+    // Open a review project folder buffer (non-chat targets activePaneId)
     let reviewId: string;
     await actAndUpdateWithDelay(() => {
       reviewId = ctx().openWorkspaceBuffer({

@@ -29,7 +29,7 @@ func registerFilesHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodGet,
 		Path:        "/api/files",
 		Summary:     "List a directory with git status.",
-		Description: "Lists the entries of a directory, computing per-entry git status (modified, untracked, ignored) unless `git_status=false` is set for a faster, status-free listing. Defaults to the workspace root when `path` (or `dir`) is omitted.",
+		Description: "Lists the entries of a directory, computing per-entry git status (modified, untracked, ignored) unless `git_status=false` is set for a faster, status-free listing. Defaults to the project folder when `path` (or `dir`) is omitted.",
 		Tags:        []string{"files"},
 	}, ws.filesListHumaHandler)
 
@@ -37,8 +37,8 @@ func registerFilesHumaOperations(api huma.API, ws *ReactWebServer) {
 		OperationID: "prettierConfig",
 		Method:      http.MethodGet,
 		Path:        "/api/files/prettier-config",
-		Summary:     "Discover the workspace's Prettier configuration.",
-		Description: "Merges the Prettier configuration found in the workspace (the .prettierrc family of files and the `prettier` key in package.json) into a single object, with later sources overriding earlier ones. Only the formats the Go backend can parse are read; JS and TOML config files are intentionally skipped.",
+		Summary:     "Discover the project folder's Prettier configuration.",
+		Description: "Merges the Prettier configuration found in the project folder (the .prettierrc family of files and the `prettier` key in package.json) into a single object, with later sources overriding earlier ones. Only the formats the Go backend can parse are read; JS and TOML config files are intentionally skipped.",
 		Tags:        []string{"files"},
 	}, ws.prettierConfigHumaHandler)
 
@@ -47,7 +47,7 @@ func registerFilesHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodGet,
 		Path:        "/api/file",
 		Summary:     "Read a file's contents.",
-		Description: "Reads and returns the raw content of the file at the `path` query parameter, with a detected Content-Type. Serves a conditional 304 when the `If-Modified-Since` header matches the file's mtime. External paths (outside the workspace and app-config directory) require an unconsumed file-consent token.",
+		Description: "Reads and returns the raw content of the file at the `path` query parameter, with a detected Content-Type. Serves a conditional 304 when the `If-Modified-Since` header matches the file's mtime. External paths (outside the project folder and app-config directory) require an unconsumed file-consent token.",
 		Tags:        []string{"files"},
 	}, ws.fileHumaHandler)
 
@@ -65,7 +65,7 @@ func registerFilesHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodPost,
 		Path:        "/api/file/consent",
 		Summary:     "Issue a file-consent token for an external path.",
-		Description: "Mints a short-lived consent token that authorizes a read or write of a file outside the workspace and the app-config directory. Paths that are already within the workspace (or the app-config directory) need no consent and are rejected with 400.",
+		Description: "Mints a short-lived consent token that authorizes a read or write of a file outside the project folder and the app-config directory. Paths that are already within the project folder (or the app-config directory) need no consent and are rejected with 400.",
 		Tags:        []string{"files"},
 	}, ws.fileConsentHumaHandler)
 
@@ -82,8 +82,8 @@ func registerFilesHumaOperations(api huma.API, ws *ReactWebServer) {
 		OperationID: "searchQuery",
 		Method:      http.MethodGet,
 		Path:        "/api/search",
-		Summary:     "Search for matches across workspace files.",
-		Description: "Searches the workspace files for matches of `query`, returning the matched lines with surrounding context. The search is bounded by a timeout and by a file-walk and match cap; when any cap is hit the result is marked truncated.",
+		Summary:     "Search for matches across project folder files.",
+		Description: "Searches the project folder files for matches of `query`, returning the matched lines with surrounding context. The search is bounded by a timeout and by a file-walk and match cap; when any cap is hit the result is marked truncated.",
 		Tags:        []string{"search"},
 	}, ws.searchQueryHumaHandler)
 
@@ -92,7 +92,7 @@ func registerFilesHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodPost,
 		Path:        "/api/search/replace",
 		Summary:     "Search and replace across files.",
-		Description: "Replaces matches of `search` with `replace` within the listed `files`, honoring the same case/whole-word/regex modifiers as the search. When `preview` is true the changes are computed but not written. Files are restricted to the workspace.",
+		Description: "Replaces matches of `search` with `replace` within the listed `files`, honoring the same case/whole-word/regex modifiers as the search. When `preview` is true the changes are computed but not written. Files are restricted to the project folder.",
 		Tags:        []string{"search"},
 	}, ws.searchReplaceHumaHandler)
 
@@ -137,7 +137,7 @@ func registerFilesHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodPost,
 		Path:        "/api/upload/image",
 		Summary:     "Upload an image for use in a chat.",
-		Description: "Accepts an image either as a raw body or as a multipart form field named `image`. The image format is validated by magic bytes and the file is saved into the workspace; the response returns the absolute path and filename so the client can reference it in a message.",
+		Description: "Accepts an image either as a raw body or as a multipart form field named `image`. The image format is validated by magic bytes and the file is saved into the project folder; the response returns the absolute path and filename so the client can reference it in a message.",
 		Tags:        []string{"files"},
 	}, ws.uploadImageHumaHandler)
 
@@ -155,7 +155,7 @@ func registerFilesHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodGet,
 		Path:        "/api/lsp/status",
 		Summary:     "Report available and active LSP servers.",
-		Description: "Lists the configured language servers with their supported languages, binary, install hint, and whether the binary is resolvable on PATH, plus the count of currently active LSP sessions and the workspace root.",
+		Description: "Lists the configured language servers with their supported languages, binary, install hint, and whether the binary is resolvable on PATH, plus the count of currently active LSP sessions and the project folder.",
 		Tags:        []string{"terminal"},
 	}, ws.lspStatusHumaHandler)
 
@@ -164,7 +164,7 @@ func registerFilesHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodGet,
 		Path:        "/api/preview/source",
 		Summary:     "Mint a URL for the HTML preview iframe.",
-		Description: "Returns a short-lived URL on the dedicated preview origin for the workspace file at `path`, so the editor's HTML preview renders with a real document URL (relative assets and `blob:` navigation resolve) on an origin that cannot reach the app's session storage or cookies. Reports `available: false` when the preview origin is not running, in which case the editor falls back to a `srcDoc` iframe.",
+		Description: "Returns a short-lived URL on the dedicated preview origin for the project folder file at `path`, so the editor's HTML preview renders with a real document URL (relative assets and `blob:` navigation resolve) on an origin that cannot reach the app's session storage or cookies. Reports `available: false` when the preview origin is not running, in which case the editor falls back to a `srcDoc` iframe.",
 		Tags:        []string{"preview"},
 	}, ws.previewSourceHumaHandler)
 

@@ -35,14 +35,14 @@ type SkillInfo struct {
 // or is explicitly disabled cannot be activated, even if its content
 // happens to be embedded.
 func LoadSkill(skillID string, config *configuration.Config) (*SkillInfo, error) {
-	return LoadSkillInWorkspace(skillID, config, "")
+	return LoadSkillInProjectFolder(skillID, config, "")
 }
 
-// LoadSkillInWorkspace is the workspace-aware variant of LoadSkill.
+// LoadSkillInProjectFolder is the project-folder-aware variant of LoadSkill.
 // Project-level skills (e.g., .sprout/skills/) are resolved relative to
-// workspaceRoot instead of os.Getwd(). This is critical in daemon mode
-// where the process CWD differs from the workspace being served.
-func LoadSkillInWorkspace(skillID string, config *configuration.Config, workspaceRoot string) (*SkillInfo, error) {
+// projectFolder instead of os.Getwd(). This is critical in daemon mode
+// where the process CWD differs from the project folder being served.
+func LoadSkillInProjectFolder(skillID string, config *configuration.Config, projectFolder string) (*SkillInfo, error) {
 	skill := config.GetSkill(skillID)
 	if skill == nil {
 		return nil, agenterrors.NewNotFoundCause(
@@ -63,7 +63,7 @@ func LoadSkillInWorkspace(skillID string, config *configuration.Config, workspac
 	}
 
 	// Fall back to filesystem for project/user skills
-	skillPath := resolveSkillPathInWorkspace(skill.Path, workspaceRoot)
+	skillPath := resolveSkillPathInProjectFolder(skill.Path, projectFolder)
 	skillFile := filepath.Join(skillPath, SkillFileName)
 
 	content, err := os.ReadFile(skillFile)
@@ -142,18 +142,18 @@ func GetSkillManifest(content string) (map[string]string, string, error) {
 // resolveSkillPath resolves a skill path for filesystem-based skills (project/user).
 // Builtin skills are served from the embedded filesystem and don't use this.
 func resolveSkillPath(relativePath string) string {
-	return resolveSkillPathInWorkspace(relativePath, "")
+	return resolveSkillPathInProjectFolder(relativePath, "")
 }
 
-// resolveSkillPathInWorkspace resolves a skill path relative to the given
-// workspace root. If workspaceRoot is empty, falls back to os.Getwd().
-func resolveSkillPathInWorkspace(relativePath, workspaceRoot string) string {
+// resolveSkillPathInProjectFolder resolves a skill path relative to the given
+// project folder. If projectFolder is empty, falls back to os.Getwd().
+func resolveSkillPathInProjectFolder(relativePath, projectFolder string) string {
 	if filepath.IsAbs(relativePath) {
 		return relativePath
 	}
 
-	// Project skills (e.g., .sprout/skills/...) are relative to the workspace root.
-	base := strings.TrimSpace(workspaceRoot)
+	// Project skills (e.g., .sprout/skills/...) are relative to the project folder.
+	base := strings.TrimSpace(projectFolder)
 	if base == "" {
 		wd, err := os.Getwd()
 		if err != nil {
@@ -214,7 +214,7 @@ func (a *Agent) activateSkillByID(skillID string) (string, error) {
 		return "", errors.New("skill_id is required")
 	}
 	config := a.GetConfigManager().GetConfig()
-	skillInfo, err := LoadSkillInWorkspace(skillID, config, a.GetWorkspaceRoot())
+	skillInfo, err := LoadSkillInProjectFolder(skillID, config, a.GetProjectFolder())
 	if err != nil {
 		return "", err
 	}

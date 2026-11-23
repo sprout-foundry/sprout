@@ -1,8 +1,8 @@
 /**
- * The repository the cloud workspace is working on.
+ * The repository the cloud dev space is working on.
  *
  * Everything that leaves the browser for a container (transactional runs,
- * agent escalation, full workspaces) needs a repo URL. It comes from ?repo=
+ * agent escalation, dev spaces) needs a repo URL. It comes from ?repo=
  * when the editor was opened for a repository, otherwise from the most
  * recent import — including clones started inside the editor, which never
  * touch the URL.

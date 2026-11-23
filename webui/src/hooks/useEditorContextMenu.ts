@@ -2,7 +2,7 @@
  * useEditorContextMenu — manages context menu state and handlers.
  *
  * Extracts context menu logic from EditorPane:
- * - State: contextMenu, workspaceRoot
+ * - State: contextMenu, projectFolder
  * - Handlers: handleEditorContextMenu, handleCopySelection, handleRevealInExplorer
  * - Handlers: handleCopyRelativePath, handleCopyAbsolutePath
  * - Handlers: handleGoToDefinitionFromMenu, handleFindAllReferencesFromMenu
@@ -17,7 +17,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { resolveLanguageId } from '../extensions/languageRegistry';
 import { ApiService } from '../services/api';
 import { setConfigFetcher } from '../services/formatter';
-import { useWorkspaceRoot } from '../services/workspaceStore';
+import { useProjectFolder } from '../services/workspaceStore';
 import type { EditorBuffer } from '../types/editor';
 import { copyToClipboard } from '../utils/clipboard';
 import { debugLog, warn } from '../utils/log';
@@ -75,7 +75,7 @@ export function useEditorContextMenu(
   // ---------------------------------------------------------------------------
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const workspaceRoot = useWorkspaceRoot();
+  const projectFolder = useProjectFolder();
 
   // ---------------------------------------------------------------------------
   // Helpers
@@ -147,12 +147,12 @@ export function useEditorContextMenu(
   const handleCopyAbsolutePath = useCallback(() => {
     const buf = bufferRef.current;
     if (!buf || !buf.file) return;
-    const root = workspaceRoot.replace(/\/+$/, '');
+    const root = projectFolder.replace(/\/+$/, '');
     copyToClipboard(`${root}/${buf.file.path}`).catch((err) => {
       debugLog('Clipboard write failed for absolute path:', err);
     });
     hideContextMenu();
-  }, [workspaceRoot, hideContextMenu]);
+  }, [projectFolder, hideContextMenu]);
 
   const handleGoToDefinitionFromMenu = useCallback(() => {
     hideContextMenu();
@@ -177,7 +177,7 @@ export function useEditorContextMenu(
 
   return {
     contextMenu,
-    workspaceRoot,
+    workspaceRoot: projectFolder,
     hideContextMenu,
     handleEditorContextMenu,
     handleCopySelection,

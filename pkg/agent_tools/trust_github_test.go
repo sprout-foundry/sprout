@@ -181,7 +181,7 @@ func TestOwnedByUser_FailuresAreNotTrust(t *testing.T) {
 	})
 }
 
-// TestOwnedByUser_CachesTheVerdict pins that a workspace full of files from
+// TestOwnedByUser_CachesTheVerdict pins that a project folder full of files from
 // one clone resolves the origin once, not once per read.
 func TestOwnedByUser_CachesTheVerdict(t *testing.T) {
 	var calls int32

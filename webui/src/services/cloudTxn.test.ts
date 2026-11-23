@@ -12,7 +12,7 @@ import {
   bytesToBase64,
   CloudTxnError,
   createTxn,
-  resolveTxnWorkspace,
+  resolveTxnDevSpace,
   RunnerUnavailableError,
   TXN_MAX_FILES,
   TXN_MAX_FILE_BYTES,
@@ -306,61 +306,61 @@ describe('applyPullManifest', () => {
   });
 });
 
-describe('resolveTxnWorkspace', () => {
+describe('resolveTxnDevSpace', () => {
   it('resolves through the host-agnostic endpoint and records the backend', async () => {
     const fetchMock = routeFetch({
-      'GET /workspace/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp': () =>
-        jsonResponse({ workspace_id: 'ws-mine', status: 'running', backend: 'runner' }),
+      'GET /dev-space/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp': () =>
+        jsonResponse({ dev_space_id: 'ws-mine', status: 'running', backend: 'runner' }),
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const resolved = await resolveTxnWorkspace('https://github.com/acme/app');
-    expect(resolved).toEqual({ workspaceId: 'ws-mine', created: false });
+    const resolved = await resolveTxnDevSpace('https://github.com/acme/app');
+    expect(resolved).toEqual({ devSpaceId: 'ws-mine', created: false });
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    // The lifecycle path follows the resolved backend (runner → /workspace/txn).
+    // The lifecycle path follows the resolved backend (runner → /dev-space/txn).
     const openMock = routeFetch({
-      'POST /workspace/txn/ws-mine/txn': () =>
-        jsonResponse({ txn_id: 'txn-1', status: 'push', workspace_id: 'ws-mine' }, { status: 201 }),
+      'POST /dev-space/txn/ws-mine/txn': () =>
+        jsonResponse({ txn_id: 'txn-1', status: 'push', dev_space_id: 'ws-mine' }, { status: 201 }),
     });
     vi.stubGlobal('fetch', openMock);
     await createTxn('ws-mine');
     expect(openMock).toHaveBeenCalledTimes(1);
-    expect((openMock.mock.calls[0][0] as string).startsWith('/workspace/txn/')).toBe(true);
+    expect((openMock.mock.calls[0][0] as string).startsWith('/dev-space/txn/')).toBe(true);
   });
 
   it('addresses a firecracker workspace through the host-agnostic lifecycle', async () => {
     vi.stubGlobal(
       'fetch',
       routeFetch({
-        'GET /workspace/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp': () =>
-          jsonResponse({ workspace_id: 'ws-fc', status: 'running', backend: 'firecracker' }),
+        'GET /dev-space/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp': () =>
+          jsonResponse({ dev_space_id: 'ws-fc', status: 'running', backend: 'firecracker' }),
       }),
     );
-    await resolveTxnWorkspace('https://github.com/acme/app');
+    await resolveTxnDevSpace('https://github.com/acme/app');
 
     const openMock = routeFetch({
-      'POST /workspace/txn/ws-fc/txn': () =>
-        jsonResponse({ txn_id: 'txn-1', status: 'push', workspace_id: 'ws-fc' }, { status: 201 }),
+      'POST /dev-space/txn/ws-fc/txn': () =>
+        jsonResponse({ txn_id: 'txn-1', status: 'push', dev_space_id: 'ws-fc' }, { status: 201 }),
     });
     vi.stubGlobal('fetch', openMock);
     await createTxn('ws-fc');
-    expect(openMock.mock.calls[0][0]).toBe('/workspace/txn/ws-fc/txn');
+    expect(openMock.mock.calls[0][0]).toBe('/dev-space/txn/ws-fc/txn');
   });
 
   it('creates a workspace when resolve finds no match', async () => {
     const fetchMock = routeFetch({
-      'GET /workspace/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp': () =>
+      'GET /dev-space/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp': () =>
         jsonResponse({ error: 'no workspace for repo' }, { status: 404 }),
-      'POST /workspace/txn': (body) => {
+      'POST /dev-space/txn': (body) => {
         expect(body).toEqual({ repo_url: 'https://github.com/acme/app', host: 'auto' });
-        return jsonResponse({ workspace_id: 'ws-new', status: 'pending', backend: 'fly' }, { status: 201 });
+        return jsonResponse({ dev_space_id: 'ws-new', status: 'pending', backend: 'fly' }, { status: 201 });
       },
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    expect(await resolveTxnWorkspace('https://github.com/acme/app')).toEqual({
-      workspaceId: 'ws-new',
+    expect(await resolveTxnDevSpace('https://github.com/acme/app')).toEqual({
+      devSpaceId: 'ws-new',
       created: true,
     });
   });
@@ -369,13 +369,13 @@ describe('resolveTxnWorkspace', () => {
     vi.stubGlobal(
       'fetch',
       routeFetch({
-        'GET /workspace/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp': () =>
+        'GET /dev-space/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp': () =>
           jsonResponse({ error: 'boom' }, { status: 500 }),
-        'POST /workspace/txn': () => jsonResponse({ workspace_id: 'ws-new' }, { status: 201 }),
+        'POST /dev-space/txn': () => jsonResponse({ dev_space_id: 'ws-new' }, { status: 201 }),
       }),
     );
-    expect(await resolveTxnWorkspace('https://github.com/acme/app')).toEqual({
-      workspaceId: 'ws-new',
+    expect(await resolveTxnDevSpace('https://github.com/acme/app')).toEqual({
+      devSpaceId: 'ws-new',
       created: true,
     });
   });
@@ -384,40 +384,40 @@ describe('resolveTxnWorkspace', () => {
     vi.stubGlobal(
       'fetch',
       routeFetch({
-        'GET /workspace/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp': () =>
+        'GET /dev-space/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp': () =>
           jsonResponse({ error: 'none' }, { status: 404 }),
-        'POST /workspace/txn': () => jsonResponse({ error: 'Overage spending cap reached.' }, { status: 402 }),
+        'POST /dev-space/txn': () => jsonResponse({ error: 'Overage spending cap reached.' }, { status: 402 }),
       }),
     );
-    await expect(resolveTxnWorkspace('https://github.com/acme/app')).rejects.toThrow('Overage spending cap reached.');
+    await expect(resolveTxnDevSpace('https://github.com/acme/app')).rejects.toThrow('Overage spending cap reached.');
   });
 
   it('requires a repo URL', async () => {
-    await expect(resolveTxnWorkspace('')).rejects.toThrow(TypeError);
-    await expect(resolveTxnWorkspace('   ')).rejects.toThrow(TypeError);
+    await expect(resolveTxnDevSpace('')).rejects.toThrow(TypeError);
+    await expect(resolveTxnDevSpace('   ')).rejects.toThrow(TypeError);
   });
 });
 
-describe('resolveTxnWorkspace with a chosen host', () => {
+describe('resolveTxnDevSpace with a chosen host', () => {
   const REPO = 'https://github.com/acme/app';
-  const RESOLVE_FLY = 'GET /workspace/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp&host=fly';
+  const RESOLVE_FLY = 'GET /dev-space/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp&host=fly';
   const RESOLVE_R1 =
-    'GET /workspace/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp&host=runner&runner_id=r-1';
+    'GET /dev-space/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp&host=runner&runner_id=r-1';
   const RESOLVE_R9 =
-    'GET /workspace/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp&host=runner&runner_id=r-9';
+    'GET /dev-space/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp&host=runner&runner_id=r-9';
 
   it('cloud: asks the platform for the Fly workspace and uses it without creating (no session block)', async () => {
     const fetchMock = routeFetch({
-      [RESOLVE_FLY]: () => jsonResponse({ workspace_id: 'ws-fly', status: 'stopped', backend: 'fly' }),
+      [RESOLVE_FLY]: () => jsonResponse({ dev_space_id: 'ws-fly', status: 'stopped', backend: 'fly' }),
     });
     vi.stubGlobal('fetch', fetchMock);
-    expect(await resolveTxnWorkspace(REPO, { host: 'fly' })).toEqual({ workspaceId: 'ws-fly', created: false });
+    expect(await resolveTxnDevSpace(REPO, { host: 'fly' })).toEqual({ devSpaceId: 'ws-fly', created: false });
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    // A resolved Fly workspace uses the host-agnostic lifecycle too; the
+    // A resolved Fly dev space uses the host-agnostic lifecycle too; the
     // platform hands it to the Fly handlers.
     const openMock = routeFetch({
-      'POST /workspace/txn/ws-fly/txn': () => jsonResponse({ txn_id: 't', status: 'push' }, { status: 201 }),
+      'POST /dev-space/txn/ws-fly/txn': () => jsonResponse({ txn_id: 't', status: 'push' }, { status: 201 }),
     });
     vi.stubGlobal('fetch', openMock);
     await createTxn('ws-fly');
@@ -427,23 +427,23 @@ describe('resolveTxnWorkspace with a chosen host', () => {
   it('cloud: creates with host "fly" when the user has no Fly workspace for the repo', async () => {
     const fetchMock = routeFetch({
       [RESOLVE_FLY]: () => jsonResponse({ error: 'no workspace for repo' }, { status: 404 }),
-      'POST /workspace/txn': (body) => {
+      'POST /dev-space/txn': (body) => {
         expect(body).toEqual({ repo_url: REPO, host: 'fly' });
-        return jsonResponse({ workspace_id: 'ws-new', backend: 'fly' }, { status: 201 });
+        return jsonResponse({ dev_space_id: 'ws-new', backend: 'fly' }, { status: 201 });
       },
     });
     vi.stubGlobal('fetch', fetchMock);
-    expect(await resolveTxnWorkspace(REPO, { host: 'fly' })).toEqual({ workspaceId: 'ws-new', created: true });
+    expect(await resolveTxnDevSpace(REPO, { host: 'fly' })).toEqual({ devSpaceId: 'ws-new', created: true });
   });
 
   it('runner: reuses the workspace the platform resolves on that runner', async () => {
     const fetchMock = routeFetch({
       [RESOLVE_R1]: () =>
-        jsonResponse({ workspace_id: 'ws-mine', status: 'stopped', backend: 'runner', runner_id: 'r-1' }),
+        jsonResponse({ dev_space_id: 'ws-mine', status: 'stopped', backend: 'runner', runner_id: 'r-1' }),
     });
     vi.stubGlobal('fetch', fetchMock);
-    expect(await resolveTxnWorkspace(REPO, { host: 'runner', runnerId: 'r-1' })).toEqual({
-      workspaceId: 'ws-mine',
+    expect(await resolveTxnDevSpace(REPO, { host: 'runner', runnerId: 'r-1' })).toEqual({
+      devSpaceId: 'ws-mine',
       created: false,
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -453,21 +453,21 @@ describe('resolveTxnWorkspace with a chosen host', () => {
     const created: unknown[] = [];
     const fetchMock = routeFetch({
       [RESOLVE_R1]: () => jsonResponse({ error: 'no workspace for repo' }, { status: 404 }),
-      'POST /workspace/txn': (body) => {
+      'POST /dev-space/txn': (body) => {
         created.push(body);
-        return jsonResponse({ workspace_id: 'ws-r1', status: 'pending', backend: 'runner' }, { status: 201 });
+        return jsonResponse({ dev_space_id: 'ws-r1', status: 'pending', backend: 'runner' }, { status: 201 });
       },
     });
     vi.stubGlobal('fetch', fetchMock);
-    expect(await resolveTxnWorkspace(REPO, { host: 'runner', runnerId: 'r-1' })).toEqual({
-      workspaceId: 'ws-r1',
+    expect(await resolveTxnDevSpace(REPO, { host: 'runner', runnerId: 'r-1' })).toEqual({
+      devSpaceId: 'ws-r1',
       created: true,
     });
     expect(created).toEqual([{ repo_url: REPO, host: 'runner', runner_id: 'r-1' }]);
 
     // Runner-backed txns use the host-agnostic lifecycle path.
     const openMock = routeFetch({
-      'POST /workspace/txn/ws-r1/txn': () => jsonResponse({ txn_id: 't', status: 'push' }, { status: 201 }),
+      'POST /dev-space/txn/ws-r1/txn': () => jsonResponse({ txn_id: 't', status: 'push' }, { status: 201 }),
     });
     vi.stubGlobal('fetch', openMock);
     await createTxn('ws-r1');
@@ -479,11 +479,11 @@ describe('resolveTxnWorkspace with a chosen host', () => {
       'fetch',
       routeFetch({
         [RESOLVE_R9]: () => jsonResponse({ error: 'none' }, { status: 404 }),
-        'POST /workspace/txn': () =>
+        'POST /dev-space/txn': () =>
           jsonResponse({ error: 'runner_unavailable', message: 'that runner is not online' }, { status: 409 }),
       }),
     );
-    const err = await resolveTxnWorkspace(REPO, { host: 'runner', runnerId: 'r-9' }).catch((e: unknown) => e);
+    const err = await resolveTxnDevSpace(REPO, { host: 'runner', runnerId: 'r-9' }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(RunnerUnavailableError);
     expect((err as RunnerUnavailableError).runnerId).toBe('r-9');
     expect((err as RunnerUnavailableError).status).toBe(409);
@@ -494,10 +494,10 @@ describe('resolveTxnWorkspace with a chosen host', () => {
       'fetch',
       routeFetch({
         [RESOLVE_R9]: () => jsonResponse({ error: 'none' }, { status: 404 }),
-        'POST /workspace/txn': () => jsonResponse({ error: 'something else' }, { status: 409 }),
+        'POST /dev-space/txn': () => jsonResponse({ error: 'something else' }, { status: 409 }),
       }),
     );
-    const err = await resolveTxnWorkspace(REPO, { host: 'runner', runnerId: 'r-9' }).catch((e: unknown) => e);
+    const err = await resolveTxnDevSpace(REPO, { host: 'runner', runnerId: 'r-9' }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(CloudTxnError);
     expect(err).not.toBeInstanceOf(RunnerUnavailableError);
   });
@@ -506,9 +506,9 @@ describe('resolveTxnWorkspace with a chosen host', () => {
 describe('txn lifecycle client', () => {
   it('opens a txn with an empty body and surfaces txn_id/status', async () => {
     const fetchMock = routeFetch({
-      'POST /workspace/fly/ws-1/txn': () =>
+      'POST /dev-space/fly/ws-1/txn': () =>
         jsonResponse(
-          { txn_id: 'txn-9', status: 'push', expires_at: '2030-01-01T00:00:00Z', workspace_id: 'ws-1' },
+          { txn_id: 'txn-9', status: 'push', expires_at: '2030-01-01T00:00:00Z', dev_space_id: 'ws-1' },
           {
             status: 201,
           },
@@ -522,7 +522,7 @@ describe('txn lifecycle client', () => {
       expires_at: '2030-01-01T00:00:00Z',
     });
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('/workspace/fly/ws-1/txn');
+    expect(url).toBe('/dev-space/fly/ws-1/txn');
     expect(init.method).toBe('POST');
     expect(init.credentials).toBe('include');
     expect(JSON.parse(init.body as string)).toEqual({});
@@ -532,7 +532,7 @@ describe('txn lifecycle client', () => {
     vi.stubGlobal(
       'fetch',
       routeFetch({
-        'POST /workspace/fly/ws-1/txn': () => jsonResponse({ error: 'a transaction is already open' }, { status: 409 }),
+        'POST /dev-space/fly/ws-1/txn': () => jsonResponse({ error: 'a transaction is already open' }, { status: 409 }),
       }),
     );
     const err = await createTxn('ws-1').catch((e: unknown) => e);
@@ -543,7 +543,7 @@ describe('txn lifecycle client', () => {
 
   it('pushes the manifest verbatim to /push', async () => {
     const fetchMock = routeFetch({
-      'POST /workspace/fly/ws-1/txn/txn-9/push': () =>
+      'POST /dev-space/fly/ws-1/txn/txn-9/push': () =>
         jsonResponse({ applied: 2, deleted: 1, skipped: [], status: 'ok' }),
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -552,13 +552,13 @@ describe('txn lifecycle client', () => {
     const result = await txnPush('ws-1', 'txn-9', manifest);
     expect(result.applied).toBe(2);
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('/workspace/fly/ws-1/txn/txn-9/push');
+    expect(url).toBe('/dev-space/fly/ws-1/txn/txn-9/push');
     expect(JSON.parse(init.body as string)).toEqual(manifest);
   });
 
   it('runs a command with the timeout and returns the run result', async () => {
     const fetchMock = routeFetch({
-      'POST /workspace/fly/ws-1/txn/txn-9/run': (body) => {
+      'POST /dev-space/fly/ws-1/txn/txn-9/run': (body) => {
         expect(body).toEqual({ command: 'go build ./...', timeout_seconds: 600 });
         return jsonResponse({
           stdout: 'ok',
@@ -584,7 +584,7 @@ describe('txn lifecycle client', () => {
     vi.stubGlobal(
       'fetch',
       routeFetch({
-        'POST /workspace/fly/ws-1/txn/txn-9/pull': () => jsonResponse({ files: null, deletes: null }),
+        'POST /dev-space/fly/ws-1/txn/txn-9/pull': () => jsonResponse({ files: null, deletes: null }),
       }),
     );
     const manifest = await txnPull('ws-1', 'txn-9');
@@ -595,20 +595,20 @@ describe('txn lifecycle client', () => {
 
   it('gets txn status via GET', async () => {
     const fetchMock = routeFetch({
-      'GET /workspace/fly/ws-1/txn/txn-9': () =>
+      'GET /dev-space/fly/ws-1/txn/txn-9': () =>
         jsonResponse({ txn_id: 'txn-9', status: 'done', created_at: 't', expires_at: 't', run_result: null }),
     });
     vi.stubGlobal('fetch', fetchMock);
 
     expect((await txnStatus('ws-1', 'txn-9')).status).toBe('done');
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('/workspace/fly/ws-1/txn/txn-9');
+    expect(url).toBe('/dev-space/fly/ws-1/txn/txn-9');
     expect(init.method).toBe('GET');
   });
 
   it('finishes the txn', async () => {
     const fetchMock = routeFetch({
-      'POST /workspace/fly/ws-1/txn/txn-9/finish': () =>
+      'POST /dev-space/fly/ws-1/txn/txn-9/finish': () =>
         jsonResponse({ status: 'done', txn_duration_seconds: 42, stop_initiated: true }),
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -622,10 +622,10 @@ describe('txn lifecycle client', () => {
 
   it('URI-encodes ids with reserved characters', async () => {
     const fetchMock = routeFetch({
-      'POST /workspace/fly/ws%201/txn/txn%2F9/finish': () => jsonResponse({ status: 'done' }),
+      'POST /dev-space/fly/ws%201/txn/txn%2F9/finish': () => jsonResponse({ status: 'done' }),
     });
     vi.stubGlobal('fetch', fetchMock);
     await txnFinish('ws 1', 'txn/9');
-    expect(fetchMock).toHaveBeenCalledWith('/workspace/fly/ws%201/txn/txn%2F9/finish', expect.anything());
+    expect(fetchMock).toHaveBeenCalledWith('/dev-space/fly/ws%201/txn/txn%2F9/finish', expect.anything());
   });
 });

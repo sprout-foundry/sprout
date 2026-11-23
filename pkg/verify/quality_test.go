@@ -146,12 +146,12 @@ func TestQualityFormatterChangeDetected(t *testing.T) {
 	calls := 0
 	r := NewQualityRunner()
 	r.Exec = &fakeExecutor{results: map[string]Outcome{"make format": {Passed: true}}}
-	r.Fingerprint = func(string) (workspaceFingerprint, error) {
+	r.Fingerprint = func(string) (projectFolderFingerprint, error) {
 		calls++
 		if calls == 1 { // the formatter's "before" snapshot
-			return workspaceFingerprint{"a.go": "before"}, nil
+			return projectFolderFingerprint{"a.go": "before"}, nil
 		}
-		return workspaceFingerprint{"a.go": "after"}, nil
+		return projectFolderFingerprint{"a.go": "after"}, nil
 	}
 
 	res, err := r.RunQuality(context.Background(), root)

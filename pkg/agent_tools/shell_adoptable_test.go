@@ -255,13 +255,13 @@ func TestAdoptable_OutputFileCleanedUpOnNormalCompletion(t *testing.T) {
 }
 
 // =============================================================================
-// TestAdoptable_WithWorkspaceRoot — verify workspace root from context is used
+// TestAdoptable_WithProjectFolder — verify project folder from context is used
 // =============================================================================
 
-func TestAdoptable_WithWorkspaceRoot(t *testing.T) {
+func TestAdoptable_WithProjectFolder(t *testing.T) {
 	t.Parallel()
 
-	// This test verifies the workspace root is respected. We can't easily
+	// This test verifies the project folder is respected. We can't easily
 	// create a temp file in a custom dir for testing, but we verify the
 	// path resolution doesn't error.
 	bpm := NewBackgroundProcessManager()

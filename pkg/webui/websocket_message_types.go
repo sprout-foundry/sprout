@@ -93,7 +93,7 @@ var allowedMessageTypes = map[string]bool{
 }
 
 // HydrateManifestData is the data payload for "hydrate_manifest" messages.
-// Sent after the workspace scan, before file streaming begins, so the
+// Sent after the project folder scan, before file streaming begins, so the
 // client can display a progress bar with ETA.
 type HydrateManifestData struct {
 	TotalFiles      int64 `json:"total_files"`

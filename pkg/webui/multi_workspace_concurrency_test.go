@@ -19,27 +19,27 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// session describes one concurrent client session in the multi-workspace gate
-// test: a client ID and the workspace it binds to.
+// session describes one concurrent client session in the multi-project-folder gate
+// test: a client ID and the project folder it binds to.
 type session struct {
-	clientID  string
-	workspace string
+	clientID      string
+	projectFolder string
 }
 
-// TestMultiWorkspaceConcurrentSessions is the SP-136 Phase-1 integration gate.
+// TestMultiProjectFolderConcurrentSessions is the SP-136 Phase-1 integration gate.
 //
-// It simulates 5 concurrent CLI/WebUI sessions across 3 workspaces sharing one
+// It simulates 5 concurrent CLI/WebUI sessions across 3 project folders sharing one
 // daemon (a single ReactWebServer on one port). It verifies:
 //
 //  1. Every session completes without hanging, panicking, or returning an
 //     unexpected error (agent creation fast-fails with a recognized
 //     provider-config sentinel when no model is installed — the important
 //     property is that the plumbing routes correctly and never hangs).
-//  2. Client contexts are isolated per session: each has its own workspace
-//     root, and no session sees another session's workspace.
+//  2. Client contexts are isolated per session: each has its own project folder
+//     root, and no session sees another session's project folder.
 //  3. The daemon's RSS stays bounded across the concurrent run (Linux only —
 //     the daemon runs in-process here, so /proc/self is the daemon's RSS).
-func TestMultiWorkspaceConcurrentSessions(t *testing.T) {
+func TestMultiProjectFolderConcurrentSessions(t *testing.T) {
 	// Isolate session-state persistence: if a provider IS configured in the
 	// test environment, getChatAgent builds a real Agent whose autoSaveState
 	// would otherwise write into the package-level state dir.
@@ -48,7 +48,7 @@ func TestMultiWorkspaceConcurrentSessions(t *testing.T) {
 	daemonRoot := t.TempDir()
 
 	// Canonicalize for macOS: /var is a symlink to /private/var and the
-	// server resolves workspace roots via filepathAbsEval (EvalSymlinks).
+	// server resolves project folders via filepathAbsEval (EvalSymlinks).
 	// The isolation assertions below compare raw paths, so everything must
 	// be on the same (canonical) footing or they trip on the symlink.
 	canonicalPath := func(p string) string {
@@ -59,15 +59,15 @@ func TestMultiWorkspaceConcurrentSessions(t *testing.T) {
 	}
 	daemonRoot = canonicalPath(daemonRoot)
 
-	// Three workspaces under the daemon root (required by setClientWorkspaceRoot).
-	workspaceDirs := []string{
+	// Three project folders under the daemon root (required by setClientProjectFolder).
+	projectFolderDirs := []string{
 		filepath.Join(daemonRoot, "w1"),
 		filepath.Join(daemonRoot, "w2"),
 		filepath.Join(daemonRoot, "w3"),
 	}
-	for _, w := range workspaceDirs {
+	for _, w := range projectFolderDirs {
 		require.NoError(t, os.MkdirAll(w, 0o755))
-		// A small Go file so the workspace looks like a real code project.
+		// A small Go file so the project folder looks like a real code project.
 		require.NoError(t, os.WriteFile(
 			filepath.Join(w, "main.go"),
 			[]byte("package main\nfunc main() {}\n"), 0o644))
@@ -76,22 +76,22 @@ func TestMultiWorkspaceConcurrentSessions(t *testing.T) {
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	require.NoError(t, err)
 	ws.daemonRoot = daemonRoot
-	ws.SetWorkspaceRoot(workspaceDirs[0])
+	ws.SetProjectFolder(projectFolderDirs[0])
 
-	// 5 sessions across 3 workspaces: w1×2, w2×2, w3×1.
+	// 5 sessions across 3 project folders: w1×2, w2×2, w3×1.
 	sessions := []session{
-		{"sess-1", workspaceDirs[0]},
-		{"sess-2", workspaceDirs[0]},
-		{"sess-3", workspaceDirs[1]},
-		{"sess-4", workspaceDirs[1]},
-		{"sess-5", workspaceDirs[2]},
+		{"sess-1", projectFolderDirs[0]},
+		{"sess-2", projectFolderDirs[0]},
+		{"sess-3", projectFolderDirs[1]},
+		{"sess-4", projectFolderDirs[1]},
+		{"sess-5", projectFolderDirs[2]},
 	}
 	require.Len(t, sessions, 5)
-	workspaceCount := map[string]int{}
+	projectFolderCount := map[string]int{}
 	for _, s := range sessions {
-		workspaceCount[s.workspace]++
+		projectFolderCount[s.projectFolder]++
 	}
-	require.Len(t, workspaceCount, 3, "test must cover 3 distinct workspaces")
+	require.Len(t, projectFolderCount, 3, "test must cover 3 distinct project folders")
 
 	startRSS := processRSSKB(t)
 
@@ -117,20 +117,20 @@ func TestMultiWorkspaceConcurrentSessions(t *testing.T) {
 		require.NoError(t, err, "concurrent session failed")
 	}
 
-	// 2. Client contexts are isolated: distinct pointers, correct workspace.
+	// 2. Client contexts are isolated: distinct pointers, correct project folder.
 	ws.mutex.RLock()
 	distinctRoots := map[string]bool{}
 	for _, s := range sessions {
 		ctx := ws.clientContexts[s.clientID]
 		require.NotNil(t, ctx, "client context for %s must exist", s.clientID)
-		require.Equal(t, s.workspace, ctx.WorkspaceRoot,
-			"client %s must be bound to its own workspace %s, got %s",
-			s.clientID, s.workspace, ctx.WorkspaceRoot)
-		distinctRoots[ctx.WorkspaceRoot] = true
+		require.Equal(t, s.projectFolder, ctx.ProjectFolder,
+			"client %s must be bound to its own project folder %s, got %s",
+			s.clientID, s.projectFolder, ctx.ProjectFolder)
+		distinctRoots[ctx.ProjectFolder] = true
 	}
 	ws.mutex.RUnlock()
 	require.Len(t, distinctRoots, 3,
-		"client contexts must map to exactly 3 distinct workspace roots, got %v", distinctRoots)
+		"client contexts must map to exactly 3 distinct project folders, got %v", distinctRoots)
 
 	// 3. Daemon RSS stays bounded across the concurrent run.
 	endRSS := processRSSKB(t)
@@ -166,7 +166,7 @@ func TestMultiWorkspaceConcurrentSessions(t *testing.T) {
 }
 
 // runConcurrentSession drives one session through the daemon plumbing:
-// set workspace root, create/get the default chat session, and force agent
+// set project folder, create/get the default chat session, and force agent
 // plumbing via getChatAgent.
 func runConcurrentSession(t *testing.T, ws *ReactWebServer, s session) error {
 	t.Helper()
@@ -175,13 +175,13 @@ func runConcurrentSession(t *testing.T, ws *ReactWebServer, s session) error {
 	done := make(chan error, 1)
 	go func() {
 		done <- func() error {
-			// Set workspace root — returns the resolved path.
-			resolved, err := ws.setClientWorkspaceRoot(s.clientID, s.workspace)
+			// Set project folder — returns the resolved path.
+			resolved, err := ws.setClientProjectFolder(s.clientID, s.projectFolder)
 			if err != nil {
-				return fmt.Errorf("set workspace root: %w", err)
+				return fmt.Errorf("set project folder: %w", err)
 			}
-			if resolved != s.workspace {
-				return fmt.Errorf("workspace root mismatch: got %q want %q", resolved, s.workspace)
+			if resolved != s.projectFolder {
+				return fmt.Errorf("project folder mismatch: got %q want %q", resolved, s.projectFolder)
 			}
 
 			// Exercise agent-creation plumbing. Without a configured provider

@@ -78,9 +78,9 @@ function systemMode(): ThemeMode {
  *
  * The host is the source of truth when it provides a theme: its `mode` picks
  * the light/dark pack ('system' follows the OS). The host's token overrides
- * are applied by the workspace root element (see `themes/hostTheme.ts`), not
+ * are applied by the project folder element (see `themes/hostTheme.ts`), not
  * here — they must not reach `documentElement`, or they would restyle the
- * host page outside the mounted workspace. Sprout never infers the theme by
+ * host page outside the mounted project folder. Sprout never infers the theme by
  * observing the DOM — it reads the host value and the OS media query only.
  */
 interface ResolvedHostTheme {
@@ -169,7 +169,7 @@ export function ThemeProvider({ children }: ThemeProviderProps): JSX.Element {
     const mode: ThemeMode = hostTheme.rawMode === 'system' ? system : hostTheme.mode;
     const base = getThemePackForMode(mode);
     // The host's token overrides are NOT merged into the pack variables: they
-    // are scoped to the workspace root (SproutWorkspace), so they must not
+    // are scoped to the project folder (SproutWorkspace), so they must not
     // land on documentElement here. The pack keeps its own variables; the
     // overrides are applied on the root element instead.
     if (mode === hostTheme.mode) return base;
@@ -280,11 +280,11 @@ export function ThemeProvider({ children }: ThemeProviderProps): JSX.Element {
   );
 
   // The resolved theme is published through the context only. It is applied
-  // to the DOM by the workspace root (`SproutWorkspace`), never here: this
+  // to the DOM by the project folder (`SproutWorkspace`), never here: this
   // provider also runs in a host page, where `documentElement` belongs to the
   // host and writing the pack onto it would restyle the host's own chrome.
-  // The workspace root is the scope that should carry the theme, and custom
-  // properties inherit from it to everything inside the workspace.
+  // The project folder is the scope that should carry the theme, and custom
+  // properties inherit from it to everything inside the project folder.
 
   const value: ThemeContextValue = {
     theme,

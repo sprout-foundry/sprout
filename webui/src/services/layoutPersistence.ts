@@ -11,7 +11,7 @@
 
 import { debugLog } from '../utils/log';
 import type { EditorPane, PaneLayout, PaneSize } from '../types/editor';
-import { getTabWorkspacePath } from './clientSession';
+import { getTabProjectFolderPath } from './clientSession';
 import { repoScopedKey } from './repoScope';
 
 // ---------------------------------------------------------------------------
@@ -76,29 +76,29 @@ const VIRTUAL_PATH_PREFIX = '__workspace/';
 // ---------------------------------------------------------------------------
 
 /**
- * Returns a short, filesystem-safe suffix derived from the workspace path.
- * Empty/unknown workspace → '_default'.  Otherwise the path with / replaced by :.
+ * Returns a short, filesystem-safe suffix derived from the project folder path.
+ * Empty/unknown project folder → '_default'.  Otherwise the path with / replaced by :.
  * In the hosted editor the repo scope is appended, so each repo keeps its own tabs.
  */
-function getWorkspaceSuffix(): string {
-  const ws = getTabWorkspacePath();
+function getProjectFolderSuffix(): string {
+  const ws = getTabProjectFolderPath();
   const suffix = !ws || ws === '/' ? '_default' : ws.replace(/\//g, ':');
   return repoScopedKey(suffix);
 }
 
 /** Returns the workspace-scoped key for the main layout state snapshot. */
 export function getLayoutStorageKey(): string {
-  return `${LAYOUT_STATE_BASE_KEY}:${getWorkspaceSuffix()}`;
+  return `${LAYOUT_STATE_BASE_KEY}:${getProjectFolderSuffix()}`;
 }
 
 /** Returns the workspace-scoped key for the pane layout type (single / split-*). */
 export function getPaneLayoutStorageKey(): string {
-  return `${PANE_LAYOUT_BASE_KEY}:${getWorkspaceSuffix()}`;
+  return `${PANE_LAYOUT_BASE_KEY}:${getProjectFolderSuffix()}`;
 }
 
 /** Returns the workspace-scoped key for pane sizes (percentages). */
 export function getPaneSizesStorageKey(): string {
-  return `${PANE_SIZES_BASE_KEY}:${getWorkspaceSuffix()}`;
+  return `${PANE_SIZES_BASE_KEY}:${getProjectFolderSuffix()}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +127,7 @@ export function writeStorageItem(key: string, value: string): void {
   }
 }
 
-/** Whether a file path is a real file (not a virtual workspace buffer). */
+/** Whether a file path is a real file (not a virtual project folder buffer). */
 function isRealFilePath(filePath: string): boolean {
   return !filePath.startsWith(VIRTUAL_PATH_PREFIX) && filePath.length > 0;
 }
@@ -358,11 +358,11 @@ export interface SavedPane {
 }
 
 export function getPanesStorageKey(): string {
-  return `${PANES_BASE_KEY}:${getWorkspaceSuffix()}`;
+  return `${PANES_BASE_KEY}:${getProjectFolderSuffix()}`;
 }
 
 export function getChatPanesStorageKey(): string {
-  return `${CHAT_PANES_BASE_KEY}:${getWorkspaceSuffix()}`;
+  return `${CHAT_PANES_BASE_KEY}:${getProjectFolderSuffix()}`;
 }
 
 function readJSON<T>(key: string): T | null {
@@ -459,9 +459,9 @@ export function loadChatPanePlacement(): Record<string, string> {
 
 const TAB_ORDER_BASE_KEY = 'sprout.editor.tabOrder';
 
-/** Tab order (buffer paths, files and chats alike), per workspace. */
+/** Tab order (buffer paths, files and chats alike), per project folder. */
 export function getTabOrderStorageKey(): string {
-  return `${TAB_ORDER_BASE_KEY}:${getWorkspaceSuffix()}`;
+  return `${TAB_ORDER_BASE_KEY}:${getProjectFolderSuffix()}`;
 }
 
 export function loadTabOrder(): string[] | null {

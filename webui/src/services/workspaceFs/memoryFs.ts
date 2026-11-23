@@ -1,5 +1,5 @@
 /**
- * In-memory backend for the workspaceFs seam.
+ * In-memory backend for the projectFolderFs seam.
  *
  * Used by unit tests and any future sandboxed-browser mode. Implements the
  * full contract against a plain nested map — including writeBatch's
@@ -7,7 +7,16 @@
  * behavior, not backend quirks.
  */
 
-import type { BatchResult, FsOk, FsEntry, ListResult, ReadResult, StatResult, WorkspaceFs, WriteEntry } from './types';
+import type {
+  BatchResult,
+  FsOk,
+  FsEntry,
+  ListResult,
+  ReadResult,
+  StatResult,
+  ProjectFolderFs,
+  WriteEntry,
+} from './types';
 import { normalizeFsPath, WRITE_BATCH_CAP } from './types';
 
 /** Serialized entry stored under its normalized path. */
@@ -43,7 +52,7 @@ function splitParent(path: string): [string, string] {
   return idx < 0 ? ['', path] : [path.slice(0, idx), path.slice(idx + 1)];
 }
 
-export function createMemoryFs(seed: Record<string, string | Uint8Array> = {}): WorkspaceFs {
+export function createMemoryFs(seed: Record<string, string | Uint8Array> = {}): ProjectFolderFs {
   const entries = new Map<string, MemEntry>();
   entries.set('', { isDir: true });
 

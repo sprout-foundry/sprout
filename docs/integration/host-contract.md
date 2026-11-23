@@ -764,12 +764,12 @@ git); `/api/sessions*` and, unless the host declares `chatSessions`,
 `/api/chat-sessions*` (browser-local stores);
 `/api/upload/image`; the edit and shell approval decisions; and the stubs in
 `endpoints/synthetic.ts` / `endpoints/noop.ts` (onboarding, instances,
-hotkeys, LSP status, `/api/config`, `/api/workspace`, the MCP and skills
+hotkeys, LSP status, `/api/config`, `/api/project-folder`, the MCP and skills
 settings reads).
 
 The in-browser workspace has one filesystem: the startup repo import, the
 agent and its shell, and the file paths above all work on the WASM shell's
-workspace root, which `GET /api/workspace` reports (`/workspace`). The file
+workspace root, which `GET /api/project-folder` reports (`/workspace`). The file
 paths take the daemon's path forms: workspace-relative (`src/a.ts`) or
 absolute (`/workspace/src/a.ts`, the form listings return), and `''`, `.`,
 `./`, `/workspace` and `workspace` (with or without a trailing slash) all
@@ -792,18 +792,18 @@ instead.
 | In-browser terminal | `GET /api/terminal/agent-sessions` (polled while expanded), `POST /api/terminal/agent-sessions/{id}/attach`, `/kill` | `capabilities.localTerminal` is `false` (the Code shell then renders the in-browser terminal) |
 | Arranged `terminal` view | the in-browser terminal's paths above (polled while it is mounted) | the arrangement places `terminal` on a wasm-agent host |
 | Editor | `POST /api/completion` | the user enables AI completions |
-| Escalation | `GET /workspace`, `GET /workspace/{id}`, `/workspace/txn*`, `GET /runners` | the host mounts `AgentEscalationBridge` / `EscalationListener` |
+| Escalation | `GET /dev-space`, `GET /dev-space/{id}`, `/dev-space/txn*`, `GET /runners` | the host mounts `AgentEscalationBridge` / `EscalationListener` |
 
 **Source control and search views.** On an in-browser-agent host an arranged
 `git` or `search` view forwards nothing: `/api/git/*` is answered by browser
 git, `/api/search` and `/api/search/replace` by the WASM shell, and
-`/api/workspace` by a stub. A daemon-backed host serves the daemon's paths
+`/api/project-folder` by a stub. A daemon-backed host serves the daemon's paths
 for them: `GET /api/git/status`, `/api/git/branches`, `/api/git/diff?path=`,
 `/api/git/log`, `/api/git/commit/show`, `/api/git/commit/show/file`;
 `POST /api/git/stage`, `/unstage`, `/discard`, `/commit`, `/commit-message`,
 `/checkout`, `/branch/create`, `/pull`, `/push`, `/pull-request`, `/revert`;
 with `capabilities.serverGit`, `GET /api/git/worktrees` and
-`POST /api/git/worktree/{create,remove,checkout}`; `GET /api/workspace` (the
+`POST /api/git/worktree/{create,remove,checkout}`; `GET /api/project-folder` (the
 root shown in file paths); and `GET /api/search`, `POST /api/search/replace`.
 Each git call carries the session's repo directory (`dir`) when one is set.
 
@@ -820,7 +820,7 @@ endpoint resolves against `apiBaseURL`). When a
 startup repository is set and there is no git proxy or the browser clone
 fails, the adapter falls back to `POST <apiBase>/api/repo/import`. The git
 proxy (below) is at `transport.gitProxyURL`, by default `/git-proxy` at the
-page origin for a `bearer` host, which also serves `/workspace/fly` there.
+page origin for a `bearer` host, which also serves `/dev-space/fly` there.
 
 **Git proxy for in-browser git.** A startup repository (`project.repoUrl`, or
 the hosted build's `?repo=`) opens as a git repository in the browser, so the

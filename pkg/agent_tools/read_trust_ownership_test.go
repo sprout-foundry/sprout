@@ -21,7 +21,7 @@ func stubOwnership(t *testing.T, verdict repoOwnership) {
 	t.Cleanup(func() { trustOwnershipCheck = prev })
 }
 
-// nestedRepoFixture builds a nested clone inside a temp workspace and returns
+// nestedRepoFixture builds a nested clone inside a temp project folder and returns
 // the env plus a file inside the clone.
 func nestedRepoFixture(t *testing.T) (ToolEnv, string) {
 	t.Helper()
@@ -65,7 +65,7 @@ func TestResolveReadTrust_OwnershipIsRemembered(t *testing.T) {
 	if got := resolveReadTrust(env, target); got != injection.TrustFirstParty {
 		t.Fatalf("class = %v, want first-party", got)
 	}
-	decisions := env.ConfigManager.GetConfig().TrustedContentRoots[env.WorkspaceRoot]
+	decisions := env.ConfigManager.GetConfig().TrustedContentRoots[env.ProjectFolder]
 	if len(decisions) != 1 {
 		t.Fatalf("ownership decision not persisted: %v", decisions)
 	}
@@ -111,7 +111,7 @@ func TestResolveReadTrust_RecordedDecisionOutranksOwnership(t *testing.T) {
 		if cfg.TrustedContentRoots == nil {
 			cfg.TrustedContentRoots = make(map[string]map[string]bool)
 		}
-		cfg.TrustedContentRoots[env.WorkspaceRoot] = map[string]bool{"clones/acme": true}
+		cfg.TrustedContentRoots[env.ProjectFolder] = map[string]bool{"clones/acme": true}
 		return nil
 	}); err != nil {
 		t.Fatal(err)

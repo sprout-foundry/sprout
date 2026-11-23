@@ -1,5 +1,5 @@
 // Package proxy provides an LSP (Language Server Protocol) proxy manager that
-// manages language server processes for workspace-aware code intelligence.
+// manages language server processes for project-folder-aware code intelligence.
 //
 // Manager Shutdown Contract:
 //
@@ -18,10 +18,10 @@ import (
 	"time"
 )
 
-// Manager manages LSP server processes across workspaces and languages.
+// Manager manages LSP server processes across project folders and languages.
 type Manager struct {
 	mu      sync.Mutex
-	servers map[string]*serverEntry // key: "workspacePath|languageID"
+	servers map[string]*serverEntry // key: "projectFolderPath|languageID"
 	configs []LanguageServerConfig
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -53,20 +53,20 @@ func NewManager(ctx context.Context) *Manager {
 	return m
 }
 
-// serverKey creates a unique key for a workspace+language pair.
-func serverKey(workspacePath, languageID string) string {
+// serverKey creates a unique key for a project folder+language pair.
+func serverKey(projectFolderPath, languageID string) string {
 	// Normalize path to ensure consistent key
-	absPath, err := filepath.Abs(workspacePath)
+	absPath, err := filepath.Abs(projectFolderPath)
 	if err != nil {
-		absPath = workspacePath
+		absPath = projectFolderPath
 	}
 	return fmt.Sprintf("%s|%s", absPath, languageID)
 }
 
-// GetOrCreate returns an existing LSP process for the workspace+language, or starts a new one.
+// GetOrCreate returns an existing LSP process for the project folder+language, or starts a new one.
 // Returns the process and a release function that should be called when the connection is done.
-func (m *Manager) GetOrCreate(workspacePath, languageID string) (*LSPProcess, func(), error) {
-	key := serverKey(workspacePath, languageID)
+func (m *Manager) GetOrCreate(projectFolderPath, languageID string) (*LSPProcess, func(), error) {
+	key := serverKey(projectFolderPath, languageID)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -116,8 +116,8 @@ func (m *Manager) GetOrCreate(workspacePath, languageID string) (*LSPProcess, fu
 	}
 
 	// Start the process
-	log.Printf("LSP manager: starting %s for workspace=%s", cfg.ID, workspacePath)
-	process, err := StartLSPProcess(m.ctx, workspacePath, binaryPath, cfg.Args)
+	log.Printf("LSP manager: starting %s for project_folder=%s", cfg.ID, projectFolderPath)
+	process, err := StartLSPProcess(m.ctx, projectFolderPath, binaryPath, cfg.Args)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to start %s: %w", cfg.Binary, err)
 	}

@@ -109,7 +109,7 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 	}
 	// "prompt" → interactive approval; on deny fall through to the raw error.
 	if decision == "prompt" {
-		if ctx2, approved := promptForOffWorkspacePath(ctx, env, "write_structured_file", path, resolvedStructured, "write"); approved {
+		if ctx2, approved := promptForOffProjectFolderPath(ctx, env, "write_structured_file", path, resolvedStructured, "write"); approved {
 			ctx = ctx2
 		}
 	}
@@ -157,7 +157,7 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 	// Capture pre-write content for change tracking BEFORE WriteFile
 	// mutates the file (same contract as write_file). Empty = create.
 	// Resolve the path the way the write itself does (against the
-	// workspace root on ctx) so a daemon run outside the workspace
+	// project folder on ctx) so a daemon run outside the project folder
 	// records the true pre-state of the file it overwrites.
 	trackPath := trackingPath(ctx, path)
 	var preWriteOriginal string

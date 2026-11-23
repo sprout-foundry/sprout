@@ -4,7 +4,7 @@
  * Shortcuts and header controls talk to their handlers through window events
  * (`sprout:hotkey` with a command id, `sprout:open-command-palette`, ...).
  * Sprout's own app root listens for all of them, but a host that embeds the
- * workspace mounts only the views it composes, so many of those events have
+ * project folder mounts only the views it composes, so many of those events have
  * no listener there. This registry lets the producers ask first:
  *
  * - The standalone app claims the page with `claimAppShell()` before it

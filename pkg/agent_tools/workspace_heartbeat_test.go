@@ -144,7 +144,7 @@ func TestHeartbeat_MissedHeartbeatTriggersTermination(t *testing.T) {
 
 	found := false
 	for _, e := range evts {
-		if e.eventType == events.EventTypeWorkspaceHeartbeatLost {
+		if e.eventType == events.EventTypeProjectFolderHeartbeatLost {
 			found = true
 			if e.data == nil {
 				t.Errorf("heartbeat_lost event has nil data payload")
@@ -231,7 +231,7 @@ func TestHeartbeat_TransientBlipTolerated(t *testing.T) {
 	evts := publisher.getEvents()
 	found := false
 	for _, e := range evts {
-		if e.eventType == events.EventTypeWorkspaceHeartbeatLost {
+		if e.eventType == events.EventTypeProjectFolderHeartbeatLost {
 			found = true
 			break
 		}

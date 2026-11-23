@@ -21,7 +21,7 @@ interface EditorWithOutlineProps {
 }
 
 /**
- * EditorWithOutline wraps the editor workspace with a collapsible/resizable outline panel.
+ * EditorWithOutline wraps the editor project folder with a collapsible/resizable outline panel.
  * The outline panel shows a document outline (functions, classes, etc.) and enables
  * navigation to symbols in the code.
  */

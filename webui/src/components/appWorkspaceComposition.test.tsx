@@ -1,5 +1,5 @@
 /**
- * SP-160 Acceptance criteria 2 — the local app's workspace composition.
+ * SP-160 Acceptance criteria 2 — the local app's project folder composition.
  *
  * The local web UI is the package's own consumer: its shell must render the
  * active space through `SproutWorkspace` (with `localHost` and
@@ -136,9 +136,9 @@ describe('the app composition renders the registry shell under the ambient local
         </SproutProviders>
       </HostProvider>,
     );
-    const workspace = await screen.findByTestId('sprout-workspace');
-    expect(workspace).toHaveAttribute('data-project', '/workspace/project');
-    expect(workspace).toHaveAttribute('data-space', 'code');
+    const projectFolder = await screen.findByTestId('sprout-workspace');
+    expect(projectFolder).toHaveAttribute('data-project', '/workspace/project');
+    expect(projectFolder).toHaveAttribute('data-space', 'code');
     // The registry shell renders (the fake composition uses the real registry
     // and real providers); `SproutWorkspace.test.tsx` asserts the shell identity.
   });

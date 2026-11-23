@@ -13,7 +13,7 @@ import (
 // the snapshot was taken (stale), returning action="stale_skip" without
 // touching the file on disk.
 func TestRollbackChangesSingleFileStaleSkip(t *testing.T) {
-	cleanup := withTempWorkspace(t)
+	cleanup := withTempProjectFolder(t)
 	defer cleanup()
 
 	// Re-initialize history paths so changes are stored in the temp dir,
@@ -60,7 +60,7 @@ func TestRollbackChangesSingleFileStaleSkip(t *testing.T) {
 // rollback path in RollbackChanges proceeds normally when the file on
 // disk still matches the recorded NewCode, restoring the original content.
 func TestRollbackChangesSingleFileNotStale(t *testing.T) {
-	cleanup := withTempWorkspace(t)
+	cleanup := withTempProjectFolder(t)
 	defer cleanup()
 
 	history.InitializeHistoryPaths(nil)

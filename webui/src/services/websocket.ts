@@ -34,7 +34,7 @@ type EventCallback = (event: WsEvent) => void;
  *   socket does.
  * - `ready`: the in-browser agent is wired. Its calls are answered by the
  *   installed adapter and its events are delivered in the page, so the
- *   workspace is connected whether or not an events socket is open.
+ *   project folder is connected whether or not an events socket is open.
  */
 export type LocalAgentState = 'none' | 'starting' | 'ready';
 
@@ -576,7 +576,7 @@ class WebSocketService {
   /**
    * Record how far the in-browser agent has started (see
    * {@link LocalAgentState}) and tell listeners when that changes whether the
-   * workspace is connected. A daemon-backed workspace never calls this, so its
+   * project folder is connected. A daemon-backed project folder never calls this, so its
    * connection state stays the socket's.
    */
   setLocalAgentState(state: LocalAgentState): void {

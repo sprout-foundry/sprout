@@ -5,7 +5,7 @@ package personas
 // The embedded catalog stays the immutable core. Everything here reads
 // persona definitions a creator owns: the person's files under
 // `<config dir>/personas/` and a repository's files under
-// `<workspace>/.sprout/personas/`. The host's own definitions are not files
+// `<project folder>/.sprout/personas/`. The host's own definitions are not files
 // — they arrive through the headless agent API — so they are loaded by the
 // caller and only validated here.
 //
@@ -91,7 +91,7 @@ func (p Problem) String() string {
 type LoadOptions struct {
 	// UserDir is `<config dir>/personas`.
 	UserDir string
-	// ProjectDir is `<workspace>/.sprout/personas`.
+	// ProjectDir is `<project folder>/.sprout/personas`.
 	ProjectDir string
 	// AcceptedProjectHashes maps a project persona id to the content hash
 	// the person accepted. A project persona whose file hash is not the

@@ -46,7 +46,7 @@ export function PreviewBody({ onClose }: { onClose?: () => void }): JSX.Element 
 }
 
 /**
- * The preview surface an editor pane renders: the workspace's mockup when it
+ * The preview surface an editor pane renders: the project folder's mockup when it
  * has one, otherwise the dev server's output. Both are a rendered view of the
  * work, so they share one buffer and one slot beside the code.
  */

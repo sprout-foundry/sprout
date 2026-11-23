@@ -7,9 +7,9 @@ import (
 )
 
 // externalTempDir creates a temporary directory that is OUTSIDE both the
-// current workspace and /tmp, so isWithinWorkspace returns false for it.
+// current project folder and /tmp, so isWithinProjectFolder returns false for it.
 // This is needed because t.TempDir() returns a /tmp path on Linux, and the
-// workspace boundary check intentionally allows all /tmp paths (same as
+// project folder boundary check intentionally allows all /tmp paths (same as
 // SafeResolvePath).
 //
 // The directory is created under the user's home directory. If the home
@@ -31,11 +31,11 @@ func externalTempDir(t *testing.T) string {
 	return dir
 }
 
-// TestRollbackSkipsFileOutsideWorkspace verifies that handleRevisionRollback
+// TestRollbackSkipsFileOutsideProjectFolder verifies that handleRevisionRollback
 // skips (does not write) a file whose stored path resolves outside the current
-// workspace root. This is the safety guard that prevents the history store from
+// project folder. This is the safety guard that prevents the history store from
 // clobbering files elsewhere on the filesystem.
-func TestRollbackSkipsFileOutsideWorkspace(t *testing.T) {
+func TestRollbackSkipsFileOutsideProjectFolder(t *testing.T) {
 	orig, _ := os.Getwd()
 	dir := t.TempDir()
 	defer os.Chdir(orig)
@@ -43,7 +43,7 @@ func TestRollbackSkipsFileOutsideWorkspace(t *testing.T) {
 		t.Fatalf("Chdir: %v", err)
 	}
 
-	// An absolute path that resolves OUTSIDE both the workspace (temp dir) and
+	// An absolute path that resolves OUTSIDE both the project folder (temp dir) and
 	// /tmp. We can't use t.TempDir() for this because that lands under /tmp on
 	// Linux, which is always allowed by the boundary check.
 	externalDir := externalTempDir(t)
@@ -84,9 +84,9 @@ func TestRollbackSkipsFileOutsideWorkspace(t *testing.T) {
 	}
 }
 
-// TestRollbackWritesFileInsideWorkspace verifies that the boundary check does
-// not interfere with legitimate rollback of files within the workspace.
-func TestRollbackWritesFileInsideWorkspace(t *testing.T) {
+// TestRollbackWritesFileInsideProjectFolder verifies that the boundary check does
+// not interfere with legitimate rollback of files within the project folder.
+func TestRollbackWritesFileInsideProjectFolder(t *testing.T) {
 	orig, _ := os.Getwd()
 	dir := t.TempDir()
 	defer os.Chdir(orig)
@@ -99,7 +99,7 @@ func TestRollbackWritesFileInsideWorkspace(t *testing.T) {
 		t.Fatalf("RecordBaseRevision: %v", err)
 	}
 
-	// A relative path inside the workspace (cwd == temp dir).
+	// A relative path inside the project folder (cwd == temp dir).
 	insideFile := "inside.txt"
 	if err := os.WriteFile(insideFile, []byte("modified content"), 0600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
@@ -118,7 +118,7 @@ func TestRollbackWritesFileInsideWorkspace(t *testing.T) {
 	}
 
 	if err := handleRevisionRollback(groups[0]); err != nil {
-		t.Fatalf("handleRevisionRollback failed for inside-workspace file: %v", err)
+		t.Fatalf("handleRevisionRollback failed for inside-project-folder file: %v", err)
 	}
 
 	restored, err := os.ReadFile(insideFile)
@@ -130,9 +130,9 @@ func TestRollbackWritesFileInsideWorkspace(t *testing.T) {
 	}
 }
 
-// TestRestoreSkipsFileOutsideWorkspace verifies handleRevisionRestore has the
-// same workspace boundary guard as rollback.
-func TestRestoreSkipsFileOutsideWorkspace(t *testing.T) {
+// TestRestoreSkipsFileOutsideProjectFolder verifies handleRevisionRestore has the
+// same project folder boundary guard as rollback.
+func TestRestoreSkipsFileOutsideProjectFolder(t *testing.T) {
 	orig, _ := os.Getwd()
 	dir := t.TempDir()
 	defer os.Chdir(orig)
@@ -173,9 +173,9 @@ func TestRestoreSkipsFileOutsideWorkspace(t *testing.T) {
 	}
 }
 
-// TestRestoreWritesFileInsideWorkspace verifies restore still works for files
-// inside the workspace.
-func TestRestoreWritesFileInsideWorkspace(t *testing.T) {
+// TestRestoreWritesFileInsideProjectFolder verifies restore still works for files
+// inside the project folder.
+func TestRestoreWritesFileInsideProjectFolder(t *testing.T) {
 	orig, _ := os.Getwd()
 	dir := t.TempDir()
 	defer os.Chdir(orig)
@@ -206,7 +206,7 @@ func TestRestoreWritesFileInsideWorkspace(t *testing.T) {
 	}
 
 	if err := handleRevisionRestore(groups[0]); err != nil {
-		t.Fatalf("handleRevisionRestore failed for inside-workspace file: %v", err)
+		t.Fatalf("handleRevisionRestore failed for inside-project-folder file: %v", err)
 	}
 
 	restored, err := os.ReadFile(insideFile)
@@ -218,8 +218,8 @@ func TestRestoreWritesFileInsideWorkspace(t *testing.T) {
 	}
 }
 
-// TestIsWithinWorkspaceDirect exercises the helper directly for the key cases.
-func TestIsWithinWorkspaceDirect(t *testing.T) {
+// TestIsWithinProjectFolderDirect exercises the helper directly for the key cases.
+func TestIsWithinProjectFolderDirect(t *testing.T) {
 	orig, _ := os.Getwd()
 	dir := t.TempDir()
 	defer os.Chdir(orig)
@@ -241,7 +241,7 @@ func TestIsWithinWorkspaceDirect(t *testing.T) {
 	}{
 		{"relative inside", "foo.txt", true},
 		{"nested relative inside", "sub/dir/foo.txt", true},
-		{"absolute inside workspace", filepath.Join(dir, "abs.txt"), true},
+		{"absolute inside project folder", filepath.Join(dir, "abs.txt"), true},
 		{"tmp path allowed", filepath.Join(os.TempDir(), "rollboundary-ok.txt"), true},
 		{"empty rejected", "", false},
 	}
@@ -250,16 +250,16 @@ func TestIsWithinWorkspaceDirect(t *testing.T) {
 			name   string
 			path   string
 			within bool
-		}{"absolute outside workspace and tmp", homeOutside, false})
+		}{"absolute outside project folder and tmp", homeOutside, false})
 	} else {
-		t.Logf("could not find a non-/tmp external path; skipping 'outside workspace and tmp' case")
+		t.Logf("could not find a non-/tmp external path; skipping 'outside project folder and tmp' case")
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := isWithinWorkspace(tc.path)
+			got := isWithinProjectFolder(tc.path)
 			if got != tc.within {
-				t.Errorf("isWithinWorkspace(%q) = %v, want %v", tc.path, got, tc.within)
+				t.Errorf("isWithinProjectFolder(%q) = %v, want %v", tc.path, got, tc.within)
 			}
 		})
 	}

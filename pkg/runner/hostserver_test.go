@@ -33,7 +33,7 @@ func hostCall(t *testing.T, h *HostServer, path, bearer, body string) (int, stri
 	return rr.Code, rr.Body.String()
 }
 
-func TestHostServerProxiesOnlyWithTheWorkspaceSecret(t *testing.T) {
+func TestHostServerProxiesOnlyWithTheDevSpaceSecret(t *testing.T) {
 	h := NewHostServer()
 	h.Bind("ws-1", fakeDaemon(t), "s3cret")
 
@@ -54,7 +54,7 @@ func TestHostServerProxiesOnlyWithTheWorkspaceSecret(t *testing.T) {
 		}
 	}
 	if code, _ := hostCall(t, h, "/daemon/ws-2/api/txn/run", "s3cret", ""); code != http.StatusNotFound {
-		t.Errorf("unknown workspace: got %d, want 404", code)
+		t.Errorf("unknown project folder: got %d, want 404", code)
 	}
 	if code, _ := hostCall(t, h, "/daemon/ws-1", "s3cret", ""); code != http.StatusNotFound {
 		t.Errorf("no daemon path: got %d, want 404", code)

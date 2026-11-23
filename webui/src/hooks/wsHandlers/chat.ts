@@ -312,9 +312,9 @@ export const handleError = (ctx: EventHandlerContext): void => {
   console.error('[FAIL] Error event:', data);
 };
 
-// Handle workspace_stopping: the hosting platform is about to stop this
-// workspace (idle timeout, runtime cap, drain) and warns ahead of time.
-export const handleWorkspaceStopping = (ctx: EventHandlerContext): void => {
+// Handle dev_space_stopping: the hosting platform is about to stop this
+// project folder (idle timeout, runtime cap, drain) and warns ahead of time.
+export const handleDevSpaceStopping = (ctx: EventHandlerContext): void => {
   const { event, setState } = ctx;
   const logEntry = createLogEntry(event);
   logEntry.category = 'system';
@@ -325,8 +325,8 @@ export const handleWorkspaceStopping = (ctx: EventHandlerContext): void => {
     seconds >= 120 ? `in ${Math.round(seconds / 60)} minutes` : seconds > 0 ? `in ${seconds} seconds` : 'shortly';
   notificationBus.notify(
     'warning',
-    'Workspace stopping',
-    `This workspace will stop ${when}. Uncommitted work is checkpointed; start it again to continue.`,
+    'Dev space stopping',
+    `This dev space will stop ${when}. Uncommitted work is checkpointed; start it again to continue.`,
     15000,
   );
   setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));

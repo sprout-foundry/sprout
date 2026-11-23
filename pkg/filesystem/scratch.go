@@ -28,7 +28,7 @@ func scratchDir() string {
 // idempotent: sandboxed environments with a read-only or namespace-
 // isolated /tmp fail silently, which is acceptable — the system prompts
 // tell the model to verify the directory is usable from shell_command
-// and fall back to ./.scratch/ inside the workspace when it is not.
+// and fall back to ./.scratch/ inside the project folder when it is not.
 func EnsureScratchDir() {
 	_ = os.MkdirAll(ScratchDir, 0o700)
 }

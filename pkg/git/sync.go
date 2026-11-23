@@ -1,8 +1,8 @@
-// ETH-1 "sync-on-resume": reconcile the git state of a workspace container
+// ETH-1 "sync-on-resume": reconcile the git state of a project folder container
 // and report it as a single JSON object.
 //
 // The report is consumed by the platform (sprout-foundry) when a stopped
-// workspace machine is resumed, and by the browser tab through the daemon's
+// project folder machine is resumed, and by the browser tab through the daemon's
 // GET /api/sync endpoint and the "sync" field of /api/bootstrap. The JSON
 // shape below is a PINNED CONTRACT — field names, nesting and zero-values
 // must not change without coordinating with the platform parser.

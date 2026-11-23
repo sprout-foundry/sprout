@@ -334,7 +334,7 @@ Payload size contracts (see `pkg/events/events_filter.go`):
   string is preserved so `path` extraction still works.
 - `tool_end.data.result` is capped at 2000 chars with
   `result_truncated: true` / `result_length`.
-- `workspace_patch` carries `file_path`, `action`, `seq`, `size`
+- `project_folder_patch` carries `file_path`, `action`, `seq`, `size`
   (and `conflict` / `theirs_path` on conflict) — never file content.
   Fetch content via the file API.
 

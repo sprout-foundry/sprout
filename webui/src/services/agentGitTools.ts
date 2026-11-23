@@ -522,7 +522,7 @@ export const AGENT_GIT_TOOLS: AgentGitToolDefinition[] = [
   },
   {
     name: 'git_list_repos',
-    description: 'List repositories previously cloned into the workspace via git_clone.',
+    description: 'List repositories previously cloned into the project folder via git_clone.',
     parameters: { type: 'object', properties: {}, required: [] },
     execute: async (args) => {
       try {

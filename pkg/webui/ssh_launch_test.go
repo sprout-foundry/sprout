@@ -9,7 +9,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
-func TestNormalizeRemoteWorkspacePathSSH(t *testing.T) {
+func TestNormalizeRemoteProjectFolderPathSSH(t *testing.T) {
 	tests := []struct {
 		input string
 		want  string
@@ -26,9 +26,9 @@ func TestNormalizeRemoteWorkspacePathSSH(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			got := normalizeRemoteWorkspacePath(tt.input)
+			got := normalizeRemoteProjectFolderPath(tt.input)
 			if got != tt.want {
-				t.Errorf("normalizeRemoteWorkspacePath(%q) = %q, want %q", tt.input, got, tt.want)
+				t.Errorf("normalizeRemoteProjectFolderPath(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}

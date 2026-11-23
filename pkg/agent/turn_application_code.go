@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-// IsApplicationCodePath reports whether a changed workspace path counts
+// IsApplicationCodePath reports whether a changed project folder path counts
 // as application code for the verification gate. It is a pure
 // path-string predicate: it never touches the filesystem, and it
 // classifies whatever form the caller passes (relative or absolute;
@@ -76,7 +76,7 @@ func IsApplicationCodePath(path string) bool {
 	return true
 }
 
-// TurnChangedApplicationPaths returns the distinct workspace paths the
+// TurnChangedApplicationPaths returns the distinct project folder paths the
 // current turn changed that count as application code
 // (IsApplicationCodePath), in TurnChangedPaths' first-seen order — or
 // nil when change tracking is off, the turn changed no files, or every

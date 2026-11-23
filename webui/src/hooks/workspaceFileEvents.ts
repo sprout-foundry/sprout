@@ -9,13 +9,13 @@ const FILE_MODIFYING_TOOLS = [
 ];
 
 /**
- * Whether an event means files in the workspace may have changed: a file
+ * Whether an event means files in the project folder may have changed: a file
  * write, create or delete (editor saves and the agent's file tools), a file
  * changing on disk, or a completed tool that can modify files (shell commands
  * can run sed, mv, git checkout…). Git's own actions are not included — the
  * git panel refreshes after those itself.
  */
-export function changesWorkspaceFiles(event: SproutEvent | undefined): boolean {
+export function changesProjectFolderFiles(event: SproutEvent | undefined): boolean {
   if (!event) return false;
   const data = event.data as Record<string, unknown> | undefined;
   if (event.type === 'file_changed') {

@@ -35,8 +35,8 @@ vi.mock('../services/api', () => {
     async applyHotkeyPreset() {
       return { hotkeys: [] };
     }
-    async getWorkspace() {
-      return { workspace_root: '' };
+    async getProjectFolder() {
+      return { project_folder: '' };
     }
   }
   return { ApiService: MockApiService };

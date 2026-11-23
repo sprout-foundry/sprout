@@ -2,7 +2,7 @@
 
 // quality_hook_test.go — the quality-after-edits acceptance tests: the
 // turn-end quality hook drives a full agent turn (scripted model, real
-// workspace fixture, real shell execution of the manifest's formatter and
+// project folder fixture, real shell execution of the manifest's formatter and
 // linter) and pins the gate and the repair loop:
 //
 //   - a turn that changed a file runs the project's formatter and linter; a
@@ -61,7 +61,7 @@ func qhWriteStarterManifest(t *testing.T, root, format, lint string) {
 	}
 }
 
-// qhAgent wires a scripted client into a fresh agent whose workspace root is
+// qhAgent wires a scripted client into a fresh agent whose project folder is
 // the given project directory, with the quality section set (nil = unset, the
 // default-off path). Verification is left off so the two turn-end hooks are
 // independent.
@@ -89,7 +89,7 @@ func qhAgent(t *testing.T, client *ScriptedClient, root string, quality *configu
 	}
 	t.Cleanup(ag.Shutdown)
 	ag.SetMaxIterations(10)
-	ag.SetWorkspaceRoot(root)
+	ag.SetProjectFolder(root)
 	return ag
 }
 

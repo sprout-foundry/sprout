@@ -88,7 +88,7 @@ export interface HostTransport {
    * explicitly. Absent means the host did not choose, and Sprout keeps its own
    * default for the build. A host may switch backends when a daemon becomes
    * available by passing the updated transport (a new `agent`) to the mounted
-   * workspace — the composition re-wires the backend in place, and a re-mount
+   * project folder — the composition re-wires the backend in place, and a re-mount
    * with a new transport is equivalent (see the contract doc).
    */
   agent?: HostAgentBackend;
@@ -435,11 +435,11 @@ export interface HostCapabilities {
   git: boolean;
   /** Agent chat. */
   chat: boolean;
-  /** Switching between workspaces (the workspace switcher UI). */
+  /** Switching between project folders (the project folder switcher UI). */
   workspaceSwitching: boolean;
   /** A native folder picker (host shells only; off for in-browser hosts). */
   folderPicker: boolean;
-  /** Exporting the workspace to a local filesystem (no local FS means off). */
+  /** Exporting the project folder to a local filesystem (no local FS means off). */
   export: boolean;
   /** Instance management (the instance list and its actions). */
   instances: boolean;
@@ -454,7 +454,7 @@ export interface HostCapabilities {
   /**
    * The backend serves the dev-server preview lifecycle (`/api/preview/status`,
    * `/start`, `/restart`, `/stop`), so the preview panel can be offered.
-   * Absent or false means it does not: a composed workspace mounts no preview
+   * Absent or false means it does not: a composed project folder mounts no preview
    * panel, offers no toggle for it, and never calls those paths.
    */
   preview?: boolean;
@@ -479,7 +479,7 @@ export interface HostCapabilities {
    */
   chatSessions: boolean;
   /**
-   * Read-only access to the in-browser workspace's files: the host may list
+   * Read-only access to the in-browser project folder's files: the host may list
    * the project's files and read a file's bytes, so it can carry them along
    * when the project moves off the in-browser agent (e.g. into a container).
    * Offered only when the agent runs in-browser (the transport's agent
@@ -491,7 +491,7 @@ export interface HostCapabilities {
   browserFiles?: boolean;
   /**
    * Sprout's own "Start Building" action in the hosted header: move the
-   * project from the in-browser agent into a full workspace. A host that
+   * project from the in-browser agent into a dev space. A host that
    * offers that move in its own interface leaves this off, so the person
    * sees one way to do it, not two. Absent or false hides the action.
    */

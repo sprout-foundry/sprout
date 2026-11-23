@@ -24,7 +24,7 @@ import (
 )
 
 // vhacWriteToolCall is vhWriteToolCall generalized: a scripted write_file
-// tool call for any workspace path, so a test can script the exact mix of
+// tool call for any project folder path, so a test can script the exact mix of
 // docs and application-code writes its gate case needs.
 func vhacWriteToolCall(t *testing.T, root, path string) *ScriptedResponse {
 	t.Helper()

@@ -24,10 +24,10 @@ func TestTypeScriptAdapterRun(t *testing.T) {
 		Method:        "diagnostics",
 		Content:       "const x: number = 1;\nconsole.log(x);\n",
 		FilePath:      "test.ts",
-		WorkspaceRoot: ".",
+		ProjectFolder: ".",
 	})
 	if err != nil {
-		// This can fail if typescript is not installed in the workspace
+		// This can fail if typescript is not installed in the project folder
 		t.Logf("TypeScript adapter run failed (expected without ts): %v", err)
 		return
 	}
@@ -40,13 +40,13 @@ func TestTypeScriptAdapterRunWithEmptyPaths(t *testing.T) {
 		t.Skip("node not available")
 	}
 
-	// Test with empty workspace — should not panic
+	// Test with empty project folder — should not panic
 	adapter := NewTypeScriptAdapter()
 	_, err = adapter.Run(ToolInput{
 		Method:        "diagnostics",
 		Content:       "const x = 1",
 		FilePath:      "",
-		WorkspaceRoot: "",
+		ProjectFolder: "",
 	})
 	// This may or may not error depending on environment, just ensure no panic
 	_ = err
@@ -63,6 +63,6 @@ func TestRunTypeScriptToolBasicInput(t *testing.T) {
 		Method:        "diagnostics",
 		Content:       "",
 		FilePath:      "test.ts",
-		WorkspaceRoot: ".",
+		ProjectFolder: ".",
 	})
 }

@@ -76,53 +76,53 @@ const taskEndpoints: CloudEndpoint[] = [
   },
 ];
 
-// --- Fly workspaces & ETH-2 transactions ---
-// /workspace/fly is the LEGACY prefix: the live client (cloudTxn.ts) addresses
-// the host-agnostic /workspace/txn surface (SP-BUILDER-12) and only falls back
-// to /workspace/fly for in-flight sessions that resolved a workspace before
-// that change. /workspace/fly remains platform-only surface (never a local
+// --- Fly dev spaces & ETH-2 transactions ---
+// /dev-space/fly is the LEGACY prefix: the live client (cloudTxn.ts) addresses
+// the host-agnostic /dev-space/txn surface (SP-BUILDER-12) and only falls back
+// to /dev-space/fly for in-flight sessions that resolved a dev space before
+// that change. /dev-space/fly remains platform-only surface (never a local
 // sprout route); both prefixes are relative so the CloudAdapter proxies them
 // with session credentials.
-const flyWorkspaceEndpoints: CloudEndpoint[] = [
+const flyDevSpaceEndpoints: CloudEndpoint[] = [
   {
-    path: '/workspace/txn',
+    path: '/dev-space/txn',
     methods: ['GET', 'POST'],
     category: 'foundry-backend',
     description:
-      'Resolve/create the caller workspace for a repo, any backend (runner when attached, else Fly) — the escalation entry point',
+      'Resolve/create the caller’s dev space for a repo, any backend (runner when attached, else Fly) — the escalation entry point',
   },
   {
-    path: '/workspace/txn/',
+    path: '/dev-space/txn/',
     methods: ['POST', 'GET'],
     category: 'foundry-backend',
     isPrefix: true,
     description: 'Backend-agnostic txn lifecycle (open/status/push/run/pull/finish)',
   },
   {
-    path: '/workspace',
+    path: '/dev-space',
     methods: ['GET'],
     category: 'foundry-backend',
-    description: 'List the caller workspaces (backend per row) — picks the workspace on the chosen escalation host',
+    description: 'List the caller’s dev spaces (backend per row) — picks the dev space on the chosen escalation host',
   },
   {
-    path: '/workspace/',
+    path: '/dev-space/',
     methods: ['GET'],
     category: 'foundry-backend',
     isPrefix: true,
-    description: 'Get one workspace row (carries runner_id) — confirms a runner-hosted escalation workspace',
+    description: 'Get one dev space row (carries runner_id) — confirms a runner-hosted escalation dev space',
   },
   {
-    path: '/workspace/fly',
+    path: '/dev-space/fly',
     methods: ['GET', 'POST'],
     category: 'foundry-backend',
-    description: 'Legacy: list/create Fly workspaces (in-flight sessions only)',
+    description: 'Legacy: list/create Fly dev spaces (in-flight sessions only)',
   },
   {
-    path: '/workspace/fly/',
+    path: '/dev-space/fly/',
     methods: ['POST', 'GET'],
     category: 'foundry-backend',
     isPrefix: true,
-    description: 'Legacy: Fly workspace txn lifecycle (in-flight sessions only)',
+    description: 'Legacy: Fly dev space txn lifecycle (in-flight sessions only)',
   },
 ];
 
@@ -196,10 +196,10 @@ const statsEndpoints: CloudEndpoint[] = [
   },
 ];
 
-// --- Workspace ---
+// --- Dev space ---
 // Intentionally empty: /api/workspace/symbols is not available in browser
 // mode and returns a synthetic safe-default response (see synthetic.ts).
-const workspaceEndpoints: CloudEndpoint[] = [];
+const devSpaceEndpoints: CloudEndpoint[] = [];
 
 /**
  * All foundry-backend endpoints combined (non-git + git from separate module).
@@ -212,10 +212,10 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
   ...historyEndpoints,
   ...sessionEndpoints,
   ...taskEndpoints,
-  ...flyWorkspaceEndpoints,
+  ...flyDevSpaceEndpoints,
   ...runnerEndpoints,
   ...settingsEndpoints,
   ...providerEndpoints,
   ...statsEndpoints,
-  ...workspaceEndpoints,
+  ...devSpaceEndpoints,
 ];

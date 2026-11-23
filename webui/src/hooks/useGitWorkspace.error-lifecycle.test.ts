@@ -1,5 +1,5 @@
 /**
- * Tests for useGitWorkspace's git status load lifecycle — specifically that a
+ * Tests for useGitProjectFolder's git status load lifecycle — specifically that a
  * successful status load clears a stale error banner from an earlier failed
  * attempt (regression: the boot call that fires before the in-browser WASM
  * shell is ready set gitActionError, and the post-import refresh populated
@@ -35,7 +35,7 @@ vi.mock('../utils/log', () => ({
   warn: vi.fn(),
 }));
 
-import { useGitWorkspace, type UseGitWorkspaceOptions } from './useGitWorkspace';
+import { useGitProjectFolder, type UseGitWorkspaceOptions } from './useGitWorkspace';
 
 function makeOptions(): UseGitWorkspaceOptions {
   const noop = () => undefined;
@@ -90,7 +90,7 @@ describe('useGitWorkspace — gitActionError lifecycle (stale banner after recov
     // and the success path would immediately clear the banner.
     getGitStatus.mockRejectedValue(new Error('Failed to fetch git status'));
 
-    const { result } = renderHook(() => useGitWorkspace(options));
+    const { result } = renderHook(() => useGitProjectFolder(options));
 
     await waitFor(() => expect(result.current.gitActionError).toBe('Failed to fetch git status'));
     expect(result.current.gitStatus).toBeNull();
@@ -110,7 +110,7 @@ describe('useGitWorkspace — gitActionError lifecycle (stale banner after recov
   it('clears a stale error when the workspace reports no git repository', async () => {
     getGitStatus.mockRejectedValue(new Error('Failed to fetch git status'));
 
-    const { result } = renderHook(() => useGitWorkspace(options));
+    const { result } = renderHook(() => useGitProjectFolder(options));
     await waitFor(() => expect(result.current.gitActionError).toBe('Failed to fetch git status'));
 
     // Subsequent load succeeds but reports no repo
@@ -126,7 +126,7 @@ describe('useGitWorkspace — gitActionError lifecycle (stale banner after recov
   it('keeps the error banner when the status load fails', async () => {
     getGitStatus.mockRejectedValue(new Error('Failed to fetch git status'));
 
-    const { result } = renderHook(() => useGitWorkspace(options));
+    const { result } = renderHook(() => useGitProjectFolder(options));
 
     await waitFor(() => expect(result.current.gitActionError).toBe('Failed to fetch git status'));
     expect(result.current.gitStatus).toBeNull();
@@ -134,7 +134,7 @@ describe('useGitWorkspace — gitActionError lifecycle (stale banner after recov
 
   it("shows the repository's note (an imported snapshot) as the panel warning", async () => {
     getGitStatus.mockResolvedValue({ ...okStatus, note: 'Imported without git history.' });
-    const { result } = renderHook(() => useGitWorkspace(options));
+    const { result } = renderHook(() => useGitProjectFolder(options));
     await waitFor(() => expect(result.current.gitStatus).not.toBeNull());
     expect(result.current.gitActionWarning).toBe('Imported without git history.');
   });

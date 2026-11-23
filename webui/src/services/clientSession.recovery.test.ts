@@ -12,7 +12,7 @@ function crossOriginDaemonHost() {
   };
 }
 
-/** The platform host once its workspace is up: the daemon behind a same-origin proxy path. */
+/** The platform host once its project folder is up: the daemon behind a same-origin proxy path. */
 function proxiedDaemonHost() {
   return {
     transport: {

@@ -279,7 +279,7 @@ func TestHandleIndexDoesNotServeAPIPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 	rec := httptest.NewRecorder()
 
 	server.handleIndex(rec, req)

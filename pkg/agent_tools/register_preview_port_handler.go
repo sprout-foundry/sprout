@@ -15,7 +15,7 @@ import (
 
 // registerPreviewPortHandler implements ToolHandler for register_preview_port.
 // Called by the agent when it starts a web server or dev server inside a
-// workspace, so the user gets a browser-accessible preview URL.
+// project folder, so the user gets a browser-accessible preview URL.
 type registerPreviewPortHandler struct{}
 
 func (h *registerPreviewPortHandler) Name() string { return "register_preview_port" }
@@ -24,7 +24,7 @@ func (h *registerPreviewPortHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "register_preview_port",
 		Description: "Register a port for browser preview access. Call this when you start a web server, " +
-			"dev server, or any HTTP service inside the workspace. Returns a preview URL the user can open. " +
+			"dev server, or any HTTP service inside the project folder. Returns a preview URL the user can open. " +
 			"Only call this AFTER the server is running and listening on a port.",
 		Required: []string{"port"},
 		Parameters: []ParameterDef{
@@ -57,15 +57,15 @@ func (h *registerPreviewPortHandler) Execute(ctx context.Context, env ToolEnv, a
 		label = "dev server"
 	}
 
-	workspaceID := os.Getenv("WORKSPACE_ID")
-	if workspaceID == "" {
+	projectFolderID := os.Getenv("WORKSPACE_ID")
+	if projectFolderID == "" {
 		return ToolResult{
 			Output:  "WORKSPACE_ID not set — preview port registration is only available in platform workspaces.",
 			IsError: true,
 		}, nil
 	}
 
-	workspaceToken := os.Getenv("WORKSPACE_TOKEN")
+	projectFolderToken := os.Getenv("WORKSPACE_TOKEN")
 	platformURL := os.Getenv("PLATFORM_API_URL")
 	if platformURL == "" {
 		platformURL = "http://172.17.0.1:8080" // Default Docker bridge gateway
@@ -77,15 +77,15 @@ func (h *registerPreviewPortHandler) Execute(ctx context.Context, env ToolEnv, a
 	})
 
 	client := &http.Client{Timeout: 5 * time.Second}
-	url := fmt.Sprintf("%s/internal/workspace/%s/ports", platformURL, workspaceID)
+	url := fmt.Sprintf("%s/internal/workspace/%s/ports", platformURL, projectFolderID)
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("Failed to create request: %v", err), IsError: true}, nil
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if workspaceToken != "" {
-		req.Header.Set("X-Workspace-Token", workspaceToken)
+	if projectFolderToken != "" {
+		req.Header.Set("X-Workspace-Token", projectFolderToken)
 	}
 
 	resp, err := client.Do(req)
@@ -121,7 +121,7 @@ func (h *registerPreviewPortHandler) Execute(ctx context.Context, env ToolEnv, a
 
 	// Let the webui server learn about the
 	// registered preview URL so its preview pane can embed it instead of
-	// only printing it. In hosted workspaces the agent runs in-process in
+	// only printing it. In hosted project folders the agent runs in-process in
 	// the webui server and ToolEnv.EventBus is the shared bus, so a
 	// publish here reaches the server's subscriber. Best-effort: a nil bus
 	// (or any publish hiccup) never fails the tool — the model still gets

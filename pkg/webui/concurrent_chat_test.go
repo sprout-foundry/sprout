@@ -19,16 +19,16 @@ import (
 
 const testConcurrentClientID = "test-concurrent-client"
 
-// setupConcurrentTestServer creates a ReactWebServer with a temporary workspace
+// setupConcurrentTestServer creates a ReactWebServer with a temporary project folder
 // and pre-registers a client context so callers can make chat-session API
 // requests immediately.
 func setupConcurrentTestServer(t *testing.T) *ReactWebServer {
 	t.Helper()
 
 	daemonRoot := t.TempDir()
-	workspaceRoot := filepath.Join(daemonRoot, "workspace")
-	if err := os.MkdirAll(workspaceRoot, 0o755); err != nil {
-		t.Fatalf("mkdir workspace: %v", err)
+	projectFolder := filepath.Join(daemonRoot, "workspace")
+	if err := os.MkdirAll(projectFolder, 0o755); err != nil {
+		t.Fatalf("mkdir project folder: %v", err)
 	}
 
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
@@ -36,14 +36,14 @@ func setupConcurrentTestServer(t *testing.T) *ReactWebServer {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.SetWorkspaceRoot(workspaceRoot)
+	ws.SetProjectFolder(projectFolder)
 	ws.terminalManager = NewTerminalManager(daemonRoot)
 	ws.fileConsents = newFileConsentManager()
 
-	// Pre-register client context so resolveClientID finds a workspace root.
+	// Pre-register client context so resolveClientID finds a project folder.
 	clientCtx := ws.getOrCreateClientContextLocked(testConcurrentClientID)
-	clientCtx.WorkspaceRoot = workspaceRoot
-	clientCtx.Terminal = NewTerminalManager(workspaceRoot)
+	clientCtx.ProjectFolder = projectFolder
+	clientCtx.Terminal = NewTerminalManager(projectFolder)
 	clientCtx.FileConsents = newFileConsentManager()
 
 	return ws
@@ -278,10 +278,10 @@ func TestConcurrentChatQueryIsolated(t *testing.T) {
 		t.Fatal("expected chat B to not have an active query")
 	}
 
-	// SP-142 §3 (one workspace, one runner): a query to chat B while chat A
+	// SP-142 §3 (one project folder, one runner): a query to chat B while chat A
 	// runs is rejected 409 workspace_busy — the gate serializes cross-chat
 	// queries because agents share one file tree. (The pre-142.3 contract
-	// was per-chat isolation with 202 here; the workspace gate replaced it.
+	// was per-chat isolation with 202 here; the project folder gate replaced it.
 	// The 409's payload semantics are pinned in chat_sessions_mode_test.go.)
 	code := queryChat(t, ws, testConcurrentClientID, chatB, "test query for chat B")
 	if code != http.StatusConflict {

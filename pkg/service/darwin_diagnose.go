@@ -44,11 +44,11 @@ func (m *launchdManager) Diagnose() error {
 		fmt.Printf("     Size: %d bytes\n", len(plistContent))
 		// Flag a stale plist that predates the SPROUT_DAEMON_ROOT fix —
 		// without it, the daemon falls back to $HOME (which launchd may have
-		// set wrong). Since SP-130, the webui forces explicit workspace
+		// set wrong). Since SP-130, the webui forces explicit project folder
 		// selection rather than silently inheriting home, so a stale plist
-		// means the browser root is wrong, not just the workspace.
+		// means the browser root is wrong, not just the project folder.
 		if !strings.Contains(string(plistContent), "SPROUT_DAEMON_ROOT") {
-			console.GlyphWarning.Fprintln(os.Stdout, "  STALE plist: missing SPROUT_DAEMON_ROOT — workspace browser may start in the wrong directory.")
+			console.GlyphWarning.Fprintln(os.Stdout, "  STALE plist: missing SPROUT_DAEMON_ROOT — project folder browser may start in the wrong directory.")
 			fmt.Println("      Reinstall to regenerate: sprout service uninstall && sprout service install")
 		}
 		diagnoseInlinedSecrets(os.Stdout, plistContent)

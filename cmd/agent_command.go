@@ -104,8 +104,8 @@ func runStartupPermissionCheck() error {
 }
 
 // resolveGlobalConfigDir returns the global config directory for layering a
-// workspace config on top. SPROUT_CONFIG is not consulted: isolated-config
-// mode repoints it at the workspace's own .sprout directory. An explicit
+// project folder config on top. SPROUT_CONFIG is not consulted: isolated-config
+// mode repoints it at the project folder's own .sprout directory. An explicit
 // SPROUT_CONFIG_DIR still wins, and otherwise $XDG_CONFIG_HOME/sprout or
 // ~/.config/sprout — the same place the isolated config was seeded from.
 func resolveGlobalConfigDir() string {
@@ -260,12 +260,12 @@ func createChatAgent() (*agent.Agent, error) {
 	var chatAgent *agent.Agent
 	var err error
 
-	// Use layered config when workspace config was auto-detected, so the agent
-	// inherits API keys from global config while using workspace overrides.
-	if autoDetectedWorkspaceDir != "" {
+	// Use layered config when project folder config was auto-detected, so the agent
+	// inherits API keys from global config while using project folder overrides.
+	if autoDetectedProjectFolderDir != "" {
 		globalDir := resolveGlobalConfigDir()
 		if globalDir != "" {
-			chatAgent, err = agent.NewAgentWithLayers(globalDir, autoDetectedWorkspaceDir, providerModelSpec(agentProvider, agentModel))
+			chatAgent, err = agent.NewAgentWithLayers(globalDir, autoDetectedProjectFolderDir, providerModelSpec(agentProvider, agentModel))
 		}
 	}
 	if chatAgent == nil {

@@ -149,9 +149,9 @@ const atomOneLight: ThemePack = {
     // The composer (`@sprout/ui` CommandInput) and the change list
     // (AgentChangesPanel) consume these. The packs are the override layer on
     // top of the package's `:root` tokens, which are DARK by default: a token
-    // a light pack omits is not set inline on the workspace root, so it
+    // a light pack omits is not set inline on the project folder, so it
     // inherits the dark `:root` value and the surface renders dark inside a
-    // light workspace. Every token these two components read is therefore
+    // light project folder. Every token these two components read is therefore
     // declared here, not just the ones the dark pack happens to carry.
     '--bg-hover': '#e6e8eb',
     '--accent-primary-hover': '#2f66e0',

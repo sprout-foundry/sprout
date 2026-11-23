@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { memoryFileStore } from './files';
 import { loadSproutWasm, resetSproutWasmLoader, resolveWasmAssetUrls, runtimeEnv } from './runtime';
-import { summarizeArgs, toAbsolutePath, toWorkspacePath } from './events';
+import { summarizeArgs, toAbsolutePath, toProjectFolderPath } from './events';
 
 type Globals = Record<string, unknown>;
 const g = globalThis as unknown as Globals;
@@ -103,8 +103,8 @@ describe('loadSproutWasm', () => {
 
 describe('event helpers', () => {
   it('converts between workspace and absolute paths', () => {
-    expect(toWorkspacePath('/workspace/design/a.html', '/workspace')).toBe('design/a.html');
-    expect(toWorkspacePath('./x', '/workspace')).toBe('x');
+    expect(toProjectFolderPath('/workspace/design/a.html', '/workspace')).toBe('design/a.html');
+    expect(toProjectFolderPath('./x', '/workspace')).toBe('x');
     expect(toAbsolutePath('design/a.html', '/workspace')).toBe('/workspace/design/a.html');
     expect(toAbsolutePath('.', '/workspace')).toBe('/workspace');
     expect(toAbsolutePath('/etc/x', '/workspace')).toBe('/etc/x');

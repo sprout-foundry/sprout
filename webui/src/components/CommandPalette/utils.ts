@@ -4,9 +4,9 @@ export function normalizePathSeparators(value: string): string {
   return value.replace(/\\/g, '/');
 }
 
-export function toWorkspaceRelativePath(filePath: string, workspaceRoot: string): string {
+export function toProjectFolderRelativePath(filePath: string, projectFolder: string): string {
   const normalizedPath = normalizePathSeparators(filePath).replace(/^\.\//, '');
-  const normalizedRoot = normalizePathSeparators(workspaceRoot).replace(/\/+$/, '');
+  const normalizedRoot = normalizePathSeparators(projectFolder).replace(/\/+$/, '');
   if (!normalizedRoot) return normalizedPath;
   if (normalizedPath === normalizedRoot) return '';
   const prefix = `${normalizedRoot}/`;

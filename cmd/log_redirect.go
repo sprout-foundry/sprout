@@ -7,7 +7,7 @@ import (
 	"os"
 )
 
-// redirectGoLogToWorkspace points Go's default `log` package output at
+// redirectGoLogToProjectFolder points Go's default `log` package output at
 // .sprout/workspace.log (appended) so package-level log.Printf calls in
 // sprout's internals don't interleave with the interactive REPL's
 // stderr-bound chrome (activity indicator, status footer, prompts).
@@ -16,10 +16,10 @@ import (
 // to log.SetOutput so background non-interactive paths (subagents, daemon
 // mode) keep their stderr logging intact when this REPL session ends.
 //
-// On any failure (workspace dir not writable, permission error, etc.) the
+// On any failure (project folder dir not writable, permission error, etc.) the
 // function silently returns a no-op restore — better to keep the spinner
 // thrash than to wedge the user's session on a logging concern.
-func redirectGoLogToWorkspace() (restore func(), err error) {
+func redirectGoLogToProjectFolder() (restore func(), err error) {
 	if err := os.MkdirAll(".sprout", 0o755); err != nil {
 		return func() {}, err
 	}

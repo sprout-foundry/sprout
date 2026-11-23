@@ -135,7 +135,7 @@ test.describe("Escalation — Run in cloud container (ETH-2)", () => {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          workspace_id: WORKSPACE_ID,
+          dev_space_id: WORKSPACE_ID,
           repo_url: "https://github.com/example/repo",
           status: "running",
           backend: "runner",
@@ -157,7 +157,7 @@ test.describe("Escalation — Run in cloud container (ETH-2)", () => {
           txn_id: TXN_ID,
           status: "push",
           expires_at: "2030-01-01T00:00:00Z",
-          workspace_id: WORKSPACE_ID,
+          dev_space_id: WORKSPACE_ID,
         }),
       });
     });
@@ -326,7 +326,7 @@ test.describe("Escalation — Run in cloud container (ETH-2)", () => {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          workspace_id: WORKSPACE_ID,
+          dev_space_id: WORKSPACE_ID,
           repo_url: "https://github.com/example/repo",
           status: "running",
           backend: "runner",
@@ -362,7 +362,7 @@ test.describe("Escalation — Run in cloud container (ETH-2)", () => {
     await expect(
       page.getByTestId(TESTIDS["escalation-toast-txn-error"]),
     ).toHaveText(
-      "Another command is already running in the cloud workspace — try again shortly.",
+      "Another command is already running in the cloud dev space — try again shortly.",
       { timeout: 10_000 },
     );
 

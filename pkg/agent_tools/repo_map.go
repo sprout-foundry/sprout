@@ -93,10 +93,10 @@ func GenerateRepoMap(ctx context.Context, rootDir string, depth int, query strin
 	}
 	query = strings.TrimSpace(query)
 	if rootDir == "" || rootDir == "." {
-		// Use the workspace root from context (set by withToolExecutionMetadata)
+		// Use the project folder from context (set by withToolExecutionMetadata)
 		// instead of os.Getwd(), which returns the daemon's CWD, not the
-		// workspace the agent is operating in.
-		if wsRoot := filesystem.WorkspaceRootFromContext(ctx); wsRoot != "" {
+		// project folder the agent is operating in.
+		if wsRoot := filesystem.ProjectFolderFromContext(ctx); wsRoot != "" {
 			rootDir = wsRoot
 		} else {
 			var err error

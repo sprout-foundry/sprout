@@ -33,7 +33,7 @@ func runGoInlayHints(input ToolInput) (ToolResult, error) {
 	remoteAddr := "unix;" + socketPath
 
 	cmd := exec.Command(goplsPath, "serve", "-listen="+remoteAddr)
-	cmd.Dir = input.WorkspaceRoot
+	cmd.Dir = input.ProjectFolder
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 

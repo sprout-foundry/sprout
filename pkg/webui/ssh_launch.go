@@ -16,10 +16,10 @@ import (
 // SSH command helpers
 // ---------------------------------------------------------------------------
 
-// normalizeRemoteWorkspacePath converts tilde-prefixed paths to their $HOME
+// normalizeRemoteProjectFolderPath converts tilde-prefixed paths to their $HOME
 // equivalent so that "~/project", "$HOME/project", and "${HOME}/project" all
 // collapse to the same canonical form used as the session key.
-func normalizeRemoteWorkspacePath(path string) string {
+func normalizeRemoteProjectFolderPath(path string) string {
 	switch {
 	case path == "~":
 		return "$HOME"

@@ -20,7 +20,7 @@ import (
 //
 // A daemon is a long-lived process: its build and its config root were fixed
 // at its start, and either can differ from the invoking CLI's (a newer
-// binary; an --isolated-config run pointing the CLI at the workspace's
+// binary; an --isolated-config run pointing the CLI at the project folder's
 // ./.sprout while the daemon still uses the user's main config). Routing a
 // turn to such a daemon would run it under the wrong binary or the wrong
 // config, silently — so the CLI fetches the daemon's identity first and runs

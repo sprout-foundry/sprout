@@ -68,9 +68,9 @@ func TestHandleAPISyncOp_WriteOp(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.agent = &agent.Agent{}
-	ws.workspaceRoot = dir
+	ws.projectFolder = dir
 
-	// Create the default client context so getWorkspaceRootForRequest works.
+	// Create the default client context so getProjectFolderForRequest works.
 	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
 	ws.getClientContextForRequest(req)
 
@@ -114,7 +114,7 @@ func TestHandleAPISyncOp_DeleteOp(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.agent = &agent.Agent{}
-	ws.workspaceRoot = dir
+	ws.projectFolder = dir
 
 	// Create the default client context.
 	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
@@ -155,7 +155,7 @@ func TestHandleAPISyncOp_RenameOp(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.agent = &agent.Agent{}
-	ws.workspaceRoot = dir
+	ws.projectFolder = dir
 
 	// Create the default client context.
 	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
@@ -204,10 +204,10 @@ func TestHandleAPISyncOp_ConflictDetection(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.agent = &agent.Agent{}
-	ws.workspaceRoot = dir
+	ws.projectFolder = dir
 
 	// Pre-set metadata: container has unsynced writes.
-	ws.agent.SetFileMetadata("conflict.txt", agent.WorkspaceFileMetadata{
+	ws.agent.SetFileMetadata("conflict.txt", agent.ProjectFolderFileMetadata{
 		ContainerSeq:        5,
 		LastSyncedContainer: 3,
 	})
@@ -247,7 +247,7 @@ func TestHandleAPISyncOp_PathTraversal(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.agent = &agent.Agent{}
-	ws.workspaceRoot = dir
+	ws.projectFolder = dir
 
 	// Create the default client context.
 	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
@@ -343,7 +343,7 @@ func TestHandleAPISyncBatch_MultipleOps(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.agent = &agent.Agent{}
-	ws.workspaceRoot = dir
+	ws.projectFolder = dir
 
 	// Create the default client context.
 	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
@@ -401,10 +401,10 @@ func TestHandleAPISyncBatch_StopsOnConflict(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.agent = &agent.Agent{}
-	ws.workspaceRoot = dir
+	ws.projectFolder = dir
 
 	// Set conflict on the second file.
-	ws.agent.SetFileMetadata("conflict.txt", agent.WorkspaceFileMetadata{
+	ws.agent.SetFileMetadata("conflict.txt", agent.ProjectFolderFileMetadata{
 		ContainerSeq:        5,
 		LastSyncedContainer: 3,
 	})
@@ -521,11 +521,11 @@ func TestHandleAPISyncStatus_WithMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.agent = &agent.Agent{}
-	ws.agent.SetFileMetadata("x.txt", agent.WorkspaceFileMetadata{
+	ws.agent.SetFileMetadata("x.txt", agent.ProjectFolderFileMetadata{
 		BrowserSeq:   5,
 		ContainerSeq: 3,
 	})
-	ws.agent.SetFileMetadata("y.txt", agent.WorkspaceFileMetadata{
+	ws.agent.SetFileMetadata("y.txt", agent.ProjectFolderFileMetadata{
 		BrowserSeq:   2,
 		ContainerSeq: 1,
 	})

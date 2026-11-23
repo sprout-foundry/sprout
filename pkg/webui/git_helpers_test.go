@@ -152,7 +152,7 @@ func TestMakeGitRelativePath_DeeplyNested(t *testing.T) {
 	}
 }
 
-func TestMakeGitRelativePath_WorkspaceRootTrailingSlash(t *testing.T) {
+func TestMakeGitRelativePath_ProjectFolderTrailingSlash(t *testing.T) {
 	got := makeGitRelativePath(osAbs("/ws/file.go"), osAbs("/ws/"))
 	if got != "file.go" {
 		t.Errorf("got %q, want file.go", got)

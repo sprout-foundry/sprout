@@ -303,10 +303,10 @@ func TestLoadConfigWithLayers_GlobalOnly(t *testing.T) {
 	assert.Equal(t, "gpt-4", result.ProviderModels["openai"])
 }
 
-func TestLoadConfigWithLayers_WorkspaceOverride(t *testing.T) {
+func TestLoadConfigWithLayers_ProjectFolderOverride(t *testing.T) {
 	tempDir := t.TempDir()
 	globalPath := filepath.Join(tempDir, "global_config.json")
-	workspacePath := filepath.Join(tempDir, "workspace_config.json")
+	projectFolderPath := filepath.Join(tempDir, "workspace_config.json")
 
 	globalCfg := `{
 		"version": "2.0",
@@ -317,7 +317,7 @@ func TestLoadConfigWithLayers_WorkspaceOverride(t *testing.T) {
 		}
 	}`
 
-	workspaceCfg := `{
+	projectFolderCfg := `{
 		"version": "2.0",
 		"last_used_provider": "anthropic",
 		"provider_models": {
@@ -328,10 +328,10 @@ func TestLoadConfigWithLayers_WorkspaceOverride(t *testing.T) {
 
 	err := os.WriteFile(globalPath, []byte(globalCfg), 0644)
 	require.NoError(t, err)
-	err = os.WriteFile(workspacePath, []byte(workspaceCfg), 0644)
+	err = os.WriteFile(projectFolderPath, []byte(projectFolderCfg), 0644)
 	require.NoError(t, err)
 
-	result, err := LoadConfigWithLayers(globalPath, workspacePath, "", tempDir)
+	result, err := LoadConfigWithLayers(globalPath, projectFolderPath, "", tempDir)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -345,7 +345,7 @@ func TestLoadConfigWithLayers_WorkspaceOverride(t *testing.T) {
 func TestLoadConfigWithLayers_SessionOverride(t *testing.T) {
 	tempDir := t.TempDir()
 	globalPath := filepath.Join(tempDir, "global_config.json")
-	workspacePath := filepath.Join(tempDir, "workspace_config.json")
+	projectFolderPath := filepath.Join(tempDir, "workspace_config.json")
 	sessionPath := filepath.Join(tempDir, "session_config.json")
 
 	globalCfg := `{
@@ -354,7 +354,7 @@ func TestLoadConfigWithLayers_SessionOverride(t *testing.T) {
 		"reasoning_effort": "medium"
 	}`
 
-	workspaceCfg := `{
+	projectFolderCfg := `{
 		"version": "2.0",
 		"last_used_provider": "anthropic",
 		"reasoning_effort": "high"
@@ -368,12 +368,12 @@ func TestLoadConfigWithLayers_SessionOverride(t *testing.T) {
 
 	err := os.WriteFile(globalPath, []byte(globalCfg), 0644)
 	require.NoError(t, err)
-	err = os.WriteFile(workspacePath, []byte(workspaceCfg), 0644)
+	err = os.WriteFile(projectFolderPath, []byte(projectFolderCfg), 0644)
 	require.NoError(t, err)
 	err = os.WriteFile(sessionPath, []byte(sessionCfg), 0644)
 	require.NoError(t, err)
 
-	result, err := LoadConfigWithLayers(globalPath, workspacePath, sessionPath, tempDir)
+	result, err := LoadConfigWithLayers(globalPath, projectFolderPath, sessionPath, tempDir)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -382,10 +382,10 @@ func TestLoadConfigWithLayers_SessionOverride(t *testing.T) {
 	assert.Equal(t, "low", result.ReasoningEffort)        // Session takes highest precedence
 }
 
-func TestLoadConfigWithLayers_MissingWorkspace(t *testing.T) {
+func TestLoadConfigWithLayers_MissingProjectFolder(t *testing.T) {
 	tempDir := t.TempDir()
 	globalPath := filepath.Join(tempDir, "global_config.json")
-	workspacePath := filepath.Join(tempDir, "nonexistent_workspace_config.json")
+	projectFolderPath := filepath.Join(tempDir, "nonexistent_workspace_config.json")
 
 	globalCfg := `{
 		"version": "2.0",
@@ -395,7 +395,7 @@ func TestLoadConfigWithLayers_MissingWorkspace(t *testing.T) {
 	err := os.WriteFile(globalPath, []byte(globalCfg), 0644)
 	require.NoError(t, err)
 
-	result, err := LoadConfigWithLayers(globalPath, workspacePath, "", tempDir)
+	result, err := LoadConfigWithLayers(globalPath, projectFolderPath, "", tempDir)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -406,7 +406,7 @@ func TestLoadConfigWithLayers_MissingWorkspace(t *testing.T) {
 func TestLoadConfigWithLayers_CorruptFile(t *testing.T) {
 	tempDir := t.TempDir()
 	globalPath := filepath.Join(tempDir, "global_config.json")
-	workspacePath := filepath.Join(tempDir, "corrupt_config.json")
+	projectFolderPath := filepath.Join(tempDir, "corrupt_config.json")
 
 	globalCfg := `{
 		"version": "2.0",
@@ -421,14 +421,14 @@ func TestLoadConfigWithLayers_CorruptFile(t *testing.T) {
 
 	err := os.WriteFile(globalPath, []byte(globalCfg), 0644)
 	require.NoError(t, err)
-	err = os.WriteFile(workspacePath, []byte(corruptCfg), 0644)
+	err = os.WriteFile(projectFolderPath, []byte(corruptCfg), 0644)
 	require.NoError(t, err)
 
-	result, err := LoadConfigWithLayers(globalPath, workspacePath, "", tempDir)
+	result, err := LoadConfigWithLayers(globalPath, projectFolderPath, "", tempDir)
 	require.NoError(t, err) // Should not error, should log warning and continue
 	require.NotNil(t, result)
 
-	// Should have global config values since workspace was corrupt and skipped
+	// Should have global config values since project folder was corrupt and skipped
 	assert.Equal(t, "2.0", result.Version)
 	assert.Equal(t, "openai", result.LastUsedProvider)
 }
@@ -436,10 +436,10 @@ func TestLoadConfigWithLayers_CorruptFile(t *testing.T) {
 func TestNewManagerWithLayers_CreatesManager(t *testing.T) {
 	tempDir := t.TempDir()
 	globalDir := tempDir
-	workspaceDir := filepath.Join(tempDir, "workspace")
+	projectFolderDir := filepath.Join(tempDir, "workspace")
 
-	// Create workspace directory
-	err := os.Mkdir(workspaceDir, 0755)
+	// Create project folder
+	err := os.Mkdir(projectFolderDir, 0755)
 	require.NoError(t, err)
 
 	// Create global config
@@ -450,7 +450,7 @@ func TestNewManagerWithLayers_CreatesManager(t *testing.T) {
 	err = os.WriteFile(filepath.Join(globalDir, ConfigFileName), []byte(globalCfg), 0644)
 	require.NoError(t, err)
 
-	manager, err := NewManagerWithLayers(globalDir, workspaceDir)
+	manager, err := NewManagerWithLayers(globalDir, projectFolderDir)
 	require.NoError(t, err)
 	require.NotNil(t, manager)
 
@@ -460,13 +460,13 @@ func TestNewManagerWithLayers_CreatesManager(t *testing.T) {
 	assert.Equal(t, "openai", config.LastUsedProvider)
 }
 
-func TestNewManagerWithLayers_SavesToWorkspaceDir(t *testing.T) {
+func TestNewManagerWithLayers_SavesToProjectFolderDir(t *testing.T) {
 	tempDir := t.TempDir()
 	globalDir := tempDir
-	workspaceDir := filepath.Join(tempDir, "workspace")
+	projectFolderDir := filepath.Join(tempDir, "workspace")
 
-	// Create workspace directory with a config file
-	err := os.Mkdir(workspaceDir, 0755)
+	// Create project folder with a config file
+	err := os.Mkdir(projectFolderDir, 0755)
 	require.NoError(t, err)
 
 	// Create global config
@@ -477,23 +477,23 @@ func TestNewManagerWithLayers_SavesToWorkspaceDir(t *testing.T) {
 	err = os.WriteFile(filepath.Join(globalDir, ConfigFileName), []byte(globalCfg), 0644)
 	require.NoError(t, err)
 
-	// Create workspace config that overrides global
-	workspaceCfg := `{
+	// Create project folder config that overrides global
+	projectFolderCfg := `{
 		"version": "2.0",
 		"last_used_provider": "anthropic",
 		"reasoning_effort": "high"
 	}`
-	err = os.WriteFile(filepath.Join(workspaceDir, ConfigFileName), []byte(workspaceCfg), 0644)
+	err = os.WriteFile(filepath.Join(projectFolderDir, ConfigFileName), []byte(projectFolderCfg), 0644)
 	require.NoError(t, err)
 
-	manager, err := NewManagerWithLayers(globalDir, workspaceDir)
+	manager, err := NewManagerWithLayers(globalDir, projectFolderDir)
 	require.NoError(t, err)
 	require.NotNil(t, manager)
 
-	// The merged config should reflect workspace overriding global
+	// The merged config should reflect project folder overriding global
 	config := manager.GetConfig()
-	assert.Equal(t, "anthropic", config.LastUsedProvider) // workspace overrides global
-	assert.Equal(t, "high", config.ReasoningEffort)       // workspace-only value
+	assert.Equal(t, "anthropic", config.LastUsedProvider) // project folder overrides global
+	assert.Equal(t, "high", config.ReasoningEffort)       // project-folder-only value
 }
 
 // Additional helper test to verify deep cloning works correctly
@@ -533,7 +533,7 @@ func TestMergeConfig_DeepClone(t *testing.T) {
 }
 
 // TestMergeConfig_CommitTrailersUnion verifies the commit.trailers list
-// union-merges across layers (workspace entries stack on global) and the
+// union-merges across layers (project folder entries stack on global) and the
 // result is a copy, not a shared slice.
 func TestMergeConfig_CommitTrailersUnion(t *testing.T) {
 	base := &Config{CommitTrailers: []string{"Assisted-by: Sprout (dev/m)"}}

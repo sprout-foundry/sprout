@@ -2,7 +2,7 @@
 
 // Hosted-preview subscriber.
 //
-// In hosted workspaces the agent runs in-process inside the webui server,
+// In hosted project folders the agent runs in-process inside the webui server,
 // and its register_preview_port tool publishes a preview_port_registered
 // event to the shared event bus (the same bus passed to ToolEnv). This
 // file is the webui server's half of that wiring: it keeps the active

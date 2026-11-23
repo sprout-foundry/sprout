@@ -64,7 +64,7 @@ func TestLogSecurityDecision_BlockedEntry(t *testing.T) {
 	}
 	defer logger.Close()
 
-	a := &Agent{state: NewAgentStateManager(false), workspaceRoot: "/test/workspace"}
+	a := &Agent{state: NewAgentStateManager(false), projectFolder: "/test/workspace"}
 	a.SetAuditLogger(logger)
 	defer tools.SetAuditLogger(nil)
 
@@ -98,8 +98,8 @@ func TestLogSecurityDecision_BlockedEntry(t *testing.T) {
 	if e.Category != "classifier" {
 		t.Errorf("Category = %q, want 'classifier'", e.Category)
 	}
-	if e.Workspace != "/test/workspace" {
-		t.Errorf("Workspace = %q, want '/test/workspace'", e.Workspace)
+	if e.ProjectFolder != "/test/workspace" {
+		t.Errorf("Workspace = %q, want '/test/workspace'", e.ProjectFolder)
 	}
 }
 
@@ -287,7 +287,7 @@ func TestAuditLogger_CdGateDenied(t *testing.T) {
 
 	a := &Agent{
 		state:         NewAgentStateManager(false),
-		workspaceRoot: "/workspace",
+		projectFolder: "/workspace",
 		output:        NewAgentOutputManager(),
 		security:      NewAgentSecurityManager(),
 		shellCwd:      &shellCwdTracker{},
@@ -295,7 +295,7 @@ func TestAuditLogger_CdGateDenied(t *testing.T) {
 	a.SetAuditLogger(logger)
 	defer tools.SetAuditLogger(nil)
 
-	// Initialize shell cwd to workspace
+	// Initialize shell cwd to project folder
 	a.ensureShellCwd().Set("/workspace")
 
 	// Attempt cd to /etc (should be rejected)
@@ -339,7 +339,7 @@ func TestAuditLogger_CdGateAllowed(t *testing.T) {
 
 	a := &Agent{
 		state:         NewAgentStateManager(false),
-		workspaceRoot: "/workspace",
+		projectFolder: "/workspace",
 		output:        NewAgentOutputManager(),
 		security:      NewAgentSecurityManager(),
 		shellCwd:      &shellCwdTracker{},
@@ -347,7 +347,7 @@ func TestAuditLogger_CdGateAllowed(t *testing.T) {
 	a.SetAuditLogger(logger)
 	defer tools.SetAuditLogger(nil)
 
-	// Initialize shell cwd to workspace
+	// Initialize shell cwd to project folder
 	a.ensureShellCwd().Set("/workspace")
 
 	// Attempt cd to /workspace/subdir (should be allowed)
@@ -367,14 +367,14 @@ func TestAuditLogger_CdGateDenied_NilLogger(t *testing.T) {
 
 	a := &Agent{
 		state:         NewAgentStateManager(false),
-		workspaceRoot: "/workspace",
+		projectFolder: "/workspace",
 		output:        NewAgentOutputManager(),
 		security:      NewAgentSecurityManager(),
 		shellCwd:      &shellCwdTracker{},
 	}
 	// No audit logger set - should not panic
 
-	// Initialize shell cwd to workspace
+	// Initialize shell cwd to project folder
 	a.ensureShellCwd().Set("/workspace")
 
 	// Attempt cd to /etc (should be rejected silently)
@@ -412,14 +412,14 @@ func TestAuditLogger_RealLoggerCatchesFilesystemEntry(t *testing.T) {
 	}
 	defer logger.Close()
 
-	// Create a test workspace using t.TempDir (guaranteed to exist on all
-	// platforms). The workspace location doesn't affect the test — only the
+	// Create a test project folder using t.TempDir (guaranteed to exist on all
+	// platforms). The project folder location doesn't affect the test — only the
 	// target path (/etc/passwd) matters for triggering the filesystem gate.
-	workspace := t.TempDir()
+	projectFolder := t.TempDir()
 
 	// Build a filesystem context with the real logger.
 	ctx := context.Background()
-	ctx = filesystem.WithWorkspaceRoot(ctx, workspace)
+	ctx = filesystem.WithProjectFolder(ctx, projectFolder)
 	ctx = filesystem.WithAuditLogger(ctx, logger)
 
 	// Trigger a denied write path resolution.
@@ -489,8 +489,8 @@ func TestSP068_UnifiedGateApprovesMediumCommand(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	// Ensure UnifiedRiskResolver is on (the default, but be explicit).
 	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
@@ -524,8 +524,8 @@ func TestSP068_UnifiedGateIdempotent(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
 		cfg.UnifiedRiskResolver = true
@@ -555,8 +555,8 @@ func TestSP068_AllowlistedCommandApproved(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	// Add a Medium-risk command to the persistent allowlist.
 	const allowlistedCmd = "rm cached_file.tmp"
@@ -627,8 +627,8 @@ func TestSP068_CriticalHardBlockUnoverridable(t *testing.T) {
 			agent := newTestAgent(t)
 			defer agent.Shutdown()
 
-			workspace := t.TempDir()
-			agent.SetWorkspaceRoot(workspace)
+			projectFolder := t.TempDir()
+			agent.SetProjectFolder(projectFolder)
 
 			// BYPASS ATTEMPT: add the exact critical command to the
 			// persistent allowlist. A broken implementation might let this
@@ -704,8 +704,8 @@ func TestSP068_CriticalBlocksWhileAllowlistWorksForNonCritical(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	// Put both a critical command and a safe command on the same allowlist.
 	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
@@ -763,8 +763,8 @@ func TestSP068_CriticalPersistsAcrossRiskProfiles(t *testing.T) {
 			agent := newTestAgent(t)
 			defer agent.Shutdown()
 
-			workspace := t.TempDir()
-			agent.SetWorkspaceRoot(workspace)
+			projectFolder := t.TempDir()
+			agent.SetProjectFolder(projectFolder)
 
 			err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
 				cfg.UnifiedRiskResolver = true

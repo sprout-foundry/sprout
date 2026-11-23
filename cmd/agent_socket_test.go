@@ -133,8 +133,8 @@ func TestNewEphemeralDaemonAgent_IsolatedPerCall(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.NotSame(t, a, b, "each call must get its own Agent, not a shared one")
-	assert.Equal(t, dirA, a.GetWorkspaceRoot())
-	assert.Equal(t, dirB, b.GetWorkspaceRoot())
+	assert.Equal(t, dirA, a.GetProjectFolder())
+	assert.Equal(t, dirB, b.GetProjectFolder())
 
 	// Simulate a's query leaving conversation history behind, the way a real
 	// ProcessQuery call would. b must not see it.
@@ -158,7 +158,7 @@ func TestNewEphemeralDaemonAgent_RequiresWorkDir(t *testing.T) {
 func TestSharedAgentService_Query_EndToEnd(t *testing.T) {
 	// Wrap (not replace) the real constructor so the real layered-config
 	// path runs, while capturing the ephemeral agent to await its async
-	// shutdown: Shutdown flushes session files into the workspace temp dir,
+	// shutdown: Shutdown flushes session files into the project folder temp dir,
 	// and t.TempDir's RemoveAll races those writes if the test returns first.
 	var mu sync.Mutex
 	var created []*agent.Agent
@@ -284,7 +284,7 @@ func newTestAgent(t *testing.T) *agent.Agent {
 // TestSharedAgentService_ReleasesEphemeralAgents is the regression test for
 // the daemon one-shot resource leak: Query/StreamQuery build a fresh agent
 // per call and used to drop the reference without Shutdown(), leaking a
-// shared embedding-manager refcount (the workspace's HNSW store could never
+// shared embedding-manager refcount (the project folder's HNSW store could never
 // close again) plus MCP child processes and lifetime contexts. Every
 // ephemeral agent must now be shut down once the query returns.
 func TestSharedAgentService_ReleasesEphemeralAgents(t *testing.T) {
@@ -295,7 +295,7 @@ func TestSharedAgentService_ReleasesEphemeralAgents(t *testing.T) {
 	var created []*agent.Agent
 	newEphemeralDaemonAgentFn = func(workDir string, _ daemon.QueryOptions) (*agent.Agent, error) {
 		a := newTestAgent(t)
-		a.SetWorkspaceRoot(workDir)
+		a.SetProjectFolder(workDir)
 		mu.Lock()
 		created = append(created, a)
 		mu.Unlock()
@@ -332,7 +332,7 @@ func TestSharedAgentService_WaitForTeardown_BlocksUntilShutdown(t *testing.T) {
 	var created []*agent.Agent
 	newEphemeralDaemonAgentFn = func(workDir string, _ daemon.QueryOptions) (*agent.Agent, error) {
 		a := newTestAgent(t)
-		a.SetWorkspaceRoot(workDir)
+		a.SetProjectFolder(workDir)
 		mu.Lock()
 		created = append(created, a)
 		mu.Unlock()
@@ -469,7 +469,7 @@ func setEphemeralAgentSeam(t *testing.T) (createdAgents func() []*agent.Agent) {
 	var created []*agent.Agent
 	newEphemeralDaemonAgentFn = func(workDir string, _ daemon.QueryOptions) (*agent.Agent, error) {
 		a := newTestAgent(t)
-		a.SetWorkspaceRoot(workDir)
+		a.SetProjectFolder(workDir)
 		mu.Lock()
 		created = append(created, a)
 		mu.Unlock()

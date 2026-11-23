@@ -132,15 +132,15 @@ func searchFileStructured(path string, pattern *regexp.Regexp, maxPerFile int) (
 	return hits, total, nil
 }
 
-// resolveSearchDirectory applies the same workspace-root and traversal rules
-// search_files uses. "." resolves against the workspace root, not the process
+// resolveSearchDirectory applies the same project-folder-root and traversal rules
+// search_files uses. "." resolves against the project folder, not the process
 // CWD, to avoid walking the home directory in daemon mode.
-func resolveSearchDirectory(directory, workspaceRoot string) (string, error) {
+func resolveSearchDirectory(directory, projectFolder string) (string, error) {
 	if directory == "" {
 		directory = "."
 	}
-	if directory == "." && workspaceRoot != "" {
-		directory = workspaceRoot
+	if directory == "." && projectFolder != "" {
+		directory = projectFolder
 	}
 	if directory != "." && strings.Contains(directory, "..") {
 		return "", fmt.Errorf("invalid search directory: %q", directory)

@@ -1,8 +1,8 @@
 // Package tools provides the interface-based tool system for the Sprout AI agent.
 //
-// This file defines the workspace sync model types used by the browser-primary
+// This file defines the project folder sync model types used by the browser-primary
 // synchronization protocol between OPFS (browser) and the container filesystem.
-// See roadmap/SP-046-workspace-sync-model.md for the full specification.
+// See roadmap/SP-046-project-folder-sync-model.md for the full specification.
 
 package tools
 
@@ -48,7 +48,7 @@ type FileMetadata struct {
 //
 // @ts-generated — consumed by the frontend to generate a TypeScript interface.
 type PatchEvent struct {
-	// Path is the workspace-relative file path (e.g. "pkg/foo/bar.go").
+	// Path is the project-folder-relative file path (e.g. "pkg/foo/bar.go").
 	Path string `json:"path"`
 
 	// ContainerSeq is the new container sequence number for this file after the
@@ -66,7 +66,7 @@ type PatchEvent struct {
 
 // SyncState is the per-file metadata store, protected by a mutex.
 // It lives in-process on the server side to track sequence numbers for each
-// workspace file during a session.
+// project folder file during a session.
 type SyncState struct {
 	mu    sync.RWMutex
 	files map[string]*FileMetadata
@@ -211,9 +211,9 @@ type EventPublisher interface {
 	Publish(eventType string, data any)
 }
 
-// eventWorkspaceConflict mirrors events.EventTypeWorkspaceConflict.
+// eventProjectFolderConflict mirrors events.EventTypeProjectFolderConflict.
 // Defined locally to avoid an import-cycle dependency.
-const eventWorkspaceConflict = "workspace.conflict_detected"
+const eventProjectFolderConflict = "workspace.conflict_detected"
 
 // HandleContainerPatchWithConflictDetection applies a container→browser patch
 // with full conflict detection (SP-046-3).
@@ -276,7 +276,7 @@ func (ss *SyncState) HandleContainerPatchWithConflictDetection(
 
 	// Emit the event (if bus is available).
 	if eventBus != nil {
-		eventBus.Publish(eventWorkspaceConflict, map[string]interface{}{
+		eventBus.Publish(eventProjectFolderConflict, map[string]interface{}{
 			"path":           path,
 			"theirs_path":    theirsPath,
 			"hash_container": hashContainer,

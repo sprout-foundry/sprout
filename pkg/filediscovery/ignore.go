@@ -12,7 +12,7 @@ import (
 
 // ignore-rule cache: compiling gitignore patterns dominates repeated
 // listings (the palette crawl used to re-read + recompile per directory
-// request). Keyed by workspace root; entries revalidate when either ignore
+// request). Keyed by project folder; entries revalidate when either ignore
 // file's mtime or size changes, so edits to .gitignore take effect without
 // a restart.
 type ignoreRulesKey struct {

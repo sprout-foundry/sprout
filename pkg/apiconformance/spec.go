@@ -8,11 +8,11 @@
 // A Suite is configured with a base URL and a Spec (the parsed document) and
 // carries a set of Probes — one per operation the suite wants to check. The
 // default probe set (DefaultProbes) is a curated table of safe, read-only GET
-// operations that return a usable response on a fresh, disposable workspace.
+// operations that return a usable response on a fresh, disposable project folder.
 // Mutating operations are never probed by the safe suite: RunMutating only
-// runs when an explicitly disposable workspace root has been set
-// (WithDisposableWorkspace), which is the gate that keeps a conformance run
-// from writing to a real workspace.
+// runs when an explicitly disposable project folder has been set
+// (WithDisposableProjectFolder), which is the gate that keeps a conformance run
+// from writing to a real project folder.
 //
 // Schema validation is done with github.com/santhosh-tekuri/jsonschema/v6,
 // chosen over Huma's own schema tooling on purpose. The generated document is

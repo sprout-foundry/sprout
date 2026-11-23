@@ -154,16 +154,16 @@ func TestLog_EntryFormat(t *testing.T) {
 
 	ts := time.Date(2024, 6, 15, 14, 30, 0, 0, time.UTC)
 	entry := AuditEntry{
-		Timestamp: ts,
-		Tool:      "shell_command",
-		Args:      `{"command":"ls -la /tmp"}`,
-		RiskLevel: "SAFE",
-		Category:  "read-only",
-		Action:    "allowed",
-		Reasoning: "Read-only shell command in workspace",
-		Source:    "classifier",
-		SessionID: "session-abc-123",
-		Workspace: "/home/user/project",
+		Timestamp:     ts,
+		Tool:          "shell_command",
+		Args:          `{"command":"ls -la /tmp"}`,
+		RiskLevel:     "SAFE",
+		Category:      "read-only",
+		Action:        "allowed",
+		Reasoning:     "Read-only shell command in workspace",
+		Source:        "classifier",
+		SessionID:     "session-abc-123",
+		ProjectFolder: "/home/user/project",
 	}
 
 	if err := logger.Log(entry); err != nil {
@@ -208,8 +208,8 @@ func TestLog_EntryFormat(t *testing.T) {
 	if parsed.SessionID != entry.SessionID {
 		t.Errorf("SessionID = %q, want %q", parsed.SessionID, entry.SessionID)
 	}
-	if parsed.Workspace != entry.Workspace {
-		t.Errorf("Workspace = %q, want %q", parsed.Workspace, entry.Workspace)
+	if parsed.ProjectFolder != entry.ProjectFolder {
+		t.Errorf("Workspace = %q, want %q", parsed.ProjectFolder, entry.ProjectFolder)
 	}
 
 	// Verify timestamp is a valid RFC3339 format by parsing the raw JSON.
@@ -253,7 +253,7 @@ func TestLog_OmitsEmptyFields(t *testing.T) {
 		RiskLevel: "SAFE",
 		Category:  "read-only",
 		Action:    "allowed",
-		// Args, Reasoning, Source, SessionID, Workspace are all empty — should be omitted.
+		// Args, Reasoning, Source, SessionID, Project folder are all empty — should be omitted.
 	}
 
 	if err := logger.Log(entry); err != nil {

@@ -73,10 +73,10 @@ func isTmpPath(path string) bool {
 	return false
 }
 
-// isWithinWorkspace reports whether the given filename resolves to a path
-// inside the current workspace root (determined from os.Getwd()). /tmp paths
+// isWithinProjectFolder reports whether the given filename resolves to a path
+// inside the current project folder (determined from os.Getwd()). /tmp paths
 // are always allowed. Any error during path resolution returns false.
-func isWithinWorkspace(filename string) bool {
+func isWithinProjectFolder(filename string) bool {
 	if filename == "" {
 		return false
 	}
@@ -133,7 +133,7 @@ func isWithinWorkspace(filename string) bool {
 		return false
 	}
 
-	// A relative path starting with ".." escapes the workspace root.
+	// A relative path starting with ".." escapes the project folder.
 	if !strings.HasPrefix(relPath, "..") {
 		return true
 	}
@@ -318,11 +318,11 @@ func handleRevisionRollback(group RevisionGroup) error {
 			continue
 		}
 
-		// Safety check: never write to files outside the current workspace.
+		// Safety check: never write to files outside the current project folder.
 		// The history DB may contain snapshots of files that were later moved
 		// or committed elsewhere; blindly restoring them would clobber
 		// intentional changes outside this project.
-		if !isWithinWorkspace(change.Filename) {
+		if !isWithinProjectFolder(change.Filename) {
 			fmt.Printf("  Skipping %s: outside current workspace (safety check)\n", change.Filename)
 			skipped++
 			continue
@@ -383,9 +383,9 @@ func handleRevisionRestore(group RevisionGroup) error {
 			continue
 		}
 
-		// Safety check: never write to files outside the current workspace.
+		// Safety check: never write to files outside the current project folder.
 		// See handleRevisionRollback for rationale.
-		if !isWithinWorkspace(change.Filename) {
+		if !isWithinProjectFolder(change.Filename) {
 			fmt.Printf("  Skipping %s: outside current workspace (safety check)\n", change.Filename)
 			skipped++
 			continue

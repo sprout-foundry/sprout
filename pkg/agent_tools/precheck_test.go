@@ -45,13 +45,13 @@ type allowClassifier struct{}
 func (allowClassifier) ClassifyFileAccess(_ context.Context, _, _, _ string) string { return "allow" }
 func (allowClassifier) IsFolderSessionAllowed(_ string) bool                        { return false }
 
-// newTestEnvWithClassifier builds a ToolEnv backed by a temp workspace and
+// newTestEnvWithClassifier builds a ToolEnv backed by a temp project folder and
 // optionally injects a FileAccessClassifier. Nil classifier means no
 // classifier is available (handlers fall through and return the raw filesystem error).
 func newTestEnvWithClassifier(t *testing.T, classifier FileAccessClassifier) ToolEnv {
 	t.Helper()
 	return ToolEnv{
-		WorkspaceRoot:        t.TempDir(),
+		ProjectFolder:        t.TempDir(),
 		OutputWriter:         os.Stderr,
 		FileAccessClassifier: classifier,
 	}
@@ -157,11 +157,11 @@ func TestPrecheckWriteFile_Deny_ReturnsTypedError(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	h := &writeFileHandler{}
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), dir)
+	ctx := filesystem.WithProjectFolder(context.Background(), dir)
 
 	// Use a classifier that denies all writes to /etc.
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: denyClassifier{},
 	}
 
@@ -179,13 +179,13 @@ func TestPrecheckWriteFile_Deny_ReturnsTypedError(t *testing.T) {
 func TestPrecheckEditFile_Deny_ReturnsTypedError(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	// Create a file inside the workspace first so edit has something to work with.
+	// Create a file inside the project folder first so edit has something to work with.
 	// We use a classifier that denies the specific /etc path.
 	h := &editFileHandler{}
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), dir)
+	ctx := filesystem.WithProjectFolder(context.Background(), dir)
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: denyClassifier{},
 	}
 
@@ -205,10 +205,10 @@ func TestPrecheckWriteStructuredFile_Deny_ReturnsTypedError(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	h := &writeStructuredFileHandler{}
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), dir)
+	ctx := filesystem.WithProjectFolder(context.Background(), dir)
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: denyClassifier{},
 	}
 
@@ -227,10 +227,10 @@ func TestPrecheckPatchStructuredFile_Deny_ReturnsTypedError(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	h := &patchStructuredFileHandler{}
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), dir)
+	ctx := filesystem.WithProjectFolder(context.Background(), dir)
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: denyClassifier{},
 	}
 
@@ -256,11 +256,11 @@ func TestPrecheckReadFile_Allow_ProceedsSuccessfully(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, []byte("hello"), 0o644))
 
 	h := &readFileHandler{}
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), dir)
+	ctx := filesystem.WithProjectFolder(context.Background(), dir)
 
 	// An allow classifier means the path is workspace/tmp/allowlisted.
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: allowClassifier{},
 	}
 
@@ -277,11 +277,11 @@ func TestPrecheckListDirectory_Allow_ProceedsSuccessfully(t *testing.T) {
 	require.NoError(t, os.MkdirAll(subdir, 0o755))
 
 	h := &listDirHandler{}
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), dir)
+	ctx := filesystem.WithProjectFolder(context.Background(), dir)
 
 	// An allow classifier means the path is workspace/tmp/allowlisted.
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: allowClassifier{},
 	}
 
@@ -299,17 +299,17 @@ func TestPrecheckWriteFile_NilClassifier_NoError(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	h := &writeFileHandler{}
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), dir)
+	ctx := filesystem.WithProjectFolder(context.Background(), dir)
 
 	// nil classifier means no precheck context; write should proceed
-	// (outside the gate, may fail due to off-workspace, but not panic).
+	// (outside the gate, may fail due to off-project-folder, but not panic).
 	env := ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		// FileAccessClassifier is nil by default
 	}
 
 	// With a nil classifier, the handler should fall through without panic.
-	// The actual result depends on whether the path is in-workspace or not.
+	// The actual result depends on whether the path is in-project-folder or not.
 	_, _ = h.Execute(ctx, env, map[string]any{
 		"path":    filepath.Join(dir, "test.txt"),
 		"content": "hello",

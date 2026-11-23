@@ -191,12 +191,12 @@ func TestSetModel(t *testing.T) {
 	}
 }
 
-func TestSetWorkspaceRoot(t *testing.T) {
+func TestSetProjectFolder(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	agent.SetWorkspaceRoot("/tmp/myproject")
-	if got := agent.GetWorkspaceRoot(); got != "/tmp/myproject" {
+	agent.SetProjectFolder("/tmp/myproject")
+	if got := agent.GetProjectFolder(); got != "/tmp/myproject" {
 		t.Errorf("GetWorkspaceRoot = %q, want %q", got, "/tmp/myproject")
 	}
 }
@@ -664,12 +664,12 @@ func TestCLIPath_LCM_AutoActivatesAt32K(t *testing.T) {
 	manager, _, cleanup := cliPathTestEnv(t, 32_000)
 	defer cleanup()
 
-	// Workspace root is a server-side temp dir, NOT the user's $HOME —
+	// Project folder is a server-side temp dir, NOT the user's $HOME —
 	// autoActivateCoordinatorPersona would otherwise try to activate
 	// the coordinator persona and we'd be testing the wrong thing.
-	workspaceRoot := t.TempDir()
+	projectFolder := t.TempDir()
 
-	ag, err := newAgentWithConfigManagerInner(manager, workspaceRoot, "")
+	ag, err := newAgentWithConfigManagerInner(manager, projectFolder, "")
 	if err != nil {
 		t.Fatalf("newAgentWithConfigManagerInner failed: %v", err)
 	}
@@ -726,8 +726,8 @@ func TestCLIPath_FullContextAt200K(t *testing.T) {
 	manager, _, cleanup := cliPathTestEnv(t, 200_000)
 	defer cleanup()
 
-	workspaceRoot := t.TempDir()
-	ag, err := newAgentWithConfigManagerInner(manager, workspaceRoot, "")
+	projectFolder := t.TempDir()
+	ag, err := newAgentWithConfigManagerInner(manager, projectFolder, "")
 	if err != nil {
 		t.Fatalf("newAgentWithConfigManagerInner failed: %v", err)
 	}
@@ -750,8 +750,8 @@ func TestCLIPath_ContextFloor_4K(t *testing.T) {
 	manager, _, cleanup := cliPathTestEnv(t, 4_096)
 	defer cleanup()
 
-	workspaceRoot := t.TempDir()
-	_, err := newAgentWithConfigManagerInner(manager, workspaceRoot, "")
+	projectFolder := t.TempDir()
+	_, err := newAgentWithConfigManagerInner(manager, projectFolder, "")
 	if err == nil {
 		t.Fatal("expected context-floor error for 4K context, got nil")
 	}
@@ -782,7 +782,7 @@ func TestCLIPath_LCM_HelperConcurrencySmoke(t *testing.T) {
 	manager, _, cleanup := cliPathTestEnv(t, 32_000)
 	defer cleanup()
 
-	workspaceRoot := t.TempDir()
+	projectFolder := t.TempDir()
 
 	const goroutines = 4
 	var wg sync.WaitGroup
@@ -793,7 +793,7 @@ func TestCLIPath_LCM_HelperConcurrencySmoke(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			ag, err := newAgentWithConfigManagerInner(manager, workspaceRoot, "")
+			ag, err := newAgentWithConfigManagerInner(manager, projectFolder, "")
 			if err != nil {
 				errs <- agenterrors.Wrapf(err, "goroutine %d", idx)
 				return

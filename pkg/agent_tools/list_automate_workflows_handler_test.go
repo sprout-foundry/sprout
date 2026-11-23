@@ -9,18 +9,18 @@ import (
 	"testing"
 )
 
-// TestListAutomateWorkflowsHandler_UsesWorkspaceRoot verifies that the
+// TestListAutomateWorkflowsHandler_UsesProjectFolder verifies that the
 // list_automate_workflows handler resolves automate/ against
-// ToolEnv.WorkspaceRoot in daemon mode (SP-119). When the workspace
+// ToolEnv.ProjectFolder in daemon mode (SP-119). When the project folder
 // directory contains an automate/ subdir with workflows, those should be
 // returned. When it doesn't, the empty-activate-skill-hint message should
 // be returned (not an error scanning a different directory).
-func TestListAutomateWorkflowsHandler_UsesWorkspaceRoot(t *testing.T) {
+func TestListAutomateWorkflowsHandler_UsesProjectFolder(t *testing.T) {
 	t.Parallel()
 
-	// Build a workspace whose automate/ subdir contains one valid workflow.
-	workspace := t.TempDir()
-	automateDir := filepath.Join(workspace, "automate")
+	// Build a project folder whose automate/ subdir contains one valid workflow.
+	projectFolder := t.TempDir()
+	automateDir := filepath.Join(projectFolder, "automate")
 	if err := os.Mkdir(automateDir, 0755); err != nil {
 		t.Fatalf("mkdir automate/: %v", err)
 	}
@@ -33,7 +33,7 @@ func TestListAutomateWorkflowsHandler_UsesWorkspaceRoot(t *testing.T) {
 	}
 
 	h := &listAutomateWorkflowsHandler{}
-	env := ToolEnv{WorkspaceRoot: workspace}
+	env := ToolEnv{ProjectFolder: projectFolder}
 
 	result, err := h.Execute(context.Background(), env, map[string]any{})
 	if err != nil {
@@ -43,7 +43,7 @@ func TestListAutomateWorkflowsHandler_UsesWorkspaceRoot(t *testing.T) {
 		t.Fatalf("expected success, got IsError=true: %s", result.Output)
 	}
 
-	// Decode and verify the workflow was discovered from <workspace>/automate/.
+	// Decode and verify the workflow was discovered from <project folder>/automate/.
 	var parsed struct {
 		Directory string `json:"directory"`
 		Count     int    `json:"count"`
@@ -67,17 +67,17 @@ func TestListAutomateWorkflowsHandler_UsesWorkspaceRoot(t *testing.T) {
 	}
 }
 
-// TestListAutomateWorkflowsHandler_EmptyWorkspaceActivatesSkillHint verifies
-// the friendly empty-state response when the workspace has no automate/
+// TestListAutomateWorkflowsHandler_EmptyProjectFolderActivatesSkillHint verifies
+// the friendly empty-state response when the project folder has no automate/
 // directory.
-func TestListAutomateWorkflowsHandler_EmptyWorkspaceActivatesSkillHint(t *testing.T) {
+func TestListAutomateWorkflowsHandler_EmptyProjectFolderActivatesSkillHint(t *testing.T) {
 	t.Parallel()
 
-	// Workspace exists but has no automate/ subdir.
-	workspace := t.TempDir()
+	// Project folder exists but has no automate/ subdir.
+	projectFolder := t.TempDir()
 
 	h := &listAutomateWorkflowsHandler{}
-	env := ToolEnv{WorkspaceRoot: workspace}
+	env := ToolEnv{ProjectFolder: projectFolder}
 
 	result, err := h.Execute(context.Background(), env, map[string]any{})
 	if err != nil {
@@ -91,10 +91,10 @@ func TestListAutomateWorkflowsHandler_EmptyWorkspaceActivatesSkillHint(t *testin
 	}
 }
 
-// TestListAutomateWorkflowsHandler_EmptyWorkspaceRootFallsBackToCwd
-// verifies backwards-compat behavior: when ToolEnv.WorkspaceRoot is empty,
+// TestListAutomateWorkflowsHandler_EmptyProjectFolderFallsBackToCwd
+// verifies backwards-compat behavior: when ToolEnv.ProjectFolder is empty,
 // the handler falls back to automate.Dir() (CWD-based), matching legacy CLI
-// behavior where the user's shell CWD IS the workspace.
+// behavior where the user's shell CWD IS the project folder.
 //
 // IMPORTANT: do NOT add t.Parallel() here — os.Chdir mutates process-global
 // state shared with every other test in the binary, and parallel tests
@@ -102,7 +102,7 @@ func TestListAutomateWorkflowsHandler_EmptyWorkspaceActivatesSkillHint(t *testin
 // pkg/agent_tools/zero_coverage_test.go:275 and
 // pkg/agent_tools/background_process_signal_unix_test.go:27, 52 for the
 // codebase convention on this.
-func TestListAutomateWorkflowsHandler_EmptyWorkspaceRootFallsBackToCwd(t *testing.T) {
+func TestListAutomateWorkflowsHandler_EmptyProjectFolderFallsBackToCwd(t *testing.T) {
 	// t.Parallel() intentionally omitted — see comment above.
 
 	// Create a fake CWD-relative automate/ directory and chdir into it.
@@ -127,7 +127,7 @@ func TestListAutomateWorkflowsHandler_EmptyWorkspaceRootFallsBackToCwd(t *testin
 	}
 
 	h := &listAutomateWorkflowsHandler{}
-	env := ToolEnv{WorkspaceRoot: ""} // explicit empty — exercises the Dir() fallback
+	env := ToolEnv{ProjectFolder: ""} // explicit empty — exercises the Dir() fallback
 
 	result, err := h.Execute(context.Background(), env, map[string]any{})
 	if err != nil {

@@ -27,7 +27,7 @@ func TestCommitHandler_AppendsExplicitTrailers(t *testing.T) {
 	dir := newTestGitRepo(t, true)
 
 	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 	}, map[string]any{
 		"message":  "fix: login timeout",
 		"trailers": []any{"Assisted-by: Claude Code (anthropic/claude-opus-5-5)", "Signed-off-by: Dev <dev@example.com>"},
@@ -48,7 +48,7 @@ func TestCommitHandler_TrailersDeduplicateAgainstMessage(t *testing.T) {
 	dir := newTestGitRepo(t, true)
 
 	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 	}, map[string]any{
 		"message":  "fix: login timeout\n\nSigned-off-by: Dev <dev@example.com>",
 		"trailers": []any{"signed-off-by: Dev <dev@example.com>", "Assisted-by: Sprout (ollama/llama3:8b)"},
@@ -68,7 +68,7 @@ func TestCommitHandler_TrailersFromAgentsMd(t *testing.T) {
 	writeAgentsMdTrailers(t, dir, "# Agent notes\n\n## Commit Trailers\nTrailer lines to append:\n- Assisted-by: Sprout (ollama/llama3:8b)\n\n## Other section\nstuff\n")
 
 	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 	}, map[string]any{"message": "fix: login timeout"})
 	require.NoError(t, err)
 	require.False(t, res.IsError, "tool output: %s", res.Output)
@@ -91,7 +91,7 @@ func TestCommitHandler_TrailersFromConfig(t *testing.T) {
 	}))
 
 	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		ConfigManager: mgr,
 	}, map[string]any{"message": "fix: login timeout"})
 	require.NoError(t, err)
@@ -109,7 +109,7 @@ func TestCommitHandler_TrailersGeneratedMessage(t *testing.T) {
 	const generated = "feat(commit): generated subject\n\nGenerated body."
 
 	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		ToolFuncs:     &ToolFuncSet{GenerateCommitMessage: func([]byte, string) (string, error) { return generated, nil }},
 	}, map[string]any{
 		"notes":    "context notes",
@@ -130,7 +130,7 @@ func TestCommitHandler_TrailersBadListType(t *testing.T) {
 	headBefore := gitInRepo(t, dir, "rev-parse", "HEAD")
 
 	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 	}, map[string]any{"message": "fix: x", "trailers": []any{"ok: v", 42}})
 	require.NoError(t, err)
 	require.True(t, res.IsError)
@@ -139,11 +139,11 @@ func TestCommitHandler_TrailersBadListType(t *testing.T) {
 }
 
 // TestCommitHandler_TrailersRepoDir verifies trailers are resolved from the
-// repo_dir worktree, not just the workspace root.
+// repo_dir worktree, not just the project folder.
 func TestCommitHandler_TrailersRepoDir(t *testing.T) {
 	root := newTestGitRepo(t, false)
 	worktreeDir := filepath.Join(root, "wt")
-	// A real worktree of the workspace repo (shared .git), so
+	// A real worktree of the project folder repo (shared .git), so
 	// ValidateRepoDir admits it.
 	gitInRepo(t, root, "worktree", "add", "-b", "feat", worktreeDir)
 	require.NoError(t, os.WriteFile(filepath.Join(worktreeDir, "a.txt"), []byte("a\nb\n"), 0o644))
@@ -151,7 +151,7 @@ func TestCommitHandler_TrailersRepoDir(t *testing.T) {
 	writeAgentsMdTrailers(t, worktreeDir, "## Commit Trailers\n- Assisted-by: Sprout (ollama/qwen3:8b)\n")
 
 	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
-		WorkspaceRoot: root,
+		ProjectFolder: root,
 	}, map[string]any{"message": "fix: x", "repo_dir": worktreeDir})
 	require.NoError(t, err)
 	require.False(t, res.IsError, "tool output: %s", res.Output)

@@ -55,7 +55,7 @@ func (r *Registry) RegisterAliases(factory AdapterFactory, languageIDs ...string
 // RegisterSingleton binds a shared adapter instance to one or more language IDs.
 // The same adapter instance is reused for every request on those language IDs.
 // This is the right choice for a SessionPool or any adapter that maintains
-// per-workspace state across calls.
+// per-project-folder state across calls.
 func (r *Registry) RegisterSingleton(adapter Adapter, languageIDs ...string) {
 	if r == nil || adapter == nil {
 		return

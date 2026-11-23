@@ -187,26 +187,26 @@ func (ws *ReactWebServer) handleAPIAutomateSessionOutput(w http.ResponseWriter, 
 		return
 	}
 
-	// Validate output file path stays within workspace.
+	// Validate output file path stays within project folder.
 	absOutput, err := filepath.Abs(info.OutputFilePath)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "invalid output file path")
 		return
 	}
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	if workspaceRoot != "" {
-		absWorkspace, _ := filepath.Abs(workspaceRoot)
+	projectFolder := ws.getProjectFolderForRequest(r)
+	if projectFolder != "" {
+		absProjectFolder, _ := filepath.Abs(projectFolder)
 		// Resolve symlinks in both paths so macOS /var → /private/var
 		// doesn't cause a false negative.
-		if evaled, err := filepath.EvalSymlinks(absWorkspace); err == nil {
-			absWorkspace = evaled
+		if evaled, err := filepath.EvalSymlinks(absProjectFolder); err == nil {
+			absProjectFolder = evaled
 		}
 		if evaled, err := filepath.EvalSymlinks(absOutput); err == nil {
 			absOutput = evaled
 		}
 		// Add trailing separator to avoid prefix mismatches like
 		// "/tmp/ws2" matching "/tmp/ws".
-		if !strings.HasPrefix(absOutput, absWorkspace+string(filepath.Separator)) {
+		if !strings.HasPrefix(absOutput, absProjectFolder+string(filepath.Separator)) {
 			writeJSONError(w, http.StatusBadRequest, "output file path outside workspace")
 			return
 		}

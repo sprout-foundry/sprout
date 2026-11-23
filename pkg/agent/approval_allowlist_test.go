@@ -284,11 +284,11 @@ func TestElevationBypassesFilesystemGate(t *testing.T) {
 	// External path: must NOT land under any prefix ClassifyPathAccess
 	// treats as Sensitive (/var, /private/var, /etc, /usr, …) and must
 	// NOT be under $HOME when CWD is outside $HOME (off-CWD home is
-	// also Sensitive). Create a sibling of the workspace root — this
-	// guarantees: not under workspace, not a system dir, and since CWD
-	// == workspace, if the workspace is under home then CWD is too,
+	// also Sensitive). Create a sibling of the project folder — this
+	// guarantees: not under project folder, not a system dir, and since CWD
+	// == project folder, if the project folder is under home then CWD is too,
 	// so the off-CWD-home check doesn't trip.
-	wsRoot := a.GetWorkspaceRoot()
+	wsRoot := a.GetProjectFolder()
 	extDir := filepath.Join(filepath.Dir(wsRoot), "sprout-elevation-test-"+t.Name())
 	if err := os.MkdirAll(extDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)

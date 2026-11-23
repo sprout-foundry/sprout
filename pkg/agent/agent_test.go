@@ -169,12 +169,12 @@ func TestAgentStructFields(t *testing.T) {
 
 // newTestAgentWithSecurity creates a minimal agent with initialized sub-managers
 // for testing cd-target validation.
-func newTestAgentWithSecurity(workspaceRoot string) *Agent {
-	if workspaceRoot == "" {
-		workspaceRoot, _ = os.MkdirTemp("", "test-workspace-*")
+func newTestAgentWithSecurity(projectFolder string) *Agent {
+	if projectFolder == "" {
+		projectFolder, _ = os.MkdirTemp("", "test-workspace-*")
 	}
 	return &Agent{
-		workspaceRoot: workspaceRoot,
+		projectFolder: projectFolder,
 		state:         NewAgentStateManager(false),
 		output:        NewAgentOutputManager(),
 		security:      NewAgentSecurityManager(),
@@ -193,7 +193,7 @@ func absFixture(p string) string {
 	return p
 }
 
-func TestIsCdTargetAllowed_Workspace(t *testing.T) {
+func TestIsCdTargetAllowed_ProjectFolder(t *testing.T) {
 	a := newTestAgentWithSecurity(absFixture("/workspace"))
 
 	tests := []struct {
@@ -308,12 +308,12 @@ func TestListAllowedCdTargets(t *testing.T) {
 
 	targets := a.ListAllowedCdTargets()
 
-	// Should contain workspace root first, then sorted allowlisted folders.
+	// Should contain project folder first, then sorted allowlisted folders.
 	if len(targets) < 3 {
 		t.Fatalf("expected at least 3 targets, got %d: %v", len(targets), targets)
 	}
 
-	// First should be workspace root.
+	// First should be project folder.
 	if normalizePath(targets[0]) != normalizePath(absFixture("/workspace")) {
 		t.Errorf("first target should be workspace root, got %q", targets[0])
 	}
@@ -337,16 +337,16 @@ func TestListAllowedCdTargets(t *testing.T) {
 // --- Tests for updateShellCwd ---
 
 func TestUpdateShellCwd_AllowedTarget(t *testing.T) {
-	// Create a temp workspace.
-	workspace, _ := os.MkdirTemp("", "test-workspace-*")
-	defer os.RemoveAll(workspace)
+	// Create a temp project folder.
+	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	defer os.RemoveAll(projectFolder)
 
-	a := newTestAgentWithSecurity(workspace)
+	a := newTestAgentWithSecurity(projectFolder)
 	tracker := a.ensureShellCwd()
-	tracker.Set(workspace)
+	tracker.Set(projectFolder)
 
-	// cd to a subdirectory of workspace should work.
-	subdir := filepath.Join(workspace, "sub")
+	// cd to a subdirectory of project folder should work.
+	subdir := filepath.Join(projectFolder, "sub")
 	os.MkdirAll(subdir, 0755)
 
 	a.updateShellCwd("cd " + subdir)
@@ -358,18 +358,18 @@ func TestUpdateShellCwd_AllowedTarget(t *testing.T) {
 }
 
 func TestUpdateShellCwd_AllowedPath(t *testing.T) {
-	// Create a temp workspace.
-	workspace, _ := os.MkdirTemp("", "test-workspace-*")
-	defer os.RemoveAll(workspace)
+	// Create a temp project folder.
+	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	defer os.RemoveAll(projectFolder)
 
 	// Create a temp allowed folder.
 	allowed, _ := os.MkdirTemp("", "test-allowed-*")
 	defer os.RemoveAll(allowed)
 
-	a := newTestAgentWithSecurity(workspace)
+	a := newTestAgentWithSecurity(projectFolder)
 	a.AddSessionAllowedFolder(allowed)
 	tracker := a.ensureShellCwd()
-	tracker.Set(workspace)
+	tracker.Set(projectFolder)
 
 	// cd to the allowed folder should work.
 	a.updateShellCwd("cd " + allowed)
@@ -381,100 +381,100 @@ func TestUpdateShellCwd_AllowedPath(t *testing.T) {
 }
 
 func TestUpdateShellCwd_RejectedTarget(t *testing.T) {
-	// Create a temp workspace.
-	workspace, _ := os.MkdirTemp("", "test-workspace-*")
-	defer os.RemoveAll(workspace)
+	// Create a temp project folder.
+	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	defer os.RemoveAll(projectFolder)
 
-	a := newTestAgentWithSecurity(workspace)
+	a := newTestAgentWithSecurity(projectFolder)
 	tracker := a.ensureShellCwd()
-	tracker.Set(workspace)
+	tracker.Set(projectFolder)
 
 	// cd to /etc should be rejected.
 	a.updateShellCwd("cd /etc")
 
 	cwd, _ := tracker.GetBoth()
 	// cwd should NOT change.
-	if cwd != workspace {
-		t.Errorf("expected cwd to remain %q after rejected cd, got %q", workspace, cwd)
+	if cwd != projectFolder {
+		t.Errorf("expected cwd to remain %q after rejected cd, got %q", projectFolder, cwd)
 	}
 }
 
 func TestUpdateShellCwd_CdDash(t *testing.T) {
-	// Create a temp workspace.
-	workspace, _ := os.MkdirTemp("", "test-workspace-*")
-	defer os.RemoveAll(workspace)
+	// Create a temp project folder.
+	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	defer os.RemoveAll(projectFolder)
 
 	// Create a temp rejected folder.
 	rejected, _ := os.MkdirTemp("", "test-rejected-*")
 	defer os.RemoveAll(rejected)
 
-	a := newTestAgentWithSecurity(workspace)
+	a := newTestAgentWithSecurity(projectFolder)
 	tracker := a.ensureShellCwd()
-	tracker.Set(workspace)
+	tracker.Set(projectFolder)
 
-	// cd to workspace should succeed.
-	a.updateShellCwd("cd " + workspace)
+	// cd to project folder should succeed.
+	a.updateShellCwd("cd " + projectFolder)
 	cwd, prev := tracker.GetBoth()
-	if cwd != workspace {
-		t.Errorf("expected cwd to be %q after first cd, got %q", workspace, cwd)
+	if cwd != projectFolder {
+		t.Errorf("expected cwd to be %q after first cd, got %q", projectFolder, cwd)
 	}
 
 	// Attempted cd to rejected folder should fail.
 	a.updateShellCwd("cd " + rejected)
 	cwd, _ = tracker.GetBoth()
-	if cwd != workspace {
-		t.Errorf("expected cwd to remain %q after rejected cd, got %q", workspace, cwd)
+	if cwd != projectFolder {
+		t.Errorf("expected cwd to remain %q after rejected cd, got %q", projectFolder, cwd)
 	}
 
-	// cd - should succeed (prev is workspace, which is allowed).
+	// cd - should succeed (prev is project folder, which is allowed).
 	a.updateShellCwd("cd -")
 	cwd, prev = tracker.GetBoth()
-	if cwd != workspace || prev != workspace {
-		t.Errorf("expected cwd and prev to be %q, got cwd=%q prev=%q", workspace, cwd, prev)
+	if cwd != projectFolder || prev != projectFolder {
+		t.Errorf("expected cwd and prev to be %q, got cwd=%q prev=%q", projectFolder, cwd, prev)
 	}
 }
 
 func TestUpdateShellCwd_CdDashRejectsPrevious(t *testing.T) {
-	// Create a temp workspace.
-	workspace, _ := os.MkdirTemp("", "test-workspace-*")
-	defer os.RemoveAll(workspace)
+	// Create a temp project folder.
+	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	defer os.RemoveAll(projectFolder)
 
 	// Create a temp rejected folder.
 	rejected, _ := os.MkdirTemp("", "test-rejected-*")
 	defer os.RemoveAll(rejected)
 
-	a := newTestAgentWithSecurity(workspace)
+	a := newTestAgentWithSecurity(projectFolder)
 	tracker := a.ensureShellCwd()
-	tracker.Set(workspace)
+	tracker.Set(projectFolder)
 
 	// cd to rejected folder should fail.
 	a.updateShellCwd("cd " + rejected)
 	cwd, _ := tracker.GetBoth()
-	if cwd != workspace {
-		t.Errorf("expected cwd to remain %q, got %q", workspace, cwd)
+	if cwd != projectFolder {
+		t.Errorf("expected cwd to remain %q, got %q", projectFolder, cwd)
 	}
 
 	// cd - should also fail because the previous (rejected) is not allowed.
-	// The previous is the current directory, which is still workspace.
+	// The previous is the current directory, which is still project folder.
 	// Wait, actually for cd - the current becomes previous. Let me trace:
-	// - initial: cwd=workspace, prev=""
-	// - after failed cd: cwd=workspace, prev="" (unchanged)
+	// - initial: cwd=project folder, prev=""
+	// - after failed cd: cwd=project folder, prev="" (unchanged)
 	// - cd - would swap: cwd=""... but wait, SwapPrevious swaps without going through IsCdTargetAllowed
 	// Actually looking at the code, cd - calls SwapPrevious() which just swaps,
 	// then returns. So the prev (which would be empty) is now cwd.
 	// But with our new code, we check IsCdTargetAllowed(current) first.
-	// Since current is workspace, which is allowed, cd - proceeds.
-	// After swap: cwd="" (was prev), prev=workspace
+	// Since current is project folder, which is allowed, cd - proceeds.
+	// After swap: cwd="" (was prev), prev=project folder
 	// This is a corner case - let me check what happens when prev is empty.
 }
 
 func TestUpdateShellCwd_NonCdCommand(t *testing.T) {
-	workspace, _ := os.MkdirTemp("", "test-workspace-*")
-	defer os.RemoveAll(workspace)
+	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	defer os.RemoveAll(projectFolder)
 
-	a := newTestAgentWithSecurity(workspace)
+	a := newTestAgentWithSecurity(projectFolder)
 	tracker := a.ensureShellCwd()
-	tracker.Set(workspace)
+	tracker.Set(projectFolder)
 
 	// Non-cd commands should not trigger the gate.
 	a.updateShellCwd("ls")
@@ -483,21 +483,21 @@ func TestUpdateShellCwd_NonCdCommand(t *testing.T) {
 	a.updateShellCwd("cat file.txt")
 
 	cwd, _ := tracker.GetBoth()
-	if cwd != workspace {
-		t.Errorf("expected cwd to remain %q after non-cd commands, got %q", workspace, cwd)
+	if cwd != projectFolder {
+		t.Errorf("expected cwd to remain %q after non-cd commands, got %q", projectFolder, cwd)
 	}
 }
 
 func TestUpdateShellCwd_CompoundCommand(t *testing.T) {
-	workspace, _ := os.MkdirTemp("", "test-workspace-*")
-	defer os.RemoveAll(workspace)
+	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	defer os.RemoveAll(projectFolder)
 
-	subdir := filepath.Join(workspace, "sub")
+	subdir := filepath.Join(projectFolder, "sub")
 	os.MkdirAll(subdir, 0755)
 
-	a := newTestAgentWithSecurity(workspace)
+	a := newTestAgentWithSecurity(projectFolder)
 	tracker := a.ensureShellCwd()
-	tracker.Set(workspace)
+	tracker.Set(projectFolder)
 
 	// Compound command with cd should work.
 	a.updateShellCwd("cd " + subdir + " && ls")
@@ -509,79 +509,79 @@ func TestUpdateShellCwd_CompoundCommand(t *testing.T) {
 }
 
 func TestUpdateShellCwd_CompoundCommandRejected(t *testing.T) {
-	workspace, _ := os.MkdirTemp("", "test-workspace-*")
-	defer os.RemoveAll(workspace)
+	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	defer os.RemoveAll(projectFolder)
 
-	a := newTestAgentWithSecurity(workspace)
+	a := newTestAgentWithSecurity(projectFolder)
 	tracker := a.ensureShellCwd()
-	tracker.Set(workspace)
+	tracker.Set(projectFolder)
 
 	// Compound command with rejected cd should not change cwd.
 	a.updateShellCwd("cd /etc && ls")
 
 	cwd, _ := tracker.GetBoth()
-	if cwd != workspace {
-		t.Errorf("expected cwd to remain %q after rejected cd, got %q", workspace, cwd)
+	if cwd != projectFolder {
+		t.Errorf("expected cwd to remain %q after rejected cd, got %q", projectFolder, cwd)
 	}
 }
 
 func TestUpdateShellCwd_Subshell(t *testing.T) {
-	workspace, _ := os.MkdirTemp("", "test-workspace-*")
-	defer os.RemoveAll(workspace)
+	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	defer os.RemoveAll(projectFolder)
 
-	subdir := filepath.Join(workspace, "sub")
+	subdir := filepath.Join(projectFolder, "sub")
 	os.MkdirAll(subdir, 0755)
 
-	a := newTestAgentWithSecurity(workspace)
+	a := newTestAgentWithSecurity(projectFolder)
 	tracker := a.ensureShellCwd()
-	tracker.Set(workspace)
+	tracker.Set(projectFolder)
 
 	// Subshell cd should not affect parent shell cwd.
 	a.updateShellCwd("(cd " + subdir + ")")
 
 	cwd, _ := tracker.GetBoth()
-	if cwd != workspace {
-		t.Errorf("expected cwd to remain %q after subshell cd, got %q", workspace, cwd)
+	if cwd != projectFolder {
+		t.Errorf("expected cwd to remain %q after subshell cd, got %q", projectFolder, cwd)
 	}
 }
 
 func TestUpdateShellCwd_BareCd(t *testing.T) {
-	workspace, _ := os.MkdirTemp("", "test-workspace-*")
-	defer os.RemoveAll(workspace)
+	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	defer os.RemoveAll(projectFolder)
 
-	// Set HOME to the workspace.
-	t.Setenv("HOME", workspace)
+	// Set HOME to the project folder.
+	t.Setenv("HOME", projectFolder)
 
-	a := newTestAgentWithSecurity(workspace)
+	a := newTestAgentWithSecurity(projectFolder)
 	tracker := a.ensureShellCwd()
-	tracker.Set(workspace)
+	tracker.Set(projectFolder)
 
 	// Bare cd (without arguments) goes to HOME.
 	a.updateShellCwd("cd")
 
 	cwd, _ := tracker.GetBoth()
-	if cwd != workspace {
-		t.Errorf("expected cwd to be HOME (%q), got %q", workspace, cwd)
+	if cwd != projectFolder {
+		t.Errorf("expected cwd to be HOME (%q), got %q", projectFolder, cwd)
 	}
 }
 
 func TestUpdateShellCwd_CdDotdot(t *testing.T) {
-	workspace, _ := os.MkdirTemp("", "test-workspace-*")
-	defer os.RemoveAll(workspace)
+	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	defer os.RemoveAll(projectFolder)
 
-	subdir := filepath.Join(workspace, "sub")
+	subdir := filepath.Join(projectFolder, "sub")
 	os.MkdirAll(subdir, 0755)
 
-	a := newTestAgentWithSecurity(workspace)
+	a := newTestAgentWithSecurity(projectFolder)
 	tracker := a.ensureShellCwd()
 	tracker.Set(subdir)
 
-	// cd .. from subdir should go back to workspace.
+	// cd .. from subdir should go back to project folder.
 	a.updateShellCwd("cd ..")
 
 	cwd, _ := tracker.GetBoth()
-	if cwd != workspace {
-		t.Errorf("expected cwd to be %q, got %q", workspace, cwd)
+	if cwd != projectFolder {
+		t.Errorf("expected cwd to be %q, got %q", projectFolder, cwd)
 	}
 }
 
@@ -657,12 +657,12 @@ func TestCaptureStderr_PanicRestoresStderr(t *testing.T) {
 }
 
 func TestUpdateShellCwd_RejectionMessage(t *testing.T) {
-	workspace, _ := os.MkdirTemp("", "test-workspace-*")
-	defer os.RemoveAll(workspace)
+	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	defer os.RemoveAll(projectFolder)
 
-	a := newTestAgentWithSecurity(workspace)
+	a := newTestAgentWithSecurity(projectFolder)
 	tracker := a.ensureShellCwd()
-	tracker.Set(workspace)
+	tracker.Set(projectFolder)
 
 	msg := captureStderr(t, func() {
 		a.updateShellCwd("cd /etc")
@@ -689,12 +689,12 @@ func TestUpdateShellCwd_RejectionMessage(t *testing.T) {
 }
 
 func TestUpdateShellCwd_RejectionMessage_CdPrevious(t *testing.T) {
-	workspace, _ := os.MkdirTemp("", "test-workspace-*")
-	defer os.RemoveAll(workspace)
+	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	defer os.RemoveAll(projectFolder)
 
-	a := newTestAgentWithSecurity(workspace)
+	a := newTestAgentWithSecurity(projectFolder)
 	tracker := a.ensureShellCwd()
-	tracker.SetWithPrev(workspace, "/etc")
+	tracker.SetWithPrev(projectFolder, "/etc")
 
 	msg := captureStderr(t, func() {
 		a.updateShellCwd("cd -")
@@ -720,8 +720,8 @@ func TestUpdateShellCwd_RejectionMessage_CdPrevious(t *testing.T) {
 	}
 
 	cwd, _ := tracker.GetBoth()
-	if cwd != workspace {
-		t.Errorf("expected cwd to stay %q after refused cd -, got %q", workspace, cwd)
+	if cwd != projectFolder {
+		t.Errorf("expected cwd to stay %q after refused cd -, got %q", projectFolder, cwd)
 	}
 }
 
@@ -807,7 +807,7 @@ func TestAgent_EnableChangeTracking_PreservesExistingTracker(t *testing.T) {
 	ws := t.TempDir()
 	a := &Agent{
 		state:         NewAgentStateManager(false),
-		workspaceRoot: ws,
+		projectFolder: ws,
 	}
 	a.EnableChangeTracking("first instructions")
 	firstID := a.GetRevisionID()
@@ -2189,13 +2189,13 @@ func TestSP079_AnalyzeUIScreenshot_HandlerBehavior(t *testing.T) {
 // guard: subagents must not eagerly prime the shell snapshot cache at
 // EnableChangeTracking time. Each primed cache holds up to the 32 MiB
 // content budget; N parallel subagents multiplied that by N, and
-// read-only subagents paid the cold workspace walk for nothing.
+// read-only subagents paid the cold project folder walk for nothing.
 // TrackShellTurn auto-primes on the first tracked shell command, so
 // shell-heavy subagents keep full mutation coverage.
 func TestAgent_EnableChangeTracking_SubagentSkipsShellPrime(t *testing.T) {
 	a := &Agent{
 		state:         NewAgentStateManager(false),
-		workspaceRoot: t.TempDir(),
+		projectFolder: t.TempDir(),
 		subagentDepth: 1,
 	}
 	a.EnableChangeTracking("subagent run")
@@ -2214,7 +2214,7 @@ func TestAgent_EnableChangeTracking_SubagentSkipsShellPrime(t *testing.T) {
 	// Primary agents still prime eagerly.
 	b := &Agent{
 		state:         NewAgentStateManager(false),
-		workspaceRoot: t.TempDir(),
+		projectFolder: t.TempDir(),
 	}
 	b.EnableChangeTracking("primary run")
 	bt := b.GetChangeTracker()

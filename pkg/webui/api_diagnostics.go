@@ -60,14 +60,14 @@ func (ws *ReactWebServer) handleAPIDiagnostics(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Resolve relative path against workspace root.
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	canonical, err := canonicalizePath(req.Path, workspaceRoot, true)
+	// Resolve relative path against project folder.
+	projectFolder := ws.getProjectFolderForRequest(r)
+	canonical, err := canonicalizePath(req.Path, projectFolder, true)
 	if err != nil {
 		writeJSONErr(w, http.StatusBadRequest, "invalid_path", "Invalid path")
 		return
 	}
-	if !isWithinWorkspace(canonical, workspaceRoot) {
+	if !isWithinProjectFolder(canonical, projectFolder) {
 		writeJSONErr(w, http.StatusForbidden, "path_outside_workspace", "Path is outside workspace")
 		return
 	}

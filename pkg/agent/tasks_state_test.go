@@ -26,7 +26,7 @@ func TestTaskRegistry_SaveAndLoad(t *testing.T) {
 	processTasks.add(&taskRecord{
 		ID: "bg-task-1", Branch: "feat/add-login", Path: repo + "/.sprout/tasks/add-login",
 		Prompt: "add login", Status: "completed", Commit: "abc1234",
-		Summary: "done", Workspace: repo, Started: time.Now().Add(-time.Minute),
+		Summary: "done", ProjectFolder: repo, Started: time.Now().Add(-time.Minute),
 	})
 	processTasks.setTerminal("bg-task-1", "completed", "done", "abc1234")
 
@@ -63,7 +63,7 @@ func TestTaskRegistry_LoadMarksRunningAsInterrupted(t *testing.T) {
 
 	processTasks.add(&taskRecord{
 		ID: "bg-task-live", Branch: "feat/live", Path: repo + "/wt",
-		Status: "running", Workspace: repo, Started: time.Now(),
+		Status: "running", ProjectFolder: repo, Started: time.Now(),
 	})
 	processTasks.save(repo)
 
@@ -88,7 +88,7 @@ func TestTaskRegistry_InterruptedDoesNotHoldSlot(t *testing.T) {
 	resetProcessTasks(t)
 	repo := t.TempDir()
 
-	processTasks.add(&taskRecord{ID: "bg-task-x", Status: "running", Workspace: repo, Started: time.Now()})
+	processTasks.add(&taskRecord{ID: "bg-task-x", Status: "running", ProjectFolder: repo, Started: time.Now()})
 	processTasks.save(repo)
 	resetProcessTasks(t)
 	processTasks.loadTasks(repo)
@@ -123,15 +123,15 @@ func TestTaskRegistry_LoadIgnoresCorruptFile(t *testing.T) {
 	}
 }
 
-// Two workspaces must not share a task list.
-func TestTaskRegistry_SaveIsPerWorkspace(t *testing.T) {
+// Two project folders must not share a task list.
+func TestTaskRegistry_SaveIsPerProjectFolder(t *testing.T) {
 	newTaskStateDir(t)
 	resetProcessTasks(t)
 	repoA := t.TempDir()
 	repoB := t.TempDir()
 
-	processTasks.add(&taskRecord{ID: "bg-task-a", Status: "completed", Workspace: repoA, Started: time.Now(), Branch: "feat/a"})
-	processTasks.add(&taskRecord{ID: "bg-task-b", Status: "completed", Workspace: repoB, Started: time.Now(), Branch: "feat/b"})
+	processTasks.add(&taskRecord{ID: "bg-task-a", Status: "completed", ProjectFolder: repoA, Started: time.Now(), Branch: "feat/a"})
+	processTasks.add(&taskRecord{ID: "bg-task-b", Status: "completed", ProjectFolder: repoB, Started: time.Now(), Branch: "feat/b"})
 	processTasks.save(repoA)
 	processTasks.save(repoB)
 
@@ -172,13 +172,13 @@ func TestTaskInterruptedNote(t *testing.T) {
 }
 
 // The sanitized prefix is lossy (/a/b-c and /a/b_c both become a_b_c), so the
-// key must carry a hash or two workspaces share one state file and destroy
+// key must carry a hash or two project folders share one state file and destroy
 // each other's tasks.
-func TestWorkspaceKey_DistinguishesSimilarPaths(t *testing.T) {
+func TestProjectFolderKey_DistinguishesSimilarPaths(t *testing.T) {
 	keys := map[string]string{
-		"/a/b-c": workspaceKey("/a/b-c"),
-		"/a/b_c": workspaceKey("/a/b_c"),
-		"/a/b/c": workspaceKey("/a/b/c"),
+		"/a/b-c": projectFolderKey("/a/b-c"),
+		"/a/b_c": projectFolderKey("/a/b_c"),
+		"/a/b/c": projectFolderKey("/a/b/c"),
 	}
 	seen := map[string]string{}
 	for path, key := range keys {
@@ -189,37 +189,37 @@ func TestWorkspaceKey_DistinguishesSimilarPaths(t *testing.T) {
 	}
 }
 
-func TestWorkspaceKey_Stable(t *testing.T) {
-	if workspaceKey("/a/b") != workspaceKey("/a/b/") {
+func TestProjectFolderKey_Stable(t *testing.T) {
+	if projectFolderKey("/a/b") != projectFolderKey("/a/b/") {
 		t.Error("the same workspace must produce the same key regardless of a trailing separator")
 	}
-	first := workspaceKey("/a/b")
+	first := projectFolderKey("/a/b")
 	for i := 0; i < 5; i++ {
-		if got := workspaceKey("/a/b"); got != first {
+		if got := projectFolderKey("/a/b"); got != first {
 			t.Fatalf("workspaceKey is not deterministic: %q then %q", first, got)
 		}
 	}
 }
 
-// A record whose stored workspace differs from the file it came from must
-// still belong to the workspace being loaded: otherwise the next save sees
+// A record whose stored project folder differs from the file it came from must
+// still belong to the project folder being loaded: otherwise the next save sees
 // zero records and deletes the file.
-func TestTaskRegistry_LoadScopesRecordsToRequestedWorkspace(t *testing.T) {
+func TestTaskRegistry_LoadScopesRecordsToRequestedProjectFolder(t *testing.T) {
 	newTaskStateDir(t)
 	resetProcessTasks(t)
 	repo := t.TempDir()
 
 	processTasks.add(&taskRecord{
 		ID: "bg-task-stale", Branch: "feat/x", Path: repo + "/wt",
-		Status: "completed", Workspace: "/somewhere/else", Started: time.Now(),
+		Status: "completed", ProjectFolder: "/somewhere/else", Started: time.Now(),
 	})
 	processTasks.save("/somewhere/else")
 
 	resetProcessTasks(t)
 	processTasks.loadTasks(repo)
 
-	// The record was written under another workspace's file, so this
-	// workspace has nothing — and saving must not delete anything it owns.
+	// The record was written under another project folder's file, so this
+	// project folder has nothing — and saving must not delete anything it owns.
 	if got := len(processTasks.snapshot()); got != 0 {
 		t.Errorf("loaded %d records from another workspace's file, want 0", got)
 	}
@@ -235,7 +235,7 @@ func TestTaskRegistry_ConcurrentSavesKeepEveryRecord(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < n; i++ {
 		id := fmt.Sprintf("bg-task-%d", i)
-		processTasks.add(&taskRecord{ID: id, Status: "running", Workspace: repo, Started: time.Now(), Branch: "feat/" + id})
+		processTasks.add(&taskRecord{ID: id, Status: "running", ProjectFolder: repo, Started: time.Now(), Branch: "feat/" + id})
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

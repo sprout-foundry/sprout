@@ -42,7 +42,7 @@ func newProjectTestServer(t *testing.T) projectTestServer {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.workspaceRoot = daemonRoot
+	ws.projectFolder = daemonRoot
 	// Registered after TempDir, so it runs first: released agents flush their
 	// history into the chat directories before those are removed.
 	t.Cleanup(ws.waitForAgentTeardown)
@@ -72,22 +72,22 @@ func (p projectTestServer) switchChat(t *testing.T, clientID, chatID string) {
 	}
 }
 
-func (p projectTestServer) clientRoots(clientID string) (workspace, project string) {
+func (p projectTestServer) clientRoots(clientID string) (projectFolder, project string) {
 	p.ws.mutex.RLock()
 	defer p.ws.mutex.RUnlock()
 	ctx := p.ws.clientContexts[clientID]
-	return ctx.WorkspaceRoot, ctx.ProjectRoot
+	return ctx.ProjectFolder, ctx.ProjectRoot
 }
 
-// nextWorkspaceChanged waits for the next workspace_changed event addressed
+// nextProjectFolderChanged waits for the next workspace_changed event addressed
 // to clientID and returns its workspace_root.
-func nextWorkspaceChanged(t *testing.T, ch <-chan events.UIEvent, clientID string) string {
+func nextProjectFolderChanged(t *testing.T, ch <-chan events.UIEvent, clientID string) string {
 	t.Helper()
 	timeout := time.After(2 * time.Second)
 	for {
 		select {
 		case ev := <-ch:
-			if ev.Type != events.EventTypeWorkspaceChanged {
+			if ev.Type != events.EventTypeProjectFolderChanged {
 				continue
 			}
 			data, _ := ev.Data.(map[string]interface{})
@@ -114,7 +114,7 @@ func subscribeEvents(t *testing.T, ws *ReactWebServer) <-chan events.UIEvent {
 func TestChatSwitchReturnsToSelectedProject(t *testing.T) {
 	p := newProjectTestServer(t)
 	const client = "tab-a"
-	if _, err := p.ws.setClientWorkspaceRoot(client, p.project); err != nil {
+	if _, err := p.ws.setClientProjectFolder(client, p.project); err != nil {
 		t.Fatal(err)
 	}
 	wtChat := p.addWorktreeChat(t, client)
@@ -124,7 +124,7 @@ func TestChatSwitchReturnsToSelectedProject(t *testing.T) {
 	if root, _ := p.clientRoots(client); root != p.worktree {
 		t.Fatalf("root after switching to the worktree chat = %q, want %q", root, p.worktree)
 	}
-	if got := nextWorkspaceChanged(t, evs, client); got != p.worktree {
+	if got := nextProjectFolderChanged(t, evs, client); got != p.worktree {
 		t.Errorf("workspace_changed root = %q, want %q", got, p.worktree)
 	}
 
@@ -132,10 +132,10 @@ func TestChatSwitchReturnsToSelectedProject(t *testing.T) {
 	if root, project := p.clientRoots(client); root != p.project || project != p.project {
 		t.Fatalf("roots after switching back = (%q, %q), want the selected project %q", root, project, p.project)
 	}
-	if got := nextWorkspaceChanged(t, evs, client); got != p.project {
+	if got := nextProjectFolderChanged(t, evs, client); got != p.project {
 		t.Errorf("workspace_changed root = %q, want %q", got, p.project)
 	}
-	if got := p.ws.GetWorkspaceRoot(); got != p.daemonRoot {
+	if got := p.ws.GetProjectFolder(); got != p.daemonRoot {
 		t.Errorf("a non-default client's switch moved the server root to %q", got)
 	}
 }
@@ -143,7 +143,7 @@ func TestChatSwitchReturnsToSelectedProject(t *testing.T) {
 func TestWorktreeClearReturnsToSelectedProject(t *testing.T) {
 	p := newProjectTestServer(t)
 	const client = "tab-b"
-	if _, err := p.ws.setClientWorkspaceRoot(client, p.project); err != nil {
+	if _, err := p.ws.setClientProjectFolder(client, p.project); err != nil {
 		t.Fatal(err)
 	}
 	wtChat := p.addWorktreeChat(t, client)
@@ -161,15 +161,15 @@ func TestWorktreeClearReturnsToSelectedProject(t *testing.T) {
 	if root, _ := p.clientRoots(client); root != p.project {
 		t.Fatalf("root after clearing the worktree = %q, want the project %q", root, p.project)
 	}
-	if got := nextWorkspaceChanged(t, evs, client); got != p.project {
+	if got := nextProjectFolderChanged(t, evs, client); got != p.project {
 		t.Errorf("workspace_changed root = %q, want %q", got, p.project)
 	}
 }
 
-func TestDeleteAllPublishesWorkspaceChanged(t *testing.T) {
+func TestDeleteAllPublishesProjectFolderChanged(t *testing.T) {
 	p := newProjectTestServer(t)
 	const client = "tab-c"
-	if _, err := p.ws.setClientWorkspaceRoot(client, p.project); err != nil {
+	if _, err := p.ws.setClientProjectFolder(client, p.project); err != nil {
 		t.Fatal(err)
 	}
 	wtChat := p.addWorktreeChat(t, client)
@@ -183,7 +183,7 @@ func TestDeleteAllPublishesWorkspaceChanged(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("delete all: %d %s", rec.Code, rec.Body.String())
 	}
-	if got := nextWorkspaceChanged(t, evs, client); got != p.project {
+	if got := nextProjectFolderChanged(t, evs, client); got != p.project {
 		t.Errorf("workspace_changed root = %q, want %q", got, p.project)
 	}
 }
@@ -198,12 +198,12 @@ func TestNewClientContextRecordsProjectRoot(t *testing.T) {
 	}
 }
 
-func TestClientWorkspacesSurviveRestart(t *testing.T) {
+func TestClientProjectFoldersSurviveRestart(t *testing.T) {
 	p := newProjectTestServer(t)
-	storePath := filepath.Join(t.TempDir(), clientWorkspacesFileName)
-	p.ws.clientWorkspacesPath = storePath
+	storePath := filepath.Join(t.TempDir(), clientProjectFoldersFileName)
+	p.ws.clientProjectFoldersPath = storePath
 
-	if _, err := p.ws.setClientWorkspaceRoot("tab-d", p.project); err != nil {
+	if _, err := p.ws.setClientProjectFolder("tab-d", p.project); err != nil {
 		t.Fatal(err)
 	}
 
@@ -212,66 +212,66 @@ func TestClientWorkspacesSurviveRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	restarted.daemonRoot = p.daemonRoot
-	restarted.workspaceRoot = p.daemonRoot
+	restarted.projectFolder = p.daemonRoot
 	restarted.mutex.Lock()
-	restarted.clientWorkspacesPath = storePath
-	restarted.loadClientWorkspacesLocked()
+	restarted.clientProjectFoldersPath = storePath
+	restarted.loadClientProjectFoldersLocked()
 	restarted.mutex.Unlock()
 
 	ctx := restarted.getOrCreateClientContext("tab-d")
-	if ctx.WorkspaceRoot != p.project || ctx.ProjectRoot != p.project {
-		t.Fatalf("restarted context roots = (%q, %q), want %q", ctx.WorkspaceRoot, ctx.ProjectRoot, p.project)
+	if ctx.ProjectFolder != p.project || ctx.ProjectRoot != p.project {
+		t.Fatalf("restarted context roots = (%q, %q), want %q", ctx.ProjectFolder, ctx.ProjectRoot, p.project)
 	}
 }
 
-func TestLoadClientWorkspacesDropsInvalidEntries(t *testing.T) {
+func TestLoadClientProjectFoldersDropsInvalidEntries(t *testing.T) {
 	p := newProjectTestServer(t)
 	outside := t.TempDir()
-	stale := time.Now().Add(-2 * clientWorkspaceMaxAge)
-	stored := persistedClientWorkspaces{Version: 1, Clients: map[string]persistedClientWorkspace{
+	stale := time.Now().Add(-2 * clientProjectFolderMaxAge)
+	stored := persistedClientProjectFolders{Version: 1, Clients: map[string]persistedClientProjectFolder{
 		"live":     {Path: p.project, UpdatedAt: time.Now()},
 		"stale":    {Path: p.project, UpdatedAt: stale},
 		"vanished": {Path: filepath.Join(p.daemonRoot, "gone"), UpdatedAt: time.Now()},
 		"outside":  {Path: outside, UpdatedAt: time.Now()},
 		"default":  {Path: p.project, UpdatedAt: time.Now()},
 	}}
-	for i := 0; i < maxPersistedClientWorkspaces+10; i++ {
-		stored.Clients[fmt.Sprintf("old-%d", i)] = persistedClientWorkspace{Path: p.worktree, UpdatedAt: time.Now().Add(-time.Hour - time.Duration(i)*time.Minute)}
+	for i := 0; i < maxPersistedClientProjectFolders+10; i++ {
+		stored.Clients[fmt.Sprintf("old-%d", i)] = persistedClientProjectFolder{Path: p.worktree, UpdatedAt: time.Now().Add(-time.Hour - time.Duration(i)*time.Minute)}
 	}
 	data, err := json.Marshal(stored)
 	if err != nil {
 		t.Fatal(err)
 	}
-	storePath := filepath.Join(t.TempDir(), clientWorkspacesFileName)
+	storePath := filepath.Join(t.TempDir(), clientProjectFoldersFileName)
 	if err := os.WriteFile(storePath, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
 	p.ws.mutex.Lock()
 	defer p.ws.mutex.Unlock()
-	p.ws.clientWorkspaces = map[string]string{}
-	p.ws.clientWorkspacesPath = storePath
-	p.ws.loadClientWorkspacesLocked()
+	p.ws.clientProjectFolders = map[string]string{}
+	p.ws.clientProjectFoldersPath = storePath
+	p.ws.loadClientProjectFoldersLocked()
 
-	if got := p.ws.clientWorkspaces["live"]; got != p.project {
+	if got := p.ws.clientProjectFolders["live"]; got != p.project {
 		t.Errorf("live entry = %q, want %q", got, p.project)
 	}
 	for _, id := range []string{"stale", "vanished", "outside", "default"} {
-		if got, ok := p.ws.clientWorkspaces[id]; ok {
+		if got, ok := p.ws.clientProjectFolders[id]; ok {
 			t.Errorf("entry %q was loaded (%q), want it dropped", id, got)
 		}
 	}
-	if n := len(p.ws.clientWorkspaces); n > maxPersistedClientWorkspaces {
-		t.Errorf("loaded %d entries, want at most %d", n, maxPersistedClientWorkspaces)
+	if n := len(p.ws.clientProjectFolders); n > maxPersistedClientProjectFolders {
+		t.Errorf("loaded %d entries, want at most %d", n, maxPersistedClientProjectFolders)
 	}
 }
 
-// TestWorkspaceGetDoesNotRaceChatSwitch exercises the GET handler against
+// TestProjectFolderGetDoesNotRaceChatSwitch exercises the GET handler against
 // concurrent root changes; run with -race to check the locking.
-func TestWorkspaceGetDoesNotRaceChatSwitch(t *testing.T) {
+func TestProjectFolderGetDoesNotRaceChatSwitch(t *testing.T) {
 	p := newProjectTestServer(t)
 	const client = "tab-e"
-	if _, err := p.ws.setClientWorkspaceRoot(client, p.project); err != nil {
+	if _, err := p.ws.setClientProjectFolder(client, p.project); err != nil {
 		t.Fatal(err)
 	}
 	wtChat := p.addWorktreeChat(t, client)
@@ -300,7 +300,7 @@ func TestWorkspaceGetDoesNotRaceChatSwitch(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
 			req.Header.Set(webClientIDHeader, client)
 			rec := httptest.NewRecorder()
-			p.ws.handleAPIWorkspaceGet(rec, req)
+			p.ws.handleAPIProjectFolderGet(rec, req)
 			if rec.Code != http.StatusOK {
 				t.Errorf("GET /api/workspace: %d", rec.Code)
 			}

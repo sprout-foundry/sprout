@@ -77,24 +77,24 @@ func (a *blockingSessionAdapter) Close() error {
 	return nil
 }
 
-func TestSessionPoolReusesHealthyAdapterPerWorkspace(t *testing.T) {
+func TestSessionPoolReusesHealthyAdapterPerProjectFolder(t *testing.T) {
 	factoryCalls := 0
 	var created []*fakeSessionAdapter
-	pool := NewSessionPool(func(workspaceRoot string) (SessionAdapter, error) {
-		_ = workspaceRoot
+	pool := NewSessionPool(func(projectFolder string) (SessionAdapter, error) {
+		_ = projectFolder
 		factoryCalls++
 		adapter := &fakeSessionAdapter{healthy: true}
 		created = append(created, adapter)
 		return adapter, nil
 	}, 0)
 
-	if _, err := pool.Run(ToolInput{WorkspaceRoot: "/repo-a"}); err != nil {
+	if _, err := pool.Run(ToolInput{ProjectFolder: "/repo-a"}); err != nil {
 		t.Fatalf("first run failed: %v", err)
 	}
-	if _, err := pool.Run(ToolInput{WorkspaceRoot: "/repo-a"}); err != nil {
+	if _, err := pool.Run(ToolInput{ProjectFolder: "/repo-a"}); err != nil {
 		t.Fatalf("second run failed: %v", err)
 	}
-	if _, err := pool.Run(ToolInput{WorkspaceRoot: "/repo-b"}); err != nil {
+	if _, err := pool.Run(ToolInput{ProjectFolder: "/repo-b"}); err != nil {
 		t.Fatalf("third run failed: %v", err)
 	}
 
@@ -110,8 +110,8 @@ func TestSessionPoolEvictsFailedAdapter(t *testing.T) {
 	factoryCalls := 0
 	first := &fakeSessionAdapter{healthy: true, err: errors.New("boom")}
 	second := &fakeSessionAdapter{healthy: true}
-	pool := NewSessionPool(func(workspaceRoot string) (SessionAdapter, error) {
-		_ = workspaceRoot
+	pool := NewSessionPool(func(projectFolder string) (SessionAdapter, error) {
+		_ = projectFolder
 		factoryCalls++
 		if factoryCalls == 1 {
 			return first, nil
@@ -119,13 +119,13 @@ func TestSessionPoolEvictsFailedAdapter(t *testing.T) {
 		return second, nil
 	}, 0)
 
-	if _, err := pool.Run(ToolInput{WorkspaceRoot: "/repo-a"}); err == nil {
+	if _, err := pool.Run(ToolInput{ProjectFolder: "/repo-a"}); err == nil {
 		t.Fatal("expected first run to fail")
 	}
 	if !first.closed {
 		t.Fatal("expected failed adapter to be closed and evicted")
 	}
-	if _, err := pool.Run(ToolInput{WorkspaceRoot: "/repo-a"}); err != nil {
+	if _, err := pool.Run(ToolInput{ProjectFolder: "/repo-a"}); err != nil {
 		t.Fatalf("expected second run to recreate adapter, got error: %v", err)
 	}
 	if factoryCalls != 2 {
@@ -141,8 +141,8 @@ func TestSessionPoolDefersEvictionUntilInUseCallsFinish(t *testing.T) {
 	}
 	second := &fakeSessionAdapter{healthy: true}
 	factoryCalls := 0
-	pool := NewSessionPool(func(workspaceRoot string) (SessionAdapter, error) {
-		_ = workspaceRoot
+	pool := NewSessionPool(func(projectFolder string) (SessionAdapter, error) {
+		_ = projectFolder
 		factoryCalls++
 		if factoryCalls == 1 {
 			return first, nil
@@ -153,14 +153,14 @@ func TestSessionPoolDefersEvictionUntilInUseCallsFinish(t *testing.T) {
 	firstDone := make(chan struct{})
 	go func() {
 		defer close(firstDone)
-		_, _ = pool.Run(ToolInput{WorkspaceRoot: "/repo-a"})
+		_, _ = pool.Run(ToolInput{ProjectFolder: "/repo-a"})
 	}()
 	<-first.firstStarted
 
 	secondDone := make(chan struct{})
 	go func() {
 		defer close(secondDone)
-		_, _ = pool.Run(ToolInput{WorkspaceRoot: "/repo-a"})
+		_, _ = pool.Run(ToolInput{ProjectFolder: "/repo-a"})
 	}()
 	<-secondDone
 
@@ -176,7 +176,7 @@ func TestSessionPoolDefersEvictionUntilInUseCallsFinish(t *testing.T) {
 		t.Fatal("expected adapter to close after in-use calls completed")
 	}
 
-	if _, err := pool.Run(ToolInput{WorkspaceRoot: "/repo-a"}); err != nil {
+	if _, err := pool.Run(ToolInput{ProjectFolder: "/repo-a"}); err != nil {
 		t.Fatalf("expected recreated adapter to run, got: %v", err)
 	}
 	if factoryCalls != 2 {
@@ -187,8 +187,8 @@ func TestSessionPoolDefersEvictionUntilInUseCallsFinish(t *testing.T) {
 func TestSessionPoolConcurrentAcquireSingleCreation(t *testing.T) {
 	var mu sync.Mutex
 	factoryCalls := 0
-	pool := NewSessionPool(func(workspaceRoot string) (SessionAdapter, error) {
-		_ = workspaceRoot
+	pool := NewSessionPool(func(projectFolder string) (SessionAdapter, error) {
+		_ = projectFolder
 		mu.Lock()
 		factoryCalls++
 		mu.Unlock()
@@ -205,7 +205,7 @@ func TestSessionPoolConcurrentAcquireSingleCreation(t *testing.T) {
 	for i := 0; i < workers; i++ {
 		go func() {
 			defer wg.Done()
-			if _, err := pool.Run(ToolInput{WorkspaceRoot: "/repo-a"}); err != nil {
+			if _, err := pool.Run(ToolInput{ProjectFolder: "/repo-a"}); err != nil {
 				t.Errorf("run failed: %v", err)
 			}
 		}()
@@ -223,8 +223,8 @@ func TestSessionPoolConcurrentAcquireSingleCreation(t *testing.T) {
 func TestSessionPoolConcurrentAcquireDifferentRoots(t *testing.T) {
 	var mu sync.Mutex
 	factoryCalls := 0
-	pool := NewSessionPool(func(workspaceRoot string) (SessionAdapter, error) {
-		_ = workspaceRoot
+	pool := NewSessionPool(func(projectFolder string) (SessionAdapter, error) {
+		_ = projectFolder
 		mu.Lock()
 		factoryCalls++
 		mu.Unlock()
@@ -241,7 +241,7 @@ func TestSessionPoolConcurrentAcquireDifferentRoots(t *testing.T) {
 		wg.Add(1)
 		go func(r string) {
 			defer wg.Done()
-			if _, err := pool.Run(ToolInput{WorkspaceRoot: r}); err != nil {
+			if _, err := pool.Run(ToolInput{ProjectFolder: r}); err != nil {
 				t.Errorf("run failed for %s: %v", r, err)
 			}
 		}(root)
@@ -259,8 +259,8 @@ func TestSessionPoolConcurrentAcquireDifferentRoots(t *testing.T) {
 func TestSessionPoolWaiterRetriesAfterFactoryError(t *testing.T) {
 	var mu sync.Mutex
 	factoryCalls := 0
-	pool := NewSessionPool(func(workspaceRoot string) (SessionAdapter, error) {
-		_ = workspaceRoot
+	pool := NewSessionPool(func(projectFolder string) (SessionAdapter, error) {
+		_ = projectFolder
 		mu.Lock()
 		factoryCalls++
 		call := factoryCalls
@@ -277,7 +277,7 @@ func TestSessionPoolWaiterRetriesAfterFactoryError(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		go func() {
 			defer wg.Done()
-			_, err := pool.Run(ToolInput{WorkspaceRoot: "/repo-a"})
+			_, err := pool.Run(ToolInput{ProjectFolder: "/repo-a"})
 			results <- err
 		}()
 	}
@@ -310,15 +310,15 @@ func TestSessionPoolWaiterRetriesAfterFactoryError(t *testing.T) {
 func TestSessionPoolReleaseRecyclesIdlePastTTL(t *testing.T) {
 	factoryCalls := 0
 	var created []*fakeSessionAdapter
-	pool := NewSessionPool(func(workspaceRoot string) (SessionAdapter, error) {
-		_ = workspaceRoot
+	pool := NewSessionPool(func(projectFolder string) (SessionAdapter, error) {
+		_ = projectFolder
 		factoryCalls++
 		adapter := &fakeSessionAdapter{healthy: true}
 		created = append(created, adapter)
 		return adapter, nil
 	}, 50*time.Millisecond)
 
-	if _, err := pool.Run(ToolInput{WorkspaceRoot: "/repo-a"}); err != nil {
+	if _, err := pool.Run(ToolInput{ProjectFolder: "/repo-a"}); err != nil {
 		t.Fatalf("first run failed: %v", err)
 	}
 	if created[0].closed {
@@ -330,7 +330,7 @@ func TestSessionPoolReleaseRecyclesIdlePastTTL(t *testing.T) {
 	// Run 2: the second acquire observes the entry idle past TTL, marks it for
 	// eviction, and release closes it — so a session that sat unused is
 	// recycled promptly instead of lingering until the next EvictIdle sweep.
-	if _, err := pool.Run(ToolInput{WorkspaceRoot: "/repo-a"}); err != nil {
+	if _, err := pool.Run(ToolInput{ProjectFolder: "/repo-a"}); err != nil {
 		t.Fatalf("second run failed: %v", err)
 	}
 	if !created[0].closed {
@@ -341,7 +341,7 @@ func TestSessionPoolReleaseRecyclesIdlePastTTL(t *testing.T) {
 	}
 
 	// Run 3: pool must now create a fresh adapter (the idle one was closed).
-	if _, err := pool.Run(ToolInput{WorkspaceRoot: "/repo-a"}); err != nil {
+	if _, err := pool.Run(ToolInput{ProjectFolder: "/repo-a"}); err != nil {
 		t.Fatalf("third run failed: %v", err)
 	}
 	if factoryCalls != 2 {

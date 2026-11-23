@@ -20,12 +20,12 @@ import (
 // recent-sessions list on startup. Anything older is hidden as noise.
 const recentSessionsWindow = 7 * 24 * time.Hour
 
-// maxRecentSessionsShown caps the list so even chatty workspaces don't
+// maxRecentSessionsShown caps the list so even chatty project folders don't
 // drown the welcome screen.
 const maxRecentSessionsShown = 3
 
 // maybeOfferSessionResume prints up to maxRecentSessionsShown recent
-// sessions for the current workspace (last recentSessionsWindow), then
+// sessions for the current project folder (last recentSessionsWindow), then
 // offers inline numeric selection. If the user picks a valid number, the
 // corresponding session is loaded into chatAgent (state + session ID)
 // and the user proceeds in that session. SP-048-5a.

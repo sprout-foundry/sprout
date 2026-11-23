@@ -23,7 +23,7 @@ func (ws *ReactWebServer) buildAPIConfig(r *http.Request) map[string]interface{}
 	config := map[string]interface{}{
 		"port":           ws.port,
 		"daemon_root":    ws.GetDaemonRoot(),
-		"workspace_root": clientCtx.WorkspaceRoot,
+		"workspace_root": clientCtx.ProjectFolder,
 		"agent": map[string]interface{}{
 			"name":    "sprout",
 			"version": "1.0.0", // This should come from actual version info
@@ -203,7 +203,7 @@ func (ws *ReactWebServer) handleUploadImage(w http.ResponseWriter, r *http.Reque
 		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 
 	// Read the entire body once into a buffer
 	r.Body = http.MaxBytesReader(w, r.Body, console.MaxPastedImageSize)
@@ -230,7 +230,7 @@ func (ws *ReactWebServer) handleUploadImage(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Save the image
-	savedPath, err := console.SavePastedImage(data, workspaceRoot)
+	savedPath, err := console.SavePastedImage(data, projectFolder)
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "image_save_failed", fmt.Sprintf("Failed to save image: %v", err))
 		return
@@ -239,8 +239,8 @@ func (ws *ReactWebServer) handleUploadImage(w http.ResponseWriter, r *http.Reque
 	// Return an absolute path so the model message contains the full path,
 	// avoiding the model burning tokens trying to resolve relative paths.
 	absolutePath := savedPath
-	if !filepath.IsAbs(savedPath) && workspaceRoot != "" {
-		absolutePath = filepath.Join(workspaceRoot, savedPath)
+	if !filepath.IsAbs(savedPath) && projectFolder != "" {
+		absolutePath = filepath.Join(projectFolder, savedPath)
 	}
 
 	filename := filepath.Base(savedPath)

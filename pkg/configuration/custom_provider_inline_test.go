@@ -37,7 +37,7 @@ func writeProviderSeed(t *testing.T, globalDir string) {
 }
 
 // isolateEnv points every config root at the fixture's home and the given
-// workspace config directory.
+// project folder config directory.
 func isolateEnv(t *testing.T, home, configDir string) {
 	t.Helper()
 	t.Setenv("HOME", home)
@@ -47,13 +47,13 @@ func isolateEnv(t *testing.T, home, configDir string) {
 }
 
 // A provider defined inline in the global config.json must be visible to a run
-// whose active config directory is a workspace layer. That run's own config
+// whose active config directory is a project folder layer. That run's own config
 // never carries custom_providers (Save strips it), and the provider files live
 // under the global dir, so without reading the inline block the provider is
 // unresolvable and a non-interactive run fails with "unsupported provider".
 //
 // This is the warm-VM failure from docs/106 (firecracker-lab): the cold run
-// writes .sprout/config.json into the workspace, the next run on that VM takes
+// writes .sprout/config.json into the project folder, the next run on that VM takes
 // the isolated path, and its agent exits at once.
 func TestIsolatedConfigSeesInlineGlobalProvider(t *testing.T) {
 	root := t.TempDir()
@@ -106,8 +106,8 @@ func TestLayeredManagerSeesInlineGlobalProvider(t *testing.T) {
 	globalDir := filepath.Join(home, ".config", "sprout")
 	writeProviderSeed(t, globalDir)
 
-	workspaceDir := filepath.Join(root, "workspace", ConfigDirName)
-	if err := os.MkdirAll(workspaceDir, 0o700); err != nil {
+	projectFolderDir := filepath.Join(root, "workspace", ConfigDirName)
+	if err := os.MkdirAll(projectFolderDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	wsData, err := json.MarshalIndent(map[string]any{
@@ -118,12 +118,12 @@ func TestLayeredManagerSeesInlineGlobalProvider(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(workspaceDir, WorkspaceConfigFileName), wsData, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(projectFolderDir, ProjectFolderConfigFileName), wsData, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	isolateEnv(t, home, workspaceDir)
+	isolateEnv(t, home, projectFolderDir)
 
-	m, err := NewManagerWithLayers(globalDir, workspaceDir)
+	m, err := NewManagerWithLayers(globalDir, projectFolderDir)
 	if err != nil {
 		t.Fatalf("NewManagerWithLayers: %v", err)
 	}

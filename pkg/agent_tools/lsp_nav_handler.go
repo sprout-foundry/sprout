@@ -55,7 +55,7 @@ func resolveLSPNavQuery(env ToolEnv, args map[string]any) (lspNavQuery, string) 
 	if strings.TrimSpace(path) == "" || strings.TrimSpace(q.symbol) == "" || line <= 0 {
 		return q, "give path, a 1-based line and the symbol"
 	}
-	q.root = env.WorkspaceRoot
+	q.root = env.ProjectFolder
 	if q.root == "" {
 		q.root, _ = os.Getwd()
 	}
@@ -128,14 +128,14 @@ func runLSPNav(q lspNavQuery, method string) (lspsemantic.ToolResult, string) {
 	if !ok {
 		return lspsemantic.ToolResult{}, "no language server for " + q.lang
 	}
-	res, err := adapter.Run(lspsemantic.ToolInput{WorkspaceRoot: q.root, FilePath: q.abs, Content: q.content, Method: method, Position: &q.pos})
+	res, err := adapter.Run(lspsemantic.ToolInput{ProjectFolder: q.root, FilePath: q.abs, Content: q.content, Method: method, Position: &q.pos})
 	if err != nil {
 		return res, fmt.Sprintf("the %s language server could not answer: %v", q.lang, err)
 	}
 	return res, ""
 }
 
-// relPath shows a path relative to the workspace when it is inside it.
+// relPath shows a path relative to the project folder when it is inside it.
 func relPath(root, p string) string {
 	p = strings.TrimPrefix(p, "file://")
 	if rel, err := filepath.Rel(root, p); err == nil && !strings.HasPrefix(rel, "..") {

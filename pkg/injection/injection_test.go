@@ -107,16 +107,16 @@ func TestComputeSignals_StructuralSignals(t *testing.T) {
 		},
 		{
 			name:       "write outside the workspace holds",
-			in:         SignalInput{Command: "echo x > /etc/hosts", WorkspaceRoot: "/home/u/proj"},
+			in:         SignalInput{Command: "echo x > /etc/hosts", ProjectFolder: "/home/u/proj"},
 			wantAction: Hold,
 			wantVeto:   true,
-			wantSignal: SignalWriteOutsideWorkspace,
+			wantSignal: SignalWriteOutsideProjectFolder,
 		},
 		{
 			name:         "write outside the workspace is not signalled without a root",
 			in:           SignalInput{Command: "echo x > /etc/hosts"},
 			wantAction:   Pass,
-			wantNoSignal: SignalWriteOutsideWorkspace,
+			wantNoSignal: SignalWriteOutsideProjectFolder,
 		},
 		{
 			name:          "instruction-shaped content is a corroborating signal",

@@ -13,8 +13,8 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
-// Task worktrees live inside the workspace so they are easy to find and
-// survive state-dir cleanup: <workspace>/.sprout/tasks/<slug>.
+// Task worktrees live inside the project folder so they are easy to find and
+// survive state-dir cleanup: <project folder>/.sprout/tasks/<slug>.
 const taskDirName = "tasks"
 
 // taskBranchMaxLen bounds the branch name the LLM proposes. Long names are
@@ -23,7 +23,7 @@ const taskBranchMaxLen = 48
 
 // taskConventionsBudget caps how much of AGENTS.md goes into the naming
 // prompt. The whole file is a few KB; the cap only guards against a
-// workspace that has grown a book.
+// project folder that has grown a book.
 const taskConventionsBudget = 4000
 
 // taskBranchPattern is the shape a task branch must have: a Conventional
@@ -36,21 +36,21 @@ var taskSlugSanitizer = regexp.MustCompile(`[^a-z0-9]+`)
 
 // taskWorktree describes a created task worktree.
 type taskWorktree struct {
-	RepoRoot  string // repository top level
-	Path      string // worktree top level
-	Branch    string
-	Base      string // branch or commit the worktree was created from
-	Workspace string // the primary workspace root this task belongs to
+	RepoRoot      string // repository top level
+	Path          string // worktree top level
+	Branch        string
+	Base          string // branch or commit the worktree was created from
+	ProjectFolder string // the primary project folder this task belongs to
 }
 
-// taskBaseDir returns the directory holding task worktrees for a workspace.
-func taskBaseDir(workspaceRoot string) string {
-	return filepath.Join(workspaceRoot, ".sprout", taskDirName)
+// taskBaseDir returns the directory holding task worktrees for a project folder.
+func taskBaseDir(projectFolder string) string {
+	return filepath.Join(projectFolder, ".sprout", taskDirName)
 }
 
 // taskWorktreePath returns the worktree path for a branch's slug.
-func taskWorktreePath(workspaceRoot, slug string) string {
-	return filepath.Join(taskBaseDir(workspaceRoot), slug)
+func taskWorktreePath(projectFolder, slug string) string {
+	return filepath.Join(taskBaseDir(projectFolder), slug)
 }
 
 // slugFromBranch strips the Conventional Commit type prefix from a branch
@@ -62,15 +62,15 @@ func slugFromBranch(branch string) string {
 	return branch
 }
 
-// createTaskWorktree creates a worktree at <workspace>/.sprout/tasks/<slug>
+// createTaskWorktree creates a worktree at <project folder>/.sprout/tasks/<slug>
 // on a new branch, based at base (empty means the repo's current HEAD
-// branch). Unlike createIsolatedWorkspace it does not seed uncommitted
+// branch). Unlike createIsolatedProjectFolder it does not seed uncommitted
 // changes: a task starts from a committed base so its branch is mergeable on
 // its own.
-func createTaskWorktree(ctx context.Context, workspaceRoot, branch, base string) (*taskWorktree, error) {
-	repoRoot := reviewRepoRoot(ctx, workspaceRoot)
+func createTaskWorktree(ctx context.Context, projectFolder, branch, base string) (*taskWorktree, error) {
+	repoRoot := reviewRepoRoot(ctx, projectFolder)
 	if repoRoot == "" {
-		return nil, agenterrors.NewValidation(fmt.Sprintf("%s is not inside a git repository", workspaceRoot), nil)
+		return nil, agenterrors.NewValidation(fmt.Sprintf("%s is not inside a git repository", projectFolder), nil)
 	}
 	if _, err := runGitIn(ctx, repoRoot, "rev-parse", "--verify", "--quiet", "HEAD"); err != nil {
 		return nil, agenterrors.NewValidation(fmt.Sprintf("%s has no commits yet", repoRoot), nil)
@@ -91,7 +91,7 @@ func createTaskWorktree(ctx context.Context, workspaceRoot, branch, base string)
 	}
 
 	slug := slugFromBranch(branch)
-	path := taskWorktreePath(workspaceRoot, slug)
+	path := taskWorktreePath(projectFolder, slug)
 	if _, err := os.Stat(path); err == nil {
 		return nil, agenterrors.NewValidation(fmt.Sprintf("a task worktree already exists at %s", path), nil)
 	}
@@ -99,11 +99,11 @@ func createTaskWorktree(ctx context.Context, workspaceRoot, branch, base string)
 		return nil, fmt.Errorf("create task directory: %w", err)
 	}
 	// A task worktree inside .sprout/ must not read as an untracked file in
-	// the workspace: `git status` would then be permanently dirty and
+	// the project folder: `git status` would then be permanently dirty and
 	// /task merge (which refuses a dirty tree) could never run. The
-	// workspace's shipped .sprout/.gitignore covers this; a workspace that
+	// project folder's shipped .sprout/.gitignore covers this; a project folder that
 	// predates it gets the line appended here.
-	if err := ensureTaskGitignore(workspaceRoot); err != nil {
+	if err := ensureTaskGitignore(projectFolder); err != nil {
 		return nil, err
 	}
 
@@ -111,38 +111,38 @@ func createTaskWorktree(ctx context.Context, workspaceRoot, branch, base string)
 		return nil, fmt.Errorf("create task worktree: %w", err)
 	}
 	return &taskWorktree{
-		RepoRoot:  repoRoot,
-		Path:      path,
-		Branch:    branch,
-		Base:      base,
-		Workspace: workspaceRoot,
+		RepoRoot:      repoRoot,
+		Path:          path,
+		Branch:        branch,
+		Base:          base,
+		ProjectFolder: projectFolder,
 	}, nil
 }
 
-// ensureTaskGitignore makes sure the workspace's .sprout/.gitignore covers
+// ensureTaskGitignore makes sure the project folder's .sprout/.gitignore covers
 // the tasks directory, so task worktrees never read as untracked files in
-// the workspace (which would make `git status` permanently dirty and block
+// the project folder (which would make `git status` permanently dirty and block
 // /task merge).
 //
-// It defers to EnsureWorkspaceConfigDir for a file sprout generated: that
+// It defers to EnsureProjectFolderConfigDir for a file sprout generated: that
 // function owns the generated content and refreshes it whenever it still
 // matches (or is user-written), and appending here would break its
 // exact-match refresh contract. Only a file sprout did not generate — or a
 // missing one — gets the line appended, and then only once.
-func ensureTaskGitignore(workspaceRoot string) error {
-	dir := filepath.Join(workspaceRoot, ".sprout")
+func ensureTaskGitignore(projectFolder string) error {
+	dir := filepath.Join(projectFolder, ".sprout")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("create .sprout directory: %w", err)
 	}
 	path := filepath.Join(dir, ".gitignore")
-	existing, err := os.ReadFile(path) //nolint:gosec // G304: fixed filename under the workspace root
+	existing, err := os.ReadFile(path) //nolint:gosec // G304: fixed filename under the project folder
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("read .sprout/.gitignore: %w", err)
 	}
 
 	// A sprout-generated file already carries tasks/ (see
-	// workspaceGitignoreContent); leave it to the generator.
-	if strings.HasPrefix(string(existing), configuration.WorkspaceGitignoreHeader()) {
+	// projectFolderGitignoreContent); leave it to the generator.
+	if strings.HasPrefix(string(existing), configuration.ProjectFolderGitignoreHeader()) {
 		return nil
 	}
 
@@ -157,7 +157,7 @@ func ensureTaskGitignore(workspaceRoot string) error {
 	}
 	// Self-ignoring: without this, .sprout/ reads as untracked whenever the
 	// ignore file is the only thing in it, which is exactly the state a
-	// fresh workspace is in when its first task starts.
+	// fresh project folder is in when its first task starts.
 	if !strings.Contains(string(existing), ".gitignore\n") {
 		b.WriteString(".gitignore\n")
 	}
@@ -182,14 +182,14 @@ func (w *taskWorktree) remove(ctx context.Context) {
 	}
 }
 
-// readWorkspaceConventions returns the workspace's AGENTS.md, capped, or ""
-// when the workspace has none. The naming call uses it to follow the
+// readProjectFolderConventions returns the project folder's AGENTS.md, capped, or ""
+// when the project folder has none. The naming call uses it to follow the
 // project's branch conventions instead of guessing.
-func readWorkspaceConventions(workspaceRoot string) string {
-	if strings.TrimSpace(workspaceRoot) == "" {
+func readProjectFolderConventions(projectFolder string) string {
+	if strings.TrimSpace(projectFolder) == "" {
 		return ""
 	}
-	data, err := os.ReadFile(filepath.Join(workspaceRoot, "AGENTS.md")) //nolint:gosec // G304: fixed filename under the workspace root
+	data, err := os.ReadFile(filepath.Join(projectFolder, "AGENTS.md")) //nolint:gosec // G304: fixed filename under the project folder
 	if err != nil {
 		return ""
 	}
@@ -214,7 +214,7 @@ func suggestTaskBranch(ctx context.Context, a *Agent, description string) (strin
 	b.WriteString("type is one of: feat, fix, refactor, chore, docs, test, perf, build, ci.\n")
 	b.WriteString("slug is lowercase kebab-case, at most 6 words, describing the task.\n")
 	b.WriteString("Reply with the branch name only — no quotes, no explanation.\n")
-	if conventions := readWorkspaceConventions(a.currentWorkspaceRoot()); conventions != "" {
+	if conventions := readProjectFolderConventions(a.currentProjectFolder()); conventions != "" {
 		b.WriteString("\nThe project's conventions (follow them where they mention branches or commits):\n\n")
 		b.WriteString(conventions)
 		b.WriteString("\n")

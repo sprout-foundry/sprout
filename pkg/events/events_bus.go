@@ -19,7 +19,7 @@ func isCriticalEvent(eventType string) bool {
 	case EventTypeQueryStarted,
 		EventTypeQueryCompleted,
 		EventTypeError,
-		EventTypeWorkspaceStopping,
+		EventTypeDevSpaceStopping,
 		EventTypeSecurityApprovalRequest,
 		EventTypeSecurityPromptRequest,
 		EventTypeAskUserRequest,

@@ -42,10 +42,10 @@ func (f *fakeClassifier) ClassifyFileAccess(ctx context.Context, filePath, resol
 
 func (f *fakeClassifier) IsFolderSessionAllowed(absPath string) bool { return false }
 
-// outsideWorkspaceTarget creates a file guaranteed outside both the
-// process workspace (repo cwd) and /tmp: under the user's HOME, in a
+// outsideProjectFolderTarget creates a file guaranteed outside both the
+// process project folder (repo cwd) and /tmp: under the user's HOME, in a
 // uniquely named dir the classifier does not allowlist.
-func outsideWorkspaceTarget(t *testing.T) string {
+func outsideProjectFolderTarget(t *testing.T) string {
 	t.Helper()
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -63,12 +63,12 @@ func outsideWorkspaceTarget(t *testing.T) string {
 	return outside
 }
 
-func TestPromptForOffWorkspacePath(t *testing.T) {
+func TestPromptForOffProjectFolderPath(t *testing.T) {
 	ctx := context.Background()
 	approved := &fakeFSPrompter{approve: true}
 	env := ToolEnv{FileAccessPrompter: approved}
 
-	got, ok := promptForOffWorkspacePath(ctx, env, "read_file", "/etc/hosts", "/etc/hosts", "read")
+	got, ok := promptForOffProjectFolderPath(ctx, env, "read_file", "/etc/hosts", "/etc/hosts", "read")
 	if !ok || got == nil {
 		t.Fatalf("approved prompt: ok=%v ctx=%v", ok, got)
 	}
@@ -78,24 +78,24 @@ func TestPromptForOffWorkspacePath(t *testing.T) {
 
 	denied := &fakeFSPrompter{}
 	env2 := ToolEnv{FileAccessPrompter: denied}
-	if _, ok := promptForOffWorkspacePath(ctx, env2, "write_file", "/x", "/x", "write"); ok {
+	if _, ok := promptForOffProjectFolderPath(ctx, env2, "write_file", "/x", "/x", "write"); ok {
 		t.Fatal("denied prompt must return false")
 	}
 
 	env3 := ToolEnv{}
-	if _, ok := promptForOffWorkspacePath(ctx, env3, "read_file", "/x", "/x", "read"); ok {
+	if _, ok := promptForOffProjectFolderPath(ctx, env3, "read_file", "/x", "/x", "read"); ok {
 		t.Fatal("nil prompter must return false without prompting")
 	}
 }
 
 func TestReadFileHandlerPromptFlow(t *testing.T) {
-	outside := outsideWorkspaceTarget(t)
+	outside := outsideProjectFolderTarget(t)
 
 	approved := &fakeFSPrompter{approve: true}
 	env := ToolEnv{
 		FileAccessClassifier: &fakeClassifier{verdict: "prompt"},
 		FileAccessPrompter:   approved,
-		WorkspaceRoot:        t.TempDir(),
+		ProjectFolder:        t.TempDir(),
 	}
 	var h ToolHandler = &readFileHandler{}
 	args := map[string]interface{}{"path": outside}
@@ -114,7 +114,7 @@ func TestReadFileHandlerPromptFlow(t *testing.T) {
 	env2 := ToolEnv{
 		FileAccessClassifier: &fakeClassifier{verdict: "prompt"},
 		FileAccessPrompter:   denied,
-		WorkspaceRoot:        t.TempDir(),
+		ProjectFolder:        t.TempDir(),
 	}
 	res2, err2 := h.Execute(context.Background(), env2, args)
 	if err2 == nil && !res2.IsError {
@@ -126,7 +126,7 @@ func TestReadFileHandlerPromptFlow(t *testing.T) {
 
 	env3 := ToolEnv{
 		FileAccessClassifier: &fakeClassifier{verdict: "prompt"},
-		WorkspaceRoot:        t.TempDir(),
+		ProjectFolder:        t.TempDir(),
 	}
 	res3, err3 := h.Execute(context.Background(), env3, args)
 	if err3 == nil && !res3.IsError {
@@ -135,12 +135,12 @@ func TestReadFileHandlerPromptFlow(t *testing.T) {
 }
 
 func TestWriteFileHandlerPromptFlow(t *testing.T) {
-	outside := outsideWorkspaceTarget(t)
+	outside := outsideProjectFolderTarget(t)
 	approved := &fakeFSPrompter{approve: true}
 	env := ToolEnv{
 		FileAccessClassifier: &fakeClassifier{verdict: "prompt"},
 		FileAccessPrompter:   approved,
-		WorkspaceRoot:        t.TempDir(),
+		ProjectFolder:        t.TempDir(),
 	}
 	var h ToolHandler = &writeFileHandler{}
 	target := strings.TrimSuffix(outside, ".txt") + "-w.txt"

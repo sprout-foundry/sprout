@@ -315,17 +315,17 @@ func (ws *ReactWebServer) handleAPIOnboardingSkip(w http.ResponseWriter, r *http
 
 	// "Skip — use as editor" is a dismissal of the setup dialog, not a
 	// durable configuration choice. Persisting "editor" to the GLOBAL
-	// config gates agent creation for every workspace (see
-	// isProviderAvailableInWorkspace), including workspaces whose own
-	// config fully configures a provider — a workspace that never asked
+	// config gates agent creation for every project folder (see
+	// isProviderAvailableInProjectFolder), including project folders whose own
+	// config fully configures a provider — a project folder that never asked
 	// to be editor-only. So:
 	//
-	//   • Workspace scope available → persist "editor" to the workspace
+	//   • Project folder scope available → persist "editor" to the project folder
 	//     layer only (sticky for this project, invisible elsewhere).
-	//   • No workspace scope (daemon at $HOME before workspace selection)
+	//   • No project folder scope (daemon at $HOME before project folder selection)
 	//     → session-only dismissal, persist nothing.
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	if configuration.WorkspaceConfigDir(workspaceRoot) == "" {
+	projectFolder := ws.getProjectFolderForRequest(r)
+	if configuration.ProjectFolderConfigDir(projectFolder) == "" {
 		ws.log().Info("onboarding skipped without a workspace scope — editor mode not persisted",
 			slog.String("client_id", clientID),
 		)
@@ -344,8 +344,8 @@ func (ws *ReactWebServer) handleAPIOnboardingSkip(w http.ResponseWriter, r *http
 		return
 	}
 
-	// The manager resolved here is layered (global + workspace); UpdateConfig
-	// saves to the workspace layer, which is the intended scope.
+	// The manager resolved here is layered (global + project folder); UpdateConfig
+	// saves to the project folder layer, which is the intended scope.
 	if err := cm.UpdateConfig(func(cfg *configuration.Config) error {
 		cfg.LastUsedProvider = "editor"
 		return nil

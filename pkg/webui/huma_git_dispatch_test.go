@@ -26,7 +26,7 @@ func TestHumaGitDispatch(t *testing.T) {
 	defer srv.Close()
 
 	// GET /api/git/branches — a Huma operation (was a plain handler). The
-	// response is deterministic in either case: a git workspace lists branches
+	// response is deterministic in either case: a git project folder lists branches
 	// and a non-git one reports "not_git_repo".
 	resp, err := srv.Client().Get(srv.URL + "/api/git/branches")
 	if err != nil {

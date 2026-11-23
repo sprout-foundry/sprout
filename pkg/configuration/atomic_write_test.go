@@ -9,13 +9,13 @@ import (
 	"testing"
 )
 
-// TestWorkspaceSave_OverlappingManagersNeverFailRename reproduces two config
-// managers for one workspace saving at the same time (the daemon builds more
-// than one agent per workspace at startup, and each persists its provider
+// TestProjectFolderSave_OverlappingManagersNeverFailRename reproduces two config
+// managers for one project folder saving at the same time (the daemon builds more
+// than one agent per project folder at startup, and each persists its provider
 // selection). With a shared fixed temp name, one writer's rename moved the
 // other's temp file away and the second save failed with "rename
 // workspace.json.tmp workspace.json: no such file or directory".
-func TestWorkspaceSave_OverlappingManagersNeverFailRename(t *testing.T) {
+func TestProjectFolderSave_OverlappingManagersNeverFailRename(t *testing.T) {
 	ws := filepath.Join(t.TempDir(), ConfigDirName)
 	global := t.TempDir()
 
@@ -57,7 +57,7 @@ func TestWorkspaceSave_OverlappingManagersNeverFailRename(t *testing.T) {
 		t.Errorf("overlapping save failed: %v", err)
 	}
 
-	got := readJSONFile(t, filepath.Join(ws, WorkspaceConfigFileName))
+	got := readJSONFile(t, filepath.Join(ws, ProjectFolderConfigFileName))
 	if p, _ := got["last_used_provider"].(string); !strings.HasPrefix(p, "provider-") {
 		t.Errorf("workspace config lost the provider selection: %v", got["last_used_provider"])
 	}
@@ -69,7 +69,7 @@ func TestWorkspaceSave_OverlappingManagersNeverFailRename(t *testing.T) {
 // a save.
 func TestWriteFileAtomic_IgnoresStaleFixedTempFile(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, WorkspaceConfigFileName)
+	path := filepath.Join(dir, ProjectFolderConfigFileName)
 	stale := path + ".tmp"
 	if err := os.WriteFile(stale, []byte("stale"), 0600); err != nil {
 		t.Fatal(err)

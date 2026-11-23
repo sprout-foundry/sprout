@@ -8,9 +8,9 @@ import (
 	"testing"
 )
 
-func TestWorkspaceGitignoreKeepsMachineFilesOut(t *testing.T) {
+func TestProjectFolderGitignoreKeepsMachineFilesOut(t *testing.T) {
 	root := t.TempDir()
-	if err := EnsureWorkspaceConfigDir(root); err != nil {
+	if err := EnsureProjectFolderConfigDir(root); err != nil {
 		t.Fatalf("EnsureWorkspaceConfigDir: %v", err)
 	}
 	got, err := os.ReadFile(filepath.Join(root, ConfigDirName, ".gitignore"))
@@ -24,7 +24,7 @@ func TestWorkspaceGitignoreKeepsMachineFilesOut(t *testing.T) {
 	}
 }
 
-func TestWorkspaceGitignoreRefreshesOnlySproutsOwnFile(t *testing.T) {
+func TestProjectFolderGitignoreRefreshesOnlySproutsOwnFile(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, ConfigDirName)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -32,14 +32,14 @@ func TestWorkspaceGitignoreRefreshesOnlySproutsOwnFile(t *testing.T) {
 	}
 	path := filepath.Join(dir, ".gitignore")
 
-	old := workspaceGitignoreHeader + "\n*.local.json\nchanges/\n"
+	old := projectFolderGitignoreHeader + "\n*.local.json\nchanges/\n"
 	if err := os.WriteFile(path, []byte(old), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := EnsureWorkspaceConfigDir(root); err != nil {
+	if err := EnsureProjectFolderConfigDir(root); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := os.ReadFile(path); string(got) != workspaceGitignoreContent {
+	if got, _ := os.ReadFile(path); string(got) != projectFolderGitignoreContent {
 		t.Errorf("an outdated generated .gitignore was not refreshed:\n%s", got)
 	}
 
@@ -47,7 +47,7 @@ func TestWorkspaceGitignoreRefreshesOnlySproutsOwnFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte(custom), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := EnsureWorkspaceConfigDir(root); err != nil {
+	if err := EnsureProjectFolderConfigDir(root); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := os.ReadFile(path); string(got) != custom {
@@ -55,7 +55,7 @@ func TestWorkspaceGitignoreRefreshesOnlySproutsOwnFile(t *testing.T) {
 	}
 }
 
-func TestWorkspaceConfigDirLeavesTheRepositoryClean(t *testing.T) {
+func TestProjectFolderConfigDirLeavesTheRepositoryClean(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not installed")
 	}
@@ -63,7 +63,7 @@ func TestWorkspaceConfigDirLeavesTheRepositoryClean(t *testing.T) {
 	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil { //nolint:gosec // G204: git on the test's own temp dir
 		t.Fatalf("git init: %v: %s", err, out)
 	}
-	if err := EnsureWorkspaceConfigDir(root); err != nil {
+	if err := EnsureProjectFolderConfigDir(root); err != nil {
 		t.Fatal(err)
 	}
 	for _, f := range []string{"config.json", "workspace.json"} {

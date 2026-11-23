@@ -95,8 +95,8 @@ func TestNewWebClientContext(t *testing.T) {
 	if ctx == nil {
 		t.Fatal("expected non-nil context")
 	}
-	if ctx.WorkspaceRoot != "/workspace" {
-		t.Errorf("expected workspace /workspace, got %q", ctx.WorkspaceRoot)
+	if ctx.ProjectFolder != "/workspace" {
+		t.Errorf("expected workspace /workspace, got %q", ctx.ProjectFolder)
 	}
 	if ctx.Terminal == nil {
 		t.Error("expected non-nil Terminal")
@@ -160,7 +160,7 @@ func TestGetOrCreateClientContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.workspaceRoot = "/workspace"
+	ws.projectFolder = "/workspace"
 
 	ctx1 := ws.getOrCreateClientContext("client-1")
 	ctx2 := ws.getOrCreateClientContext("client-1")
@@ -168,8 +168,8 @@ func TestGetOrCreateClientContext(t *testing.T) {
 	if ctx1 != ctx2 {
 		t.Fatal("expected same context for same client ID")
 	}
-	if ctx1.WorkspaceRoot != "/workspace" {
-		t.Errorf("expected workspace root /workspace, got %q", ctx1.WorkspaceRoot)
+	if ctx1.ProjectFolder != "/workspace" {
+		t.Errorf("expected workspace root /workspace, got %q", ctx1.ProjectFolder)
 	}
 }
 
@@ -178,11 +178,11 @@ func TestGetOrCreateClientContextDefault(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.workspaceRoot = "/workspace"
+	ws.projectFolder = "/workspace"
 
 	ctx := ws.getOrCreateClientContext("")
-	if ctx.WorkspaceRoot != "/workspace" {
-		t.Errorf("expected default client to use workspace root, got %q", ctx.WorkspaceRoot)
+	if ctx.ProjectFolder != "/workspace" {
+		t.Errorf("expected default client to use workspace root, got %q", ctx.ProjectFolder)
 	}
 }
 
@@ -358,7 +358,7 @@ func TestCleanupInactiveClientContextsPreservesActiveQuery(t *testing.T) {
 	}
 }
 
-func TestResolveWorkspaceRootForChat(t *testing.T) {
+func TestResolveProjectFolderForChat(t *testing.T) {
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
@@ -367,7 +367,7 @@ func TestResolveWorkspaceRootForChat(t *testing.T) {
 	ws.mutex.Lock()
 	ws.clientContexts = map[string]*webClientContext{
 		"default": {
-			WorkspaceRoot: "/workspace",
+			ProjectFolder: "/workspace",
 			ChatSessions: map[string]*chatSession{
 				"default": {WorktreePath: ""},
 			},
@@ -376,13 +376,13 @@ func TestResolveWorkspaceRootForChat(t *testing.T) {
 	}
 	ws.mutex.Unlock()
 
-	result := ws.resolveWorkspaceRootForChat("default", "default")
+	result := ws.resolveProjectFolderForChat("default", "default")
 	if result != "/workspace" {
 		t.Errorf("expected /workspace, got %q", result)
 	}
 }
 
-func TestResolveWorkspaceRootForChatWithWorktree(t *testing.T) {
+func TestResolveProjectFolderForChatWithWorktree(t *testing.T) {
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
@@ -391,7 +391,7 @@ func TestResolveWorkspaceRootForChatWithWorktree(t *testing.T) {
 	ws.mutex.Lock()
 	ws.clientContexts = map[string]*webClientContext{
 		"default": {
-			WorkspaceRoot: "/workspace",
+			ProjectFolder: "/workspace",
 			ChatSessions: map[string]*chatSession{
 				"default": {WorktreePath: "/workspace/wt"},
 			},
@@ -400,36 +400,36 @@ func TestResolveWorkspaceRootForChatWithWorktree(t *testing.T) {
 	}
 	ws.mutex.Unlock()
 
-	result := ws.resolveWorkspaceRootForChat("default", "default")
+	result := ws.resolveProjectFolderForChat("default", "default")
 	if result != "/workspace/wt" {
 		t.Errorf("expected /workspace/wt, got %q", result)
 	}
 }
 
-func TestResolveWorkspaceRootForChatMissingClient(t *testing.T) {
+func TestResolveProjectFolderForChatMissingClient(t *testing.T) {
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	result := ws.resolveWorkspaceRootForChat("nonexistent", "default")
+	result := ws.resolveProjectFolderForChat("nonexistent", "default")
 	if result != "" {
 		t.Errorf("expected empty string, got %q", result)
 	}
 }
 
-func TestCleanupInactiveClientContextsRemembersWorkspace(t *testing.T) {
+func TestCleanupInactiveClientContextsRemembersProjectFolder(t *testing.T) {
 	dir := t.TempDir()
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.workspaceRoot = t.TempDir() // daemon launch dir the fallback would use
+	ws.projectFolder = t.TempDir() // daemon launch dir the fallback would use
 
 	ws.mutex.Lock()
 	ws.clientContexts = map[string]*webClientContext{
 		"idle-client": {
-			WorkspaceRoot: dir,
+			ProjectFolder: dir,
 			LastSeenAt:    time.Now().Add(-2 * time.Hour),
 		},
 	}
@@ -440,33 +440,33 @@ func TestCleanupInactiveClientContextsRemembersWorkspace(t *testing.T) {
 	}
 
 	ws.mutex.RLock()
-	remembered := ws.clientWorkspaces["idle-client"]
+	remembered := ws.clientProjectFolders["idle-client"]
 	ws.mutex.RUnlock()
 	if remembered != dir {
 		t.Fatalf("expected remembered workspace %q after eviction, got %q", dir, remembered)
 	}
 
-	// The recreated context must restore the remembered workspace, not the
+	// The recreated context must restore the remembered project folder, not the
 	// server-level launch dir.
 	ctx := ws.getOrCreateClientContext("idle-client")
-	if ctx.WorkspaceRoot != dir {
-		t.Fatalf("recreated context workspace = %q, want %q", ctx.WorkspaceRoot, dir)
+	if ctx.ProjectFolder != dir {
+		t.Fatalf("recreated context workspace = %q, want %q", ctx.ProjectFolder, dir)
 	}
-	if ctx.Terminal == nil || ctx.Terminal.workspaceRoot != dir {
+	if ctx.Terminal == nil || ctx.Terminal.projectFolder != dir {
 		t.Fatalf("recreated context terminal manager rooted at %v, want %q", ctx.Terminal, dir)
 	}
 }
 
-func TestCleanupInactiveClientContextsDropsVanishedWorkspace(t *testing.T) {
+func TestCleanupInactiveClientContextsDropsVanishedProjectFolder(t *testing.T) {
 	dir := t.TempDir()
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.workspaceRoot = t.TempDir()
+	ws.projectFolder = t.TempDir()
 
 	ws.mutex.Lock()
-	ws.clientWorkspaces = map[string]string{"idle-client": dir}
+	ws.clientProjectFolders = map[string]string{"idle-client": dir}
 	ws.clientContexts = map[string]*webClientContext{
 		"idle-client": {LastSeenAt: time.Now().Add(-2 * time.Hour)},
 	}
@@ -481,15 +481,15 @@ func TestCleanupInactiveClientContextsDropsVanishedWorkspace(t *testing.T) {
 	}
 
 	ctx := ws.getOrCreateClientContext("idle-client")
-	if ctx.WorkspaceRoot == dir {
+	if ctx.ProjectFolder == dir {
 		t.Fatalf("recreated context kept vanished workspace %q", dir)
 	}
-	if ctx.WorkspaceRoot != ws.workspaceRoot {
-		t.Fatalf("recreated context workspace = %q, want server-level fallback %q", ctx.WorkspaceRoot, ws.workspaceRoot)
+	if ctx.ProjectFolder != ws.projectFolder {
+		t.Fatalf("recreated context workspace = %q, want server-level fallback %q", ctx.ProjectFolder, ws.projectFolder)
 	}
 
 	ws.mutex.RLock()
-	_, stillRemembered := ws.clientWorkspaces["idle-client"]
+	_, stillRemembered := ws.clientProjectFolders["idle-client"]
 	ws.mutex.RUnlock()
 	if stillRemembered {
 		t.Fatal("vanished workspace was not pruned from clientWorkspaces")

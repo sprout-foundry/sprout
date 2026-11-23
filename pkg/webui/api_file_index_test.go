@@ -21,8 +21,8 @@ func TestHandleAPIFileIndex(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		server.workspaceRoot = root
-		server.getOrCreateClientContext(defaultWebClientID).WorkspaceRoot = root
+		server.projectFolder = root
+		server.getOrCreateClientContext(defaultWebClientID).ProjectFolder = root
 		return server, root
 	}
 

@@ -85,9 +85,9 @@ func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 	}
 
 	// Determine the effective working directory.
-	effectiveDir := env.WorkspaceRoot
+	effectiveDir := env.ProjectFolder
 	if repoDir != "" {
-		resolvedDir, err := ValidateRepoDir(repoDir, env.WorkspaceRoot)
+		resolvedDir, err := ValidateRepoDir(repoDir, env.ProjectFolder)
 		if err != nil {
 			return ToolResult{Output: fmt.Sprintf("Invalid repo_dir: %v", err), IsError: true}, nil
 		}
@@ -215,7 +215,7 @@ func execShellCmd(ctx context.Context, cmd string, workingDir string) (string, e
 	sc := &shellCommandHandler{}
 	args := map[string]any{"command": cmd}
 	if workingDir != "" {
-		envCopy := ToolEnv{WorkspaceRoot: workingDir}
+		envCopy := ToolEnv{ProjectFolder: workingDir}
 		result, err := sc.Execute(ctx, envCopy, args)
 		if err != nil {
 			return "", err

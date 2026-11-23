@@ -166,7 +166,7 @@ func (ws *ReactWebServer) publishAgentSessionUpdate(event map[string]interface{}
 
 // installSessionUpdateHook wires the TerminalManager's lifecycle hook to
 // publishAgentSessionUpdate. Called wherever a client context receives a
-// TerminalManager (creation and workspace switch).
+// TerminalManager (creation and project folder switch).
 func (ws *ReactWebServer) installSessionUpdateHook(tm *TerminalManager) {
 	if tm == nil {
 		return
@@ -301,7 +301,7 @@ type queryRequest struct {
 	ChatID        string `json:"chat_id,omitempty"`
 	Provider      string `json:"provider,omitempty"`
 	Model         string `json:"model,omitempty"`
-	WorkspaceRoot string `json:"workspace_root,omitempty"`
+	ProjectFolder string `json:"workspace_root,omitempty"`
 	SystemPrompt  string `json:"system_prompt,omitempty"`
 }
 
@@ -332,7 +332,7 @@ func (ws *ReactWebServer) buildAPIQuery(w http.ResponseWriter, r *http.Request, 
 	ws.runChatQuery(w, r, clientID, chatID, q.Query, chatQueryOptions{
 		Provider:           q.Provider,
 		Model:              q.Model,
-		WorkspaceRoot:      q.WorkspaceRoot,
+		ProjectFolder:      q.ProjectFolder,
 		SystemPrompt:       q.SystemPrompt,
 		AllowSlashCommands: true,
 		EchoQueryInAccept:  true,

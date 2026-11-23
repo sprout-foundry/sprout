@@ -67,8 +67,8 @@ var policyListCmd = &cobra.Command{
 		}
 		fmt.Println()
 
-		// Workspace overlay mode
-		mode := config.Shell.WorkspaceOverlay.Mode
+		// Project folder overlay mode
+		mode := config.Shell.ProjectFolderOverlay.Mode
 		if mode == "" {
 			mode = "tighten_only"
 		}
@@ -84,7 +84,7 @@ var policyListCmd = &cobra.Command{
 type policyDumpOutput struct {
 	UserSafePatterns      []policyPatternSource `json:"user_safe_patterns" yaml:"user_safe_patterns"`
 	UserDangerousPatterns []policyPatternSource `json:"user_dangerous_patterns" yaml:"user_dangerous_patterns"`
-	WorkspaceOverlay      policyOverlaySource   `json:"workspace_overlay" yaml:"workspace_overlay"`
+	ProjectFolderOverlay  policyOverlaySource   `json:"workspace_overlay" yaml:"workspace_overlay"`
 }
 
 type policyPatternSource struct {
@@ -133,11 +133,11 @@ Each pattern is tagged with its source (user-config). Default format is JSON.`,
 			})
 		}
 
-		mode := config.Shell.WorkspaceOverlay.Mode
+		mode := config.Shell.ProjectFolderOverlay.Mode
 		if mode == "" {
 			mode = "tighten_only"
 		}
-		out.WorkspaceOverlay = policyOverlaySource{Mode: mode}
+		out.ProjectFolderOverlay = policyOverlaySource{Mode: mode}
 
 		return formatOutput(out, format)
 	},

@@ -80,7 +80,7 @@ func TestGoSessionAdapterRunDefinitionNoGopls(t *testing.T) {
 		Method:        "definition",
 		Content:       "package main\n",
 		FilePath:      "main.go",
-		WorkspaceRoot: "/tmp",
+		ProjectFolder: "/tmp",
 		Position:      &Position{Line: 1, Column: 1},
 	})
 	if err != nil {
@@ -101,7 +101,7 @@ func TestGoSessionAdapterRunHoverNoGopls(t *testing.T) {
 		Method:        "hover",
 		Content:       "package main\n",
 		FilePath:      "main.go",
-		WorkspaceRoot: "/tmp",
+		ProjectFolder: "/tmp",
 		Position:      &Position{Line: 1, Column: 1},
 	})
 	if err != nil {
@@ -122,7 +122,7 @@ func TestGoSessionAdapterRunInlayHintsNoGopls(t *testing.T) {
 		Method:        "inlay_hints",
 		Content:       "package main\n",
 		FilePath:      "main.go",
-		WorkspaceRoot: "/tmp",
+		ProjectFolder: "/tmp",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

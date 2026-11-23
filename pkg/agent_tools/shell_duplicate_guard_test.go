@@ -22,11 +22,11 @@ import (
 // session blocks; and concurrent identical starts admit exactly one.
 
 // startBackgroundForChat starts a command through the agent-facing
-// background path, in dir as the workspace root.
+// background path, in dir as the project folder.
 func startBackgroundForChat(t *testing.T, bpm *BackgroundProcessManager, command, dir string) (string, error) {
 	t.Helper()
 	ctx := WithBackgroundProcessManager(context.Background(), bpm)
-	ctx = filesystem.WithWorkspaceRoot(ctx, dir)
+	ctx = filesystem.WithProjectFolder(ctx, dir)
 	t.Cleanup(func() { bpm.StopAll() })
 	return ExecuteShellCommandBackground(ctx, command, "")
 }
@@ -154,7 +154,7 @@ func TestDuplicateGuard_StoppedSessionDoesNotBlock(t *testing.T) {
 func TestDuplicateGuard_PromotedForegroundCountsAsRunning(t *testing.T) {
 	bpm := newTestBPM(t)
 	dir := t.TempDir()
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), dir)
+	ctx := filesystem.WithProjectFolder(context.Background(), dir)
 
 	// A short deadline promotes the still-running command.
 	shortCtx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
@@ -187,7 +187,7 @@ func TestDuplicateGuard_PromotedForegroundCountsAsRunning(t *testing.T) {
 func TestDuplicateGuard_ConcurrentIdenticalStartsAdmitOne(t *testing.T) {
 	bpm := newTestBPM(t)
 	dir := t.TempDir()
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), dir)
+	ctx := filesystem.WithProjectFolder(context.Background(), dir)
 	t.Cleanup(func() { bpm.StopAll() })
 
 	const callers = 8

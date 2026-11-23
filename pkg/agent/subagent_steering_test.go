@@ -42,7 +42,7 @@ func TestInjectInputIntoActivePrefersPrimary(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	runner := NewSubagentRunner(parent, shared)
 
@@ -99,7 +99,7 @@ func TestInjectInputIntoActiveFallbackToSubagent(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	runner := NewSubagentRunner(parent, shared)
 
@@ -152,7 +152,7 @@ func TestInjectInputIntoActiveNoTargets(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	runner := NewSubagentRunner(parent, shared)
 
@@ -189,7 +189,7 @@ func TestInjectInputIntoActiveEmptyInput(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	runner := NewSubagentRunner(parent, shared)
 
@@ -210,7 +210,7 @@ func TestInjectInputIntoActiveRoutesToDeepestSubagent(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	runner := NewSubagentRunner(parent, shared)
 
@@ -281,7 +281,7 @@ func TestInjectInputIntoActiveSkipsCompletedSubagent(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	runner := NewSubagentRunner(parent, shared)
 

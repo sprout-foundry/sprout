@@ -209,13 +209,13 @@ func (ws *ReactWebServer) handleAPISemantic(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	canonical, err := canonicalizePath(req.Path, workspaceRoot, true)
+	projectFolder := ws.getProjectFolderForRequest(r)
+	canonical, err := canonicalizePath(req.Path, projectFolder, true)
 	if err != nil {
 		writeJSONErr(w, http.StatusBadRequest, "invalid_path", "Invalid path")
 		return
 	}
-	if !isWithinWorkspace(canonical, workspaceRoot) {
+	if !isWithinProjectFolder(canonical, projectFolder) {
 		writeJSONErr(w, http.StatusForbidden, "path_outside_workspace", "Path is outside workspace")
 		return
 	}
@@ -229,7 +229,7 @@ func (ws *ReactWebServer) handleAPISemantic(w http.ResponseWriter, r *http.Reque
 	}
 
 	toolInput := semanticToolInput{
-		WorkspaceRoot: workspaceRoot,
+		ProjectFolder: projectFolder,
 		FilePath:      canonical,
 		Content:       req.Content,
 		Method:        req.Method,
@@ -253,7 +253,7 @@ func (ws *ReactWebServer) handleAPISemantic(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	applyToolResult(&result, toolResult, workspaceRoot)
+	applyToolResult(&result, toolResult, projectFolder)
 	result.DurationMs = toolResult.DurationMs
 	ws.writeSemanticResponse(w, result)
 }
@@ -261,7 +261,7 @@ func (ws *ReactWebServer) handleAPISemantic(w http.ResponseWriter, r *http.Reque
 // applyToolResult populates a semanticResponse from a semanticToolResult.
 // All language adapters return semanticToolResult, so this shared post-processing
 // is the seam that makes the routing language-agnostic.
-func applyToolResult(result *semanticResponse, toolResult semanticToolResult, workspaceRoot string) {
+func applyToolResult(result *semanticResponse, toolResult semanticToolResult, projectFolder string) {
 	result.Capabilities = toolResult.Capabilities
 	if toolResult.Error != "" {
 		result.Error = toolResult.Error
@@ -280,7 +280,7 @@ func applyToolResult(result *semanticResponse, toolResult semanticToolResult, wo
 	}
 	if toolResult.Definition != nil {
 		defPath := toolResult.Definition.Path
-		if rel, relErr := filepath.Rel(workspaceRoot, defPath); relErr == nil {
+		if rel, relErr := filepath.Rel(projectFolder, defPath); relErr == nil {
 			defPath = filepath.ToSlash(rel)
 		}
 		result.Definition = &semanticDefinition{
@@ -313,7 +313,7 @@ func applyToolResult(result *semanticResponse, toolResult semanticToolResult, wo
 		locs := make([]semanticReferenceLocation, 0, len(toolResult.References.Locations))
 		for _, loc := range toolResult.References.Locations {
 			refPath := loc.FilePath
-			if rel, relErr := filepath.Rel(workspaceRoot, refPath); relErr == nil {
+			if rel, relErr := filepath.Rel(projectFolder, refPath); relErr == nil {
 				refPath = filepath.ToSlash(rel)
 			}
 			locs = append(locs, semanticReferenceLocation{

@@ -165,12 +165,12 @@ func (h *shellCommandHandler) Validate(args map[string]any) error {
 }
 
 func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	// Inject env.WorkspaceRoot into context so runShellCommand resolves
+	// Inject env.ProjectFolder into context so runShellCommand resolves
 	// the correct cmd.Dir. Without this, the shell falls back to
 	// os.Getwd() which is the package source dir during tests —
 	// creating nested .git repos that corrupt the ChangeTracker.
-	if env.WorkspaceRoot != "" {
-		ctx = filesystem.WithWorkspaceRoot(ctx, env.WorkspaceRoot)
+	if env.ProjectFolder != "" {
+		ctx = filesystem.WithProjectFolder(ctx, env.ProjectFolder)
 	}
 
 	// Scope hidden/background shell sessions to this conversation so
@@ -235,7 +235,7 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 	}
 
 	// --- Security classification ---
-	secResult := ClassifyToolCallWithWorkspace("shell_command", args, env.WorkspaceRoot)
+	secResult := ClassifyToolCallWithProjectFolder("shell_command", args, env.ProjectFolder)
 
 	// Only truly unrecoverable operations (IsHardBlock) are blocked outright.
 	// ShouldBlock without IsHardBlock falls through to the approval prompt
@@ -355,7 +355,7 @@ func (h *shellCommandHandler) SafeForParallel() bool { return false }
 
 func (h *shellCommandHandler) Interactive() bool { return false }
 
-// prepareShellMutation lets the agent's ChangeTracker snapshot the workspace
+// prepareShellMutation lets the agent's ChangeTracker snapshot the project folder
 // before a command runs, so the command's own mutations are diffable. Without
 // it, a tracker that skipped the eager snapshot (subagents) took its first
 // snapshot after the first mutating command — making that command's changes

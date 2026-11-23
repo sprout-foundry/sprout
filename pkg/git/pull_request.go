@@ -140,12 +140,12 @@ func splitOwnerRepo(raw string) (string, string, error) {
 //
 // Resolution order:
 //
-//  1. In a Sprout Foundry workspace, the platform (any git host it supports)
+//  1. In a Sprout Foundry project folder, the platform (any git host it supports)
 //  2. GitHub REST API (credential store → GH_TOKEN env var)
 //  3. gh pr create shell-out (fallback when no token available)
 //  4. Structured error with the exact gh command the user can run manually
 //
-// Outside a platform workspace, a remote on a host other than GitHub that gh
+// Outside a platform project folder, a remote on a host other than GitHub that gh
 // cannot serve either gets a plain error naming the host.
 //
 // If req.Head is empty, the current branch name is used.
@@ -180,12 +180,12 @@ func CreatePullRequest(ctx context.Context, repoDir string, req PullRequestReque
 		// If everything else fails, the final error will mention the push problem too.
 	}
 
-	// --- In a platform workspace, the platform opens it on any host ---
+	// --- In a platform project folder, the platform opens it on any host ---
 	// An HTTP answer from the platform is final; only an unreachable
 	// platform falls through to the GitHub paths below.
 	var platformErr error
-	if apiURL, workspaceID, wsToken, ok := platformWorkspace(); ok {
-		result, err := createPRViaPlatform(ctx, apiURL, workspaceID, wsToken, head, base, req.Title, body, req.Draft)
+	if apiURL, projectFolderID, wsToken, ok := platformProjectFolder(); ok {
+		result, err := createPRViaPlatform(ctx, apiURL, projectFolderID, wsToken, head, base, req.Title, body, req.Draft)
 		if err == nil {
 			return result, nil
 		}

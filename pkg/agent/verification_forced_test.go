@@ -2,7 +2,7 @@
 
 // verification_forced_test.go — the forced-verification seam: the escape
 // hatch a caller uses when it has independent evidence the turn changed
-// the workspace but the tracker's window stayed empty, so the turn-end
+// the project folder but the tracker's window stayed empty, so the turn-end
 // hook's gate never opened. The seam runs the same trusted checks the
 // hook runs and stores the result as the turn's verification state, and
 // it honors the verification switch (a disabled run never verifies).

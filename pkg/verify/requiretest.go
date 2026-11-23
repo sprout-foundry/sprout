@@ -84,7 +84,7 @@ func pathsIncludeTestFile(paths []string) bool {
 	return false
 }
 
-// IsTestFilePath reports whether a workspace path is a test file, using
+// IsTestFilePath reports whether a project folder path is a test file, using
 // filename conventions rather than content inspection (so the check stays a
 // pure path predicate). It recognizes the common Go, JavaScript/TypeScript,
 // Python, Ruby, Rust, and Java conventions:

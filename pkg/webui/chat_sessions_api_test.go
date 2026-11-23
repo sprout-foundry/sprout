@@ -495,7 +495,7 @@ func TestResolveChatID(t *testing.T) {
 func TestDeleteAllReturnsRootFromDeletedWorktree(t *testing.T) {
 	p := newProjectTestServer(t)
 	const client = "root-client"
-	if _, err := p.ws.setClientWorkspaceRoot(client, p.project); err != nil {
+	if _, err := p.ws.setClientProjectFolder(client, p.project); err != nil {
 		t.Fatal(err)
 	}
 	p.switchChat(t, client, p.addWorktreeChat(t, client))

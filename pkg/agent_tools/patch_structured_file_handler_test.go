@@ -88,8 +88,8 @@ func TestPatchStructuredFile_PreservesOrder_JSON(t *testing.T) {
 	}
 
 	h := &patchStructuredFileHandler{}
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
-	env := ToolEnv{WorkspaceRoot: tmpDir}
+	ctx := filesystem.WithProjectFolder(context.Background(), tmpDir)
+	env := ToolEnv{ProjectFolder: tmpDir}
 	result, err := h.Execute(ctx, env, map[string]any{
 		"path": jsonPath,
 		"patch_ops": []interface{}{
@@ -162,8 +162,8 @@ license: MIT
 	}
 
 	h := &patchStructuredFileHandler{}
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
-	env := ToolEnv{WorkspaceRoot: tmpDir}
+	ctx := filesystem.WithProjectFolder(context.Background(), tmpDir)
+	env := ToolEnv{ProjectFolder: tmpDir}
 	result, err := h.Execute(ctx, env, map[string]any{
 		"path": yamlPath,
 		"patch_ops": []interface{}{
@@ -237,8 +237,8 @@ description: Multi-line dockerfile
 	}
 
 	h := &patchStructuredFileHandler{}
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
-	env := ToolEnv{WorkspaceRoot: tmpDir}
+	ctx := filesystem.WithProjectFolder(context.Background(), tmpDir)
+	env := ToolEnv{ProjectFolder: tmpDir}
 	result, err := h.Execute(ctx, env, map[string]any{
 		"path": yamlPath,
 		"patch_ops": []interface{}{
@@ -299,8 +299,8 @@ func TestPatchStructuredFile_NestedArrayPatch(t *testing.T) {
 	}
 
 	h := &patchStructuredFileHandler{}
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
-	env := ToolEnv{WorkspaceRoot: tmpDir}
+	ctx := filesystem.WithProjectFolder(context.Background(), tmpDir)
+	env := ToolEnv{ProjectFolder: tmpDir}
 	result, err := h.Execute(ctx, env, map[string]any{
 		"path": jsonPath,
 		"patch_ops": []interface{}{
@@ -358,8 +358,8 @@ func TestPatchStructuredFile_AddNewKey_JSON(t *testing.T) {
 	}
 
 	h := &patchStructuredFileHandler{}
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
-	env := ToolEnv{WorkspaceRoot: tmpDir}
+	ctx := filesystem.WithProjectFolder(context.Background(), tmpDir)
+	env := ToolEnv{ProjectFolder: tmpDir}
 	result, err := h.Execute(ctx, env, map[string]any{
 		"path": jsonPath,
 		"patch_ops": []interface{}{
@@ -406,8 +406,8 @@ func TestPatchStructuredFile_RemoveKey_JSON(t *testing.T) {
 	}
 
 	h := &patchStructuredFileHandler{}
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
-	env := ToolEnv{WorkspaceRoot: tmpDir}
+	ctx := filesystem.WithProjectFolder(context.Background(), tmpDir)
+	env := ToolEnv{ProjectFolder: tmpDir}
 	result, err := h.Execute(ctx, env, map[string]any{
 		"path": jsonPath,
 		"patch_ops": []interface{}{
@@ -490,8 +490,8 @@ func TestPatchStructuredFile_SingleFieldDiff(t *testing.T) {
 	}
 
 	h := &patchStructuredFileHandler{}
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
-	env := ToolEnv{WorkspaceRoot: tmpDir}
+	ctx := filesystem.WithProjectFolder(context.Background(), tmpDir)
+	env := ToolEnv{ProjectFolder: tmpDir}
 	result, err := h.Execute(ctx, env, map[string]any{
 		"path": jsonPath,
 		"patch_ops": []interface{}{
@@ -548,7 +548,7 @@ func TestPatchStructuredFile_SingleFieldDiff(t *testing.T) {
 }
 
 // TestPatchStructuredFile_PreservesExistingFilePermissions verifies
-// the permission-preservation fix: an off-workspace patch on a file
+// the permission-preservation fix: an off-project-folder patch on a file
 // with custom permissions (e.g. 0755) keeps those permissions after
 // the write. Before the fix, the write hardcoded 0644 and silently
 // stripped the execute bit.
@@ -570,8 +570,8 @@ func TestPatchStructuredFile_PreservesExistingFilePermissions(t *testing.T) {
 	}
 
 	h := &patchStructuredFileHandler{}
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
-	env := ToolEnv{WorkspaceRoot: tmpDir}
+	ctx := filesystem.WithProjectFolder(context.Background(), tmpDir)
+	env := ToolEnv{ProjectFolder: tmpDir}
 	result, err := h.Execute(ctx, env, map[string]any{
 		"path": target,
 		"patch_ops": []interface{}{

@@ -103,8 +103,8 @@ func Load() (*Config, error) {
 	// the in-memory map fresh from the embedded catalog every time so any
 	// stale `subagent_types` data from a pre-removal config gets discarded.
 	// Custom personas (SP-175) are then merged in from the user-scope files;
-	// this path has no workspace layer, so project-scope personas wait for a
-	// workspace-scoped manager.
+	// this path has no project folder layer, so project-scope personas wait for a
+	// project-folder-scoped manager.
 	config.SubagentTypes = defaultSubagentTypes()
 	HydrateCustomPersonas(config, "")
 	noticeLegacySubagentTypes(rawConfig)
@@ -237,9 +237,9 @@ func (c *Config) SaveToDir(dir string) error {
 	return c.SaveToDirAs(dir, ConfigFileName)
 }
 
-// SaveToDirAs writes the config to dir under an explicit filename. Workspace
-// layers use WorkspaceConfigFileName so they can never collide with the
-// user-level config.json when the workspace root is $HOME.
+// SaveToDirAs writes the config to dir under an explicit filename. Project folder
+// layers use ProjectFolderConfigFileName so they can never collide with the
+// user-level config.json when the project folder is $HOME.
 func (c *Config) SaveToDirAs(dir, fileName string) error {
 	c.prepareForPersist()
 

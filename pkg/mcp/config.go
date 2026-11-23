@@ -103,20 +103,20 @@ func getConfigDir() (string, error) {
 // carries mcp.servers; both are merged at agent startup.
 const mcpConfigFileName = "mcp_config.json"
 
-// mcpConfigCandidates returns the config files to consult for a workspace,
-// in precedence order: the workspace layer first, then the global config
-// root. A workspace root that is empty or is the user's home directory
-// contributes no workspace layer — $HOME is not a project, and its .sprout
+// mcpConfigCandidates returns the config files to consult for a project folder,
+// in precedence order: the project folder layer first, then the global config
+// root. A project folder that is empty or is the user's home directory
+// contributes no project folder layer — $HOME is not a project, and its .sprout
 // would alias the user-level state directory.
 //
 // The global root comes from envutil.ConfigDir(), which honors
 // SPROUT_CONFIG. That is correct for the *global* half: the env var names
-// the process's config root. The workspace half is explicit so an agent
-// serving a workspace reads that workspace's file regardless of which
+// the process's config root. The project folder half is explicit so an agent
+// serving a project folder reads that project folder's file regardless of which
 // process (CLI or daemon) is running the turn.
-func mcpConfigCandidates(workspaceRoot string) []string {
+func mcpConfigCandidates(projectFolder string) []string {
 	var paths []string
-	if ws := strings.TrimSpace(workspaceRoot); ws != "" {
+	if ws := strings.TrimSpace(projectFolder); ws != "" {
 		if abs, err := filepath.Abs(ws); err == nil {
 			ws = abs
 		}
@@ -131,14 +131,14 @@ func mcpConfigCandidates(workspaceRoot string) []string {
 }
 
 // MCPConfigStamp returns the newest mtime (Unix nanoseconds) of the
-// mcp_config.json files LoadMCPConfigForWorkspace would read for the
-// workspace, or 0 when none exists. A caller polling for config changes
+// mcp_config.json files LoadMCPConfigForProjectFolder would read for the
+// project folder, or 0 when none exists. A caller polling for config changes
 // made out of process (a terminal `sprout login` adding the platform's
 // MCP server while an agent runs) compares successive stamps instead of
 // parsing the files.
-func MCPConfigStamp(workspaceRoot string) int64 {
+func MCPConfigStamp(projectFolder string) int64 {
 	var stamp int64
-	for _, path := range mcpConfigCandidates(workspaceRoot) {
+	for _, path := range mcpConfigCandidates(projectFolder) {
 		info, err := os.Stat(path)
 		if err != nil {
 			continue
@@ -175,23 +175,23 @@ func LoadGlobalMCPConfigFile() (MCPConfig, error) {
 
 // LoadMCPConfig loads MCP configuration from the process's config root.
 func LoadMCPConfig() (MCPConfig, error) {
-	return LoadMCPConfigForWorkspace("")
+	return LoadMCPConfigForProjectFolder("")
 }
 
-// LoadMCPConfigForWorkspace loads MCP configuration for a workspace,
-// consulting the workspace layer first and the global config root second.
-// Servers are merged with the workspace winning on a name collision, so a
+// LoadMCPConfigForProjectFolder loads MCP configuration for a project folder,
+// consulting the project folder layer first and the global config root second.
+// Servers are merged with the project folder winning on a name collision, so a
 // repo-local mcp_config.json is visible to an agent serving that repo no
-// matter which process constructed it. An empty workspaceRoot reads only
+// matter which process constructed it. An empty projectFolder reads only
 // the global root, matching LoadMCPConfig.
-func LoadMCPConfigForWorkspace(workspaceRoot string) (MCPConfig, error) {
+func LoadMCPConfigForProjectFolder(projectFolder string) (MCPConfig, error) {
 	mcpConfig := DefaultMCPConfig()
 
 	// Merge each layer in precedence order: the first layer that exists
 	// supplies the scalar flags, and later layers only contribute servers
 	// the higher-precedence layers did not define.
 	flagsApplied := false
-	for _, configPath := range mcpConfigCandidates(workspaceRoot) {
+	for _, configPath := range mcpConfigCandidates(projectFolder) {
 		layer, ok := readMCPConfigFile(configPath)
 		if !ok {
 			continue
@@ -312,7 +312,7 @@ func isPlaywrightAvailable() bool {
 
 // readMCPConfigFile reads and parses one mcp_config.json. A missing file is
 // "no layer", not an error; a malformed file is reported so a typo in a
-// workspace config is visible rather than silently ignored.
+// project folder config is visible rather than silently ignored.
 func readMCPConfigFile(path string) (MCPConfig, bool) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -378,14 +378,14 @@ func mergeMCPConfig(dst *MCPConfig, layer MCPConfig, applyFlags bool) {
 
 // SaveMCPConfig saves MCP configuration to the process's config root.
 func SaveMCPConfig(mcpConfig *MCPConfig) error {
-	return SaveMCPConfigForWorkspace(mcpConfig, "")
+	return SaveMCPConfigForProjectFolder(mcpConfig, "")
 }
 
-// SaveMCPConfigForWorkspace saves MCP configuration for a workspace. With a
-// workspace root it writes the workspace layer (so a repo-local config is
+// SaveMCPConfigForProjectFolder saves MCP configuration for a project folder. With a
+// project folder it writes the project folder layer (so a repo-local config is
 // what `mcp add` produces inside a repo); with an empty root it writes the
 // global config root, matching SaveMCPConfig.
-func SaveMCPConfigForWorkspace(mcpConfig *MCPConfig, workspaceRoot string) error {
+func SaveMCPConfigForProjectFolder(mcpConfig *MCPConfig, projectFolder string) error {
 	// Migrate secrets before persisting. This is a defense-in-depth measure:
 	// migrateSecretsOnLoad (called on read) also migrates. Both paths are
 	// intentional — if secrets are somehow injected between load and save,
@@ -401,7 +401,7 @@ func SaveMCPConfigForWorkspace(mcpConfig *MCPConfig, workspaceRoot string) error
 		}
 	}
 
-	configDir, err := mcpConfigWriteDir(workspaceRoot)
+	configDir, err := mcpConfigWriteDir(projectFolder)
 	if err != nil {
 		return err
 	}
@@ -424,11 +424,11 @@ func SaveMCPConfigForWorkspace(mcpConfig *MCPConfig, workspaceRoot string) error
 	return nil
 }
 
-// mcpConfigWriteDir picks the directory a save targets: the workspace layer
+// mcpConfigWriteDir picks the directory a save targets: the project folder layer
 // when there is one, else the global config root. Mirrors
-// mcpConfigCandidates' workspace rule so a write lands where a read looks.
-func mcpConfigWriteDir(workspaceRoot string) (string, error) {
-	if ws := strings.TrimSpace(workspaceRoot); ws != "" {
+// mcpConfigCandidates' project folder rule so a write lands where a read looks.
+func mcpConfigWriteDir(projectFolder string) (string, error) {
+	if ws := strings.TrimSpace(projectFolder); ws != "" {
 		if abs, err := filepath.Abs(ws); err == nil {
 			ws = abs
 		}
@@ -439,11 +439,11 @@ func mcpConfigWriteDir(workspaceRoot string) (string, error) {
 	return getConfigDir()
 }
 
-// MCPConfigSourcePath returns the file a workspace's MCP config is read
-// from — the workspace layer when it exists, else the global root — so a
+// MCPConfigSourcePath returns the file a project folder's MCP config is read
+// from — the project folder layer when it exists, else the global root — so a
 // caller can tell the user which config was consulted.
-func MCPConfigSourcePath(workspaceRoot string) string {
-	candidates := mcpConfigCandidates(workspaceRoot)
+func MCPConfigSourcePath(projectFolder string) string {
+	candidates := mcpConfigCandidates(projectFolder)
 	for _, path := range candidates {
 		if _, err := os.Stat(path); err == nil {
 			return path

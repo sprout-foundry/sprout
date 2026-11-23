@@ -16,7 +16,7 @@ import (
 // ChangeTracker rooted at ws — the shape handleRecoverFile needs.
 func newRecoveryTestAgent(t *testing.T, ws string) *Agent {
 	t.Helper()
-	a := &Agent{workspaceRoot: ws, state: NewAgentStateManager(false)}
+	a := &Agent{projectFolder: ws, state: NewAgentStateManager(false)}
 	a.EnableChangeTracking("recovery test")
 	if a.GetChangeTracker() == nil {
 		t.Fatal("tracker not enabled")
@@ -27,7 +27,7 @@ func newRecoveryTestAgent(t *testing.T, ws string) *Agent {
 // setupPersistedRecoveryTest isolates config and history I/O, then
 // redirects history paths AFTER agent construction (the redirect must
 // be the last write to the package-level paths). Returns the agent and
-// the isolated workspace root.
+// the isolated project folder.
 func setupPersistedRecoveryTest(t *testing.T) (*Agent, string) {
 	t.Helper()
 	_, configCleanup := configuration.NewTestManager(t)

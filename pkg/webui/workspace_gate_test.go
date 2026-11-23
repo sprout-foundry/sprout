@@ -11,10 +11,10 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
-// TestIsHomeWorkspace verifies the home-detection predicate for the home,
+// TestIsHomeProjectFolder verifies the home-detection predicate for the home,
 // non-home, empty, and subdirectory-of-home cases. Only an exact (symlink-safe)
 // match of the home directory itself should return true.
-func TestIsHomeWorkspace(t *testing.T) {
+func TestIsHomeProjectFolder(t *testing.T) {
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
 		t.Skipf("cannot resolve home directory for test: %v", err)
@@ -48,7 +48,7 @@ func TestIsHomeWorkspace(t *testing.T) {
 					t.Skipf("subdirectory %q does not exist; skipping", tc.path)
 				}
 			}
-			got := isHomeWorkspace(tc.path)
+			got := isHomeProjectFolder(tc.path)
 			if got != tc.want {
 				t.Errorf("isHomeWorkspace(%q) = %v, want %v", tc.path, got, tc.want)
 			}
@@ -56,24 +56,24 @@ func TestIsHomeWorkspace(t *testing.T) {
 	}
 }
 
-// TestHomeWorkspaceConsentRoundTrip verifies the consent store degrades to
+// TestHomeProjectFolderConsentRoundTrip verifies the consent store degrades to
 // "no consent" initially, persists on record, and reads back as consented.
 // Test isolation is achieved by pointing HOME at a temp directory: resolveHomeDir
 // tries os.UserHomeDir() first, which honors the $HOME env var at call time.
-func TestHomeWorkspaceConsentRoundTrip(t *testing.T) {
+func TestHomeProjectFolderConsentRoundTrip(t *testing.T) {
 	tmpHome := t.TempDir()
 	setTestHome(t, tmpHome)
 	t.Setenv("SPROUT_STATE_DIR", filepath.Join(tmpHome, ".local", "state", "sprout"))
 
-	if hasHomeWorkspaceConsent() {
+	if hasHomeProjectFolderConsent() {
 		t.Fatal("expected no consent initially")
 	}
 
-	if err := recordHomeWorkspaceConsent(); err != nil {
+	if err := recordHomeProjectFolderConsent(); err != nil {
 		t.Fatalf("recordHomeWorkspaceConsent failed: %v", err)
 	}
 
-	if !hasHomeWorkspaceConsent() {
+	if !hasHomeProjectFolderConsent() {
 		t.Fatal("expected consent to be recorded after recordHomeWorkspaceConsent")
 	}
 
@@ -84,11 +84,11 @@ func TestHomeWorkspaceConsentRoundTrip(t *testing.T) {
 	}
 }
 
-// TestSetClientWorkspaceRootRejectsHome verifies the defense-in-depth gate in
-// setClientWorkspaceRoot: home is rejected without consent and accepted after
+// TestSetClientProjectFolderRejectsHome verifies the defense-in-depth gate in
+// setClientProjectFolder: home is rejected without consent and accepted after
 // consent is recorded. daemonRoot is set to the resolved home so the home path
-// passes the isWithinWorkspace check and reaches the home gate.
-func TestSetClientWorkspaceRootRejectsHome(t *testing.T) {
+// passes the isWithinProjectFolder check and reaches the home gate.
+func TestSetClientProjectFolderRejectsHome(t *testing.T) {
 	tmpHome := t.TempDir()
 	setTestHome(t, tmpHome)
 	t.Setenv("SPROUT_STATE_DIR", filepath.Join(tmpHome, ".local", "state", "sprout"))
@@ -105,7 +105,7 @@ func TestSetClientWorkspaceRootRejectsHome(t *testing.T) {
 	clientID := "test-client"
 
 	// Without consent: setting home must fail.
-	_, err = ws.setClientWorkspaceRoot(clientID, resolvedHome)
+	_, err = ws.setClientProjectFolder(clientID, resolvedHome)
 	if err == nil {
 		t.Fatal("expected error setting home workspace without consent, got nil")
 	}
@@ -114,21 +114,21 @@ func TestSetClientWorkspaceRootRejectsHome(t *testing.T) {
 	}
 
 	// Record consent, then retry: should succeed now.
-	if err := recordHomeWorkspaceConsent(); err != nil {
+	if err := recordHomeProjectFolderConsent(); err != nil {
 		t.Fatalf("recordHomeWorkspaceConsent failed: %v", err)
 	}
 
-	got, err := ws.setClientWorkspaceRoot(clientID, resolvedHome)
+	got, err := ws.setClientProjectFolder(clientID, resolvedHome)
 	if err != nil {
 		t.Fatalf("expected success after consent, got error: %v", err)
 	}
-	// Confirm the workspace was actually set.
+	// Confirm the project folder was actually set.
 	if got != resolvedHome {
 		t.Fatalf("expected workspace root %q, got %q", resolvedHome, got)
 	}
 }
 
-// TestHasHomeWorkspaceConsent_MalformedFile verifies that hasHomeWorkspaceConsent
+// TestHasHomeProjectFolderConsent_MalformedFile verifies that hasHomeProjectFolderConsent
 // fails closed on every form of malformed consent file: invalid JSON, a null
 // timestamp, an empty timestamp, and a missing timestamp field. Only a valid
 // timestamp should result in true. This guards against a corrupt or
@@ -136,7 +136,7 @@ func TestSetClientWorkspaceRootRejectsHome(t *testing.T) {
 //
 // Test isolation is achieved by pointing HOME at a temp directory so the
 // consent file lives under the temp home, not the real ~/.sprout/.
-func TestHasHomeWorkspaceConsent_MalformedFile(t *testing.T) {
+func TestHasHomeProjectFolderConsent_MalformedFile(t *testing.T) {
 	// Each subtest gets its own temp HOME so consent state never leaks between
 	// cases (writeConsentFile always writes to the *current* HOME).
 	cases := []struct {
@@ -185,7 +185,7 @@ func TestHasHomeWorkspaceConsent_MalformedFile(t *testing.T) {
 				t.Fatalf("write consent file: %v", err)
 			}
 
-			got := hasHomeWorkspaceConsent()
+			got := hasHomeProjectFolderConsent()
 			if got != tc.want {
 				t.Errorf("hasHomeWorkspaceConsent() with %s = %v, want %v", tc.name, got, tc.want)
 			}
@@ -212,7 +212,7 @@ func TestHomeGateIgnoresProjectMarkers(t *testing.T) {
 			home := t.TempDir()
 			setTestHome(t, home)
 			t.Setenv("SPROUT_STATE_DIR", filepath.Join(home, ".local", "state", "sprout"))
-			useTestWorkspaceConsent(t, home, tc.consented)
+			useTestProjectFolderConsent(t, home, tc.consented)
 
 			// Give home strong project markers; they must not affect the gate.
 			if err := os.MkdirAll(filepath.Join(home, ".git"), 0755); err != nil {
@@ -227,13 +227,13 @@ func TestHomeGateIgnoresProjectMarkers(t *testing.T) {
 				t.Fatal("precondition: home should look like a project here")
 			}
 
-			workspaceIsHome := isHomeWorkspace(home)
-			if !workspaceIsHome {
+			projectFolderIsHome := isHomeProjectFolder(home)
+			if !projectFolderIsHome {
 				t.Fatal("precondition: workspace should resolve to home")
 			}
 			needsSelection := !isProject
-			if workspaceIsHome {
-				needsSelection = !hasHomeWorkspaceConsent()
+			if projectFolderIsHome {
+				needsSelection = !hasHomeProjectFolderConsent()
 			}
 
 			if needsSelection != tc.wantSelection {
@@ -243,8 +243,8 @@ func TestHomeGateIgnoresProjectMarkers(t *testing.T) {
 	}
 }
 
-// useTestWorkspaceConsent writes (or removes) the home-consent file for a test.
-func useTestWorkspaceConsent(t *testing.T, home string, consented bool) {
+// useTestProjectFolderConsent writes (or removes) the home-consent file for a test.
+func useTestProjectFolderConsent(t *testing.T, home string, consented bool) {
 	t.Helper()
 	// Consent now lives in the state dir, not ~/.sprout
 	stateDir, err := envutil.StateDir()

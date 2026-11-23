@@ -18,8 +18,8 @@ import (
 
 // newTrackerForShellTest builds a minimal ChangeTracker that can be
 // exercised independently of a real Agent. The tracker.view (AgentView
-// seam) is nil — IsOutsideWorkspace handles that case by treating
-// everything as in-workspace, which is exactly what we want here.
+// seam) is nil — IsOutsideProjectFolder handles that case by treating
+// everything as in-project-folder, which is exactly what we want here.
 // Sets shellWalkEnabled=true so the shell-walk paths run without
 // requiring a configuration.Manager (production sets this via
 // EnableChangeTracking → applyChangeTrackingConfig).
@@ -51,7 +51,7 @@ func absTestPath(p string) string {
 // the build invocation still emit individually.
 func TestRecordShellMutations_BulkRollupCollapsesBuildOutput(t *testing.T) {
 	tracker := newTrackerForShellTest(t)
-	tracker.view = stubAgentView{workspaceRoot: "/work"}
+	tracker.view = stubAgentView{projectFolder: "/work"}
 
 	before := map[string]*shellSnapshotEntry{}
 	after := map[string]*shellSnapshotEntry{}
@@ -103,7 +103,7 @@ func TestRecordShellMutations_BulkRollupCollapsesBuildOutput(t *testing.T) {
 // how thinly the churn fans out within it.
 func TestRecordShellMutations_BulkRollupCatchesFanout(t *testing.T) {
 	tracker := newTrackerForShellTest(t)
-	tracker.view = stubAgentView{workspaceRoot: "/work"}
+	tracker.view = stubAgentView{projectFolder: "/work"}
 
 	before := map[string]*shellSnapshotEntry{}
 	after := map[string]*shellSnapshotEntry{}
@@ -130,7 +130,7 @@ func TestRecordShellMutations_BulkRollupCatchesFanout(t *testing.T) {
 	if ch.BulkCount != 260 {
 		t.Errorf("expected bulk count 260, got %d", ch.BulkCount)
 	}
-	// Label is the deepest workspace-relative directory shared by all
+	// Label is the deepest project-folder-relative directory shared by all
 	// items. Since each path is .../pkgN/fileN.go, the only shared
 	// prefix is "repo" (the top-level), so the rollup labels that.
 	if !strings.HasPrefix(ch.FilePath, "repo") {
@@ -145,12 +145,12 @@ func TestRecordShellMutations_BulkRollupCatchesFanout(t *testing.T) {
 // where every rolled-up path sits deep inside one common subtree
 // (e.g. `pip install --target env/` filling
 // env/lib/python3.x/site-packages/...). The rollup label should
-// sharpen to the deepest workspace-relative prefix the bucket shares,
+// sharpen to the deepest project-folder-relative prefix the bucket shares,
 // not the top-level dir — "env/lib/python3.11/site-packages" reads
 // far better than just "env" when that's actually what's underneath.
 func TestRecordShellMutations_BulkRollupLabelSharpens(t *testing.T) {
 	tracker := newTrackerForShellTest(t)
-	tracker.view = stubAgentView{workspaceRoot: "/work"}
+	tracker.view = stubAgentView{projectFolder: "/work"}
 
 	before := map[string]*shellSnapshotEntry{}
 	after := map[string]*shellSnapshotEntry{}
@@ -185,7 +185,7 @@ func TestRecordShellMutations_BulkRollupLabelSharpens(t *testing.T) {
 // behind a rollup just because the files happened to share a dir.
 func TestRecordShellMutations_BelowThresholdStaysItemised(t *testing.T) {
 	tracker := newTrackerForShellTest(t)
-	tracker.view = stubAgentView{workspaceRoot: "/work"}
+	tracker.view = stubAgentView{projectFolder: "/work"}
 
 	before := map[string]*shellSnapshotEntry{}
 	after := map[string]*shellSnapshotEntry{}
@@ -215,7 +215,7 @@ func TestRecordShellMutations_BelowThresholdStaysItemised(t *testing.T) {
 // independently.
 func TestRecordShellMutations_BulkRollupSplitsTopLevelBuckets(t *testing.T) {
 	tracker := newTrackerForShellTest(t)
-	tracker.view = stubAgentView{workspaceRoot: "/work"}
+	tracker.view = stubAgentView{projectFolder: "/work"}
 
 	before := map[string]*shellSnapshotEntry{}
 	after := map[string]*shellSnapshotEntry{}
@@ -252,12 +252,12 @@ func TestRecordShellMutations_BulkRollupSplitsTopLevelBuckets(t *testing.T) {
 
 // TestRecordShellMutations_BulkRollupKeepsRootLevelFilesItemised
 // verifies the root-level exception: even above the volume threshold,
-// files directly at the workspace root (Makefile, package.json,
+// files directly at the project folder (Makefile, package.json,
 // .gitignore, etc.) keep their per-file entries. There's no useful
 // "root" label, and those edits are almost always intentional.
 func TestRecordShellMutations_BulkRollupKeepsRootLevelFilesItemised(t *testing.T) {
 	tracker := newTrackerForShellTest(t)
-	tracker.view = stubAgentView{workspaceRoot: "/work"}
+	tracker.view = stubAgentView{projectFolder: "/work"}
 
 	before := map[string]*shellSnapshotEntry{
 		"/work/Makefile":     {Content: []byte("old"), Size: 3},
@@ -475,7 +475,7 @@ func TestCaptureShellSnapshot_FiltersOversizedFiles(t *testing.T) {
 }
 
 // TestCaptureShellSnapshot_WorksWithoutGit confirms the key fix from
-// the user feedback: the snapshot must work for non-git workspaces and
+// the user feedback: the snapshot must work for non-git project folders and
 // for files git would call "untracked". Previously the implementation
 // shelled out to `git status` and returned nil for any directory that
 // wasn't a git repo, leaving shell-command mutations completely
@@ -538,7 +538,7 @@ func TestCaptureShellSnapshot_SkipsBloatDirectories(t *testing.T) {
 
 // TestTrackShellTurn_DetectsMutationsAfterPrime is the integration
 // test for the cache-based fast path: prime against a starting state,
-// mutate the workspace with raw filesystem ops (mimicking what `sed`,
+// mutate the project folder with raw filesystem ops (mimicking what `sed`,
 // `rm`, `tee`, etc. would do), then call TrackShellTurn and verify
 // each mutation lands in the tracker with the correct op + recoverable
 // original content.
@@ -615,8 +615,8 @@ func TestTrackShellTurn_DetectsMutationsAfterPrime(t *testing.T) {
 // in production called it) until TrackShellTurn was re-wired.
 func TestTrackShellTurn_NonDestructiveBuildRollup(t *testing.T) {
 	// t.TempDir() on macOS lives under /var, a symlink to /private/var.
-	// emitWithBulkRollup EvalSymlinks-resolves the workspace root while
-	// walkWorkspace records unresolved paths — use the resolved dir for
+	// emitWithBulkRollup EvalSymlinks-resolves the project folder while
+	// walkProjectFolder records unresolved paths — use the resolved dir for
 	// both so bucketing matches (production roots are symlink-free).
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
@@ -625,9 +625,9 @@ func TestTrackShellTurn_NonDestructiveBuildRollup(t *testing.T) {
 
 	tracker := newTrackerForShellTest(t)
 	// emitWithBulkRollup buckets by top-level dir relative to the
-	// agent's workspace root; without an agent pointer every path
+	// agent's project folder; without an agent pointer every path
 	// buckets as "root-level" and emits per-file.
-	tracker.view = stubAgentView{workspaceRoot: dir}
+	tracker.view = stubAgentView{projectFolder: dir}
 	tracker.PrimeShellTracking(dir)
 
 	// Simulate a build dropping shellBulkThreshold files under one
@@ -698,7 +698,7 @@ func TestTrackShellTurn_SubdirWorkDirKeepsRootCache(t *testing.T) {
 	}
 
 	// The agent cd's into sub/ and a subsequent shell command creates
-	// b.txt at the workspace root (e.g. `cd sub && ../scripts/gen.sh`).
+	// b.txt at the project folder (e.g. `cd sub && ../scripts/gen.sh`).
 	sub := filepath.Join(dir, "sub")
 	if err := os.Mkdir(sub, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -725,7 +725,7 @@ func TestTrackShellTurn_SubdirWorkDirKeepsRootCache(t *testing.T) {
 }
 
 // TestTrackShellTurn_UnrelatedWorkDirRePrimes covers the genuine
-// workspace-switch case: a workDir outside the cached root can't be
+// project-folder-switch case: a workDir outside the cached root can't be
 // diffed against the old tree, so a re-prime is correct there.
 func TestTrackShellTurn_UnrelatedWorkDirRePrimes(t *testing.T) {
 	dirA := t.TempDir()
@@ -878,13 +878,13 @@ func TestTrackShellTurn_TruncatedWalkSkipsFalseDeletes(t *testing.T) {
 	}
 }
 
-// TestWalkWorkspace_AdaptiveAutoSkipLearnsFatDirs confirms that the
+// TestWalkProjectFolder_AdaptiveAutoSkipLearnsFatDirs confirms that the
 // walker identifies directories with too many direct children, adds
 // them to ct.autoSkipDirs, and then skips them on subsequent walks.
 // This is the safety net for user-bloat dirs we didn't anticipate in
 // the static skip list (e.g., a custom `releases/` directory full of
 // snapshot tarballs, an misplaced data dump, a vendored mirror).
-func TestWalkWorkspace_AdaptiveAutoSkipLearnsFatDirs(t *testing.T) {
+func TestWalkProjectFolder_AdaptiveAutoSkipLearnsFatDirs(t *testing.T) {
 	dir := t.TempDir()
 
 	// Lower the threshold so we don't need to create 1500 files.
@@ -943,13 +943,13 @@ func TestWalkWorkspace_AdaptiveAutoSkipLearnsFatDirs(t *testing.T) {
 	}
 }
 
-// TestWalkWorkspace_AdaptiveAutoSkipLearnsDistributedBloat covers the
+// TestWalkProjectFolder_AdaptiveAutoSkipLearnsDistributedBloat covers the
 // distributed-bloat case: thousands of files spread across many
 // shallow subdirectories (e.g. Swift SPM's .build/index-build/...
 // with 9000 files across hundreds of 6D/, 6E/, … subdirs). No single
 // subdirectory exceeds the threshold, but the parent should still be
 // auto-skipped once the cumulative descendant count is computed.
-func TestWalkWorkspace_AdaptiveAutoSkipLearnsDistributedBloat(t *testing.T) {
+func TestWalkProjectFolder_AdaptiveAutoSkipLearnsDistributedBloat(t *testing.T) {
 	dir := t.TempDir()
 
 	// Lower both thresholds so we don't need to create thousands of
@@ -1031,14 +1031,14 @@ func TestWalkWorkspace_AdaptiveAutoSkipLearnsDistributedBloat(t *testing.T) {
 	}
 }
 
-// TestWalkWorkspace_CumulativeThresholdDoesNotFalsePositiveOnSourceTrees
+// TestWalkProjectFolder_CumulativeThresholdDoesNotFalsePositiveOnSourceTrees
 // verifies that a legitimate source tree with files spread across
 // subdirectories does NOT get auto-skipped, even when the cumulative
 // descendant count is non-trivial. The cumulative threshold (10000 in
 // production) is set far above any honest source tree; this test
 // simulates a 5000-file source dir (well under 10000) and confirms
 // it stays tracked.
-func TestWalkWorkspace_CumulativeThresholdDoesNotFalsePositiveOnSourceTrees(t *testing.T) {
+func TestWalkProjectFolder_CumulativeThresholdDoesNotFalsePositiveOnSourceTrees(t *testing.T) {
 	dir := t.TempDir()
 
 	// Use production thresholds scaled proportionally:
@@ -1092,7 +1092,7 @@ func TestWalkWorkspace_CumulativeThresholdDoesNotFalsePositiveOnSourceTrees(t *t
 	}
 }
 
-// TestWalkWorkspace_CachedContentDoesNotExhaustBudget is the M2 regression
+// TestWalkProjectFolder_CachedContentDoesNotExhaustBudget is the M2 regression
 // test. The byte budget (shellMaxTotalBytes) guards *new* allocations on a
 // given walk. Previously the stat fast path re-counted cached (unchanged)
 // content toward the budget — double-counting memory that was already
@@ -1105,7 +1105,7 @@ func TestWalkWorkspace_CumulativeThresholdDoesNotFalsePositiveOnSourceTrees(t *t
 // the cached file re-counts toward the budget and the changed file is
 // skipped; with the fix, cached content isn't counted and the changed file
 // is read fresh and captured.
-func TestWalkWorkspace_CachedContentDoesNotExhaustBudget(t *testing.T) {
+func TestWalkProjectFolder_CachedContentDoesNotExhaustBudget(t *testing.T) {
 	dir := t.TempDir()
 
 	// cached.txt: a file that fits the budget by itself and stays
@@ -1141,7 +1141,7 @@ func TestWalkWorkspace_CachedContentDoesNotExhaustBudget(t *testing.T) {
 	mustWriteFile(t, changedFile, grown)
 	bumpMtime(t, changedFile)
 
-	snap, changes, _ := tracker.walkWorkspace(dir, tracker.shellCache, false)
+	snap, changes, _ := tracker.walkProjectFolder(dir, tracker.shellCache, false)
 
 	// The changed file must be captured with fresh content (NOT skipped
 	// with "snapshot budget exceeded"). If the bug were present, cached
@@ -1174,7 +1174,7 @@ func TestWalkWorkspace_CachedContentDoesNotExhaustBudget(t *testing.T) {
 
 // TestCaptureShellSnapshot_SkipsSymlinks confirms the walker doesn't
 // dereference symlinks. Following a symlink to /etc/passwd or
-// somewhere in $HOME would leak content outside the workspace into
+// somewhere in $HOME would leak content outside the project folder into
 // the snapshot map and (worse) into the recovery buffer.
 func TestCaptureShellSnapshot_SkipsSymlinks(t *testing.T) {
 	dir := t.TempDir()
@@ -1464,7 +1464,7 @@ func TestTrackShellTurn_TruncatedDestructiveWalkAppendsWarning(t *testing.T) {
 // `go test -race` to detect it.
 func TestRecordShellMutations_NoRaceWithConcurrentReads(t *testing.T) {
 	tracker := newTrackerForShellTest(t)
-	tracker.view = stubAgentView{workspaceRoot: "/work"}
+	tracker.view = stubAgentView{projectFolder: "/work"}
 
 	// Writer goroutine: repeatedly call RecordShellMutations, which
 	// appends via appendShellMutation / appendChange under ct.mu.
@@ -1533,7 +1533,7 @@ func BenchmarkCaptureShellSnapshot_SproutRepo(b *testing.B) {
 }
 
 // BenchmarkTrackShellTurn_WarmNoChanges measures the per-shell_command
-// cost AFTER the cache has been primed and the workspace hasn't
+// cost AFTER the cache has been primed and the project folder hasn't
 // changed. This is the realistic steady-state cost — most agent
 // shell commands don't mutate files (ls, grep, build, test, …). The
 // fast path lets us stat-walk without re-reading content for unchanged
@@ -1581,16 +1581,16 @@ func readShellSkipDirsFile(t *testing.T, tmpDir string) shellSkipDirsFileSchema 
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return shellSkipDirsFileSchema{
-			Workspaces: map[string][]string{},
-			LastUsed:   map[string]int64{},
+			ProjectFolders: map[string][]string{},
+			LastUsed:       map[string]int64{},
 		}
 	}
 	var schema shellSkipDirsFileSchema
 	if err := json.Unmarshal(data, &schema); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if schema.Workspaces == nil {
-		schema.Workspaces = map[string][]string{}
+	if schema.ProjectFolders == nil {
+		schema.ProjectFolders = map[string][]string{}
 	}
 	if schema.LastUsed == nil {
 		schema.LastUsed = map[string]int64{}
@@ -1599,21 +1599,21 @@ func readShellSkipDirsFile(t *testing.T, tmpDir string) shellSkipDirsFileSchema 
 }
 
 // TestShellSkipDirs_EvictsLRUWhenOverCap verifies that saving with
-// more than maxPersistedWorkspaces entries evicts the least-recently-used.
+// more than maxPersistedProjectFolders entries evicts the least-recently-used.
 func TestShellSkipDirs_EvictsLRUWhenOverCap(t *testing.T) {
 	tmpDir := withShellSkipDirsFile(t)
 
-	// Pre-populate the file with maxPersistedWorkspaces + 2 entries,
+	// Pre-populate the file with maxPersistedProjectFolders + 2 entries,
 	// each with a distinct LastUsed timestamp.
 	schema := shellSkipDirsFileSchema{
-		Version:    1,
-		Workspaces: make(map[string][]string),
-		LastUsed:   make(map[string]int64),
+		Version:        1,
+		ProjectFolders: make(map[string][]string),
+		LastUsed:       make(map[string]int64),
 	}
-	baseTime := time.Now().Unix() - int64(maxPersistedWorkspaces*100)
-	for i := 0; i < maxPersistedWorkspaces+2; i++ {
+	baseTime := time.Now().Unix() - int64(maxPersistedProjectFolders*100)
+	for i := 0; i < maxPersistedProjectFolders+2; i++ {
 		root := filepath.Join(tmpDir, "ws", string(rune('a'+i)))
-		schema.Workspaces[root] = []string{"bigdir"}
+		schema.ProjectFolders[root] = []string{"bigdir"}
 		schema.LastUsed[root] = baseTime + int64(i*100)
 	}
 	// Write initial state.
@@ -1626,7 +1626,7 @@ func TestShellSkipDirs_EvictsLRUWhenOverCap(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Save a new workspace — should trigger eviction of the 2 oldest.
+	// Save a new project folder — should trigger eviction of the 2 oldest.
 	newRoot := filepath.Join(tmpDir, "ws", "newest")
 	newDirs := map[string]bool{"bigdir": true}
 	if err := saveAutoSkipDirsFor(newRoot, newDirs); err != nil {
@@ -1634,16 +1634,16 @@ func TestShellSkipDirs_EvictsLRUWhenOverCap(t *testing.T) {
 	}
 
 	got := readShellSkipDirsFile(t, tmpDir)
-	if len(got.Workspaces) > maxPersistedWorkspaces {
-		t.Fatalf("expected at most %d workspaces, got %d", maxPersistedWorkspaces, len(got.Workspaces))
+	if len(got.ProjectFolders) > maxPersistedProjectFolders {
+		t.Fatalf("expected at most %d workspaces, got %d", maxPersistedProjectFolders, len(got.ProjectFolders))
 	}
-	if _, ok := got.Workspaces[newRoot]; !ok {
+	if _, ok := got.ProjectFolders[newRoot]; !ok {
 		t.Errorf("new workspace %q not persisted", newRoot)
 	}
 
 	// The 2 oldest (by LastUsed) should have been evicted.
-	roots := make([]string, 0, len(got.Workspaces))
-	for r := range got.Workspaces {
+	roots := make([]string, 0, len(got.ProjectFolders))
+	for r := range got.ProjectFolders {
 		roots = append(roots, r)
 	}
 	sort.Strings(roots)
@@ -1657,7 +1657,7 @@ func TestShellSkipDirs_EvictsLRUWhenOverCap(t *testing.T) {
 }
 
 // TestShellSkipDirs_BumpsLastUsedOnSave verifies that saving updates
-// the LastUsed timestamp for the current workspace.
+// the LastUsed timestamp for the current project folder.
 func TestShellSkipDirs_BumpsLastUsedOnSave(t *testing.T) {
 	tmpDir := withShellSkipDirsFile(t)
 	root := filepath.Join(tmpDir, "ws", "test")
@@ -1685,7 +1685,7 @@ func TestShellSkipDirs_BumpsLastUsedOnSave(t *testing.T) {
 func TestShellSkipDirs_HandlesMissingLastUsed(t *testing.T) {
 	tmpDir := withShellSkipDirsFile(t)
 
-	// Write a file with only Workspaces (old format).
+	// Write a file with only Project folders (old format).
 	path := filepath.Join(tmpDir, shellSkipDirsFilename)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
@@ -1695,13 +1695,13 @@ func TestShellSkipDirs_HandlesMissingLastUsed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Load should work and return the old workspace's dirs.
+	// Load should work and return the old project folder's dirs.
 	loaded := loadAutoSkipDirsFor("/old/ws")
 	if !loaded["fatdir"] {
 		t.Errorf("expected fatdir in loaded set, got %v", loaded)
 	}
 
-	// Save should populate LastUsed for the current workspace.
+	// Save should populate LastUsed for the current project folder.
 	if err := saveAutoSkipDirsFor("/new/ws", map[string]bool{"x": true}); err != nil {
 		t.Fatalf("save: %v", err)
 	}
@@ -1724,14 +1724,14 @@ func TestShellSkipDirs_AtomicWriteProducesValidJSON(t *testing.T) {
 	}
 
 	got := readShellSkipDirsFile(t, tmpDir)
-	if len(got.Workspaces[root]) != 5 {
-		t.Errorf("expected 5 dirs, got %d: %v", len(got.Workspaces[root]), got.Workspaces[root])
+	if len(got.ProjectFolders[root]) != 5 {
+		t.Errorf("expected 5 dirs, got %d: %v", len(got.ProjectFolders[root]), got.ProjectFolders[root])
 	}
 }
 
-// TestShellSkipDirs_EmptyWorkspaceNoOp verifies that saving with an
-// empty workspace or empty dirs is a no-op (no file written).
-func TestShellSkipDirs_EmptyWorkspaceNoOp(t *testing.T) {
+// TestShellSkipDirs_EmptyProjectFolderNoOp verifies that saving with an
+// empty project folder or empty dirs is a no-op (no file written).
+func TestShellSkipDirs_EmptyProjectFolderNoOp(t *testing.T) {
 	tmpDir := withShellSkipDirsFile(t)
 	if err := saveAutoSkipDirsFor("", map[string]bool{"a": true}); err != nil {
 		t.Errorf("save with empty workspace: %v", err)
@@ -1745,9 +1745,9 @@ func TestShellSkipDirs_EmptyWorkspaceNoOp(t *testing.T) {
 	}
 }
 
-// TestShellSkipDirs_LoadRecordsWorkspaceForBump verifies that loading
-// a workspace returns the persisted set without mutating it.
-func TestShellSkipDirs_LoadRecordsWorkspaceForBump(t *testing.T) {
+// TestShellSkipDirs_LoadRecordsProjectFolderForBump verifies that loading
+// a project folder returns the persisted set without mutating it.
+func TestShellSkipDirs_LoadRecordsProjectFolderForBump(t *testing.T) {
 	tmpDir := withShellSkipDirsFile(t)
 	root := filepath.Join(tmpDir, "ws", "loaded")
 
@@ -1757,16 +1757,16 @@ func TestShellSkipDirs_LoadRecordsWorkspaceForBump(t *testing.T) {
 		t.Fatal(err)
 	}
 	old := shellSkipDirsFileSchema{
-		Version:    1,
-		Workspaces: map[string][]string{root: {"x"}},
-		LastUsed:   map[string]int64{root: 1000}, // ancient
+		Version:        1,
+		ProjectFolders: map[string][]string{root: {"x"}},
+		LastUsed:       map[string]int64{root: 1000}, // ancient
 	}
 	data, _ := json.MarshalIndent(&old, "", "  ")
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	// Load the workspace — should return the persisted set.
+	// Load the project folder — should return the persisted set.
 	loaded := loadAutoSkipDirsFor(root)
 	if !loaded["x"] {
 		t.Fatalf("expected x in loaded set")
@@ -2037,7 +2037,7 @@ func TestSP077_KeepsUntrackedFileCreations(t *testing.T) {
 }
 
 // TestSP077_NoGitRepoRecordsEverything confirms that in a non-git
-// workspace, ALL deltas are recorded (no filtering). The filter is a
+// project folder, ALL deltas are recorded (no filtering). The filter is a
 // no-op when git is not available.
 func TestSP077_NoGitRepoRecordsEverything(t *testing.T) {
 	dir := t.TempDir() // NO git init

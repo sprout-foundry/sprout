@@ -17,14 +17,14 @@ import (
 // ChangeTracker redaction tests
 // ---------------------------------------------------------------------------
 
-func TestTrackFileWrite_InWorkspace(t *testing.T) {
+func TestTrackFileWrite_InProjectFolder(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.SetWorkspaceRoot(ws)
+	agent.SetProjectFolder(ws)
 
 	ct := NewChangeTracker(agent.changesView(), "test instruction")
 
-	// Create a file inside the workspace
+	// Create a file inside the project folder
 	filePath := filepath.Join(ws, "test.go")
 	if err := os.WriteFile(filePath, []byte("package main\n"), 0644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
@@ -55,14 +55,14 @@ func TestTrackFileWrite_InWorkspace(t *testing.T) {
 	}
 }
 
-func TestTrackFileWrite_OutOfWorkspace(t *testing.T) {
+func TestTrackFileWrite_OutOfProjectFolder(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.SetWorkspaceRoot(ws)
+	agent.SetProjectFolder(ws)
 
 	ct := NewChangeTracker(agent.changesView(), "test instruction")
 
-	// Create a file outside the workspace
+	// Create a file outside the project folder
 	externalDir := t.TempDir()
 	filePath := filepath.Join(externalDir, "secrets.txt")
 	originalContent := "AWS_SECRET_KEY=abc123"
@@ -89,14 +89,14 @@ func TestTrackFileWrite_OutOfWorkspace(t *testing.T) {
 	}
 }
 
-func TestTrackFileWrite_NewFileInWorkspace(t *testing.T) {
+func TestTrackFileWrite_NewFileInProjectFolder(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.SetWorkspaceRoot(ws)
+	agent.SetProjectFolder(ws)
 
 	ct := NewChangeTracker(agent.changesView(), "test instruction")
 
-	// Write a new file that doesn't exist yet (inside workspace)
+	// Write a new file that doesn't exist yet (inside project folder)
 	filePath := filepath.Join(ws, "newfile.go")
 	newContent := "package main\n"
 	if err := ct.TrackFileWrite(filePath, "", newContent); err != nil {
@@ -120,14 +120,14 @@ func TestTrackFileWrite_NewFileInWorkspace(t *testing.T) {
 	}
 }
 
-func TestTrackFileWrite_NewFileOutOfWorkspace(t *testing.T) {
+func TestTrackFileWrite_NewFileOutOfProjectFolder(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.SetWorkspaceRoot(ws)
+	agent.SetProjectFolder(ws)
 
 	ct := NewChangeTracker(agent.changesView(), "test instruction")
 
-	// Write a new file outside workspace
+	// Write a new file outside project folder
 	externalDir := t.TempDir()
 	filePath := filepath.Join(externalDir, "new_secrets.txt")
 	newContent := "secret=value"
@@ -149,14 +149,14 @@ func TestTrackFileWrite_NewFileOutOfWorkspace(t *testing.T) {
 	}
 }
 
-func TestTrackFileWrite_EmptyWorkspaceRoot(t *testing.T) {
-	// When workspaceRoot is empty, files should NOT be redacted
+func TestTrackFileWrite_EmptyProjectFolder(t *testing.T) {
+	// When projectFolder is empty, files should NOT be redacted
 	agent := NewTestAgent()
-	agent.SetWorkspaceRoot("")
+	agent.SetProjectFolder("")
 
 	ct := NewChangeTracker(agent.changesView(), "test instruction")
 
-	// Create a file in /tmp (outside any workspace)
+	// Create a file in /tmp (outside any project folder)
 	externalDir := t.TempDir()
 	filePath := filepath.Join(externalDir, "file.txt")
 	originalContent := "sensitive data"
@@ -183,19 +183,19 @@ func TestTrackFileWrite_EmptyWorkspaceRoot(t *testing.T) {
 	}
 }
 
-func TestTrackFileWrite_RelativePathInWorkspace(t *testing.T) {
+func TestTrackFileWrite_RelativePathInProjectFolder(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.SetWorkspaceRoot(ws)
+	agent.SetProjectFolder(ws)
 
 	ct := NewChangeTracker(agent.changesView(), "test instruction")
 
-	// Change to workspace dir so relative path resolves inside workspace
+	// Change to project folder dir so relative path resolves inside project folder
 	origWd, _ := os.Getwd()
 	os.Chdir(ws)
 	defer os.Chdir(origWd)
 
-	// Create a file with relative path inside workspace
+	// Create a file with relative path inside project folder
 	relPath := "subdir/file.go"
 	subDir := filepath.Join(ws, "subdir")
 	if err := os.MkdirAll(subDir, 0755); err != nil {
@@ -228,7 +228,7 @@ func TestTrackFileWrite_RelativePathInWorkspace(t *testing.T) {
 func TestTrackFileWrite_Disabled(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.SetWorkspaceRoot(ws)
+	agent.SetProjectFolder(ws)
 
 	ct := NewChangeTracker(agent.changesView(), "test instruction")
 	ct.Disable()
@@ -251,10 +251,10 @@ func TestTrackFileWrite_Disabled(t *testing.T) {
 // TrackFileEdit tests
 // ---------------------------------------------------------------------------
 
-func TestTrackFileEdit_InWorkspace(t *testing.T) {
+func TestTrackFileEdit_InProjectFolder(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.SetWorkspaceRoot(ws)
+	agent.SetProjectFolder(ws)
 
 	ct := NewChangeTracker(agent.changesView(), "test instruction")
 
@@ -282,10 +282,10 @@ func TestTrackFileEdit_InWorkspace(t *testing.T) {
 	}
 }
 
-func TestTrackFileEdit_OutOfWorkspace(t *testing.T) {
+func TestTrackFileEdit_OutOfProjectFolder(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.SetWorkspaceRoot(ws)
+	agent.SetProjectFolder(ws)
 
 	ct := NewChangeTracker(agent.changesView(), "test instruction")
 
@@ -311,9 +311,9 @@ func TestTrackFileEdit_OutOfWorkspace(t *testing.T) {
 	}
 }
 
-func TestTrackFileEdit_EmptyWorkspaceRoot(t *testing.T) {
+func TestTrackFileEdit_EmptyProjectFolder(t *testing.T) {
 	agent := NewTestAgent()
-	agent.SetWorkspaceRoot("")
+	agent.SetProjectFolder("")
 
 	ct := NewChangeTracker(agent.changesView(), "test instruction")
 
@@ -341,7 +341,7 @@ func TestTrackFileEdit_EmptyWorkspaceRoot(t *testing.T) {
 func TestTrackFileEdit_Disabled(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.SetWorkspaceRoot(ws)
+	agent.SetProjectFolder(ws)
 
 	ct := NewChangeTracker(agent.changesView(), "test instruction")
 	ct.Disable()
@@ -356,62 +356,62 @@ func TestTrackFileEdit_Disabled(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// isOutsideWorkspace edge cases
+// isOutsideProjectFolder edge cases
 // ---------------------------------------------------------------------------
 
-func TestIsOutsideWorkspace_NilAgent(t *testing.T) {
+func TestIsOutsideProjectFolder_NilAgent(t *testing.T) {
 	// The seam made "nil agent" a nil view — a bare tracker must not panic
 	// and must not redact.
 	ct := NewChangeTracker(nil, "")
 
 	// Should not panic and should return false (don't redact)
-	result := ct.IsOutsideWorkspace("/tmp/file.txt")
+	result := ct.IsOutsideProjectFolder("/tmp/file.txt")
 	if result {
 		t.Errorf("nil agent should not redact, got isOutsideWorkspace = true")
 	}
 }
 
-func TestIsOutsideWorkspace_NestedPathInWorkspace(t *testing.T) {
+func TestIsOutsideProjectFolder_NestedPathInProjectFolder(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.SetWorkspaceRoot(ws)
+	agent.SetProjectFolder(ws)
 
 	ct := NewChangeTracker(agent.changesView(), "test")
 
-	// Deeply nested path inside workspace should not be redacted
+	// Deeply nested path inside project folder should not be redacted
 	nestedPath := filepath.Join(ws, "a", "b", "c", "d", "file.go")
-	result := ct.IsOutsideWorkspace(nestedPath)
+	result := ct.IsOutsideProjectFolder(nestedPath)
 	if result {
 		t.Errorf("nested path inside workspace should not be redacted")
 	}
 }
 
-func TestIsOutsideWorkspace_SiblingDirectory(t *testing.T) {
+func TestIsOutsideProjectFolder_SiblingDirectory(t *testing.T) {
 	ws := t.TempDir()
 	siblingDir := t.TempDir()
 	agent := NewTestAgent()
-	agent.SetWorkspaceRoot(ws)
+	agent.SetProjectFolder(ws)
 
 	ct := NewChangeTracker(agent.changesView(), "test")
 
 	// A file in a sibling directory should be redacted
 	filePath := filepath.Join(siblingDir, "file.go")
-	result := ct.IsOutsideWorkspace(filePath)
+	result := ct.IsOutsideProjectFolder(filePath)
 	if !result {
 		t.Errorf("sibling directory should be redacted")
 	}
 }
 
-func TestIsOutsideWorkspace_WorkspaceRootIsParentOfFile(t *testing.T) {
+func TestIsOutsideProjectFolder_ProjectFolderIsParentOfFile(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.SetWorkspaceRoot(ws)
+	agent.SetProjectFolder(ws)
 
 	ct := NewChangeTracker(agent.changesView(), "test")
 
-	// File directly in workspace root
+	// File directly in project folder
 	filePath := filepath.Join(ws, "file.go")
-	result := ct.IsOutsideWorkspace(filePath)
+	result := ct.IsOutsideProjectFolder(filePath)
 	if result {
 		t.Errorf("file in workspace root should not be redacted")
 	}
@@ -424,7 +424,7 @@ func TestIsOutsideWorkspace_WorkspaceRootIsParentOfFile(t *testing.T) {
 func TestGetTrackedFiles(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.SetWorkspaceRoot(ws)
+	agent.SetProjectFolder(ws)
 
 	ct := NewChangeTracker(agent.changesView(), "test")
 
@@ -446,7 +446,7 @@ func TestGetTrackedFiles(t *testing.T) {
 func TestClear(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.SetWorkspaceRoot(ws)
+	agent.SetProjectFolder(ws)
 
 	ct := NewChangeTracker(agent.changesView(), "test")
 	ct.TrackFileWrite(filepath.Join(ws, "a.go"), "", "content")
@@ -465,7 +465,7 @@ func TestClear(t *testing.T) {
 func TestReset(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.SetWorkspaceRoot(ws)
+	agent.SetProjectFolder(ws)
 
 	ct := NewChangeTracker(agent.changesView(), "old instruction")
 	oldID := ct.GetRevisionID()
@@ -488,7 +488,7 @@ func TestReset(t *testing.T) {
 func TestEnableDisable(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.SetWorkspaceRoot(ws)
+	agent.SetProjectFolder(ws)
 
 	ct := NewChangeTracker(agent.changesView(), "test")
 
@@ -518,7 +518,7 @@ func TestEnableDisable(t *testing.T) {
 func TestTrackFileWrite_RelativePathNormalizedToAbsolute(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.SetWorkspaceRoot(ws)
+	agent.SetProjectFolder(ws)
 
 	ct := NewChangeTracker(agent.changesView(), "test instruction")
 
@@ -538,7 +538,7 @@ func TestTrackFileWrite_RelativePathNormalizedToAbsolute(t *testing.T) {
 		t.Errorf("stored FilePath should be absolute, got %q", stored)
 	}
 
-	// The absolute path should resolve under the workspace root.
+	// The absolute path should resolve under the project folder.
 	expected, err := filepath.Abs(filepath.Join(ws, "pkg/agent/foo.go"))
 	if err != nil {
 		t.Fatalf("filepath.Abs: %v", err)
@@ -553,7 +553,7 @@ func TestTrackFileWrite_RelativePathNormalizedToAbsolute(t *testing.T) {
 func TestTrackFileEdit_RelativePathNormalizedToAbsolute(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.SetWorkspaceRoot(ws)
+	agent.SetProjectFolder(ws)
 
 	ct := NewChangeTracker(agent.changesView(), "test instruction")
 
@@ -579,12 +579,12 @@ func TestTrackFileEdit_RelativePathNormalizedToAbsolute(t *testing.T) {
 func TestRecovery_ResolvesCorrectlyAfterChdir(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.SetWorkspaceRoot(ws)
+	agent.SetProjectFolder(ws)
 
 	ct := NewChangeTracker(agent.changesView(), "test instruction")
 	agent.changeTracker = ct
 
-	// Track a relative path while CWD == workspace.
+	// Track a relative path while CWD == project folder.
 	origWd, _ := os.Getwd()
 	defer os.Chdir(origWd)
 	os.Chdir(ws)
@@ -623,7 +623,7 @@ func TestRecovery_ResolvesCorrectlyAfterChdir(t *testing.T) {
 	}
 
 	// Recovery via handleRecoverFile must resolve to the original
-	// workspace path, not the new CWD.
+	// project folder path, not the new CWD.
 	result, err := handleRecoverFile(nil, agent, map[string]interface{}{
 		"path":  stored,
 		"scope": "latest",
@@ -636,7 +636,7 @@ func TestRecovery_ResolvesCorrectlyAfterChdir(t *testing.T) {
 	if !strings.Contains(result, `"recovered": true`) {
 		t.Errorf("expected recovery to succeed, got: %s", result)
 	}
-	// The path in the result should be the ORIGINAL workspace location.
+	// The path in the result should be the ORIGINAL project folder location.
 	quotedPath, _ := json.Marshal(filePath)
 	if !strings.Contains(result, `"path": `+string(quotedPath)) {
 		t.Errorf("expected recovery path to be %q, got: %s", filePath, result)
@@ -680,7 +680,7 @@ func TestChangeTrackingConfigGate_DefaultNoConfig(t *testing.T) {
 	a := &Agent{
 		state:         NewAgentStateManager(false),
 		configManager: mgr,
-		workspaceRoot: t.TempDir(),
+		projectFolder: t.TempDir(),
 	}
 	a.EnableChangeTracking("test instructions")
 
@@ -712,7 +712,7 @@ func TestChangeTrackingConfigGate_ExplicitlyEnabled(t *testing.T) {
 	a := &Agent{
 		state:         NewAgentStateManager(false),
 		configManager: mgr,
-		workspaceRoot: t.TempDir(),
+		projectFolder: t.TempDir(),
 	}
 	a.EnableChangeTracking("test instructions")
 
@@ -748,7 +748,7 @@ func TestChangeTrackingConfigGate_ExplicitlyDisabled(t *testing.T) {
 	a := &Agent{
 		state:         NewAgentStateManager(false),
 		configManager: mgr,
-		workspaceRoot: t.TempDir(),
+		projectFolder: t.TempDir(),
 	}
 	a.EnableChangeTracking("test instructions")
 
@@ -772,7 +772,7 @@ func TestChangeTrackingConfigGate_NilConfigManager(t *testing.T) {
 	a := &Agent{
 		state:         NewAgentStateManager(false),
 		configManager: nil, // test path: no config manager
-		workspaceRoot: t.TempDir(),
+		projectFolder: t.TempDir(),
 	}
 	a.EnableChangeTracking("test instructions")
 
@@ -1332,7 +1332,7 @@ func TestMergeChild_DoesNotMutateInput(t *testing.T) {
 func TestMergeChild_TagsSource(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.projectFolder = ws
 	ct := NewChangeTracker(agent.changesView(), "primary instruction")
 
 	// Record a pre-existing primary-agent edit (no Source).
@@ -1369,7 +1369,7 @@ func TestMergeChild_TagsSource(t *testing.T) {
 func TestAgent_MergeSubagentChanges(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.projectFolder = ws
 	agent.changeTracker = NewChangeTracker(agent.changesView(), "primary instruction")
 
 	changes := []TrackedFileChange{
@@ -1417,7 +1417,7 @@ func TestAgent_MergeSubagentChanges(t *testing.T) {
 func TestAgent_MergeSubagentChanges_EmptyPersonaUsesBareTag(t *testing.T) {
 	ws := t.TempDir()
 	agent := NewTestAgent()
-	agent.workspaceRoot = ws
+	agent.projectFolder = ws
 	agent.changeTracker = NewChangeTracker(agent.changesView(), "primary instruction")
 
 	changes := []TrackedFileChange{
@@ -1485,7 +1485,7 @@ func TestAgent_MergeSubagentChanges_NilTrackerSafe(t *testing.T) {
 func TestSession_BufferSurvivesReEnable(t *testing.T) {
 	ws := t.TempDir()
 	a := NewTestAgent()
-	a.workspaceRoot = ws
+	a.projectFolder = ws
 
 	// Turn 1: enable tracking and record an edit.
 	a.EnableChangeTracking("first query")
@@ -1520,7 +1520,7 @@ func TestSession_BufferSurvivesReEnable(t *testing.T) {
 func TestSession_ListChangesReflectsFullSession(t *testing.T) {
 	ws := t.TempDir()
 	a := NewTestAgent()
-	a.workspaceRoot = ws
+	a.projectFolder = ws
 
 	a.EnableChangeTracking("session start")
 	a.TrackFileWrite(filepath.Join(ws, "auth.go"), "", "contents")
@@ -1559,12 +1559,12 @@ func TestSession_ListChangesPersistsSessionScoped(t *testing.T) {
 	// entries.
 	ws := t.TempDir()
 	a1 := NewTestAgent()
-	a1.workspaceRoot = ws
+	a1.projectFolder = ws
 	a1.EnableChangeTracking("session one")
 	rev1 := a1.GetRevisionID()
 
 	a2 := NewTestAgent()
-	a2.workspaceRoot = ws
+	a2.projectFolder = ws
 	a2.EnableChangeTracking("session two")
 	rev2 := a2.GetRevisionID()
 
@@ -1604,7 +1604,7 @@ func TestSession_SubagentDoesNotCommit(t *testing.T) {
 
 	// Build a subagent (depth > 0) with tracking enabled and one change.
 	sub := NewTestAgent()
-	sub.workspaceRoot = ws
+	sub.projectFolder = ws
 	sub.subagentDepth = 1
 	sub.EnableChangeTracking("subagent run")
 	sub.TrackFileWrite(filepath.Join(ws, "by_subagent.go"), "", "contents")
@@ -1629,7 +1629,7 @@ func TestSession_SubagentDoesNotCommit(t *testing.T) {
 
 	// Sanity: a primary agent (depth 0) with the same change DOES commit.
 	primary := NewTestAgent()
-	primary.workspaceRoot = ws
+	primary.projectFolder = ws
 	primary.EnableChangeTracking("primary run")
 	primary.TrackFileWrite(filepath.Join(ws, "by_primary.go"), "", "contents")
 	shouldCommitPrimary := !primary.IsSubagent() && primary.IsChangeTrackingEnabled() && primary.GetChangeCount() > 0
@@ -1645,7 +1645,7 @@ func TestSession_SubagentDoesNotCommit(t *testing.T) {
 func TestSession_PersistedDedupedAgainstInMemory(t *testing.T) {
 	ws := t.TempDir()
 	a := NewTestAgent()
-	a.workspaceRoot = ws
+	a.projectFolder = ws
 	a.EnableChangeTracking("dedup session")
 
 	path := filepath.Join(ws, "shared.go")

@@ -5,14 +5,14 @@ import (
 	"strings"
 )
 
-type workspaceRootContextKey string
+type projectFolderContextKey string
 type effectiveCwdContextKey string
 type sessionAllowedFoldersContextKey string
 type auditLoggerContextKey string
 
 const (
-	workspaceRootContextKeyValue         workspaceRootContextKey         = "workspace_root"
-	securityBypassContextKeyValue        workspaceRootContextKey         = "security_bypass"
+	projectFolderContextKeyValue         projectFolderContextKey         = "workspace_root"
+	securityBypassContextKeyValue        projectFolderContextKey         = "security_bypass"
 	effectiveCwdContextKeyValue          effectiveCwdContextKey          = "effective_cwd"
 	sessionAllowedFoldersContextKeyValue sessionAllowedFoldersContextKey = "session_allowed_folders"
 	auditLoggerContextKeyValue           auditLoggerContextKey           = "audit_logger"
@@ -27,30 +27,30 @@ type AuditLogger interface {
 	LogJSON(data []byte) error
 }
 
-// WithWorkspaceRoot stores an explicit workspace root on the context so file and
+// WithProjectFolder stores an explicit project folder on the context so file and
 // process operations do not depend on the process-global cwd.
-func WithWorkspaceRoot(ctx context.Context, workspaceRoot string) context.Context {
-	workspaceRoot = strings.TrimSpace(workspaceRoot)
+func WithProjectFolder(ctx context.Context, projectFolder string) context.Context {
+	projectFolder = strings.TrimSpace(projectFolder)
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if workspaceRoot == "" {
+	if projectFolder == "" {
 		return ctx
 	}
-	return context.WithValue(ctx, workspaceRootContextKeyValue, workspaceRoot)
+	return context.WithValue(ctx, projectFolderContextKeyValue, projectFolder)
 }
 
-// WorkspaceRootFromContext returns the explicit workspace root carried on ctx, if any.
-func WorkspaceRootFromContext(ctx context.Context) string {
+// ProjectFolderFromContext returns the explicit project folder carried on ctx, if any.
+func ProjectFolderFromContext(ctx context.Context) string {
 	if ctx == nil {
 		return ""
 	}
-	value, _ := ctx.Value(workspaceRootContextKeyValue).(string)
+	value, _ := ctx.Value(projectFolderContextKeyValue).(string)
 	return strings.TrimSpace(value)
 }
 
 // WithSecurityBypass marks a context as having explicit user approval for file
-// access outside the workspace root.
+// access outside the project folder.
 func WithSecurityBypass(ctx context.Context) context.Context {
 	if ctx == nil {
 		ctx = context.Background()

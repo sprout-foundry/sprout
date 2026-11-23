@@ -55,25 +55,25 @@ func (a *Agent) initializeMCP() error {
 	// exists). This ensures servers added via CLI commands are available.
 	// Load BEFORE checking if MCP is enabled - the file may have servers.
 	//
-	// The load is scoped to the workspace this agent serves, not to the
+	// The load is scoped to the project folder this agent serves, not to the
 	// process's ambient config root: a daemon's config root was fixed when
 	// the daemon started, so reading it would hide a repo-local config
-	// written afterwards. The workspace layer wins over the global one.
-	workspaceRoot := a.GetWorkspaceRoot()
-	// Register the workspace's credential store as a fallback scope for MCP
-	// header/env resolution. A workspace-scoped `sprout login` stores the
-	// platform token in this workspace's store, but a daemon that did not
+	// written afterwards. The project folder layer wins over the global one.
+	projectFolder := a.GetProjectFolder()
+	// Register the project folder's credential store as a fallback scope for MCP
+	// header/env resolution. A project-folder-scoped `sprout login` stores the
+	// platform token in this project folder's store, but a daemon that did not
 	// start inside the scope resolves credentials from its ambient (global)
 	// store and cannot see it — without this, the platform's MCP server
 	// authenticates with an empty Authorization header and its tools never
 	// load. The process's own store still wins when it holds the value.
-	// WorkspaceConfigDir is "" when the workspace is $HOME, where the
-	// workspace store and the global store are the same.
-	if workspaceConfigDir := configuration.WorkspaceConfigDir(workspaceRoot); workspaceConfigDir != "" {
-		mcp.SetWorkspaceCredentialDir(workspaceConfigDir)
+	// ProjectFolderConfigDir is "" when the project folder is $HOME, where the
+	// project folder store and the global store are the same.
+	if projectFolderConfigDir := configuration.ProjectFolderConfigDir(projectFolder); projectFolderConfigDir != "" {
+		mcp.SetProjectFolderCredentialDir(projectFolderConfigDir)
 	}
 	var legacyEnabled bool
-	if legacyMCPConfig, err := mcp.LoadMCPConfigForWorkspace(workspaceRoot); err == nil {
+	if legacyMCPConfig, err := mcp.LoadMCPConfigForProjectFolder(projectFolder); err == nil {
 		legacyEnabled = len(legacyMCPConfig.Servers) > 0 && legacyMCPConfig.Enabled
 		for name, serverConfig := range legacyMCPConfig.Servers {
 			// Only add if not already in main config
@@ -121,7 +121,7 @@ func (a *Agent) initializeMCP() error {
 			// Name the config consulted: "no MCP servers" is otherwise
 			// indistinguishable from "read the wrong config root".
 			a.Logger().Debug("MCP is disabled in configuration (config: %s)",
-				mcp.MCPConfigSourcePath(workspaceRoot))
+				mcp.MCPConfigSourcePath(projectFolder))
 		}
 		return nil
 	}
@@ -330,7 +330,7 @@ func (a *Agent) maybeRefreshMCPFromDisk() {
 	if a.mcpSub == nil || a.mcpSub.IsInherited() || a.configManager == nil {
 		return
 	}
-	stamp := mcp.MCPConfigStamp(a.GetWorkspaceRoot())
+	stamp := mcp.MCPConfigStamp(a.GetProjectFolder())
 	if stamp == 0 || stamp == a.mcpSub.GetDiskMCPConfigMtime() {
 		return
 	}

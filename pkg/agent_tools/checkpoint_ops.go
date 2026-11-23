@@ -5,11 +5,11 @@ package tools
 // checkpoint store and timeline onto the tool surface; a restore is one
 // action and is recorded as a checkpoint, so the timeline shows it.
 //
-// Every operation is scoped to the tool call's workspace (env.WorkspaceRoot)
-// through pkg/history's workspace-aware checkpoint functions, so the tool
-// reads and writes the same <workspace>/.sprout/checkpoints/ store the
+// Every operation is scoped to the tool call's project folder (env.ProjectFolder)
+// through pkg/history's project-folder-aware checkpoint functions, so the tool
+// reads and writes the same <project folder>/.sprout/checkpoints/ store the
 // automatic verification and deploy capture seams write to. An empty
-// workspace falls back to the process-wide store (standalone tool runs).
+// project folder falls back to the process-wide store (standalone tool runs).
 
 import (
 	"fmt"
@@ -26,7 +26,7 @@ type CheckpointResult struct {
 }
 
 // ManageCheckpoints performs the checkpoint operation named by action for the
-// given workspace (empty for the process-wide store):
+// given project folder (empty for the process-wide store):
 //
 //   - "" or "list": list the recorded checkpoints (newest first).
 //   - "create": capture the current state as an on-demand checkpoint.
@@ -35,13 +35,13 @@ type CheckpointResult struct {
 //
 // Restoring records the restore itself as a checkpoint, so the timeline
 // shows it alongside the state it returned to.
-func ManageCheckpoints(workspace, action, id, revisionID, summary string, confirm bool) (CheckpointResult, error) {
+func ManageCheckpoints(projectFolder, action, id, revisionID, summary string, confirm bool) (CheckpointResult, error) {
 	action = strings.ToLower(strings.TrimSpace(action))
 	switch action {
 	case "", "list":
-		return listCheckpoints(workspace)
+		return listCheckpoints(projectFolder)
 	case "create":
-		cp, err := history.CreateCheckpointInWorkspace(workspace, history.CheckpointManual, strings.TrimSpace(summary), nil)
+		cp, err := history.CreateCheckpointInProjectFolder(projectFolder, history.CheckpointManual, strings.TrimSpace(summary), nil)
 		if err != nil {
 			return CheckpointResult{}, fmt.Errorf("create checkpoint: %w", err)
 		}
@@ -55,14 +55,14 @@ func ManageCheckpoints(workspace, action, id, revisionID, summary string, confir
 			},
 		}, nil
 	case "restore":
-		return restoreCheckpoint(workspace, id, revisionID, confirm)
+		return restoreCheckpoint(projectFolder, id, revisionID, confirm)
 	default:
 		return CheckpointResult{}, fmt.Errorf("unknown checkpoint action %q (use list, create, or restore)", action)
 	}
 }
 
-func listCheckpoints(workspace string) (CheckpointResult, error) {
-	checkpoints, err := history.ListCheckpointsInWorkspace(workspace, true)
+func listCheckpoints(projectFolder string) (CheckpointResult, error) {
+	checkpoints, err := history.ListCheckpointsInProjectFolder(projectFolder, true)
 	if err != nil {
 		return CheckpointResult{}, fmt.Errorf("list checkpoints: %w", err)
 	}
@@ -93,7 +93,7 @@ func listCheckpoints(workspace string) (CheckpointResult, error) {
 	}, nil
 }
 
-func restoreCheckpoint(workspace, id, revisionID string, confirm bool) (CheckpointResult, error) {
+func restoreCheckpoint(projectFolder, id, revisionID string, confirm bool) (CheckpointResult, error) {
 	id = strings.TrimSpace(id)
 	revisionID = strings.TrimSpace(revisionID)
 
@@ -103,7 +103,7 @@ func restoreCheckpoint(workspace, id, revisionID string, confirm bool) (Checkpoi
 
 	if id == "" {
 		// Resolve a checkpoint by the revision it captures.
-		checkpoints, err := history.ListCheckpointsInWorkspace(workspace, false)
+		checkpoints, err := history.ListCheckpointsInProjectFolder(projectFolder, false)
 		if err != nil {
 			return CheckpointResult{}, fmt.Errorf("list checkpoints: %w", err)
 		}
@@ -118,7 +118,7 @@ func restoreCheckpoint(workspace, id, revisionID string, confirm bool) (Checkpoi
 		}
 	}
 
-	cp, found, err := history.GetCheckpointInWorkspace(workspace, id)
+	cp, found, err := history.GetCheckpointInProjectFolder(projectFolder, id)
 	if err != nil {
 		return CheckpointResult{}, fmt.Errorf("read checkpoint: %w", err)
 	}
@@ -139,7 +139,7 @@ func restoreCheckpoint(workspace, id, revisionID string, confirm bool) (Checkpoi
 		}, nil
 	}
 
-	restore, err := history.RestoreCheckpointInWorkspace(workspace, id)
+	restore, err := history.RestoreCheckpointInProjectFolder(projectFolder, id)
 	if err != nil {
 		return CheckpointResult{}, fmt.Errorf("restore checkpoint: %w", err)
 	}

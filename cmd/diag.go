@@ -36,11 +36,11 @@ func runDiag() {
 	// hard-coded ~/.sprout path.
 	globalDir, _ := configuration.GetConfigDir()
 	globalConfigPath := filepath.Join(globalDir, configuration.ConfigFileName)
-	// Resolve rather than hard-code the filename: the workspace layer is
+	// Resolve rather than hard-code the filename: the project folder layer is
 	// workspace.json, with a legacy config.json fallback. Reporting a fixed
 	// name would tell the user "does not exist" about a config that is in fact
 	// being loaded.
-	projectConfigPath := configuration.GetWorkspaceConfigPath(".")
+	projectConfigPath := configuration.GetProjectFolderConfigPath(".")
 
 	fmt.Printf("Global config: %s\n", globalConfigPath)
 	if info, err := os.Stat(globalConfigPath); err == nil {

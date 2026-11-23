@@ -21,7 +21,7 @@ func TestCommitHandler_AppliesAttributionToExplicitMessage(t *testing.T) {
 	dir := newTestGitRepo(t, true)
 	var generated []bool
 	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		ToolFuncs:     &ToolFuncSet{AttributeCommitMessage: recordingAttribution(&generated)},
 	}, map[string]any{"message": "fix: explicit"})
 	require.NoError(t, err)
@@ -35,7 +35,7 @@ func TestCommitHandler_AppliesAttributionToGeneratedMessage(t *testing.T) {
 	var generated []bool
 	gen := func([]byte, string) (string, error) { return "feat: generated", nil }
 	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		ToolFuncs: &ToolFuncSet{
 			GenerateCommitMessage:  gen,
 			AttributeCommitMessage: recordingAttribution(&generated),
@@ -50,7 +50,7 @@ func TestCommitHandler_AppliesAttributionToGeneratedMessage(t *testing.T) {
 func TestCommitHandler_NoAttributionHookCommitsUnchanged(t *testing.T) {
 	dir := newTestGitRepo(t, true)
 	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		ToolFuncs:     &ToolFuncSet{},
 	}, map[string]any{"message": "fix: plain"})
 	require.NoError(t, err)
@@ -62,7 +62,7 @@ func TestGitHandler_CommitAppliesAttribution(t *testing.T) {
 	dir := newTestGitRepo(t, true)
 	var generated []bool
 	res, err := (&gitHandler{}).Execute(context.Background(), ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		ToolFuncs:     &ToolFuncSet{AttributeCommitMessage: recordingAttribution(&generated)},
 	}, map[string]any{"operation": "commit", "args": `-m "fix: via git tool"`})
 	require.NoError(t, err)
@@ -91,7 +91,7 @@ func TestCommitHandler_TranscriptPairNamesTrailer(t *testing.T) {
 	var pairs [][2]string
 	var generated []bool
 	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		ToolFuncs:     &ToolFuncSet{AttributeCommitMessageFromTranscript: recordingTranscriptAttribution(&pairs, &generated)},
 	}, map[string]any{
 		"message":             "fix: transcript",
@@ -114,7 +114,7 @@ func TestCommitHandler_TranscriptHookFallsBackToAgent(t *testing.T) {
 	dir := newTestGitRepo(t, true)
 	var generated []bool
 	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		ToolFuncs:     &ToolFuncSet{AttributeCommitMessage: recordingAttribution(&generated)},
 	}, map[string]any{
 		"message":             "fix: fallback",

@@ -35,7 +35,7 @@ func makeSubagentForTests(t *testing.T, parent *Agent) *Agent {
 	t.Helper()
 	sub := newIsolatedTestAgent(t)
 	t.Cleanup(func() { sub.Shutdown() })
-	sub.SetWorkspaceRoot(parent.GetWorkspaceRoot())
+	sub.SetProjectFolder(parent.GetProjectFolder())
 	sub.state.SetActivePersona(personas.IDOrchestrator)
 	sub.subagentDepth = 1
 	// Mirror the createSubagent inheritance (subagent_creation.go).
@@ -59,7 +59,7 @@ func makeSubagentForTests(t *testing.T, parent *Agent) *Agent {
 func TestSP168_SubagentWebUIDialogAnswerable(t *testing.T) {
 	parent := newIsolatedTestAgent(t)
 	defer parent.Shutdown()
-	parent.SetWorkspaceRoot(t.TempDir())
+	parent.SetProjectFolder(t.TempDir())
 	parent.state.SetActivePersona(personas.IDOrchestrator)
 
 	// Browser attached: the WebUI IS the interactive surface.
@@ -140,7 +140,7 @@ func TestSP168_SubagentWebUIDialogAnswerable(t *testing.T) {
 func TestSP168_SubagentWorkflowRunFailsFast(t *testing.T) {
 	parent := newIsolatedTestAgent(t)
 	defer parent.Shutdown()
-	parent.SetWorkspaceRoot(t.TempDir())
+	parent.SetProjectFolder(t.TempDir())
 	parent.state.SetActivePersona(personas.IDOrchestrator)
 
 	parent.SetHasActiveWebUIClients(func() bool { return true })
@@ -213,7 +213,7 @@ func TestSP168_SubagentCLI_LabeledAndSingleOnly(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			parent := newIsolatedTestAgent(t)
 			defer parent.Shutdown()
-			parent.SetWorkspaceRoot(t.TempDir())
+			parent.SetProjectFolder(t.TempDir())
 			parent.state.SetActivePersona(personas.IDOrchestrator)
 			// An interactive terminal, no browser: the TTY is the surface.
 			if err := parent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {

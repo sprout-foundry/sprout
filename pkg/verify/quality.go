@@ -74,7 +74,7 @@ type QualityCheck struct {
 	Reason string `json:"reason,omitempty"`
 	// Excerpt is a bounded excerpt of the step's combined output.
 	Excerpt string `json:"excerpt,omitempty"`
-	// Changed reports whether the step rewrote files in the workspace.
+	// Changed reports whether the step rewrote files in the project folder.
 	// Reported only for the formatter, whose in-place rewrite is the
 	// runtime's own repair (the linter is informational).
 	Changed bool `json:"changed,omitempty"`
@@ -199,12 +199,12 @@ type QualityRunner struct {
 	// MaxExcerptBytes bounds QualityCheck.Excerpt. Default:
 	// DefaultMaxExcerptBytes.
 	MaxExcerptBytes int
-	// Fingerprint bounds the workspace change detection: it walks the root,
+	// Fingerprint bounds the project folder change detection: it walks the root,
 	// skipping a fixed set of heavy directories, and hashes each regular
 	// file's content up to MaxFileBytes. Nil uses the default fingerprint
 	// (defaultFingerprint). Injectable so a test can force a deterministic
 	// before/after comparison.
-	Fingerprint func(root string) (workspaceFingerprint, error)
+	Fingerprint func(root string) (projectFolderFingerprint, error)
 }
 
 // MaxProbeFileBytes caps the size of a file the fingerprint hashes: a large
@@ -227,12 +227,12 @@ var qualitySkipDirs = map[string]bool{
 	"venv": true,
 }
 
-// workspaceFingerprint is a content hash over a project's regular files: the
+// projectFolderFingerprint is a content hash over a project's regular files: the
 // signal that the formatter rewrote something. It is a map from root-relative
 // path to the file's content hash so a before/after comparison is exact.
-type workspaceFingerprint map[string]string
+type projectFolderFingerprint map[string]string
 
-func (w workspaceFingerprint) equal(other workspaceFingerprint) bool {
+func (w projectFolderFingerprint) equal(other projectFolderFingerprint) bool {
 	if len(w) != len(other) {
 		return false
 	}
@@ -382,7 +382,7 @@ func (r *QualityRunner) manifestLoad(root string) (*startermanifest.StarterManif
 
 // runQualityCheck executes one step and fills in its outcome. A step with no
 // trusted command is skipped, not failed. The formatter's check records
-// whether the step rewrote files, via a before/after workspace fingerprint.
+// whether the step rewrote files, via a before/after project folder fingerprint.
 func (r *QualityRunner) runQualityCheck(ctx context.Context, root string, c *QualityCheck) {
 	if c.Command == "" {
 		c.Skipped = true
@@ -427,10 +427,10 @@ func (r *QualityRunner) runQualityCheck(ctx context.Context, root string, c *Qua
 	}
 }
 
-// fingerprint returns the workspace content fingerprint the change detector
+// fingerprint returns the project folder content fingerprint the change detector
 // compares before and after a step. It uses the runner's injectable
 // Fingerprint when set, otherwise the default walk.
-func (r *QualityRunner) fingerprint(root string) (workspaceFingerprint, error) {
+func (r *QualityRunner) fingerprint(root string) (projectFolderFingerprint, error) {
 	if r.Fingerprint != nil {
 		return r.Fingerprint(root)
 	}
@@ -440,8 +440,8 @@ func (r *QualityRunner) fingerprint(root string) (workspaceFingerprint, error) {
 // defaultFingerprint hashes the project's regular files, skipping heavy
 // directories and capping each file's hashed bytes. It is deterministic: the
 // walk is sorted, so the same tree always yields the same map.
-func defaultFingerprint(root string) (workspaceFingerprint, error) {
-	fp := make(workspaceFingerprint)
+func defaultFingerprint(root string) (projectFolderFingerprint, error) {
+	fp := make(projectFolderFingerprint)
 	var paths []string
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {

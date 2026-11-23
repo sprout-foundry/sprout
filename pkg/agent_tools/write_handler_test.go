@@ -133,7 +133,7 @@ func TestWriteFileHandler_Execute_RelativePath(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, res.IsError)
 
-	// Verify file was created relative to workspace root
+	// Verify file was created relative to project folder
 	data, err := os.ReadFile(filepath.Join(dir, "relative.txt"))
 	require.NoError(t, err)
 	require.Equal(t, "relative content", string(data))
@@ -257,8 +257,8 @@ func TestWriteFileHandler_Execute_PathTraversal(t *testing.T) {
 	h := &writeFileHandler{}
 	ctx := newTestCtx(dir)
 
-	// Path traversal with .. - the handler resolves this relative to workspace root.
-	// In practice, writing to a path outside workspace root should be allowed
+	// Path traversal with .. - the handler resolves this relative to project folder.
+	// In practice, writing to a path outside project folder should be allowed
 	// when the resolved path is still within the OS filesystem (this is the
 	// current behavior of the handler).
 	path := filepath.Join(dir, "..", "outside_workspace.txt")

@@ -15,7 +15,7 @@ import (
 // is a legal cd destination for this agent.
 //
 // A target is legal when it equals OR sits under any of:
-//   - the agent's workspace root (a.currentWorkspaceRoot())
+//   - the agent's project folder (a.currentProjectFolder())
 //   - any session-allowlisted folder (workflow-declared allowed_paths
 //     AND folders the user approved via "Allow folder this session")
 //
@@ -40,10 +40,10 @@ func (a *Agent) IsCdTargetAllowed(target string) bool {
 	// Clean the target path.
 	cleaned := normalizePath(target)
 
-	// Check against the workspace root.
-	workspaceRoot := a.currentWorkspaceRoot()
-	if workspaceRoot != "" {
-		if isUnderPrefix(cleaned, normalizePath(workspaceRoot)) {
+	// Check against the project folder.
+	projectFolder := a.currentProjectFolder()
+	if projectFolder != "" {
+		if isUnderPrefix(cleaned, normalizePath(projectFolder)) {
 			return true
 		}
 	}
@@ -62,15 +62,15 @@ func (a *Agent) IsCdTargetAllowed(target string) bool {
 // ListAllowedCdTargets returns the set of folders the agent considers
 // legal cd destinations, formatted as a sorted, deduplicated list
 // suitable for inclusion in a shell-output rejection message. Includes
-// the workspace root and every session-allowlisted folder.
+// the project folder and every session-allowlisted folder.
 func (a *Agent) ListAllowedCdTargets() []string {
 	var result []string
 	var others []string
 
-	// Add the workspace root first.
-	workspaceRoot := a.currentWorkspaceRoot()
-	if workspaceRoot != "" {
-		result = append(result, canonicalPath(workspaceRoot))
+	// Add the project folder first.
+	projectFolder := a.currentProjectFolder()
+	if projectFolder != "" {
+		result = append(result, canonicalPath(projectFolder))
 	}
 
 	// Add session-allowlisted folders to the others list, deduplicated
@@ -139,19 +139,19 @@ func (a *Agent) IsSecurityBypassApproved() bool {
 	return a.security.IsSecurityBypassApproved()
 }
 
-// IsUnderWorkspaceRoot reports whether absPath is at or under the agent's
-// workspace root after symlink resolution. Symlink-evaluated on both sides
-// to prevent a workspace symlink pointing outside from bypassing the gate.
-// Returns false when the agent or workspace root is unset (nil-safe).
-func (a *Agent) IsUnderWorkspaceRoot(absPath string) bool {
+// IsUnderProjectFolder reports whether absPath is at or under the agent's
+// project folder after symlink resolution. Symlink-evaluated on both sides
+// to prevent a project folder symlink pointing outside from bypassing the gate.
+// Returns false when the agent or project folder is unset (nil-safe).
+func (a *Agent) IsUnderProjectFolder(absPath string) bool {
 	if a == nil {
 		return false
 	}
 	if absPath == "" {
 		return false
 	}
-	workspaceRoot := a.currentWorkspaceRoot()
-	if workspaceRoot == "" {
+	projectFolder := a.currentProjectFolder()
+	if projectFolder == "" {
 		return false
 	}
 	// Evaluate symlinks on both sides for symlink-escape safety.
@@ -162,9 +162,9 @@ func (a *Agent) IsUnderWorkspaceRoot(absPath string) bool {
 		// edge cases.
 		resolvedPath = filepath.Clean(absPath)
 	}
-	resolvedRoot, err := filepath.EvalSymlinks(workspaceRoot)
+	resolvedRoot, err := filepath.EvalSymlinks(projectFolder)
 	if err != nil {
-		resolvedRoot = filepath.Clean(workspaceRoot)
+		resolvedRoot = filepath.Clean(projectFolder)
 	}
 	return isUnderPrefix(resolvedPath, resolvedRoot)
 }

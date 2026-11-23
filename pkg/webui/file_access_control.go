@@ -110,7 +110,7 @@ func (e *pathNotExistError) Error() string {
 	return fmt.Sprintf("path does not exist: %s", e.path)
 }
 
-func canonicalizePath(path string, workspaceRoot string, forWrite bool) (string, error) {
+func canonicalizePath(path string, projectFolder string, forWrite bool) (string, error) {
 	trimmed := strings.TrimSpace(path)
 	if trimmed == "" {
 		return "", fmt.Errorf("file path is required")
@@ -118,7 +118,7 @@ func canonicalizePath(path string, workspaceRoot string, forWrite bool) (string,
 
 	cleaned := filepath.Clean(trimmed)
 	if !filepath.IsAbs(cleaned) {
-		cleaned = filepath.Join(workspaceRoot, cleaned)
+		cleaned = filepath.Join(projectFolder, cleaned)
 	}
 
 	absPath, err := filepath.Abs(cleaned)
@@ -184,8 +184,8 @@ func canonicalizePath(path string, workspaceRoot string, forWrite bool) (string,
 	return absPath, nil
 }
 
-func isWithinWorkspace(path, workspaceRoot string) bool {
-	rel, err := filepath.Rel(workspaceRoot, path)
+func isWithinProjectFolder(path, projectFolder string) bool {
+	rel, err := filepath.Rel(projectFolder, path)
 	if err != nil {
 		return false
 	}
@@ -196,11 +196,11 @@ func isWithinWorkspace(path, workspaceRoot string) bool {
 }
 
 // allowExternalAccessForRequest reports whether the request can touch
-// `canonicalPath` even though it's outside the workspace. Returns true
+// `canonicalPath` even though it's outside the project folder. Returns true
 // only when the active chat agent has the path on its session folder
 // allowlist (set via the filesystem approval dialog). Callers should
-// use this AFTER isWithinWorkspace returns false but BEFORE writing
-// the "path outside workspace" error response — it's the bridge that
+// use this AFTER isWithinProjectFolder returns false but BEFORE writing
+// the "path outside project folder" error response — it's the bridge that
 // lets file_ops / list_directory / etc. honor the same allowlist as
 // the agent's read_file/write_file tools.
 func (ws *ReactWebServer) allowExternalAccessForRequest(r *http.Request, canonicalPath string) bool {
@@ -215,7 +215,7 @@ func (ws *ReactWebServer) allowExternalAccessForRequest(r *http.Request, canonic
 }
 
 // isAppConfigPath returns true if the path is inside the sprout configuration
-// directory (e.g. ~/.config/sprout/). These are workspace-owned
+// directory (e.g. ~/.config/sprout/). These are project-folder-owned
 // config files and should never trigger the external-path consent prompt.
 func isAppConfigPath(path string) bool {
 	configDir, err := getConfigDir()

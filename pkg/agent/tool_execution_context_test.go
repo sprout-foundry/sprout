@@ -23,13 +23,13 @@ func TestWithToolExecutionMetadata(t *testing.T) {
 	}
 }
 
-func TestWithToolExecutionMetadata_ContainsWorkspaceRoot(t *testing.T) {
+func TestWithToolExecutionMetadata_ContainsProjectFolder(t *testing.T) {
 	ctx := withToolExecutionMetadata(context.Background(), "call-456", "shell_command", "/home/user/project", "/home/user/project", nil, nil)
 
-	workspaceRoot := filesystem.WorkspaceRootFromContext(ctx)
+	projectFolder := filesystem.ProjectFolderFromContext(ctx)
 
-	if workspaceRoot != "/home/user/project" {
-		t.Errorf("expected workspace root '/home/user/project'; got %q", workspaceRoot)
+	if projectFolder != "/home/user/project" {
+		t.Errorf("expected workspace root '/home/user/project'; got %q", projectFolder)
 	}
 }
 

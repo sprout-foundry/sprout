@@ -123,20 +123,20 @@ func TestMain(m *testing.M) {
 	indexPath := filepath.Join(sessionsDir, "search-index.json")
 	search.InitGlobalUpdater(indexPath, sessionsDir)
 
-	// Recent-workspace tracking is a package global whose path comes from
-	// os.UserHomeDir(), so any test that sets a workspace root writes into the
+	// Recent-project-folder tracking is a package global whose path comes from
+	// os.UserHomeDir(), so any test that sets a project folder writes into the
 	// developer's real ~/.sprout/recent_workspaces.json. Individual tests were
-	// meant to opt in via setupRecentWorkspaces, but the ones that reached
-	// RecordWorkspace indirectly (through handleAPIWorkspaceSet) did not — and
+	// meant to opt in via setupRecentProjectFolders, but the ones that reached
+	// RecordProjectFolder indirectly (through handleAPIProjectFolderSet) did not — and
 	// their temp paths filled all ten slots, evicting every real project from
-	// the user's workspace picker. Redirect it for the whole package so no test
+	// the user's project folder picker. Redirect it for the whole package so no test
 	// can leak, whether or not its author remembers.
-	clientWorkspaceStoreDisabled = true
-	realRecentPath, realRecentBefore := snapshotRealRecentWorkspaces()
-	recentWorkspaces.mu.Lock()
-	recentWorkspaces.filePath = filepath.Join(tmpDir, "recent_workspaces.json")
-	recentWorkspaces.workspaces = nil
-	recentWorkspaces.mu.Unlock()
+	clientProjectFolderStoreDisabled = true
+	realRecentPath, realRecentBefore := snapshotRealRecentProjectFolders()
+	recentProjectFolders.mu.Lock()
+	recentProjectFolders.filePath = filepath.Join(tmpDir, "recent_workspaces.json")
+	recentProjectFolders.projectFolders = nil
+	recentProjectFolders.mu.Unlock()
 
 	// Run from a scratch CWD: handlers and the workflows they start in the
 	// background resolve .sprout/ against the process CWD, and some of those
@@ -154,7 +154,7 @@ func TestMain(m *testing.M) {
 	_ = os.Chdir(origWd)
 
 	leakCode := agent.AssertNoStateLeak(realDir, beforeSnapshot)
-	recentLeakCode := assertNoRecentWorkspacesLeak(realRecentPath, realRecentBefore)
+	recentLeakCode := assertNoRecentProjectFoldersLeak(realRecentPath, realRecentBefore)
 	_ = os.RemoveAll(tmpDir)
 
 	if code == 0 {
@@ -166,10 +166,10 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// snapshotRealRecentWorkspaces records the contents of the recent-workspaces
+// snapshotRealRecentProjectFolders records the contents of the recent-project-folders
 // file this process would use outside of tests. Must be called before the
 // global is redirected.
-func snapshotRealRecentWorkspaces() (path string, before []byte) {
+func snapshotRealRecentProjectFolders() (path string, before []byte) {
 	// Consent now lives in the state dir, not ~/.sprout/
 	stateDir, err := envutil.StateDir()
 	if err != nil {
@@ -180,9 +180,9 @@ func snapshotRealRecentWorkspaces() (path string, before []byte) {
 	return path, before
 }
 
-// assertNoRecentWorkspacesLeak reports a non-zero exit code if the real
-// recent-workspaces file changed during the run.
-func assertNoRecentWorkspacesLeak(path string, before []byte) int {
+// assertNoRecentProjectFoldersLeak reports a non-zero exit code if the real
+// recent-project-folders file changed during the run.
+func assertNoRecentProjectFoldersLeak(path string, before []byte) int {
 	if path == "" {
 		return 0
 	}

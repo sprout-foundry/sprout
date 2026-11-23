@@ -2,9 +2,9 @@
 
 package webui
 
-// client_context_ssh.go — the SSH + workspace wiring for client contexts
-// (clearing a session key, remembering workspaces, setting the workspace root,
-// the withAgentWorkspace chdir helper), split out of client_context.go.
+// client_context_ssh.go — the SSH + project folder wiring for client contexts
+// (clearing a session key, remembering project folders, setting the project folder,
+// the withAgentProjectFolder chdir helper), split out of client_context.go.
 
 import (
 	"fmt"
@@ -42,18 +42,18 @@ func (ws *ReactWebServer) clearClientSSHContextForSessionKey(sessionKey string) 
 	}
 }
 
-func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string, error) {
-	workspaceRoot, err := filepathAbsEval(path)
+func (ws *ReactWebServer) setClientProjectFolder(clientID, path string) (string, error) {
+	projectFolder, err := filepathAbsEval(path)
 	if err != nil {
 		return "", fmt.Errorf("resolve workspace root: %w", err)
 	}
 
-	info, err := os.Stat(workspaceRoot)
+	info, err := os.Stat(projectFolder)
 	if err != nil {
 		return "", fmt.Errorf("stat workspace root: %w", err)
 	}
 	if !info.IsDir() {
-		return "", fmt.Errorf("workspace root %q must be a directory", workspaceRoot)
+		return "", fmt.Errorf("workspace root %q must be a directory", projectFolder)
 	}
 
 	ws.mutex.Lock()
@@ -66,16 +66,16 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 		resolvedDaemonRoot = evaled
 	}
 
-	if !isWithinWorkspace(workspaceRoot, resolvedDaemonRoot) && workspaceRoot != resolvedDaemonRoot {
+	if !isWithinProjectFolder(projectFolder, resolvedDaemonRoot) && projectFolder != resolvedDaemonRoot {
 		return "", fmt.Errorf("workspace root must stay within daemon root %s", ws.daemonRoot)
 	}
 
-	// Defense-in-depth: reject the home directory as a workspace without
-	// explicit consent. The API handler (handleAPIWorkspaceSet) is the
+	// Defense-in-depth: reject the home directory as a project folder without
+	// explicit consent. The API handler (handleAPIProjectFolderSet) is the
 	// primary gate and surfaces a structured consent error to the frontend;
 	// this prevents any other internal caller from silently setting home as
-	// the workspace root. SP-130.
-	if isHomeWorkspace(workspaceRoot) && !hasHomeWorkspaceConsent() {
+	// the project folder. SP-130.
+	if isHomeProjectFolder(projectFolder) && !hasHomeProjectFolderConsent() {
 		return "", fmt.Errorf("workspace root must not be the home directory without explicit consent")
 	}
 
@@ -84,7 +84,7 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 	}
 	ctx := ws.clientContexts[clientID]
 	if ctx == nil {
-		ctx = newWebClientContext(ws.workspaceRoot, ws.sshHostAlias, ws.sshSessionKey, ws.sshLauncherURL, ws.sshHomePath)
+		ctx = newWebClientContext(ws.projectFolder, ws.sshHostAlias, ws.sshSessionKey, ws.sshLauncherURL, ws.sshHomePath)
 		ws.clientContexts[clientID] = ctx
 	}
 
@@ -97,16 +97,16 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 		ctx.FileConsents.clearAll()
 	}
 
-	ctx.WorkspaceRoot = workspaceRoot
-	ctx.ProjectRoot = workspaceRoot
+	ctx.ProjectFolder = projectFolder
+	ctx.ProjectRoot = projectFolder
 	ctx.SSHHostAlias = ""
 	ctx.SSHSessionKey = ""
 	ctx.SSHLauncherURL = ""
 	ctx.SSHHomePath = ""
-	ctx.Terminal = NewTerminalManager(workspaceRoot)
+	ctx.Terminal = NewTerminalManager(projectFolder)
 	ws.startTerminalCleanupIfNeeded(ctx.Terminal)
 	// Collect the outgoing agents before clearing the fields below. They are
-	// bound to the OLD workspace root, and without an explicit Shutdown their
+	// bound to the OLD project folder, and without an explicit Shutdown their
 	// MCP servers and background watchers keep running for the rest of the
 	// daemon's life. Released after ws.mutex is dropped.
 	releasing := chatSessionAgents(ctx)
@@ -115,7 +115,7 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 	ctx.CurrentSessionID = ""
 	ctx.ActiveQuery = false
 	ctx.CurrentQuery = ""
-	// Reset chat sessions on workspace change — keep only the default,
+	// Reset chat sessions on project folder change — keep only the default,
 	// which starts fresh.
 	ctx.ChatSessions = nil
 	ctx.DefaultChatID = ""
@@ -127,7 +127,7 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 	ctx.LastSeenAt = time.Now()
 
 	if clientID == defaultWebClientID {
-		ws.workspaceRoot = workspaceRoot
+		ws.projectFolder = projectFolder
 		ws.sshHostAlias = ""
 		ws.sshSessionKey = ""
 		ws.sshLauncherURL = ""
@@ -136,31 +136,31 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 		ws.fileConsents = ctx.FileConsents
 	} else {
 		// Remember non-default selections so an evicted context is recreated
-		// in the workspace the user actually chose (see clientWorkspaces).
-		ws.rememberClientWorkspaceLocked(clientID, ctx)
+		// in the project folder the user actually chose (see clientProjectFolders).
+		ws.rememberClientProjectFolderLocked(clientID, ctx)
 	}
 
 	// Non-blocking: hands each agent to its own goroutine, so this is safe
 	// under the deferred ws.mutex unlock.
 	ws.releaseAgents("workspace_switch", releasing...)
 
-	return workspaceRoot, nil
+	return projectFolder, nil
 }
 
-func (ws *ReactWebServer) withAgentWorkspace(workspaceRoot string, fn func() error) error {
-	workspaceRoot = strings.TrimSpace(workspaceRoot)
-	if workspaceRoot == "" {
+func (ws *ReactWebServer) withAgentProjectFolder(projectFolder string, fn func() error) error {
+	projectFolder = strings.TrimSpace(projectFolder)
+	if projectFolder == "" {
 		return fn()
 	}
 
-	ws.workspaceExecMu.Lock()
-	defer ws.workspaceExecMu.Unlock()
+	ws.projectFolderExecMu.Lock()
+	defer ws.projectFolderExecMu.Unlock()
 
 	originalWD, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("get current working directory: %w", err)
 	}
-	if err := os.Chdir(workspaceRoot); err != nil {
+	if err := os.Chdir(projectFolder); err != nil {
 		return fmt.Errorf("change working directory: %w", err)
 	}
 	defer func() {

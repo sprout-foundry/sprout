@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestClassifyToolCallWithWorkspaceWindowsPaths(t *testing.T) {
+func TestClassifyToolCallWithProjectFolderWindowsPaths(t *testing.T) {
 	ws := `C:\Users\dev\ws`
 	cases := []struct {
 		name string
@@ -28,7 +28,7 @@ func TestClassifyToolCallWithWorkspaceWindowsPaths(t *testing.T) {
 		{"os temp dir", "cat " + filepath.Join(os.TempDir(), "x.txt"), true},
 	}
 	for _, tc := range cases {
-		res := ClassifyToolCallWithWorkspace("shell_command", map[string]interface{}{"command": tc.cmd}, ws)
+		res := ClassifyToolCallWithProjectFolder("shell_command", map[string]interface{}{"command": tc.cmd}, ws)
 		if got := res.Risk == SecuritySafe; got != tc.safe {
 			t.Errorf("%s: safe=%v want %v (cmd=%q)", tc.name, got, tc.safe, tc.cmd)
 		}

@@ -577,14 +577,14 @@ func TestToolEnvFields(t *testing.T) {
 
 	env := ToolEnv{
 		EventBus:        nil, // hard to construct without events package internals
-		WorkspaceRoot:   "/home/user/project",
+		ProjectFolder:   "/home/user/project",
 		OutputWriter:    sw,
 		ApprovalManager: am,
 		MaxTokensFunc:   func() int { return 4096 },
 	}
 
-	if env.WorkspaceRoot != "/home/user/project" {
-		t.Errorf("WorkspaceRoot = %q, want %q", env.WorkspaceRoot, "/home/user/project")
+	if env.ProjectFolder != "/home/user/project" {
+		t.Errorf("WorkspaceRoot = %q, want %q", env.ProjectFolder, "/home/user/project")
 	}
 	if env.OutputWriter == nil {
 		t.Fatal("OutputWriter should not be nil")

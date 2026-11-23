@@ -31,8 +31,8 @@ func newTxnTestWebServer(t *testing.T, root string) *ReactWebServer {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server.workspaceRoot = root
-	server.getOrCreateClientContext(defaultWebClientID).WorkspaceRoot = root
+	server.projectFolder = root
+	server.getOrCreateClientContext(defaultWebClientID).ProjectFolder = root
 	return server
 }
 
@@ -352,7 +352,7 @@ func TestHandleAPITxnRun_TraversalWorkdirIs400(t *testing.T) {
 	}
 }
 
-func TestHandleAPITxnRun_RelativeWorkdirRunsInsideWorkspace(t *testing.T) {
+func TestHandleAPITxnRun_RelativeWorkdirRunsInsideProjectFolder(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "pkg"), 0o755); err != nil {
 		t.Fatal(err)

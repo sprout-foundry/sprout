@@ -3,7 +3,7 @@
 package webui
 
 // settings_api_put_handlers.go — the per-scope PUT handlers for the
-// settings API: handlePutSessionSettings, handlePutWorkspaceSettings,
+// settings API: handlePutSessionSettings, handlePutProjectFolderSettings,
 // handlePutGlobalSettings (request decoding + validation, delegating the
 // config-file write to the settings_api_put_configfile.go layer). Split
 // out of settings_api_put.go.
@@ -183,22 +183,22 @@ func (ws *ReactWebServer) handlePutSessionSettings(w http.ResponseWriter, r *htt
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// handlePutWorkspaceSettings writes settings to the workspace config file.
-func (ws *ReactWebServer) handlePutWorkspaceSettings(w http.ResponseWriter, r *http.Request) {
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	if workspaceRoot == "" {
+// handlePutProjectFolderSettings writes settings to the project folder config file.
+func (ws *ReactWebServer) handlePutProjectFolderSettings(w http.ResponseWriter, r *http.Request) {
+	projectFolder := ws.getProjectFolderForRequest(r)
+	if projectFolder == "" {
 		writeJSONError(w, http.StatusBadRequest, "No workspace configured")
 		return
 	}
 	// Write path, not the read path: a legacy config.json is read but never
 	// written back to.
 	//
-	// Empty means this workspace has no config layer — currently only $HOME,
-	// which deliberately has none (see configuration.WorkspaceConfigDir).
+	// Empty means this project folder has no config layer — currently only $HOME,
+	// which deliberately has none (see configuration.ProjectFolderConfigDir).
 	// Writing there would create ~/.sprout/workspace.json, which the next
-	// startup reads back as a per-workspace opt-in. Direct the caller at the
+	// startup reads back as a per-project-folder opt-in. Direct the caller at the
 	// global scope instead of silently writing nothing.
-	writePath := configuration.WorkspaceConfigWritePath(workspaceRoot)
+	writePath := configuration.ProjectFolderConfigWritePath(projectFolder)
 	if writePath == "" {
 		writeJSONError(w, http.StatusBadRequest,
 			"This workspace has no per-workspace settings layer (the home directory uses global settings). Save to global settings instead.")

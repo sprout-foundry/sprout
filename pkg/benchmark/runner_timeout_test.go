@@ -53,7 +53,7 @@ func hungFactory(t *testing.T, mgr *configuration.Manager, hang time.Duration) A
 		if err != nil {
 			return nil, err
 		}
-		ag.SetWorkspaceRoot(runDir)
+		ag.SetProjectFolder(runDir)
 		return ag, nil
 	}
 }
@@ -77,7 +77,7 @@ func fastFactory(t *testing.T, mgr *configuration.Manager) AgentFactory {
 		if err != nil {
 			return nil, err
 		}
-		ag.SetWorkspaceRoot(runDir)
+		ag.SetProjectFolder(runDir)
 		return ag, nil
 	}
 }

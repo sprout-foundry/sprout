@@ -2,11 +2,11 @@
 
 // Package webui provides the React web server with embedded assets.
 //
-// ActiveSessionRegistry implements workspace-level multi-device takeover
+// ActiveSessionRegistry implements project-folder-level multi-device takeover
 // for SP-046 sync. It is used by the /api/workspace/takeover endpoint
 // (workspace_sync_handlers.go) to track which device holds the active
-// editing session for a workspace, enabling coordinated file sync when
-// multiple browsers edit the same workspace.
+// editing session for a project folder, enabling coordinated file sync when
+// multiple browsers edit the same project folder.
 //
 // This is separate from the WebSocket connection-level single-active-session
 // enforcement, which uses activeWSByUserID (Mode 1, handleWebSocket_Agent)

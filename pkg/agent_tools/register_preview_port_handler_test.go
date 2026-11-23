@@ -57,7 +57,7 @@ func runRegister(t *testing.T, env ToolEnv, args map[string]any, wait time.Durat
 	}
 }
 
-// setPlatformEnv points the handler at a platform stub for workspace ws1.
+// setPlatformEnv points the handler at a platform stub for project folder ws1.
 func setPlatformEnv(t *testing.T, stubURL string) {
 	t.Helper()
 	t.Setenv("WORKSPACE_ID", "ws1")
@@ -103,7 +103,7 @@ func TestRegisterPreviewPort_PublishesOnSuccess(t *testing.T) {
 	}
 }
 
-func TestRegisterPreviewPort_NoEventWhenWorkspaceIDUnset(t *testing.T) {
+func TestRegisterPreviewPort_NoEventWhenProjectFolderIDUnset(t *testing.T) {
 	// A platform stub is present but must never be reached.
 	stub := newPlatformStub(t, http.StatusCreated, `{"preview_url":"https://preview.example/ws1/8080"}`)
 	setPlatformEnv(t, stub.URL)

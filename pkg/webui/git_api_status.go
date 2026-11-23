@@ -13,7 +13,7 @@ func (ws *ReactWebServer) handleAPIGitStatus(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	status, err := ws.getGitStatusForWorkspace(ws.getWorkspaceRootForRequest(r))
+	status, err := ws.getGitStatusForProjectFolder(ws.getProjectFolderForRequest(r))
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_get_git_status", fmt.Sprintf("Failed to get git status: %v", err))
 		return

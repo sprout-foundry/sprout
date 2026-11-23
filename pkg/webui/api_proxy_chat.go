@@ -21,7 +21,7 @@ type proxyChatRequest struct {
 	Stream        bool               `json:"stream"` // Accepted for format compatibility; streaming is always used
 	ChatID        string             `json:"chat_id,omitempty"`
 	Steer         bool               `json:"steer,omitempty"`
-	WorkspaceRoot string             `json:"workspace_root,omitempty"`
+	ProjectFolder string             `json:"workspace_root,omitempty"`
 	SystemPrompt  string             `json:"system_prompt,omitempty"`
 }
 
@@ -170,7 +170,7 @@ func (ws *ReactWebServer) handleAPIProxyChatQuery(w http.ResponseWriter, r *http
 	ws.runChatQuery(w, r, clientID, chatID, query, chatQueryOptions{
 		Provider:           req.Provider,
 		Model:              req.Model,
-		WorkspaceRoot:      req.WorkspaceRoot,
+		ProjectFolder:      req.ProjectFolder,
 		SystemPrompt:       req.SystemPrompt,
 		AllowSlashCommands: false,
 		EchoQueryInAccept:  false,

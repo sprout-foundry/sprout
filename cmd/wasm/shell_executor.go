@@ -74,7 +74,7 @@ func init() {
 			}
 		}
 
-		r := fromWorkspace(func() wasmshell.CmdResult { return wasmshell.ParseAndExecute(command) })
+		r := fromProjectFolder(func() wasmshell.CmdResult { return wasmshell.ParseAndExecute(command) })
 		if r.ExitCode == wasmshell.ExitCommandNotFound {
 			return escalateUnavailableCommand(command, r)
 		}
@@ -289,14 +289,14 @@ func callGitToolJS(command string) (stdout, stderr string, exitCode int) {
 }
 
 // escalationTimeout bounds one escalated command end to end: starting the
-// workspace, pushing files, the run itself (up to 10 minutes), and pulling
+// project folder, pushing files, the run itself (up to 10 minutes), and pulling
 // results back.
 const escalationTimeout = 15 * time.Minute
 
 // escalateUnavailableCommand handles an agent shell command the browser shell
 // can't run (exit 127). When the webui has installed the escalation bridge
 // (globalThis.__sproutEscalate, cloud mode) it may run the command in the
-// user's cloud workspace — subject to the user's escalation policy — and the
+// user's cloud project folder — subject to the user's escalation policy — and the
 // real result is returned. Otherwise the 127 stands, with an explanation the
 // model can act on instead of a bare "command not found".
 //
@@ -339,7 +339,7 @@ func escalateUnavailableCommand(command string, local wasmshell.CmdResult) (stdo
 			r := shellGitResultFromJS(res)
 			return r.Stdout, r.Stderr, r.ExitCode
 		}
-		// Not run (declined, no workspace, no repository): say why.
+		// Not run (declined, no project folder, no repository): say why.
 		note := browserShellNote
 		if m := res.Get("message"); m.Type() == js.TypeString && m.String() != "" {
 			note = "\n[sprout] " + m.String() + "\n"

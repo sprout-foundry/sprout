@@ -5,7 +5,7 @@ package webui
 // git_api_review_heuristics.go — thin adapters over the shared heuristic
 // diff analysis in pkg/codereview (diff_context.go). The heuristics live
 // there so the CLI review command and these deep-review endpoints share one
-// implementation; these wrappers keep the workspace-rooted call sites
+// implementation; these wrappers keep the project-folder-rooted call sites
 // unchanged.
 import (
 	"fmt"
@@ -14,16 +14,16 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/codereview"
 )
 
-func (ws *ReactWebServer) gitReviewDetectProjectType(workspaceRoot string) string {
-	return codereview.DetectProjectType(workspaceRoot)
+func (ws *ReactWebServer) gitReviewDetectProjectType(projectFolder string) string {
+	return codereview.DetectProjectType(projectFolder)
 }
 
 func gitReviewExtractKeyCommentsFromDiff(diff string) string {
 	return codereview.ExtractKeyCommentsFromDiff(diff)
 }
 
-func (ws *ReactWebServer) gitReviewExtractStagedChangesSummary(workspaceRoot string) string {
-	cmd := ws.gitCommandForWorkspace(workspaceRoot, "diff", "--cached", "--stat")
+func (ws *ReactWebServer) gitReviewExtractStagedChangesSummary(projectFolder string) string {
+	cmd := ws.gitCommandForProjectFolder(projectFolder, "diff", "--cached", "--stat")
 	output, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -44,6 +44,6 @@ func gitReviewCategorizeChanges(diff string) string {
 	return codereview.CategorizeChanges(diff)
 }
 
-func (ws *ReactWebServer) gitReviewExtractFileContextForChanges(workspaceRoot, diff string) string {
-	return codereview.ExtractFileContextForChanges(workspaceRoot, diff)
+func (ws *ReactWebServer) gitReviewExtractFileContextForChanges(projectFolder, diff string) string {
+	return codereview.ExtractFileContextForChanges(projectFolder, diff)
 }

@@ -4,7 +4,7 @@ package main
 
 import "testing"
 
-func TestLegacyRelocationsMovesTheOldRootProjectIntoTheWorkspace(t *testing.T) {
+func TestLegacyRelocationsMovesTheOldRootProjectIntoTheProjectFolder(t *testing.T) {
 	files := []IDBFile{
 		{Path: "/README.md"},
 		{Path: "/src/main.go"},
@@ -26,7 +26,7 @@ func TestLegacyRelocationsMovesTheOldRootProjectIntoTheWorkspace(t *testing.T) {
 	}
 }
 
-func TestLegacyRelocationsRunOnlyBeforeTheWorkspaceHasFiles(t *testing.T) {
+func TestLegacyRelocationsRunOnlyBeforeTheProjectFolderHasFiles(t *testing.T) {
 	files := []IDBFile{
 		{Path: "/workspace/README.md"},
 		{Path: "/notes.txt"},

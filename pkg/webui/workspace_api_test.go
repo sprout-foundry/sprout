@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-func TestHandleAPIWorkspaceSetUpdatesWorkspaceRoot(t *testing.T) {
+func TestHandleAPIProjectFolderSetUpdatesProjectFolder(t *testing.T) {
 	initialRoot := t.TempDir()
 	nextRoot := filepath.Join(initialRoot, "project")
 	if err := os.Mkdir(nextRoot, 0o755); err != nil {
@@ -20,7 +20,7 @@ func TestHandleAPIWorkspaceSetUpdatesWorkspaceRoot(t *testing.T) {
 	}
 
 	// Resolve symlinks so the expected path matches what filepathAbsEval
-	// produces inside handleAPIWorkspace (macOS /var → /private/var).
+	// produces inside handleAPIProjectFolder (macOS /var → /private/var).
 	resolvedNext, err := filepath.EvalSymlinks(nextRoot)
 	if err != nil {
 		t.Fatalf("eval symlinks: %v", err)
@@ -28,7 +28,7 @@ func TestHandleAPIWorkspaceSetUpdatesWorkspaceRoot(t *testing.T) {
 
 	server := &ReactWebServer{
 		daemonRoot:      initialRoot,
-		workspaceRoot:   initialRoot,
+		projectFolder:   initialRoot,
 		terminalManager: NewTerminalManager(initialRoot),
 	}
 
@@ -40,13 +40,13 @@ func TestHandleAPIWorkspaceSetUpdatesWorkspaceRoot(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/workspace", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
-	server.handleAPIWorkspace(rec, req)
+	server.handleAPIProjectFolder(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	if got := server.GetWorkspaceRoot(); got != resolvedNext {
+	if got := server.GetProjectFolder(); got != resolvedNext {
 		t.Fatalf("expected workspace root %q, got %q", resolvedNext, got)
 	}
 
@@ -54,24 +54,24 @@ func TestHandleAPIWorkspaceSetUpdatesWorkspaceRoot(t *testing.T) {
 		t.Fatal("expected terminal manager to be reset")
 	}
 
-	if got := server.terminalManager.workspaceRoot; got != resolvedNext {
+	if got := server.terminalManager.projectFolder; got != resolvedNext {
 		t.Fatalf("expected terminal manager root %q, got %q", resolvedNext, got)
 	}
 
 }
 
-func TestHandleAPIWorkspaceGetReturnsCurrentRoot(t *testing.T) {
+func TestHandleAPIProjectFolderGetReturnsCurrentRoot(t *testing.T) {
 	root := t.TempDir()
 	server := &ReactWebServer{
 		daemonRoot:      root,
-		workspaceRoot:   root,
+		projectFolder:   root,
 		terminalManager: NewTerminalManager(root),
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
 	rec := httptest.NewRecorder()
 
-	server.handleAPIWorkspace(rec, req)
+	server.handleAPIProjectFolder(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", rec.Code)
@@ -79,7 +79,7 @@ func TestHandleAPIWorkspaceGetReturnsCurrentRoot(t *testing.T) {
 
 	var response struct {
 		DaemonRoot    string `json:"daemon_root"`
-		WorkspaceRoot string `json:"workspace_root"`
+		ProjectFolder string `json:"workspace_root"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 		t.Fatalf("unmarshal response: %v", err)
@@ -89,12 +89,12 @@ func TestHandleAPIWorkspaceGetReturnsCurrentRoot(t *testing.T) {
 		t.Fatalf("expected daemon root %q, got %q", root, response.DaemonRoot)
 	}
 
-	if response.WorkspaceRoot != filepath.Clean(root) {
-		t.Fatalf("expected workspace root %q, got %q", root, response.WorkspaceRoot)
+	if response.ProjectFolder != filepath.Clean(root) {
+		t.Fatalf("expected workspace root %q, got %q", root, response.ProjectFolder)
 	}
 }
 
-func TestHandleAPIWorkspaceBrowseIsScopedToDaemonRoot(t *testing.T) {
+func TestHandleAPIProjectFolderBrowseIsScopedToDaemonRoot(t *testing.T) {
 	daemonRoot := t.TempDir()
 	childDir := filepath.Join(daemonRoot, "child")
 	if err := os.Mkdir(childDir, 0o755); err != nil {
@@ -102,13 +102,13 @@ func TestHandleAPIWorkspaceBrowseIsScopedToDaemonRoot(t *testing.T) {
 	}
 	server := &ReactWebServer{
 		daemonRoot:      daemonRoot,
-		workspaceRoot:   daemonRoot,
+		projectFolder:   daemonRoot,
 		terminalManager: NewTerminalManager(daemonRoot),
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/workspace/browse?path="+childDir, nil)
 	rec := httptest.NewRecorder()
-	server.handleAPIWorkspaceBrowse(rec, req)
+	server.handleAPIProjectFolderBrowse(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -116,22 +116,22 @@ func TestHandleAPIWorkspaceBrowseIsScopedToDaemonRoot(t *testing.T) {
 	outsideRoot := t.TempDir()
 	req = httptest.NewRequest(http.MethodGet, "/api/workspace/browse?path="+outsideRoot, nil)
 	rec = httptest.NewRecorder()
-	server.handleAPIWorkspaceBrowse(rec, req)
+	server.handleAPIProjectFolderBrowse(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected status 403 for path outside daemon root, got %d", rec.Code)
 	}
 }
 
-func TestHandleAPIWorkspaceSetRejectsDuringActiveQuery(t *testing.T) {
+func TestHandleAPIProjectFolderSetRejectsDuringActiveQuery(t *testing.T) {
 	root := t.TempDir()
 	server := &ReactWebServer{
 		daemonRoot:      root,
-		workspaceRoot:   root,
+		projectFolder:   root,
 		terminalManager: NewTerminalManager(root),
 		activeQueries:   1,
 		clientContexts: map[string]*webClientContext{
 			"client-a": {
-				WorkspaceRoot: root,
+				ProjectFolder: root,
 				Terminal:      NewTerminalManager(root),
 				FileConsents:  newFileConsentManager(),
 				AgentState:    emptyAgentStateSnapshot(),
@@ -150,7 +150,7 @@ func TestHandleAPIWorkspaceSetRejectsDuringActiveQuery(t *testing.T) {
 	req.Header.Set(webClientIDHeader, "client-a")
 	rec := httptest.NewRecorder()
 
-	server.handleAPIWorkspace(rec, req)
+	server.handleAPIProjectFolder(rec, req)
 
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("expected status 409, got %d: %s", rec.Code, rec.Body.String())
@@ -163,8 +163,8 @@ func TestHandleAPIWorkspaceSetRejectsDuringActiveQuery(t *testing.T) {
 	if response["code"] != "query_in_progress" {
 		t.Fatalf("expected code query_in_progress, got %v", response["code"])
 	}
-	// Workspace should NOT have changed
-	if got := server.GetWorkspaceRoot(); got != root {
+	// Project folder should NOT have changed
+	if got := server.GetProjectFolder(); got != root {
 		t.Fatalf("workspace root should not have changed, got %q", got)
 	}
 }

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 )
 
-// ServerSuggestion represents a recommended language server for a workspace.
+// ServerSuggestion represents a recommended language server for a project folder.
 type ServerSuggestion struct {
 	Language    string // Language name (e.g. "go", "python")
 	ProjectFile string // Detected project file (e.g. "Cargo.toml")
@@ -20,10 +20,10 @@ type projectDetector struct {
 	ServerID string   // The language server ID to suggest
 }
 
-// Detect project files in the given workspace root and return suggestions.
-func SuggestServers(workspaceRoot string) []ServerSuggestion {
-	// Validate workspaceRoot exists and is a directory
-	absRoot, err := filepath.Abs(workspaceRoot)
+// Detect project files in the given project folder and return suggestions.
+func SuggestServers(projectFolder string) []ServerSuggestion {
+	// Validate projectFolder exists and is a directory
+	absRoot, err := filepath.Abs(projectFolder)
 	if err != nil {
 		return nil
 	}
@@ -31,7 +31,7 @@ func SuggestServers(workspaceRoot string) []ServerSuggestion {
 	if err != nil || !info.IsDir() {
 		return nil
 	}
-	workspaceRoot = absRoot
+	projectFolder = absRoot
 
 	detectors := []projectDetector{
 		{Patterns: []string{"go.mod"}, ServerID: "go"},
@@ -63,7 +63,7 @@ func SuggestServers(workspaceRoot string) []ServerSuggestion {
 
 			if pattern[0] == '*' {
 				// Glob pattern
-				matches, err := filepath.Glob(filepath.Join(workspaceRoot, pattern))
+				matches, err := filepath.Glob(filepath.Join(projectFolder, pattern))
 				if err != nil {
 					continue
 				}
@@ -73,7 +73,7 @@ func SuggestServers(workspaceRoot string) []ServerSuggestion {
 				}
 			} else {
 				// Exact filename
-				fullPath := filepath.Join(workspaceRoot, pattern)
+				fullPath := filepath.Join(projectFolder, pattern)
 				if _, err := os.Stat(fullPath); err == nil {
 					matchedFile = pattern
 					break

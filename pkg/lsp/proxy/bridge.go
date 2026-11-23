@@ -223,7 +223,7 @@ func (b *Bridge) Close() {
 // BridgeHandler creates a http.HandlerFunc that handles LSP WebSocket connections.
 // It upgrades the WebSocket connection and bridges it to the LSP process from the manager.
 // The upgrader parameter should have a proper CheckOrigin function configured by the caller.
-func BridgeHandler(manager *Manager, upgrader websocket.Upgrader, workspaceRoot string) func(w http.ResponseWriter, r *http.Request) {
+func BridgeHandler(manager *Manager, upgrader websocket.Upgrader, projectFolder string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Parse query parameters
 		languageID := r.URL.Query().Get("language")
@@ -232,14 +232,14 @@ func BridgeHandler(manager *Manager, upgrader websocket.Upgrader, workspaceRoot 
 			return
 		}
 
-		workspacePath := r.URL.Query().Get("workspace")
-		if workspacePath == "" {
+		projectFolderPath := r.URL.Query().Get("workspace")
+		if projectFolderPath == "" {
 			http.Error(w, "workspace parameter is required", http.StatusBadRequest)
 			return
 		}
 
-		// Resolve workspace path
-		_, err := filepath.Abs(workspacePath)
+		// Resolve project folder path
+		_, err := filepath.Abs(projectFolderPath)
 		if err != nil {
 			http.Error(w, "workspace not allowed", http.StatusForbidden)
 			return
@@ -249,7 +249,7 @@ func BridgeHandler(manager *Manager, upgrader websocket.Upgrader, workspaceRoot 
 		languageID = NormalizeLanguageID(languageID)
 
 		// Get or create the LSP process
-		process, release, err := manager.GetOrCreate(workspacePath, languageID)
+		process, release, err := manager.GetOrCreate(projectFolderPath, languageID)
 		if err != nil {
 			log.Printf("LSP bridge: Failed to get process: %v", err)
 			http.Error(w, "Failed to start language server: "+err.Error(), http.StatusInternalServerError)

@@ -51,11 +51,11 @@ type sshLaunchLogger struct {
 	prefix string
 }
 
-func newSSHLaunchLogger(hostAlias, remoteWorkspacePath string) (*sshLaunchLogger, error) {
+func newSSHLaunchLogger(hostAlias, remoteProjectFolderPath string) (*sshLaunchLogger, error) {
 	logger := &sshLaunchLogger{
-		path:   workspaceLogPath(),
+		path:   projectFolderLogPath(),
 		logger: utils.GetLogger(true),
-		prefix: fmt.Sprintf("[ssh-launch %s %s]", hostAlias, remoteWorkspacePath),
+		prefix: fmt.Sprintf("[ssh-launch %s %s]", hostAlias, remoteProjectFolderPath),
 	}
 	logger.Logf("launch started")
 	return logger, nil
@@ -83,29 +83,29 @@ func (l *sshLaunchLogger) Logf(format string, args ...interface{}) {
 // Shared types
 // ---------------------------------------------------------------------------
 
-type sshWorkspaceSession struct {
-	Key                 string
-	HostAlias           string
-	RemoteWorkspacePath string
-	LocalPort           int
-	RemotePort          int
-	RemotePID           int
-	URL                 string
-	TunnelCmd           *exec.Cmd
-	StartedAt           time.Time
+type sshProjectFolderSession struct {
+	Key                     string
+	HostAlias               string
+	RemoteProjectFolderPath string
+	LocalPort               int
+	RemotePort              int
+	RemotePID               int
+	URL                     string
+	TunnelCmd               *exec.Cmd
+	StartedAt               time.Time
 	// ReusedDaemon is true when this session connected to an existing daemon
 	// that was not started by this launch.  When set, closing the session
 	// kills only the local tunnel — never the remote daemon process.
 	ReusedDaemon bool
 }
 
-type persistedSSHWorkspaceSession struct {
-	Key                 string    `json:"key"`
-	HostAlias           string    `json:"host_alias"`
-	RemoteWorkspacePath string    `json:"remote_workspace_path"`
-	RemotePort          int       `json:"remote_port"`
-	RemotePID           int       `json:"remote_pid"`
-	StartedAt           time.Time `json:"started_at"`
+type persistedSSHProjectFolderSession struct {
+	Key                     string    `json:"key"`
+	HostAlias               string    `json:"host_alias"`
+	RemoteProjectFolderPath string    `json:"remote_workspace_path"`
+	RemotePort              int       `json:"remote_port"`
+	RemotePID               int       `json:"remote_pid"`
+	StartedAt               time.Time `json:"started_at"`
 }
 
 type sshLaunchResult struct {
@@ -160,9 +160,9 @@ const (
 	sshRestoreHealthTimeout = 12 * time.Second
 
 	// DaemonPort is the single shared port used by all sprout daemons for
-	// every workspace.  Both local daemons (sprout daemon / sprout service)
+	// every project folder.  Both local daemons (sprout daemon / sprout service)
 	// and SSH-launched remote daemons listen on this port.  The daemon
-	// serves ALL workspaces from this single port, routing per-workspace
+	// serves ALL project folders from this single port, routing per-project-folder
 	// internally via clientContext and chat_sessions — there are no
 	// folder-scoped daemon ports.  The launcher detects an existing daemon
 	// on this port and reuses it rather than starting a duplicate.
@@ -175,7 +175,7 @@ var errNoReleaseTagForArtifact = errors.New("no release tag available for curren
 // Shared utility functions
 // ---------------------------------------------------------------------------
 
-func workspaceLogPath() string {
+func projectFolderLogPath() string {
 	stateDir, err := envutil.StateDir()
 	if err != nil {
 		return "workspace.log"

@@ -24,8 +24,8 @@ func TestHandleFileRead_CacheHeaders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server.workspaceRoot = dir
-	server.getOrCreateClientContext(defaultWebClientID).WorkspaceRoot = dir
+	server.projectFolder = dir
+	server.getOrCreateClientContext(defaultWebClientID).ProjectFolder = dir
 
 	file := filepath.Join(dir, "design", "generated", "tokens.css")
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {

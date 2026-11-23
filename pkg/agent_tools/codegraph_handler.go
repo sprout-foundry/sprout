@@ -152,7 +152,7 @@ func (h *findDeadCodeHandler) Execute(ctx context.Context, env ToolEnv, args map
 				fmt.Errorf("read blocked: %s is not accessible", dir)
 		}
 		if decision == "prompt" && env.FileAccessPrompter != nil {
-			if ctx2, approved := promptForOffWorkspacePath(ctx, env, "find_dead_code", dir, resolvedPath, "read"); approved {
+			if ctx2, approved := promptForOffProjectFolderPath(ctx, env, "find_dead_code", dir, resolvedPath, "read"); approved {
 				ctx = ctx2
 			} else {
 				return ToolResult{Output: fmt.Sprintf("read blocked: off-workspace access to %s was not approved", dir), IsError: true},

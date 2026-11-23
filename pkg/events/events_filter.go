@@ -1,6 +1,6 @@
 // Event factory functions for the agent query / tool / approval /
 // user-interaction events: the Query / Progress / Completed / Error /
-// File / Workspace / Stream / Metrics / Validation factories, the tool
+// File / Project folder / Stream / Metrics / Validation factories, the tool
 // start / end + args-truncation helpers, the approval / password /
 // security-prompt events, and the todo / provider / agent-message /
 // subagent / ask-user / input-required events. The diagnostics / compact /
@@ -105,17 +105,17 @@ func FileContentChangedEvent(filePath string, modTime int64, size int64) map[str
 	}
 }
 
-// WorkspacePatchEvent creates a workspace_patch event payload for real-time
-// WorkspacePatchEvent creates a workspace_patch event payload for real-time
+// ProjectFolderPatchEvent creates a workspace_patch event payload for real-time
+// ProjectFolderPatchEvent creates a workspace_patch event payload for real-time
 // file change notification from the agent to the browser.
 //
 // The payload intentionally carries NO file content. The only in-tree consumer
-// (the WebUI's handleWorkspacePatch) logs path/action/seq, and shipping whole
+// (the WebUI's handleProjectFolderPatch) logs path/action/seq, and shipping whole
 // files on every write/edit flooded every connected tab's main thread with
 // multi-hundred-KB JSON.parse work. Consumers needing content must fetch the
 // file via /api/files. size is computed from content before it is dropped so
 // the UI can still show change magnitude.
-func WorkspacePatchEvent(filePath, content, action string, seqNum int64, conflictInfo ...PatchConflictInfo) map[string]interface{} {
+func ProjectFolderPatchEvent(filePath, content, action string, seqNum int64, conflictInfo ...PatchConflictInfo) map[string]interface{} {
 	payload := map[string]interface{}{
 		"file_path": filePath,
 		"size":      len(content),
@@ -367,12 +367,12 @@ func SubagentClarificationRespondedEvent(subagentID, requestID, response string)
 	}
 }
 
-// WorkspaceChangedEvent creates a workspace changed event
-func WorkspaceChangedEvent(daemonRoot, workspaceRoot, previousWorkspaceRoot string) map[string]interface{} {
+// ProjectFolderChangedEvent creates a project folder changed event
+func ProjectFolderChangedEvent(daemonRoot, projectFolder, previousProjectFolder string) map[string]interface{} {
 	return map[string]interface{}{
 		"daemon_root":             daemonRoot,
-		"workspace_root":          workspaceRoot,
-		"previous_workspace_root": previousWorkspaceRoot,
+		"workspace_root":          projectFolder,
+		"previous_workspace_root": previousProjectFolder,
 	}
 }
 

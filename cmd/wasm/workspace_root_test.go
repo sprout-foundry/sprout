@@ -10,26 +10,26 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/wasmshell"
 )
 
-func withTempWorkspace(t *testing.T) string {
+func withTempProjectFolder(t *testing.T) string {
 	t.Helper()
 	if wasmshell.ShellEnv == nil {
 		wasmshell.SetShellEnv(wasmshell.NewEnv())
 	}
-	prevRoot := workspaceRoot
+	prevRoot := projectFolder
 	prevCwd, _ := os.Getwd()
 	dir := filepath.Join(t.TempDir(), "project")
-	if err := setWorkspaceRoot(dir); err != nil {
+	if err := setProjectFolder(dir); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		workspaceRoot = prevRoot
+		projectFolder = prevRoot
 		_ = os.Chdir(prevCwd)
 	})
 	return dir
 }
 
-func TestWorkspacePathResolvesHostPathsAgainstTheWorkspace(t *testing.T) {
-	root := withTempWorkspace(t)
+func TestProjectFolderPathResolvesHostPathsAgainstTheProjectFolder(t *testing.T) {
+	root := withTempProjectFolder(t)
 	home := wasmshell.ShellEnv.Get("HOME")
 
 	cases := map[string]string{
@@ -40,14 +40,14 @@ func TestWorkspacePathResolvesHostPathsAgainstTheWorkspace(t *testing.T) {
 		"~/.config":  filepath.Join(home, ".config"),
 	}
 	for in, want := range cases {
-		if got := workspacePath(in); got != want {
+		if got := projectFolderPath(in); got != want {
 			t.Errorf("workspacePath(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
 
-func TestWorkspacePathIgnoresTheTerminalsCwd(t *testing.T) {
-	root := withTempWorkspace(t)
+func TestProjectFolderPathIgnoresTheTerminalsCwd(t *testing.T) {
+	root := withTempProjectFolder(t)
 	sub := filepath.Join(root, "api")
 	if err := os.MkdirAll(sub, 0o755); err != nil {
 		t.Fatal(err)
@@ -55,18 +55,18 @@ func TestWorkspacePathIgnoresTheTerminalsCwd(t *testing.T) {
 	if err := os.Chdir(sub); err != nil {
 		t.Fatal(err)
 	}
-	if got := workspacePath("go.mod"); got != filepath.Join(root, "go.mod") {
+	if got := projectFolderPath("go.mod"); got != filepath.Join(root, "go.mod") {
 		t.Errorf("after cd api, workspacePath(go.mod) = %q, want the workspace's go.mod", got)
 	}
 }
 
-func TestFromWorkspaceRunsAtTheRootAndRestoresTheCwd(t *testing.T) {
-	root := withTempWorkspace(t)
+func TestFromProjectFolderRunsAtTheRootAndRestoresTheCwd(t *testing.T) {
+	root := withTempProjectFolder(t)
 	sub := filepath.Join(root, "api")
 	_ = os.MkdirAll(sub, 0o755)
 	_ = os.Chdir(sub)
 
-	ran := fromWorkspace(func() string {
+	ran := fromProjectFolder(func() string {
 		cwd, _ := os.Getwd()
 		return cwd
 	})

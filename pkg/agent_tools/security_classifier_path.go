@@ -196,7 +196,7 @@ func isScreenshotPathAllowed(cleanedPath string) bool {
 		return true
 	}
 
-	// /tmp/sprout/* is always allowed (agent scratch/audit/screenshot workspace)
+	// /tmp/sprout/* is always allowed (agent scratch/audit/screenshot project folder)
 	if strings.HasPrefix(filepath.ToSlash(cleanedPath), "/tmp/sprout") {
 		return true
 	}

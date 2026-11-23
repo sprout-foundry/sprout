@@ -105,16 +105,16 @@ func TestGatherStatsForClientIDLocked_ActiveQueryButEmptyText_DoesNotReturnCurre
 	}
 }
 
-// --- setClientWorkspaceRoot clears CurrentQuery ---
+// --- setClientProjectFolder clears CurrentQuery ---
 
-func TestSetClientWorkspaceRoot_ClearsCurrentQuery(t *testing.T) {
+func TestSetClientProjectFolder_ClearsCurrentQuery(t *testing.T) {
 	daemonRoot := t.TempDir()
-	workspaceA := filepath.Join(daemonRoot, "workspace-a")
-	workspaceB := filepath.Join(daemonRoot, "workspace-b")
-	if err := os.MkdirAll(workspaceA, 0o755); err != nil {
+	projectFolderA := filepath.Join(daemonRoot, "workspace-a")
+	projectFolderB := filepath.Join(daemonRoot, "workspace-b")
+	if err := os.MkdirAll(projectFolderA, 0o755); err != nil {
 		t.Fatalf("mkdir workspace-a: %v", err)
 	}
-	if err := os.MkdirAll(workspaceB, 0o755); err != nil {
+	if err := os.MkdirAll(projectFolderB, 0o755); err != nil {
 		t.Fatalf("mkdir workspace-b: %v", err)
 	}
 
@@ -123,12 +123,12 @@ func TestSetClientWorkspaceRoot_ClearsCurrentQuery(t *testing.T) {
 		t.Fatal(err)
 	}
 	server.daemonRoot = daemonRoot
-	server.SetWorkspaceRoot(daemonRoot)
+	server.SetProjectFolder(daemonRoot)
 
 	clientID := "chrome-tab-1"
 
-	// Set initial workspace
-	if _, err := server.setClientWorkspaceRoot(clientID, workspaceA); err != nil {
+	// Set initial project folder
+	if _, err := server.setClientProjectFolder(clientID, projectFolderA); err != nil {
 		t.Fatalf("set workspaceA: %v", err)
 	}
 
@@ -138,8 +138,8 @@ func TestSetClientWorkspaceRoot_ClearsCurrentQuery(t *testing.T) {
 	server.clientContexts[clientID].CurrentQuery = "refactor authentication module"
 	server.mutex.Unlock()
 
-	// Switch workspace — should clear CurrentQuery and ActiveQuery
-	if _, err := server.setClientWorkspaceRoot(clientID, workspaceB); err != nil {
+	// Switch project folder — should clear CurrentQuery and ActiveQuery
+	if _, err := server.setClientProjectFolder(clientID, projectFolderB); err != nil {
 		t.Fatalf("set workspaceB: %v", err)
 	}
 

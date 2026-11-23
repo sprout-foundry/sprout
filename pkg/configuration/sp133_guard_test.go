@@ -9,7 +9,7 @@ import (
 
 // TestNoLegacyHomeDotSprout is a CI guard: no non-test Go file should
 // construct a path via filepath.Join(home..., ".sprout") for user-level
-// state/cache/data. Workspace-level .sprout paths are fine.
+// state/cache/data. Project-folder-level .sprout paths are fine.
 //
 // This catches regressions where a new file resolves a user-level path
 // to the old ~/.sprout location instead of the SP-133 category roots.
@@ -71,7 +71,7 @@ func TestNoLegacyHomeDotSprout(t *testing.T) {
 				if strings.Contains(line, "filepath.Join(") &&
 					strings.Contains(line, `".sprout"`) &&
 					(strings.Contains(line, "home") || strings.Contains(line, "HOME") || strings.Contains(line, "homeDir")) {
-					// Allow workspace-level paths (relative ".sprout" under cwd/workspace)
+					// Allow project-folder-level paths (relative ".sprout" under cwd/workspace)
 					if strings.Contains(line, `cwd`) || strings.Contains(line, `workspace`) || strings.Contains(line, `rootDir`) || strings.Contains(line, `projectRoot`) || strings.Contains(line, `gitRoot`) || strings.Contains(line, `baseDir`) {
 						continue
 					}

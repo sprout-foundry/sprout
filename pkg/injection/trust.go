@@ -63,8 +63,8 @@ var markerSet = func() map[string]bool {
 
 // NormalizeRelPath canonicalizes a root-relative, slash-separated path so two
 // spellings of the same location compare equal. A leading "./" is trimmed and
-// the empty string becomes "." (the workspace root itself). Paths are not
-// cleaned further: the input is already relative to the workspace root, and
+// the empty string becomes "." (the project folder itself). Paths are not
+// cleaned further: the input is already relative to the project folder, and
 // resolving ".." here would be a guess about a filesystem this function
 // deliberately does not touch.
 func NormalizeRelPath(relPath string) string {
@@ -95,7 +95,7 @@ func hasKnownMarker(normalized string) bool {
 }
 
 // ClassifyPath decides how content at relPath (slash-separated, relative to
-// the workspace root) is treated. decisions maps a root-relative path to its
+// the project folder) is treated. decisions maps a root-relative path to its
 // classification; the longest matching prefix wins.
 //
 // Rules, in order:

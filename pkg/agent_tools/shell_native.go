@@ -71,7 +71,7 @@ func runShellCommand(ctx context.Context, command string, streamOutput bool) (st
 		// Use exec.CommandContext to respect context cancellation
 		cmd := shellexec.CommandContext(ctx, command)
 
-		if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
+		if wd := filesystem.ProjectFolderFromContext(ctx); wd != "" {
 			cmd.Dir = wd
 		} else if wd, err := os.Getwd(); err == nil {
 			cmd.Dir = wd
@@ -152,7 +152,7 @@ func runShellCommand(ctx context.Context, command string, streamOutput bool) (st
 	// Fallback: no BPM available, use standard CommandContext (kills on cancel)
 	cmd := shellexec.CommandContext(ctx, command)
 
-	if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
+	if wd := filesystem.ProjectFolderFromContext(ctx); wd != "" {
 		cmd.Dir = wd
 	} else if wd, err := os.Getwd(); err == nil {
 		cmd.Dir = wd
@@ -190,7 +190,7 @@ func runShellCommandAdoptable(ctx context.Context, command string, bpm *Backgrou
 
 	cmd := shellexec.Command(command) // NOT CommandContext — we control lifecycle
 
-	if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
+	if wd := filesystem.ProjectFolderFromContext(ctx); wd != "" {
 		cmd.Dir = wd
 	} else if wd, err := os.Getwd(); err == nil {
 		cmd.Dir = wd

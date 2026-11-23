@@ -22,7 +22,7 @@ import (
 //  3. Handler Execute — calls PrecheckFileAccess, handles allow/deny/prompt
 //
 // Assertion matrix:
-//   - Workspace path         → Allow (Gate 1 allows; precheck allows; handler proceeds)
+//   - Project folder path         → Allow (Gate 1 allows; precheck allows; handler proceeds)
 //   - Allowlisted read_write → Allow (Gate 1 allows; precheck allows; handler proceeds)
 //   - Allowlisted read_only → Deny (Gate 1 denies; precheck denies; handler returns typed error)
 //   - Sensitive /etc/shadow  → Prompt (Gate 1 prompts; precheck prompts; handler falls through)
@@ -32,7 +32,7 @@ func TestSecurityGateIntegration_EndToEnd(t *testing.T) {
 	}
 
 	// --- Setup ---
-	workspaceRoot := t.TempDir()
+	projectFolder := t.TempDir()
 	allowlistRW := NonTmpTempDir(t) // read_write allowlisted folder
 	allowlistRO := NonTmpTempDir(t) // read_only allowlisted folder
 	sensitivePath := "/etc/shadow"
@@ -40,7 +40,7 @@ func TestSecurityGateIntegration_EndToEnd(t *testing.T) {
 	// --- Create agent ---
 	a := newIsolatedTestAgent(t)
 	defer a.Shutdown()
-	a.SetWorkspaceRoot(workspaceRoot)
+	a.SetProjectFolder(projectFolder)
 
 	// Add allowlisted folders
 	a.AddSessionAllowedFolder(allowlistRW)
@@ -54,8 +54,8 @@ func TestSecurityGateIntegration_EndToEnd(t *testing.T) {
 		IsHardBlock:  false,
 	}
 
-	// Workspace path: Gate 1 auto-approves
-	wsFile := filepath.Join(workspaceRoot, "main.go")
+	// Project folder path: Gate 1 auto-approves
+	wsFile := filepath.Join(projectFolder, "main.go")
 	if !a.staticGateAutoApprove(secResult, wsFile, "", "write") {
 		t.Errorf("staticGateAutoApprove: workspace path should auto-approve")
 	}
@@ -80,7 +80,7 @@ func TestSecurityGateIntegration_EndToEnd(t *testing.T) {
 	// --- Handler-level precheck via PrecheckFileAccess ---
 	ctx := context.Background()
 
-	// Workspace path: precheck returns allow
+	// Project folder path: precheck returns allow
 	_, decision := tools.PrecheckFileAccess(ctx, a, "write_file", wsFile)
 	if decision != "allow" {
 		t.Errorf("PrecheckFileAccess: workspace path = %q, want 'allow'", decision)
@@ -111,7 +111,7 @@ func TestSecurityGateIntegration_EndToEnd(t *testing.T) {
 		t.Fatal("write_file handler not found in registry")
 	}
 
-	// Workspace path: handler proceeds
+	// Project folder path: handler proceeds
 	res, err := h.Execute(ctx, tools.ToolEnv{
 		FileAccessClassifier: a,
 	}, map[string]any{
@@ -159,9 +159,9 @@ func TestSecurityGateIntegration_AuditTrail(t *testing.T) {
 	}
 	defer logger.Close()
 
-	workspaceRoot := t.TempDir()
-	a.SetWorkspaceRoot(workspaceRoot)
-	wsFile := filepath.Join(workspaceRoot, "main.go")
+	projectFolder := t.TempDir()
+	a.SetProjectFolder(projectFolder)
+	wsFile := filepath.Join(projectFolder, "main.go")
 
 	// Attach audit logger to context
 	ctx := filesystem.WithAuditLogger(context.Background(), logger)

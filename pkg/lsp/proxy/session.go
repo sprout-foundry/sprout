@@ -9,7 +9,7 @@ import (
 )
 
 // One language-server process is shared by every client on the same
-// workspace+language (see Manager.GetOrCreate). Each client speaks its own
+// project folder+language (see Manager.GetOrCreate). Each client speaks its own
 // JSON-RPC id space starting at 1, so handing them a raw broadcast of the
 // server's output breaks in two ways: two clients both send id 1 and each
 // receives the other's reply, and the second client's `initialize` is rejected

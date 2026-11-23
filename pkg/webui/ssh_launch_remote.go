@@ -11,10 +11,10 @@ import (
 	"strings"
 )
 
-func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary string, forceRestart bool, fwd *sshForwardedProvider, logger *sshLaunchLogger) (remotePort int, remotePID int, reused bool, err error) {
-	workspaceRaw := strings.TrimSpace(remoteWorkspacePath)
-	if workspaceRaw == "" {
-		workspaceRaw = "$HOME"
+func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherURL, remoteProjectFolderPath, remoteBinary string, forceRestart bool, fwd *sshForwardedProvider, logger *sshLaunchLogger) (remotePort int, remotePID int, reused bool, err error) {
+	projectFolderRaw := strings.TrimSpace(remoteProjectFolderPath)
+	if projectFolderRaw == "" {
+		projectFolderRaw = "$HOME"
 	}
 
 	// SSH remote daemons use a fixed port so that multiple SSH sessions
@@ -178,7 +178,7 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		"",
 		"# No existing daemon — start one.",
 		`mkdir -p "$HOME/.cache/sprout-webui/logs"`,
-		fmt.Sprintf("WORKSPACE_RAW=%s", shellEscapeSSH(workspaceRaw)),
+		fmt.Sprintf("WORKSPACE_RAW=%s", shellEscapeSSH(projectFolderRaw)),
 		`WORKSPACE_PATH="$WORKSPACE_RAW"`,
 		`case "$WORKSPACE_PATH" in`,
 		`  '$HOME'|'${HOME}') WORKSPACE_PATH="$HOME" ;;`,
@@ -187,13 +187,13 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		`  '~') WORKSPACE_PATH="$HOME" ;;`,
 		`  '~/'*) WORKSPACE_PATH="$HOME/${WORKSPACE_PATH#~/}" ;;`,
 		`esac`,
-		// Validate the workspace path is accessible without cd-ing into it.
-		// The daemon runs host-level from $HOME to support multi-workspace.
+		// Validate the project folder path is accessible without cd-ing into it.
+		// The daemon runs host-level from $HOME to support multi-project-folder.
 		`test -d "$WORKSPACE_PATH" || { echo "remote workspace path is not accessible: $WORKSPACE_RAW" >&2; exit 1; }`,
 		fmt.Sprintf(`LOG_FILE="$HOME/.cache/sprout-webui/logs/%s.log"`, sanitizeRemoteLogName(hostAlias)),
-		// Launch the daemon from $HOME (not the workspace directory) using
+		// Launch the daemon from $HOME (not the project folder) using
 		// the user's main config.  No --isolated-config — this is a host-level
-		// daemon that serves multiple workspaces via per-client context.
+		// daemon that serves multiple project folders via per-client context.
 		// Explicitly cd to $HOME to ensure daemonRoot is the user's home,
 		// regardless of what the SSH login shell's profile does.
 		fmt.Sprintf(
@@ -202,7 +202,7 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 			shellEscapeSSH(hostAlias),
 			shellEscapeSSH(sessionKey),
 			shellEscapeSSH(launcherURL),
-			shellEscapeSSH(remoteWorkspacePath),
+			shellEscapeSSH(remoteProjectFolderPath),
 			shellEscapeSSH(remoteBinary),
 		),
 		"REMOTE_PID=$!",

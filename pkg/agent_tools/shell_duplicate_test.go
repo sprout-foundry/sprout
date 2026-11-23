@@ -168,7 +168,7 @@ func TestExecuteShellCommandBackground_RefusesDuplicate(t *testing.T) {
 	sessionID := startLongRunningSession(t, bpm, "sleep 30", dir)
 
 	ctx := WithBackgroundProcessManager(context.Background(), bpm)
-	ctx = filesystem.WithWorkspaceRoot(ctx, dir)
+	ctx = filesystem.WithProjectFolder(ctx, dir)
 
 	out, err := ExecuteShellCommandBackground(ctx, "sleep 30", "")
 	require.NoError(t, err)
@@ -192,7 +192,7 @@ func TestRunShellCommandAdoptable_RefusesDuplicate(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	ctx = filesystem.WithWorkspaceRoot(ctx, dir)
+	ctx = filesystem.WithProjectFolder(ctx, dir)
 
 	start := time.Now()
 	out, err := runShellCommandAdoptable(ctx, "sleep 30", bpm)

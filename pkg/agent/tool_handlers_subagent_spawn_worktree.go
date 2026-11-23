@@ -1,5 +1,5 @@
-// Subagent spawn worktree helpers: file path validation, external workspace
-// approval, and workspace root override.
+// Subagent spawn worktree helpers: file path validation, external project folder
+// approval, and project folder override.
 // Extracted from tool_handlers_subagent_spawn.go for large-file decomposition.
 package agent
 
@@ -14,9 +14,9 @@ import (
 )
 
 // validateFilePaths resolves each file path to an absolute path and
-// classifies them into workspace vs outside paths. Returns the absolute
+// classifies them into project folder vs outside paths. Returns the absolute
 // paths, the outside-only paths, and any error.
-func validateFilePaths(files []string, absWorkspaceDir string, a *Agent) (absFilePaths, outsidePaths []string, _ error) {
+func validateFilePaths(files []string, absProjectFolderDir string, a *Agent) (absFilePaths, outsidePaths []string, _ error) {
 	for _, filePath := range files {
 		// Clean the path to eliminate any . or redundant separators
 		cleanedPath := filepath.Clean(filePath)
@@ -24,18 +24,18 @@ func validateFilePaths(files []string, absWorkspaceDir string, a *Agent) (absFil
 		if filepath.IsAbs(cleanedPath) {
 			absPath = cleanedPath
 		} else {
-			// Resolve relative paths against the workspace root, not the process cwd
-			absPath = filepath.Join(absWorkspaceDir, cleanedPath)
+			// Resolve relative paths against the project folder, not the process cwd
+			absPath = filepath.Join(absProjectFolderDir, cleanedPath)
 		}
 
-		// Track absolute path for later workspace root computation
+		// Track absolute path for later project folder computation
 		absFilePaths = append(absFilePaths, absPath)
 
-		// Check if file is outside workspace and not in /tmp
-		isOutsideWorkspace := !isPathInWorkspace(absPath, absWorkspaceDir)
+		// Check if file is outside project folder and not in /tmp
+		isOutsideProjectFolder := !isPathInProjectFolder(absPath, absProjectFolderDir)
 		isInTmp := isPathInTmp(absPath)
 
-		if isOutsideWorkspace && !isInTmp {
+		if isOutsideProjectFolder && !isInTmp {
 			outsidePaths = append(outsidePaths, absPath)
 		}
 
@@ -49,10 +49,10 @@ func validateFilePaths(files []string, absWorkspaceDir string, a *Agent) (absFil
 	return absFilePaths, outsidePaths, nil
 }
 
-// approveExternalWorkspace handles the approval flow for external workspace
-// access. Returns the computed subagent workspace root (common parent of
+// approveExternalProjectFolder handles the approval flow for external project folder
+// access. Returns the computed subagent project folder (common parent of
 // all file paths) or an error if the user rejects.
-func approveExternalWorkspace(a *Agent, outsidePaths, absFilePaths []string) (string, error) {
+func approveExternalProjectFolder(a *Agent, outsidePaths, absFilePaths []string) (string, error) {
 	// Check for auto-approval conditions
 	// Unsafe mode bypasses filesystem security checks automatically
 	alreadyApproved := a.GetUnsafeMode()
@@ -123,25 +123,25 @@ func approveExternalWorkspace(a *Agent, outsidePaths, absFilePaths []string) (st
 		a.Logger().Debug("Auto-approving subagent external workspace (unsafe mode or session bypass)\n")
 	}
 
-	// Compute common parent directory of all files as the new workspace root
-	subagentWorkspaceRoot := commonParent(absFilePaths)
-	a.Logger().Debug("Computed subagent workspace root: %s (from %d file paths)\n", subagentWorkspaceRoot, len(absFilePaths))
-	return subagentWorkspaceRoot, nil
+	// Compute common parent directory of all files as the new project folder
+	subagentProjectFolder := commonParent(absFilePaths)
+	a.Logger().Debug("Computed subagent workspace root: %s (from %d file paths)\n", subagentProjectFolder, len(absFilePaths))
+	return subagentProjectFolder, nil
 }
 
-// overrideWorkspaceRoot replaces the workspace root with workingDir when
+// overrideProjectFolder replaces the project folder with workingDir when
 // it is explicitly set, and logs a warning if any files fall outside.
-func overrideWorkspaceRoot(workspaceRoot, workingDir string, absFilePaths []string, a *Agent) string {
+func overrideProjectFolder(projectFolder, workingDir string, absFilePaths []string, a *Agent) string {
 	if workingDir == "" {
-		return workspaceRoot
+		return projectFolder
 	}
 	// Warn if any referenced files fall outside the working_dir scope
 	for _, absPath := range absFilePaths {
-		if !isPathInWorkspace(absPath, workingDir) && !isPathInTmp(absPath) {
+		if !isPathInProjectFolder(absPath, workingDir) && !isPathInTmp(absPath) {
 			a.Logger().Debug("Warning: file %s is outside working_dir %s; subagent may not be able to access it\n", absPath, workingDir)
 		}
 	}
-	workspaceRoot = workingDir
-	a.Logger().Debug("Overriding subagent workspace root with working_dir: %s\n", workspaceRoot)
-	return workspaceRoot
+	projectFolder = workingDir
+	a.Logger().Debug("Overriding subagent workspace root with working_dir: %s\n", projectFolder)
+	return projectFolder
 }

@@ -101,19 +101,19 @@ func TestMergeConfig_RepetitionGuard(t *testing.T) {
 }
 
 // TestLoadConfigWithLayers_RepetitionGuard covers the key across layer files: a
-// global disable persists through a silent workspace, and a workspace enable
+// global disable persists through a silent project folder, and a project folder enable
 // overrides a global disable.
 func TestLoadConfigWithLayers_RepetitionGuard(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
 	globalDir := filepath.Join(home, ".config", "sprout")
-	workspaceDir := filepath.Join(home, "proj", ".sprout")
+	projectFolderDir := filepath.Join(home, "proj", ".sprout")
 	globalPath := filepath.Join(globalDir, ConfigFileName)
-	workspacePath := filepath.Join(workspaceDir, WorkspaceConfigFileName)
+	projectFolderPath := filepath.Join(projectFolderDir, ProjectFolderConfigFileName)
 
 	load := func() *Config {
-		cfg, err := LoadConfigWithLayers(globalPath, workspacePath, "", globalDir)
+		cfg, err := LoadConfigWithLayers(globalPath, projectFolderPath, "", globalDir)
 		require.NoError(t, err)
 		return cfg
 	}
@@ -122,14 +122,14 @@ func TestLoadConfigWithLayers_RepetitionGuard(t *testing.T) {
 	cfg := load()
 	assert.True(t, cfg.RepetitionGuardEnabled(), "no layer naming the key means the guard is on")
 
-	// Global disables; the workspace never names the key — the disable persists.
+	// Global disables; the project folder never names the key — the disable persists.
 	writeFile(t, globalPath, `{"version":"2.1","repetition_guard":{"enabled":false}}`)
-	writeFile(t, workspacePath, `{"reasoning_effort":"high"}`)
+	writeFile(t, projectFolderPath, `{"reasoning_effort":"high"}`)
 	cfg = load()
 	assert.False(t, cfg.RepetitionGuardEnabled(), "a global disable must persist through a silent workspace")
 
-	// The workspace (project) re-enables over the global disable.
-	writeFile(t, workspacePath, `{"repetition_guard":{"enabled":true,"min_repetitions":5}}`)
+	// The project folder (project) re-enables over the global disable.
+	writeFile(t, projectFolderPath, `{"repetition_guard":{"enabled":true,"min_repetitions":5}}`)
 	cfg = load()
 	assert.True(t, cfg.RepetitionGuardEnabled(), "a workspace enable must override the global disable")
 	assert.Equal(t, 5, cfg.RepetitionGuardMinRepetitions())

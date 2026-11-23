@@ -17,11 +17,11 @@ type SessionsFlow struct{}
 
 // ExecuteSessionList lists sessions for the current working directory, newest first.
 func (f *SessionsFlow) ExecuteSessionList(chatAgent *agent.Agent) (string, error) {
-	workspaceRoot := ""
+	projectFolder := ""
 	if chatAgent != nil {
-		workspaceRoot = chatAgent.GetWorkspaceRoot()
+		projectFolder = chatAgent.GetProjectFolder()
 	}
-	sessions, err := agent.ListSessionsWithTimestampsScoped(workspaceRoot)
+	sessions, err := agent.ListSessionsWithTimestampsScoped(projectFolder)
 	if err != nil {
 		return "", fmt.Errorf("failed to list sessions: %w", err)
 	}
@@ -68,11 +68,11 @@ func (f *SessionsFlow) ExecuteSessionList(chatAgent *agent.Agent) (string, error
 
 // ExecuteSessionLoad loads a session with optional summary context restoration
 func (f *SessionsFlow) ExecuteSessionLoad(chatAgent *agent.Agent, args []string) (string, error) {
-	workspaceRoot := ""
+	projectFolder := ""
 	if chatAgent != nil {
-		workspaceRoot = chatAgent.GetWorkspaceRoot()
+		projectFolder = chatAgent.GetProjectFolder()
 	}
-	sessions, err := agent.ListSessionsWithTimestampsScoped(workspaceRoot)
+	sessions, err := agent.ListSessionsWithTimestampsScoped(projectFolder)
 	if err != nil {
 		return "", fmt.Errorf("failed to list sessions: %w", err)
 	}
@@ -134,11 +134,11 @@ func (f *SessionsFlow) ExecuteSessionRename(chatAgent *agent.Agent, args []strin
 		return "Usage: /sessions rename <number|id> <new_name>\nExample: /sessions rename 1 \"Refactor persistence module\"", nil
 	}
 
-	workspaceRoot := ""
+	projectFolder := ""
 	if chatAgent != nil {
-		workspaceRoot = chatAgent.GetWorkspaceRoot()
+		projectFolder = chatAgent.GetProjectFolder()
 	}
-	sessions, err := agent.ListSessionsWithTimestampsScoped(workspaceRoot)
+	sessions, err := agent.ListSessionsWithTimestampsScoped(projectFolder)
 	if err != nil {
 		return "", fmt.Errorf("failed to list sessions: %w", err)
 	}
@@ -179,11 +179,11 @@ func (f *SessionsFlow) ExecuteSessionDelete(chatAgent *agent.Agent, args []strin
 		return "Usage: /sessions delete <number|id>\nExample: /sessions delete 1 (or /sessions delete session_1734697500)", nil
 	}
 
-	workspaceRoot := ""
+	projectFolder := ""
 	if chatAgent != nil {
-		workspaceRoot = chatAgent.GetWorkspaceRoot()
+		projectFolder = chatAgent.GetProjectFolder()
 	}
-	sessions, err := agent.ListSessionsWithTimestampsScoped(workspaceRoot)
+	sessions, err := agent.ListSessionsWithTimestampsScoped(projectFolder)
 	if err != nil {
 		return "", fmt.Errorf("failed to list sessions: %w", err)
 	}
@@ -221,11 +221,11 @@ func (f *SessionsFlow) ExecuteSessionExport(chatAgent *agent.Agent, args []strin
 		return "Usage: /sessions export <number|id> <output_file.json>\nExample: /sessions export 1 my_session.json", nil
 	}
 
-	workspaceRoot := ""
+	projectFolder := ""
 	if chatAgent != nil {
-		workspaceRoot = chatAgent.GetWorkspaceRoot()
+		projectFolder = chatAgent.GetProjectFolder()
 	}
-	sessions, err := agent.ListSessionsWithTimestampsScoped(workspaceRoot)
+	sessions, err := agent.ListSessionsWithTimestampsScoped(projectFolder)
 	if err != nil {
 		return "", fmt.Errorf("failed to list sessions: %w", err)
 	}

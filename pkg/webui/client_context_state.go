@@ -82,11 +82,11 @@ func (ws *ReactWebServer) cleanupInactiveClientContexts(maxIdle time.Duration) i
 	stale := make([]staleContext, 0)
 
 	ws.mutex.Lock()
-	// The workspace selection outlives the context: when the tab comes back,
-	// its recreated context must restore the remembered workspace rather
+	// The project folder selection outlives the context: when the tab comes back,
+	// its recreated context must restore the remembered project folder rather
 	// than silently falling back to the daemon's launch directory. Snapshot
 	// before the deletes below (requires ws.mutex — see the Locked suffix).
-	ws.rememberClientWorkspacesLocked()
+	ws.rememberClientProjectFoldersLocked()
 	for clientID, ctx := range ws.clientContexts {
 		if clientID == defaultWebClientID || ctx == nil {
 			continue
@@ -149,10 +149,10 @@ func (ws *ReactWebServer) startClientContextCleanupWorker(ctx context.Context, i
 	}
 }
 
-// resolveWorkspaceRootForChat returns the appropriate workspace root for a given chat session.
+// resolveProjectFolderForChat returns the appropriate project folder for a given chat session.
 // If the chat session has a worktree path set, it returns that. Otherwise, it returns the
-// client context's workspace root.
-func (ws *ReactWebServer) resolveWorkspaceRootForChat(clientID, chatID string) string {
+// client context's project folder.
+func (ws *ReactWebServer) resolveProjectFolderForChat(clientID, chatID string) string {
 	ws.mutex.RLock()
 	defer ws.mutex.RUnlock()
 	ctx := ws.clientContexts[clientID]

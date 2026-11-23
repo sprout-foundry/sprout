@@ -75,15 +75,15 @@ var (
 )
 
 // configSetManager opens config the way createChatAgent does, so a value set
-// here lands in the layer the agent reads: the workspace layer inside a
+// here lands in the layer the agent reads: the project folder layer inside a
 // repository, the global config otherwise or with --global.
 func configSetManager() (*configuration.Manager, error) {
 	globalDir := resolveGlobalConfigDir()
 	switch {
 	case configSetGlobal && globalDir != "":
 		return configuration.NewManagerWithLayers(globalDir, "")
-	case autoDetectedWorkspaceDir != "" && globalDir != "":
-		return configuration.NewManagerWithLayers(globalDir, autoDetectedWorkspaceDir)
+	case autoDetectedProjectFolderDir != "" && globalDir != "":
+		return configuration.NewManagerWithLayers(globalDir, autoDetectedProjectFolderDir)
 	default:
 		return configuration.NewManagerSilent()
 	}

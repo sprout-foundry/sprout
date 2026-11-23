@@ -17,7 +17,7 @@ import (
 
 // handleAPICreateFile handles API requests for creating new files
 func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Request) {
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
@@ -50,7 +50,7 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 	}
 
 	// Canonicalize and validate the path
-	canonicalPath, err := canonicalizePath(targetPath, workspaceRoot, true)
+	canonicalPath, err := canonicalizePath(targetPath, projectFolder, true)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": fmt.Sprintf("Invalid path: %v", err),
@@ -59,7 +59,7 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if !isWithinWorkspace(canonicalPath, workspaceRoot) && !ws.allowExternalAccessForRequest(r, canonicalPath) {
+	if !isWithinProjectFolder(canonicalPath, projectFolder) && !ws.allowExternalAccessForRequest(r, canonicalPath) {
 		writeJSON(w, http.StatusForbidden, map[string]interface{}{
 			"error": "Path outside workspace",
 			"code":  "path_outside_workspace",
@@ -119,7 +119,7 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 // handleAPIDeleteItem handles API requests for deleting files or directories.
 // Accepts both POST (browser fetch default) and DELETE.
 func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Request) {
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 	if !requireMethods(w, r, http.MethodPost, http.MethodDelete) {
 		return
 	}
@@ -145,7 +145,7 @@ func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Req
 	}
 
 	// Canonicalize and validate the path
-	canonicalPath, err := canonicalizePath(req.Path, workspaceRoot, false)
+	canonicalPath, err := canonicalizePath(req.Path, projectFolder, false)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": fmt.Sprintf("Invalid path: %v", err),
@@ -154,7 +154,7 @@ func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if !isWithinWorkspace(canonicalPath, workspaceRoot) && !ws.allowExternalAccessForRequest(r, canonicalPath) {
+	if !isWithinProjectFolder(canonicalPath, projectFolder) && !ws.allowExternalAccessForRequest(r, canonicalPath) {
 		writeJSON(w, http.StatusForbidden, map[string]interface{}{
 			"error": "Path outside workspace",
 			"code":  "path_outside_workspace",
@@ -181,7 +181,7 @@ func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Req
 
 // handleAPIRenameItem handles API requests for renaming files or directories.
 func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Request) {
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
@@ -207,7 +207,7 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	oldCanonicalPath, err := canonicalizePath(req.OldPath, workspaceRoot, false)
+	oldCanonicalPath, err := canonicalizePath(req.OldPath, projectFolder, false)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": fmt.Sprintf("Invalid source path: %v", err),
@@ -216,7 +216,7 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	newCanonicalPath, err := canonicalizePath(req.NewPath, workspaceRoot, true)
+	newCanonicalPath, err := canonicalizePath(req.NewPath, projectFolder, true)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": fmt.Sprintf("Invalid target path: %v", err),
@@ -225,8 +225,8 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	oldExternal := !isWithinWorkspace(oldCanonicalPath, workspaceRoot)
-	newExternal := !isWithinWorkspace(newCanonicalPath, workspaceRoot)
+	oldExternal := !isWithinProjectFolder(oldCanonicalPath, projectFolder)
+	newExternal := !isWithinProjectFolder(newCanonicalPath, projectFolder)
 	if (oldExternal && !ws.allowExternalAccessForRequest(r, oldCanonicalPath)) ||
 		(newExternal && !ws.allowExternalAccessForRequest(r, newCanonicalPath)) {
 		writeJSON(w, http.StatusForbidden, map[string]interface{}{
@@ -284,9 +284,9 @@ func (ws *ReactWebServer) handleAPIGetPrettierConfig(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Get workspace root for this request
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	if workspaceRoot == "" {
+	// Get project folder for this request
+	projectFolder := ws.getProjectFolderForRequest(r)
+	if projectFolder == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": "No workspace configured",
 			"code":  "no_workspace",
@@ -309,9 +309,9 @@ func (ws *ReactWebServer) handleAPIGetPrettierConfig(w http.ResponseWriter, r *h
 	// Merge config from all sources (later ones override earlier ones)
 	mergedConfig := make(map[string]interface{})
 
-	// Try to find config in workspace root
+	// Try to find config in project folder
 	for _, configFile := range prettierConfigFiles {
-		configPath := filepath.Join(workspaceRoot, configFile)
+		configPath := filepath.Join(projectFolder, configFile)
 		data, err := os.ReadFile(configPath)
 		if err != nil {
 			continue // File doesn't exist, skip
@@ -370,7 +370,7 @@ func (ws *ReactWebServer) handleAPIGetPrettierConfig(w http.ResponseWriter, r *h
 	}
 
 	// Also check package.json for a "prettier" key
-	pkgPath := filepath.Join(workspaceRoot, "package.json")
+	pkgPath := filepath.Join(projectFolder, "package.json")
 	pkgData, err := os.ReadFile(pkgPath)
 	if err == nil {
 		var pkgJSON map[string]interface{}

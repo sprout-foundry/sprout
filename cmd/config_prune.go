@@ -14,7 +14,7 @@ import (
 
 var configPruneDryRun bool
 
-var configPruneWorkspaceCmd = &cobra.Command{
+var configPruneProjectFolderCmd = &cobra.Command{
 	Use:   "prune-workspace [workspace...]",
 	Short: "Remove settings copied from the global config into workspace config",
 	Long: `Earlier versions saved the whole merged configuration into a workspace's
@@ -45,17 +45,17 @@ With no arguments, prunes the workspace in the current directory.`,
 			if err != nil {
 				return fmt.Errorf("resolve %q: %w", root, err)
 			}
-			dir := configuration.WorkspaceConfigDir(abs)
+			dir := configuration.ProjectFolderConfigDir(abs)
 			if dir == "" {
 				cmd.Printf("%s: skipped (the home directory has no workspace layer)\n", abs)
 				continue
 			}
-			file := filepath.Join(dir, configuration.WorkspaceConfigFileName)
+			file := filepath.Join(dir, configuration.ProjectFolderConfigFileName)
 			if _, err := os.Stat(file); os.IsNotExist(err) {
 				cmd.Printf("%s: no workspace config\n", abs)
 				continue
 			}
-			res, err := configuration.PruneWorkspaceConfig(globalDir, file, configPruneDryRun)
+			res, err := configuration.PruneProjectFolderConfig(globalDir, file, configPruneDryRun)
 			if err != nil {
 				return err
 			}
@@ -90,6 +90,6 @@ func keptSummary(kept []string) string {
 }
 
 func init() {
-	configPruneWorkspaceCmd.Flags().BoolVar(&configPruneDryRun, "dry-run", false, "list what would be removed without changing anything")
-	configCmd.AddCommand(configPruneWorkspaceCmd)
+	configPruneProjectFolderCmd.Flags().BoolVar(&configPruneDryRun, "dry-run", false, "list what would be removed without changing anything")
+	configCmd.AddCommand(configPruneProjectFolderCmd)
 }

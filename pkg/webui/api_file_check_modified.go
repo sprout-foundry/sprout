@@ -32,7 +32,7 @@ func (ws *ReactWebServer) handleAPIFileCheckModified(w http.ResponseWriter, r *h
 		return
 	}
 
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 
 	r.Body = http.MaxBytesReader(w, r.Body, 256*1024)
 	var req checkModifiedRequest
@@ -45,16 +45,16 @@ func (ws *ReactWebServer) handleAPIFileCheckModified(w http.ResponseWriter, r *h
 	for path, knownMtime := range req.Files {
 		// Use forWrite=true so canonicalizePath can handle deleted/non-existent
 		// files by resolving symlinks on the nearest existing parent.
-		canonicalPath, err := canonicalizePath(path, workspaceRoot, true)
+		canonicalPath, err := canonicalizePath(path, projectFolder, true)
 		if err != nil {
 			continue // skip unresolvable paths
 		}
 
-		// Only check files within the workspace, the app config dir,
+		// Only check files within the project folder, the app config dir,
 		// or a folder the user has approved for this session. Without
 		// the allowlist check, a user with an external file open in
 		// the editor would never receive change notifications for it.
-		if !isWithinWorkspace(canonicalPath, workspaceRoot) &&
+		if !isWithinProjectFolder(canonicalPath, projectFolder) &&
 			!isAppConfigPath(canonicalPath) &&
 			!ws.allowExternalAccessForRequest(r, canonicalPath) {
 			continue

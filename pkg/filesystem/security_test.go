@@ -648,14 +648,14 @@ func TestSafeResolvePath_ResolverScope(t *testing.T) {
 	// Create a test directory in the user's home directory
 	homeDir := scratchHome(t)
 
-	// Create workspace root directory (not /tmp)
-	workspaceRoot := filepath.Join(homeDir, ".sprout-test-resolver-workspace")
-	if err := os.MkdirAll(workspaceRoot, 0755); err != nil {
+	// Create project folder (not /tmp)
+	projectFolder := filepath.Join(homeDir, ".sprout-test-resolver-workspace")
+	if err := os.MkdirAll(projectFolder, 0755); err != nil {
 		t.Fatalf("Failed to create workspace root: %v", err)
 	}
-	defer os.RemoveAll(workspaceRoot)
+	defer os.RemoveAll(projectFolder)
 
-	// Create effective cwd directory (different from workspace root)
+	// Create effective cwd directory (different from project folder)
 	effectiveCwd := filepath.Join(homeDir, ".sprout-test-resolver-cwd")
 	if err := os.MkdirAll(effectiveCwd, 0755); err != nil {
 		t.Fatalf("Failed to create effective cwd: %v", err)
@@ -669,9 +669,9 @@ func TestSafeResolvePath_ResolverScope(t *testing.T) {
 	}
 	defer os.RemoveAll(sessionFolder)
 
-	// Create a file under workspace root
-	workspaceFile := filepath.Join(workspaceRoot, "file.txt")
-	if err := os.WriteFile(workspaceFile, []byte("test"), 0644); err != nil {
+	// Create a file under project folder
+	projectFolderFile := filepath.Join(projectFolder, "file.txt")
+	if err := os.WriteFile(projectFolderFile, []byte("test"), 0644); err != nil {
 		t.Fatalf("Failed to create workspace file: %v", err)
 	}
 
@@ -707,38 +707,38 @@ func TestSafeResolvePath_ResolverScope(t *testing.T) {
 	}{
 		{
 			name:    "path under workspaceRoot is allowed",
-			path:    workspaceFile,
-			ctx:     WithWorkspaceRoot(context.Background(), workspaceRoot),
+			path:    projectFolderFile,
+			ctx:     WithProjectFolder(context.Background(), projectFolder),
 			wantErr: false,
 		},
 		{
 			name:    "path under effectiveCwd but NOT workspaceRoot is allowed",
 			path:    cwdFile,
-			ctx:     WithAgentContext(WithWorkspaceRoot(context.Background(), workspaceRoot), effectiveCwd, nil),
+			ctx:     WithAgentContext(WithProjectFolder(context.Background(), projectFolder), effectiveCwd, nil),
 			wantErr: false,
 		},
 		{
 			name:    "path under session-allowed folder is allowed",
 			path:    sessionFile,
-			ctx:     WithAgentContext(WithWorkspaceRoot(context.Background(), workspaceRoot), effectiveCwd, []string{sessionFolder}),
+			ctx:     WithAgentContext(WithProjectFolder(context.Background(), projectFolder), effectiveCwd, []string{sessionFolder}),
 			wantErr: false,
 		},
 		{
 			name:          "path outside all allowlists is rejected",
 			path:          outsideFile,
-			ctx:           WithAgentContext(WithWorkspaceRoot(context.Background(), workspaceRoot), effectiveCwd, []string{sessionFolder}),
+			ctx:           WithAgentContext(WithProjectFolder(context.Background(), projectFolder), effectiveCwd, []string{sessionFolder}),
 			wantErr:       true,
 			wantErrSubstr: "outside working directory",
 		},
 		{
 			name:    "empty agent context still allows workspaceRoot paths",
-			path:    workspaceFile,
-			ctx:     WithWorkspaceRoot(context.Background(), workspaceRoot),
+			path:    projectFolderFile,
+			ctx:     WithProjectFolder(context.Background(), projectFolder),
 			wantErr: false,
 		},
 		{
 			name:    "nil context uses process cwd (should succeed since we're in workspace)",
-			path:    workspaceFile,
+			path:    projectFolderFile,
 			ctx:     context.Background(),
 			wantErr: false,
 		},
@@ -746,8 +746,8 @@ func TestSafeResolvePath_ResolverScope(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Change to workspace root so relative paths work
-			if err := os.Chdir(workspaceRoot); err != nil {
+			// Change to project folder so relative paths work
+			if err := os.Chdir(projectFolder); err != nil {
 				t.Fatalf("Failed to chdir to workspace: %v", err)
 			}
 
@@ -768,38 +768,38 @@ func TestSafeResolvePath_ResolverScope(t *testing.T) {
 	}
 }
 
-func TestSafeResolvePath_SymlinkInWorkspace(t *testing.T) {
+func TestSafeResolvePath_SymlinkInProjectFolder(t *testing.T) {
 	// Save current working directory
 	originalWd, _ := os.Getwd()
 	defer os.Chdir(originalWd)
 
 	homeDir := scratchHome(t)
 
-	// Create workspace root
-	workspaceRoot := filepath.Join(homeDir, ".sprout-test-symlink-workspace")
-	if err := os.MkdirAll(workspaceRoot, 0755); err != nil {
+	// Create project folder
+	projectFolder := filepath.Join(homeDir, ".sprout-test-symlink-workspace")
+	if err := os.MkdirAll(projectFolder, 0755); err != nil {
 		t.Fatalf("Failed to create workspace root: %v", err)
 	}
-	defer os.RemoveAll(workspaceRoot)
+	defer os.RemoveAll(projectFolder)
 
-	if err := os.Chdir(workspaceRoot); err != nil {
+	if err := os.Chdir(projectFolder); err != nil {
 		t.Fatalf("Failed to chdir: %v", err)
 	}
 
-	// Create a target file inside workspace
-	targetFile := filepath.Join(workspaceRoot, "target.txt")
+	// Create a target file inside project folder
+	targetFile := filepath.Join(projectFolder, "target.txt")
 	if err := os.WriteFile(targetFile, []byte("test"), 0644); err != nil {
 		t.Fatalf("Failed to create target file: %v", err)
 	}
 
-	// Create a symlink in workspace pointing to target inside workspace
-	symlinkInWorkspace := filepath.Join(workspaceRoot, "link.txt")
-	if err := os.Symlink(targetFile, symlinkInWorkspace); err != nil {
+	// Create a symlink in project folder pointing to target inside project folder
+	symlinkInProjectFolder := filepath.Join(projectFolder, "link.txt")
+	if err := os.Symlink(targetFile, symlinkInProjectFolder); err != nil {
 		t.Skipf("symlink not supported: %v", err)
 	}
-	defer os.Remove(symlinkInWorkspace)
+	defer os.Remove(symlinkInProjectFolder)
 
-	// Create a symlink in workspace pointing to outside
+	// Create a symlink in project folder pointing to outside
 	outsideDir := filepath.Join(homeDir, ".sprout-test-symlink-outside")
 	if err := os.MkdirAll(outsideDir, 0755); err != nil {
 		t.Fatalf("Failed to create outside dir: %v", err)
@@ -811,13 +811,13 @@ func TestSafeResolvePath_SymlinkInWorkspace(t *testing.T) {
 		t.Fatalf("Failed to create outside file: %v", err)
 	}
 
-	symlinkOutside := filepath.Join(workspaceRoot, "badlink.txt")
+	symlinkOutside := filepath.Join(projectFolder, "badlink.txt")
 	if err := os.Symlink(outsideFile, symlinkOutside); err != nil {
 		t.Skipf("symlink not supported: %v", err)
 	}
 	defer os.Remove(symlinkOutside)
 
-	ctx := WithWorkspaceRoot(context.Background(), workspaceRoot)
+	ctx := WithProjectFolder(context.Background(), projectFolder)
 
 	tests := []struct {
 		name    string
@@ -826,7 +826,7 @@ func TestSafeResolvePath_SymlinkInWorkspace(t *testing.T) {
 	}{
 		{
 			name:    "symlink to file inside workspace is allowed",
-			path:    symlinkInWorkspace,
+			path:    symlinkInProjectFolder,
 			wantErr: false,
 		},
 		{
@@ -854,23 +854,23 @@ func TestSafeResolvePathForWrite_ResolverScope(t *testing.T) {
 	homeDir := scratchHome(t)
 
 	// Create directories
-	workspaceRoot := filepath.Join(homeDir, ".sprout-test-write-scope-ws")
+	projectFolder := filepath.Join(homeDir, ".sprout-test-write-scope-ws")
 	effectiveCwd := filepath.Join(homeDir, ".sprout-test-write-scope-cwd")
 	sessionFolder := filepath.Join(homeDir, ".sprout-test-write-scope-sess")
 	outsideDir := filepath.Join(homeDir, ".sprout-test-write-scope-outside")
 
-	for _, dir := range []string{workspaceRoot, effectiveCwd, sessionFolder, outsideDir} {
+	for _, dir := range []string{projectFolder, effectiveCwd, sessionFolder, outsideDir} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			t.Fatalf("Failed to create dir %s: %v", dir, err)
 		}
 	}
 	defer func() {
-		for _, dir := range []string{workspaceRoot, effectiveCwd, sessionFolder, outsideDir} {
+		for _, dir := range []string{projectFolder, effectiveCwd, sessionFolder, outsideDir} {
 			os.RemoveAll(dir)
 		}
 	}()
 
-	if err := os.Chdir(workspaceRoot); err != nil {
+	if err := os.Chdir(projectFolder); err != nil {
 		t.Fatalf("Failed to chdir: %v", err)
 	}
 
@@ -883,26 +883,26 @@ func TestSafeResolvePathForWrite_ResolverScope(t *testing.T) {
 	}{
 		{
 			name:    "write under workspaceRoot",
-			path:    filepath.Join(workspaceRoot, "new.txt"),
-			ctx:     WithWorkspaceRoot(context.Background(), workspaceRoot),
+			path:    filepath.Join(projectFolder, "new.txt"),
+			ctx:     WithProjectFolder(context.Background(), projectFolder),
 			wantErr: false,
 		},
 		{
 			name:    "write under effectiveCwd",
 			path:    filepath.Join(effectiveCwd, "new.txt"),
-			ctx:     WithAgentContext(WithWorkspaceRoot(context.Background(), workspaceRoot), effectiveCwd, nil),
+			ctx:     WithAgentContext(WithProjectFolder(context.Background(), projectFolder), effectiveCwd, nil),
 			wantErr: false,
 		},
 		{
 			name:    "write under session folder",
 			path:    filepath.Join(sessionFolder, "new.txt"),
-			ctx:     WithAgentContext(WithWorkspaceRoot(context.Background(), workspaceRoot), effectiveCwd, []string{sessionFolder}),
+			ctx:     WithAgentContext(WithProjectFolder(context.Background(), projectFolder), effectiveCwd, []string{sessionFolder}),
 			wantErr: false,
 		},
 		{
 			name:          "write outside all allowlists",
 			path:          filepath.Join(outsideDir, "new.txt"),
-			ctx:           WithAgentContext(WithWorkspaceRoot(context.Background(), workspaceRoot), effectiveCwd, []string{sessionFolder}),
+			ctx:           WithAgentContext(WithProjectFolder(context.Background(), projectFolder), effectiveCwd, []string{sessionFolder}),
 			wantErr:       true,
 			wantErrSubstr: "outside working directory",
 		},
@@ -932,21 +932,21 @@ func TestSafeResolvePathForWrite_SymlinkReValidation(t *testing.T) {
 
 	homeDir := scratchHome(t)
 
-	workspaceRoot := filepath.Join(homeDir, ".sprout-test-write-symlink-ws")
+	projectFolder := filepath.Join(homeDir, ".sprout-test-write-symlink-ws")
 	sessionFolder := filepath.Join(homeDir, ".sprout-test-write-symlink-sess")
 
-	if err := os.MkdirAll(workspaceRoot, 0755); err != nil {
+	if err := os.MkdirAll(projectFolder, 0755); err != nil {
 		t.Fatalf("Failed to create workspace: %v", err)
 	}
 	if err := os.MkdirAll(sessionFolder, 0755); err != nil {
 		t.Fatalf("Failed to create session folder: %v", err)
 	}
 	defer func() {
-		os.RemoveAll(workspaceRoot)
+		os.RemoveAll(projectFolder)
 		os.RemoveAll(sessionFolder)
 	}()
 
-	if err := os.Chdir(workspaceRoot); err != nil {
+	if err := os.Chdir(projectFolder); err != nil {
 		t.Fatalf("Failed to chdir: %v", err)
 	}
 
@@ -957,8 +957,8 @@ func TestSafeResolvePathForWrite_SymlinkReValidation(t *testing.T) {
 	}
 	defer os.Remove(tmpFile)
 
-	// Create a symlink in workspace pointing to /tmp
-	linkToTmp := filepath.Join(workspaceRoot, "link-to-tmp.txt")
+	// Create a symlink in project folder pointing to /tmp
+	linkToTmp := filepath.Join(projectFolder, "link-to-tmp.txt")
 	if err := os.Symlink(tmpFile, linkToTmp); err != nil {
 		t.Skipf("symlink not supported: %v", err)
 	}
@@ -970,8 +970,8 @@ func TestSafeResolvePathForWrite_SymlinkReValidation(t *testing.T) {
 		t.Fatalf("Failed to create session file: %v", err)
 	}
 
-	// Create a symlink in workspace pointing to session folder file
-	linkToSession := filepath.Join(workspaceRoot, "link-to-session.txt")
+	// Create a symlink in project folder pointing to session folder file
+	linkToSession := filepath.Join(projectFolder, "link-to-session.txt")
 	if err := os.Symlink(sessionFile, linkToSession); err != nil {
 		t.Skipf("symlink not supported: %v", err)
 	}
@@ -988,14 +988,14 @@ func TestSafeResolvePathForWrite_SymlinkReValidation(t *testing.T) {
 		t.Fatalf("Failed to create outside file: %v", err)
 	}
 
-	// Create a symlink in workspace pointing to outside
-	linkToOutside := filepath.Join(workspaceRoot, "link-to-outside.txt")
+	// Create a symlink in project folder pointing to outside
+	linkToOutside := filepath.Join(projectFolder, "link-to-outside.txt")
 	if err := os.Symlink(outsideFile, linkToOutside); err != nil {
 		t.Skipf("symlink not supported: %v", err)
 	}
 	defer os.Remove(linkToOutside)
 
-	ctx := WithAgentContext(WithWorkspaceRoot(context.Background(), workspaceRoot), workspaceRoot, []string{sessionFolder})
+	ctx := WithAgentContext(WithProjectFolder(context.Background(), projectFolder), projectFolder, []string{sessionFolder})
 
 	tests := []struct {
 		name          string
@@ -1042,27 +1042,27 @@ func TestSafeResolvePathForWrite_SymlinkReValidation(t *testing.T) {
 }
 
 func TestSafeResolvePathForWrite_SymlinkToEffectiveCwdFolder(t *testing.T) {
-	// Test that a symlink under workspace pointing to a file in effectiveCwd-allowed folder is allowed
+	// Test that a symlink under project folder pointing to a file in effectiveCwd-allowed folder is allowed
 	originalWd, _ := os.Getwd()
 	defer os.Chdir(originalWd)
 
 	homeDir := scratchHome(t)
 
-	workspaceRoot := filepath.Join(homeDir, ".sprout-test-write-symlink2-ws")
+	projectFolder := filepath.Join(homeDir, ".sprout-test-write-symlink2-ws")
 	effectiveCwd := filepath.Join(homeDir, ".sprout-test-write-symlink2-cwd")
 
-	if err := os.MkdirAll(workspaceRoot, 0755); err != nil {
+	if err := os.MkdirAll(projectFolder, 0755); err != nil {
 		t.Fatalf("Failed to create workspace: %v", err)
 	}
 	if err := os.MkdirAll(effectiveCwd, 0755); err != nil {
 		t.Fatalf("Failed to create effective cwd: %v", err)
 	}
 	defer func() {
-		os.RemoveAll(workspaceRoot)
+		os.RemoveAll(projectFolder)
 		os.RemoveAll(effectiveCwd)
 	}()
 
-	if err := os.Chdir(workspaceRoot); err != nil {
+	if err := os.Chdir(projectFolder); err != nil {
 		t.Fatalf("Failed to chdir: %v", err)
 	}
 
@@ -1072,15 +1072,15 @@ func TestSafeResolvePathForWrite_SymlinkToEffectiveCwdFolder(t *testing.T) {
 		t.Fatalf("Failed to create target file: %v", err)
 	}
 
-	// Create a symlink in workspace pointing to target in effectiveCwd
-	link := filepath.Join(workspaceRoot, "link.txt")
+	// Create a symlink in project folder pointing to target in effectiveCwd
+	link := filepath.Join(projectFolder, "link.txt")
 	if err := os.Symlink(targetFile, link); err != nil {
 		t.Skipf("symlink not supported: %v", err)
 	}
 	defer os.Remove(link)
 
 	ctx := WithAgentContext(
-		WithWorkspaceRoot(context.Background(), workspaceRoot),
+		WithProjectFolder(context.Background(), projectFolder),
 		effectiveCwd,
 		nil,
 	)
@@ -1099,27 +1099,27 @@ func TestSafeResolvePath_MultipleSymlinkHops(t *testing.T) {
 
 	homeDir := scratchHome(t)
 
-	workspaceRoot := filepath.Join(homeDir, ".sprout-test-multihop-ws")
+	projectFolder := filepath.Join(homeDir, ".sprout-test-multihop-ws")
 	outsideDir := filepath.Join(homeDir, ".sprout-test-multihop-outside")
 
-	if err := os.MkdirAll(workspaceRoot, 0755); err != nil {
+	if err := os.MkdirAll(projectFolder, 0755); err != nil {
 		t.Fatalf("Failed to create workspace: %v", err)
 	}
 	if err := os.MkdirAll(outsideDir, 0755); err != nil {
 		t.Fatalf("Failed to create outside dir: %v", err)
 	}
 	defer func() {
-		os.RemoveAll(workspaceRoot)
+		os.RemoveAll(projectFolder)
 		os.RemoveAll(outsideDir)
 	}()
 
-	if err := os.Chdir(workspaceRoot); err != nil {
+	if err := os.Chdir(projectFolder); err != nil {
 		t.Fatalf("Failed to chdir: %v", err)
 	}
 
 	// Create a chain: link1 -> link2 -> outsideFile
-	link1 := filepath.Join(workspaceRoot, "link1.txt")
-	link2 := filepath.Join(workspaceRoot, "link2.txt")
+	link1 := filepath.Join(projectFolder, "link1.txt")
+	link2 := filepath.Join(projectFolder, "link2.txt")
 	outsideFile := filepath.Join(outsideDir, "secret.txt")
 
 	if err := os.WriteFile(outsideFile, []byte("secret"), 0644); err != nil {
@@ -1138,7 +1138,7 @@ func TestSafeResolvePath_MultipleSymlinkHops(t *testing.T) {
 	}
 	defer os.Remove(link1)
 
-	ctx := WithWorkspaceRoot(context.Background(), workspaceRoot)
+	ctx := WithProjectFolder(context.Background(), projectFolder)
 
 	// link1 resolves to outside, should be rejected
 	_, err := SafeResolvePathWithBypass(ctx, link1)
@@ -1219,7 +1219,7 @@ func TestAgentContext_Getters(t *testing.T) {
 
 	t.Run("nil context handling", func(t *testing.T) {
 		// All functions should handle nil context gracefully
-		if got := WorkspaceRootFromContext(nil); got != "" {
+		if got := ProjectFolderFromContext(nil); got != "" {
 			t.Errorf("WorkspaceRootFromContext(nil) should return empty string")
 		}
 		if got := AgentEffectiveCwdFromContext(nil); got != "" {

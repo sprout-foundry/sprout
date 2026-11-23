@@ -6,18 +6,18 @@ package webui
 // in-process daemon and asserts the safe, read-only probe set all pass.
 //
 // It is the "fix or document every failure" gate for the generated OpenAPI
-// contract: a hermetic daemon is started on a disposable workspace
+// contract: a hermetic daemon is started on a disposable project folder
 // (t.TempDir, hermetic git config from testgit, no active chat or running
 // agent), and every default probe is sent to it. A probe passes when the
 // daemon answers 2xx and the body shape-checks against the operation's 200
 // schema.
 //
-// The disposable workspace is deliberately staged as a git repository with one
-// commit, because a real sprout workspace (the project a code-editing tool
+// The disposable project folder is deliberately staged as a git repository with one
+// commit, because a real sprout project folder (the project a code-editing tool
 // operates on) is a git repository. That staging resolves the two git probes
 // that would otherwise fail on a bare temp dir:
-//   - gitLog requires the workspace to be a git repo (it 400s
-//     not_a_git_repository otherwise); a git-staged workspace returns 200.
+//   - gitLog requires the project folder to be a git repo (it 400s
+//     not_a_git_repository otherwise); a git-staged project folder returns 200.
 //   - gitDiff is a per-file endpoint that requires a `path` query parameter;
 //     the probe set supplies one (a bare GET is a 400 path_required, a
 //     contract-level client error, not a server defect).
@@ -39,9 +39,9 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
-// gitInWorkspace runs a git subprocess inside dir, inheriting the hermetic git
+// gitInProjectFolder runs a git subprocess inside dir, inheriting the hermetic git
 // config that testgit.Configure (called from this package's TestMain) has set.
-func gitInWorkspace(t *testing.T, dir string, args ...string) {
+func gitInProjectFolder(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	// args are fixed by this test (never user input), so the variable
 	// subprocess launch is safe.
@@ -53,35 +53,35 @@ func gitInWorkspace(t *testing.T, dir string, args ...string) {
 }
 
 // newConformanceDaemon starts the in-process web server bound to a disposable
-// temp workspace and returns it plus the workspace root. The workspace is staged
+// temp project folder and returns it plus the project folder. The project folder is staged
 // as a git repository with one commit (see the file doc for why). The caller is
 // responsible for Close-ing the server.
 func newConformanceDaemon(t *testing.T) (*httptest.Server, string) {
 	t.Helper()
 
-	workspace := t.TempDir()
+	projectFolder := t.TempDir()
 
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatalf("NewReactWebServer: %v", err)
 	}
 
-	// Point the daemon's root storage and the named client's workspace at the
+	// Point the daemon's root storage and the named client's project folder at the
 	// disposable temp dir so no probe reads or writes the developer's real home.
-	ws.daemonRoot = workspace
-	ws.workspaceRoot = workspace
-	if _, err := ws.setClientWorkspaceRoot("conformance-client", workspace); err != nil {
+	ws.daemonRoot = projectFolder
+	ws.projectFolder = projectFolder
+	if _, err := ws.setClientProjectFolder("conformance-client", projectFolder); err != nil {
 		t.Fatalf("setClientWorkspaceRoot: %v", err)
 	}
 
-	// Stage the workspace as a git repository with one committed file so the
+	// Stage the project folder as a git repository with one committed file so the
 	// git family returns 200 (a real project host is a git repo).
-	gitInWorkspace(t, workspace, "init", "-q")
-	if err := os.WriteFile(filepath.Join(workspace, "README.md"), []byte("hi\n"), 0o644); err != nil {
+	gitInProjectFolder(t, projectFolder, "init", "-q")
+	if err := os.WriteFile(filepath.Join(projectFolder, "README.md"), []byte("hi\n"), 0o644); err != nil {
 		t.Fatalf("write README.md: %v", err)
 	}
-	gitInWorkspace(t, workspace, "add", "README.md")
-	gitInWorkspace(t, workspace, "commit", "-q", "-m", "init")
+	gitInProjectFolder(t, projectFolder, "add", "README.md")
+	gitInProjectFolder(t, projectFolder, "commit", "-q", "-m", "init")
 
 	mux := ws.setupRoutes(context.Background())
 	if mux == nil {
@@ -89,13 +89,13 @@ func newConformanceDaemon(t *testing.T) (*httptest.Server, string) {
 	}
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	return srv, workspace
+	return srv, projectFolder
 }
 
 // TestConformanceInProcess runs the full safe probe set against the in-process
-// daemon on a disposable git workspace and asserts every probe passes.
+// daemon on a disposable git project folder and asserts every probe passes.
 func TestConformanceInProcess(t *testing.T) {
-	srv, workspace := newConformanceDaemon(t)
+	srv, projectFolder := newConformanceDaemon(t)
 
 	root := repoRootFromWorkingDir(t)
 	spec, err := apiconformance.LoadSpec(filepath.Join(root, "docs", "api", "openapi.yaml"))
@@ -105,7 +105,7 @@ func TestConformanceInProcess(t *testing.T) {
 
 	suite := apiconformance.New(srv.URL, spec,
 		apiconformance.WithHTTPHeader(webClientIDHeader, "conformance-client"),
-		apiconformance.WithDisposableWorkspace(workspace),
+		apiconformance.WithDisposableProjectFolder(projectFolder),
 	)
 
 	report, err := suite.RunSafe(context.Background())

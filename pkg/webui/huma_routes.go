@@ -347,7 +347,7 @@ func registerHumaOperations(api huma.API, ws *ReactWebServer) {
 	registerSettingsMiscHumaOperations(api, ws)
 
 	// ---- workspace/instances family ----------------
-	registerWorkspaceHumaOperations(api, ws)
+	registerProjectFolderHumaOperations(api, ws)
 
 	// ---- terminal family ----------------
 	registerTerminalHumaOperations(api, ws)

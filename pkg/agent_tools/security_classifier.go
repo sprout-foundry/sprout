@@ -24,7 +24,7 @@
 //     target is a different directory.
 //
 // These limitations are acceptable because the classifier's purpose is gate-keeping
-// for LLM-initiated operations in a workspace context — NOT a security boundary.
+// for LLM-initiated operations in a project folder context — NOT a security boundary.
 // Actual enforcement (filesystem permissions, user approval, interactive confirmation)
 // should be handled by separate layers.
 package tools

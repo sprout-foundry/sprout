@@ -8,7 +8,7 @@ package cmd
 // This command checks those files without starting an agent, so a creator (or
 // a repository's CI) can validate a persona before relying on it. With no
 // path it validates the scopes that apply to the current directory: the user
-// scope and, when there is a workspace, the project scope.
+// scope and, when there is a project folder, the project scope.
 
 import (
 	"fmt"
@@ -85,8 +85,8 @@ func runPersonaDirs(w io.Writer) error {
 		return fmt.Errorf("resolve user persona directory: %w", err)
 	}
 	_, _ = fmt.Fprintf(w, "User scope:    %s\n", dirState(userDir))
-	if workspaceDir, ok := currentWorkspaceConfigDir(); ok {
-		_, _ = fmt.Fprintf(w, "Project scope: %s\n", dirState(configuration.ProjectPersonasDir(workspaceDir)))
+	if projectFolderDir, ok := currentProjectFolderConfigDir(); ok {
+		_, _ = fmt.Fprintf(w, "Project scope: %s\n", dirState(configuration.ProjectPersonasDir(projectFolderDir)))
 	} else {
 		_, _ = fmt.Fprintln(w, "Project scope: (no workspace here)")
 	}
@@ -112,7 +112,7 @@ func runPersonaValidateScopes(w io.Writer) error {
 		return fmt.Errorf("resolve user persona directory: %w", err)
 	}
 	projectDir := ""
-	if dir, ok := currentWorkspaceConfigDir(); ok {
+	if dir, ok := currentProjectFolderConfigDir(); ok {
 		projectDir = configuration.ProjectPersonasDir(dir)
 	}
 
@@ -180,9 +180,9 @@ func reportPersonaLoad(w io.Writer, result personas.LoadResult) error {
 	return nil
 }
 
-// currentWorkspaceConfigDir returns `<cwd>/.sprout` when it exists, so the
-// project scope matches what a workspace-scoped manager would load.
-func currentWorkspaceConfigDir() (string, bool) {
+// currentProjectFolderConfigDir returns `<cwd>/.sprout` when it exists, so the
+// project scope matches what a project-folder-scoped manager would load.
+func currentProjectFolderConfigDir() (string, bool) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", false

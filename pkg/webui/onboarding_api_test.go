@@ -56,20 +56,20 @@ func setupOnboardingTestServer(t *testing.T) (*ReactWebServer, string) {
 	credentials.ResetStorageBackend()
 
 	daemonRoot := t.TempDir()
-	workspaceDir := filepath.Join(daemonRoot, "workspace")
-	require.NoError(t, os.MkdirAll(workspaceDir, 0o755))
+	projectFolderDir := filepath.Join(daemonRoot, "workspace")
+	require.NoError(t, os.MkdirAll(projectFolderDir, 0o755))
 
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.SetWorkspaceRoot(daemonRoot)
+	ws.SetProjectFolder(daemonRoot)
 	ws.terminalManager = NewTerminalManager(daemonRoot)
 	ws.fileConsents = newFileConsentManager()
 
 	clientID := "test-client"
-	_, err = ws.setClientWorkspaceRoot(clientID, workspaceDir)
+	_, err = ws.setClientProjectFolder(clientID, projectFolderDir)
 	require.NoError(t, err)
 
 	return ws, tmpDir

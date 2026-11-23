@@ -19,7 +19,7 @@ func TestGoAdapterInlayHintsWithGopls(t *testing.T) {
 		Method:        "inlay_hints",
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -43,7 +43,7 @@ func TestGoSessionAdapterDefinitionWithGopls(t *testing.T) {
 		Method:        "definition",
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 6, Column: 6},
 	})
 	if err != nil {
@@ -67,7 +67,7 @@ func TestGoSessionAdapterInlayHintsWithGopls(t *testing.T) {
 		Method:        "inlay_hints",
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -103,7 +103,7 @@ func TestRunGoDiagnosticsDirectly(t *testing.T) {
 		t.Skip("gofmt not available")
 	}
 
-	// Test with empty workspace root
+	// Test with empty project folder
 	result, err := runGoDiagnostics(ToolInput{
 		Content:  "package main\n\nfunc main() {\n\tfmt.Println(\n}\n",
 		FilePath: "broken.go",
@@ -127,7 +127,7 @@ func TestRunGoDefinitionDirectly(t *testing.T) {
 	result, err := runGoDefinition(ToolInput{
 		Content:       "package main\n\nfunc main() {}\n",
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 3, Column: 1},
 	})
 	if err != nil {
@@ -146,7 +146,7 @@ func TestRunGoHoverDirectly(t *testing.T) {
 	result, err := runGoHover(ToolInput{
 		Content:       "package main\n\nfunc main() {}\n",
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      nil, // should default to 1:1
 	})
 	if err != nil {
@@ -170,7 +170,7 @@ func TestRunGoRenameDirectly(t *testing.T) {
 	result, err := runGoRename(ToolInput{
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      nil, // should default to 1:1
 	})
 	if err != nil {
@@ -191,7 +191,7 @@ func TestRunGoReferencesDirectly(t *testing.T) {
 	result, err := runGoReferences(ToolInput{
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      nil, // should default to 1:1
 	})
 	if err != nil {
@@ -232,7 +232,7 @@ func TestRunGoSignatureHelpDirectly(t *testing.T) {
 	result, err := runGoSignatureHelp(ToolInput{
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 6, Column: 14},
 	})
 	if err != nil {

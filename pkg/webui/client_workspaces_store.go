@@ -2,8 +2,8 @@
 
 package webui
 
-// client_workspaces_store.go — the on-disk copy of ws.clientWorkspaces, so a
-// tab's workspace selection also survives a daemon restart (an auto-started
+// client_workspaces_store.go — the on-disk copy of ws.clientProjectFolders, so a
+// tab's project folder selection also survives a daemon restart (an auto-started
 // daemon reaps itself when idle and is respawned on demand).
 
 import (
@@ -19,41 +19,41 @@ import (
 )
 
 const (
-	clientWorkspacesFileName = "client_workspaces.json"
-	// maxPersistedClientWorkspaces bounds the file: one entry per browser
+	clientProjectFoldersFileName = "client_workspaces.json"
+	// maxPersistedClientProjectFolders bounds the file: one entry per browser
 	// tab identity, and tab identities churn.
-	maxPersistedClientWorkspaces = 64
-	// clientWorkspaceMaxAge drops selections from tabs that have not
+	maxPersistedClientProjectFolders = 64
+	// clientProjectFolderMaxAge drops selections from tabs that have not
 	// returned in a long time; the client cookie itself lives 30 days.
-	clientWorkspaceMaxAge = clientIDCookieMaxAge
+	clientProjectFolderMaxAge = clientIDCookieMaxAge
 )
 
-// clientWorkspaceStoreDisabled keeps servers built by NewReactWebServer from
+// clientProjectFolderStoreDisabled keeps servers built by NewReactWebServer from
 // sharing one on-disk selection file; the package tests set it so a test's
-// client IDs cannot leak a remembered workspace into another test's server.
-var clientWorkspaceStoreDisabled bool
+// client IDs cannot leak a remembered project folder into another test's server.
+var clientProjectFolderStoreDisabled bool
 
-type persistedClientWorkspace struct {
+type persistedClientProjectFolder struct {
 	Path      string    `json:"path"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-type persistedClientWorkspaces struct {
-	Version int                                 `json:"version"`
-	Clients map[string]persistedClientWorkspace `json:"clients"`
+type persistedClientProjectFolders struct {
+	Version int                                     `json:"version"`
+	Clients map[string]persistedClientProjectFolder `json:"clients"`
 }
 
-func (ws *ReactWebServer) touchClientWorkspaceLocked(clientID string) {
-	if ws.clientWorkspacesUpdatedAt == nil {
-		ws.clientWorkspacesUpdatedAt = make(map[string]time.Time)
+func (ws *ReactWebServer) touchClientProjectFolderLocked(clientID string) {
+	if ws.clientProjectFoldersUpdatedAt == nil {
+		ws.clientProjectFoldersUpdatedAt = make(map[string]time.Time)
 	}
-	ws.clientWorkspacesUpdatedAt[clientID] = time.Now()
+	ws.clientProjectFoldersUpdatedAt[clientID] = time.Now()
 }
 
-// initClientWorkspaceStore points the store at the state dir and loads the
+// initClientProjectFolderStore points the store at the state dir and loads the
 // selections a previous daemon process persisted.
-func (ws *ReactWebServer) initClientWorkspaceStore() {
-	if clientWorkspaceStoreDisabled {
+func (ws *ReactWebServer) initClientProjectFolderStore() {
+	if clientProjectFolderStoreDisabled {
 		return
 	}
 	stateDir, err := envutil.StateDir()
@@ -62,22 +62,22 @@ func (ws *ReactWebServer) initClientWorkspaceStore() {
 	}
 	ws.mutex.Lock()
 	defer ws.mutex.Unlock()
-	ws.clientWorkspacesPath = filepath.Join(stateDir, clientWorkspacesFileName)
-	ws.loadClientWorkspacesLocked()
+	ws.clientProjectFoldersPath = filepath.Join(stateDir, clientProjectFoldersFileName)
+	ws.loadClientProjectFoldersLocked()
 }
 
-// loadClientWorkspacesLocked restores persisted selections, dropping entries
+// loadClientProjectFoldersLocked restores persisted selections, dropping entries
 // that are too old, no longer directories, or outside the daemon root (a
-// selection could never have been made there through setClientWorkspaceRoot).
-func (ws *ReactWebServer) loadClientWorkspacesLocked() {
-	if ws.clientWorkspacesPath == "" {
+// selection could never have been made there through setClientProjectFolder).
+func (ws *ReactWebServer) loadClientProjectFoldersLocked() {
+	if ws.clientProjectFoldersPath == "" {
 		return
 	}
-	data, err := os.ReadFile(ws.clientWorkspacesPath)
+	data, err := os.ReadFile(ws.clientProjectFoldersPath)
 	if err != nil {
 		return
 	}
-	var stored persistedClientWorkspaces
+	var stored persistedClientProjectFolders
 	if err := json.Unmarshal(data, &stored); err != nil {
 		return
 	}
@@ -86,12 +86,12 @@ func (ws *ReactWebServer) loadClientWorkspacesLocked() {
 	if evaled, err := filepath.EvalSymlinks(ws.daemonRoot); err == nil {
 		resolvedDaemonRoot = evaled
 	}
-	cutoff := time.Now().Add(-clientWorkspaceMaxAge)
-	if ws.clientWorkspaces == nil {
-		ws.clientWorkspaces = make(map[string]string)
+	cutoff := time.Now().Add(-clientProjectFolderMaxAge)
+	if ws.clientProjectFolders == nil {
+		ws.clientProjectFolders = make(map[string]string)
 	}
-	if ws.clientWorkspacesUpdatedAt == nil {
-		ws.clientWorkspacesUpdatedAt = make(map[string]time.Time)
+	if ws.clientProjectFoldersUpdatedAt == nil {
+		ws.clientProjectFoldersUpdatedAt = make(map[string]time.Time)
 	}
 	for clientID, entry := range stored.Clients {
 		clientID = sanitizeClientID(strings.TrimSpace(clientID))
@@ -99,65 +99,65 @@ func (ws *ReactWebServer) loadClientWorkspacesLocked() {
 		if clientID == defaultWebClientID || path == "" || entry.UpdatedAt.Before(cutoff) {
 			continue
 		}
-		if _, exists := ws.clientWorkspaces[clientID]; exists {
+		if _, exists := ws.clientProjectFolders[clientID]; exists {
 			continue
 		}
 		if info, err := os.Stat(path); err != nil || !info.IsDir() {
 			continue
 		}
-		if path != resolvedDaemonRoot && !isWithinWorkspace(path, resolvedDaemonRoot) {
+		if path != resolvedDaemonRoot && !isWithinProjectFolder(path, resolvedDaemonRoot) {
 			continue
 		}
-		ws.clientWorkspaces[clientID] = path
-		ws.clientWorkspacesUpdatedAt[clientID] = entry.UpdatedAt
+		ws.clientProjectFolders[clientID] = path
+		ws.clientProjectFoldersUpdatedAt[clientID] = entry.UpdatedAt
 	}
-	ws.pruneClientWorkspacesLocked()
+	ws.pruneClientProjectFoldersLocked()
 }
 
-// pruneClientWorkspacesLocked enforces the size bound, keeping the most
+// pruneClientProjectFoldersLocked enforces the size bound, keeping the most
 // recently updated selections.
-func (ws *ReactWebServer) pruneClientWorkspacesLocked() {
-	if len(ws.clientWorkspaces) <= maxPersistedClientWorkspaces {
+func (ws *ReactWebServer) pruneClientProjectFoldersLocked() {
+	if len(ws.clientProjectFolders) <= maxPersistedClientProjectFolders {
 		return
 	}
-	ids := make([]string, 0, len(ws.clientWorkspaces))
-	for id := range ws.clientWorkspaces {
+	ids := make([]string, 0, len(ws.clientProjectFolders))
+	for id := range ws.clientProjectFolders {
 		ids = append(ids, id)
 	}
 	sort.Slice(ids, func(i, j int) bool {
-		return ws.clientWorkspacesUpdatedAt[ids[i]].After(ws.clientWorkspacesUpdatedAt[ids[j]])
+		return ws.clientProjectFoldersUpdatedAt[ids[i]].After(ws.clientProjectFoldersUpdatedAt[ids[j]])
 	})
-	for _, id := range ids[maxPersistedClientWorkspaces:] {
-		delete(ws.clientWorkspaces, id)
-		delete(ws.clientWorkspacesUpdatedAt, id)
+	for _, id := range ids[maxPersistedClientProjectFolders:] {
+		delete(ws.clientProjectFolders, id)
+		delete(ws.clientProjectFoldersUpdatedAt, id)
 	}
 }
 
-// saveClientWorkspacesLocked writes the selections atomically. Best-effort:
+// saveClientProjectFoldersLocked writes the selections atomically. Best-effort:
 // a failed write only costs the selection surviving a restart.
-func (ws *ReactWebServer) saveClientWorkspacesLocked() {
-	if ws.clientWorkspacesPath == "" {
+func (ws *ReactWebServer) saveClientProjectFoldersLocked() {
+	if ws.clientProjectFoldersPath == "" {
 		return
 	}
-	ws.pruneClientWorkspacesLocked()
-	stored := persistedClientWorkspaces{Version: 1, Clients: make(map[string]persistedClientWorkspace, len(ws.clientWorkspaces))}
-	for clientID, path := range ws.clientWorkspaces {
-		updatedAt := ws.clientWorkspacesUpdatedAt[clientID]
+	ws.pruneClientProjectFoldersLocked()
+	stored := persistedClientProjectFolders{Version: 1, Clients: make(map[string]persistedClientProjectFolder, len(ws.clientProjectFolders))}
+	for clientID, path := range ws.clientProjectFolders {
+		updatedAt := ws.clientProjectFoldersUpdatedAt[clientID]
 		if updatedAt.IsZero() {
 			updatedAt = time.Now()
 		}
-		stored.Clients[clientID] = persistedClientWorkspace{Path: path, UpdatedAt: updatedAt}
+		stored.Clients[clientID] = persistedClientProjectFolder{Path: path, UpdatedAt: updatedAt}
 	}
 	data, err := json.MarshalIndent(stored, "", "  ")
 	if err != nil {
 		return
 	}
-	dir := filepath.Dir(ws.clientWorkspacesPath)
+	dir := filepath.Dir(ws.clientProjectFoldersPath)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		ws.log().Debug("create client workspaces dir failed", slog.Any("err", err))
 		return
 	}
-	tmp, err := os.CreateTemp(dir, clientWorkspacesFileName+".*.tmp")
+	tmp, err := os.CreateTemp(dir, clientProjectFoldersFileName+".*.tmp")
 	if err != nil {
 		return
 	}
@@ -168,7 +168,7 @@ func (ws *ReactWebServer) saveClientWorkspacesLocked() {
 		_ = os.Remove(tmpName)
 		return
 	}
-	if err := os.Rename(tmpName, ws.clientWorkspacesPath); err != nil {
+	if err := os.Rename(tmpName, ws.clientProjectFoldersPath); err != nil {
 		_ = os.Remove(tmpName)
 	}
 }

@@ -28,7 +28,7 @@ func (a SecurityPolicyAction) IsValid() bool {
 	}
 }
 
-// SecurityPolicy defines workspace-level security rules
+// SecurityPolicy defines project-folder-level security rules
 type SecurityPolicy struct {
 	DefaultAction  string         `json:"default_action,omitempty"`
 	Rules          []SecurityRule `json:"rules,omitempty"`
@@ -45,12 +45,12 @@ type SecurityRule struct {
 	Reason  string `json:"reason,omitempty"`
 }
 
-// LoadSecurityPolicy reads .sprout/security-policy.json from workspaceRoot.
+// LoadSecurityPolicy reads .sprout/security-policy.json from projectFolder.
 // If the file doesn't exist, returns nil, nil (no error).
 // Validates that actions and risk levels are recognized values, and
 // normalizes AllowedPaths and DeniedPaths via filepath.Clean.
-func LoadSecurityPolicy(workspaceRoot string) (*SecurityPolicy, error) {
-	path := filepath.Join(workspaceRoot, ConfigDirName, "security-policy.json")
+func LoadSecurityPolicy(projectFolder string) (*SecurityPolicy, error) {
+	path := filepath.Join(projectFolder, ConfigDirName, "security-policy.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -257,7 +257,7 @@ func (p *SecurityPolicy) MaxAllowedRisk() int {
 }
 
 // CombinedAssessment holds the result of combining the security classifier
-// with the workspace security policy.
+// with the project folder security policy.
 //
 // IMPORTANT: To avoid a circular import (configuration -> agent_tools ->
 // configuration), the ClassifierResult field is a generic map instead of a

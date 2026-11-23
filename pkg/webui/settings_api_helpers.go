@@ -238,7 +238,7 @@ func (ws *ReactWebServer) getConfigManager(r *http.Request, w http.ResponseWrite
 	//   • ErrNoProviderConfigured (no provider set up yet)
 	//   • Provider config errors (key missing, editor mode, etc.)
 	//   • Agent creation failures that don't match the provider-error patterns
-	//     (e.g. "create agent in workspace: ...", "failed to initialize configuration: ...")
+	//     (e.g. "create agent in project folder: ...", "failed to initialize configuration: ...")
 	//   • Agent exists but GetConfigManager() is nil (err is nil in that case)
 
 	// Get base directory (global config location)
@@ -249,14 +249,14 @@ func (ws *ReactWebServer) getConfigManager(r *http.Request, w http.ResponseWrite
 		return nil
 	}
 
-	// Get workspace directory if workspace is available
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	var workspaceDir string
-	if workspaceRoot != "" {
-		workspaceDir = configuration.WorkspaceConfigDir(workspaceRoot)
+	// Get project folder if project folder is available
+	projectFolder := ws.getProjectFolderForRequest(r)
+	var projectFolderDir string
+	if projectFolder != "" {
+		projectFolderDir = configuration.ProjectFolderConfigDir(projectFolder)
 	}
 
-	cm, createErr := configuration.NewManagerWithLayers(configBase, workspaceDir)
+	cm, createErr := configuration.NewManagerWithLayers(configBase, projectFolderDir)
 	if createErr != nil {
 		writeJSONErr(w, http.StatusServiceUnavailable, "config_unavailable",
 			"Configuration manager is not available")
@@ -285,13 +285,13 @@ func (ws *ReactWebServer) resolveConfigManagerQuietly(r *http.Request) *configur
 		return nil
 	}
 
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	var workspaceDir string
-	if workspaceRoot != "" {
-		workspaceDir = configuration.WorkspaceConfigDir(workspaceRoot)
+	projectFolder := ws.getProjectFolderForRequest(r)
+	var projectFolderDir string
+	if projectFolder != "" {
+		projectFolderDir = configuration.ProjectFolderConfigDir(projectFolder)
 	}
 
-	cm, createErr := configuration.NewManagerWithLayers(configBase, workspaceDir)
+	cm, createErr := configuration.NewManagerWithLayers(configBase, projectFolderDir)
 	if createErr != nil {
 		return nil
 	}

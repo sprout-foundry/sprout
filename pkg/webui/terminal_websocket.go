@@ -167,7 +167,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 	// a tab whose main /ws had dropped (sleep, background throttling) look
 	// fully disconnected, so its context — and with it every terminal
 	// session — was reaped while the tab was still open; the replacement
-	// context then fell back to the daemon's launch dir as its workspace.
+	// context then fell back to the daemon's launch dir as its project folder.
 	// Terminal connections don't use chat_id
 	ws.connections.Store(conn, &ConnectionInfo{
 		SessionID:   sessionID,

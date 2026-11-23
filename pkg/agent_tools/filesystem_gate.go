@@ -4,7 +4,7 @@ package tools
 // withFilesystemApproval retry wrapper. SP-127 M4 removed them:
 // - FilesystemGate and its implementations were removed (the PrecheckFileAccess
 //   path is now the sole entry point)
-// - withFilesystemApproval and related helpers were removed (off-workspace
+// - withFilesystemApproval and related helpers were removed (off-project-folder
 //   paths now fail with raw filesystem errors)
 //
 // Left for reference only:

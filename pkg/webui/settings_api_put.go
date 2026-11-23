@@ -22,7 +22,7 @@ func (ws *ReactWebServer) handleAPISettingsPut(w http.ResponseWriter, r *http.Re
 		ws.handlePutSessionSettings(w, r)
 		return
 	case "workspace":
-		ws.handlePutWorkspaceSettings(w, r)
+		ws.handlePutProjectFolderSettings(w, r)
 		return
 	case "global":
 		ws.handlePutGlobalSettings(w, r)
@@ -211,5 +211,5 @@ func (ws *ReactWebServer) handleAPISettingsPutDefault(w http.ResponseWriter, r *
 }
 
 // ---------------------------------------------------------------------------
-// Scoped PUT handlers — /api/settings?layer=global|workspace|session
+// Scoped PUT handlers — /api/settings?layer=global|project folder|session
 // ---------------------------------------------------------------------------

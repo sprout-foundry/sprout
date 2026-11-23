@@ -25,7 +25,7 @@ func newReviewTestRunner(t *testing.T) (*Agent, *SubagentRunner) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	return parent, NewSubagentRunner(parent, shared)
 }
@@ -89,7 +89,7 @@ func TestCreateSubagent_NoPersonaKeepsWriteTools(t *testing.T) {
 func TestResolveSubagentProviderModel_FallsBackToEmbeddedPersonaPrompt(t *testing.T) {
 	parent, _ := newReviewTestRunner(t)
 
-	// A workspace that is not the sprout source tree: the repo-relative
+	// A project folder that is not the sprout source tree: the repo-relative
 	// persona prompt path does not exist on disk there.
 	_, _, _, prompt, err := resolveSubagentProviderModel(parent, "reviewer", true, t.TempDir())
 	if err != nil {
@@ -203,7 +203,7 @@ func TestResolveParallelTaskPersonas(t *testing.T) {
 	parent, _ := newReviewTestRunner(t)
 	dir := initReviewRepo(t)
 	writeFile(t, dir, "main.go", "package main\n\nfunc main() { println(1) }\n")
-	parent.workspaceRoot = dir
+	parent.projectFolder = dir
 
 	tasks := []SubagentTask{
 		{ID: "r1", Prompt: "review main.go", Persona: "Code-Reviewer"},
@@ -297,7 +297,7 @@ func TestCreateSubagent_SystemPromptIncludesRepoConventions(t *testing.T) {
 	parent, runner := newReviewTestRunner(t)
 	dir := t.TempDir()
 	writeFile(t, dir, "AGENTS.md", "Always wrap errors with context.\n")
-	runner.shared.WorkspaceRoot = dir
+	runner.shared.ProjectFolder = dir
 	_ = parent
 
 	sub, err := runner.createSubagent(SubagentOptions{Persona: "coder"}, context.Background())
@@ -309,7 +309,7 @@ func TestCreateSubagent_SystemPromptIncludesRepoConventions(t *testing.T) {
 		t.Errorf("conventions missing from subagent system prompt:\n%s", truncateString(sub.systemPrompt, 300))
 	}
 
-	runner.shared.WorkspaceRoot = t.TempDir()
+	runner.shared.ProjectFolder = t.TempDir()
 	bare, err := runner.createSubagent(SubagentOptions{Persona: "coder"}, context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -396,7 +396,7 @@ func TestPrepareSubagentLaunch_ReviewerFilesBecomeFocusList(t *testing.T) {
 	parent, _ := newReviewTestRunner(t)
 	dir := initReviewRepo(t)
 	writeFile(t, dir, "main.go", "package main\n\nfunc main() { println(\"changed\") }\n")
-	parent.workspaceRoot = dir
+	parent.projectFolder = dir
 
 	spec, err := prepareSubagentLaunch(context.Background(), parent, map[string]interface{}{
 		"prompt":  "review it",

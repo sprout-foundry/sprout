@@ -32,7 +32,7 @@ func vcPassingResult() *verify.Result {
 }
 
 // TestCaptureVerificationCheckpoint_PassingCaptures pins the seam: a passing
-// result calls the capture hook once, with the agent's workspace.
+// result calls the capture hook once, with the agent's project folder.
 func TestCaptureVerificationCheckpoint_PassingCaptures(t *testing.T) {
 	root := t.TempDir()
 	mgr, cleanup := configuration.NewTestManager(t)
@@ -42,12 +42,12 @@ func TestCaptureVerificationCheckpoint_PassingCaptures(t *testing.T) {
 		t.Fatalf("NewAgentWithClient: %v", err)
 	}
 	t.Cleanup(ag.Shutdown)
-	ag.SetWorkspaceRoot(root)
+	ag.SetProjectFolder(root)
 
-	var capturedWorkspace string
+	var capturedProjectFolder string
 	prev := captureCheckpoint
-	captureCheckpoint = func(workspace, revisionID string, res *verify.Result) error {
-		capturedWorkspace = workspace
+	captureCheckpoint = func(projectFolder, revisionID string, res *verify.Result) error {
+		capturedProjectFolder = projectFolder
 		if res == nil || !res.Passed() {
 			t.Errorf("capture hook called with a non-passing result: %+v", res)
 		}
@@ -56,8 +56,8 @@ func TestCaptureVerificationCheckpoint_PassingCaptures(t *testing.T) {
 	t.Cleanup(func() { captureCheckpoint = prev })
 
 	ag.CaptureVerificationCheckpoint(vcPassingResult())
-	if capturedWorkspace != root {
-		t.Errorf("captured workspace = %q, want %q", capturedWorkspace, root)
+	if capturedProjectFolder != root {
+		t.Errorf("captured workspace = %q, want %q", capturedProjectFolder, root)
 	}
 }
 
@@ -74,7 +74,7 @@ func TestCaptureVerificationCheckpoint_NotPassingIsNoOp(t *testing.T) {
 
 	calls := 0
 	prev := captureCheckpoint
-	captureCheckpoint = func(workspace, revisionID string, res *verify.Result) error {
+	captureCheckpoint = func(projectFolder, revisionID string, res *verify.Result) error {
 		calls++
 		return nil
 	}
@@ -104,7 +104,7 @@ func TestCaptureVerificationCheckpoint_StoreFailureIsSwallowed(t *testing.T) {
 	t.Cleanup(ag.Shutdown)
 
 	prev := captureCheckpoint
-	captureCheckpoint = func(workspace, revisionID string, res *verify.Result) error {
+	captureCheckpoint = func(projectFolder, revisionID string, res *verify.Result) error {
 		return errors.New("store unavailable")
 	}
 	t.Cleanup(func() { captureCheckpoint = prev })
@@ -113,10 +113,10 @@ func TestCaptureVerificationCheckpoint_StoreFailureIsSwallowed(t *testing.T) {
 	ag.CaptureVerificationCheckpoint(vcPassingResult())
 }
 
-// TestCaptureCheckpointForWorkspace_WritesStore pins the production capture:
-// a checkpoint lands in the workspace's checkpoint store, capturing the
+// TestCaptureCheckpointForProjectFolder_WritesStore pins the production capture:
+// a checkpoint lands in the project folder's checkpoint store, capturing the
 // current revision.
-func TestCaptureCheckpointForWorkspace_WritesStore(t *testing.T) {
+func TestCaptureCheckpointForProjectFolder_WritesStore(t *testing.T) {
 	root := t.TempDir()
 
 	prevC, prevR := history.GetPathsForTesting()
@@ -136,11 +136,11 @@ func TestCaptureCheckpointForWorkspace_WritesStore(t *testing.T) {
 		t.Fatalf("RecordChangeWithDetails: %v", err)
 	}
 
-	if err := captureCheckpointForWorkspace(root, "rev-1", vcPassingResult()); err != nil {
+	if err := captureCheckpointForProjectFolder(root, "rev-1", vcPassingResult()); err != nil {
 		t.Fatalf("captureCheckpointForWorkspace: %v", err)
 	}
 
-	// The production capture writes under the workspace, not the
+	// The production capture writes under the project folder, not the
 	// process-wide store.
 	prevStore := history.GetCheckpointsDir()
 	history.SetCheckpointsDirForTesting(filepath.Join(root, ".sprout", "checkpoints"))
@@ -161,12 +161,12 @@ func TestCaptureCheckpointForWorkspace_WritesStore(t *testing.T) {
 	}
 }
 
-// TestCaptureCheckpointForWorkspace_UsesGivenRevisionNotMostRecent pins the
+// TestCaptureCheckpointForProjectFolder_UsesGivenRevisionNotMostRecent pins the
 // rule that the automatic capture identifies the revision it was given, not
 // whichever revision happens to be most recent in the history store. The
 // turn knows the revision it produced; capturing the store's head instead
 // would point the restore marker at the wrong state.
-func TestCaptureCheckpointForWorkspace_UsesGivenRevisionNotMostRecent(t *testing.T) {
+func TestCaptureCheckpointForProjectFolder_UsesGivenRevisionNotMostRecent(t *testing.T) {
 	root := t.TempDir()
 
 	prevC, prevR := history.GetPathsForTesting()
@@ -195,7 +195,7 @@ func TestCaptureCheckpointForWorkspace_UsesGivenRevisionNotMostRecent(t *testing
 	}
 
 	// The turn produced rev-old; capture names exactly that.
-	if err := captureCheckpointForWorkspace(root, "rev-old", vcPassingResult()); err != nil {
+	if err := captureCheckpointForProjectFolder(root, "rev-old", vcPassingResult()); err != nil {
 		t.Fatalf("captureCheckpointForWorkspace: %v", err)
 	}
 

@@ -1,7 +1,7 @@
 package tools
 
 // Tests for the deploy tool's automatic checkpoint: a completed deploy
-// leaves a restorable checkpoint of the shipped state under the workspace's
+// leaves a restorable checkpoint of the shipped state under the project folder's
 // .sprout/checkpoints/ store.
 
 import (
@@ -17,7 +17,7 @@ import (
 )
 
 // TestDeploy_CapturesCheckpoint asserts that a successful deploy records a
-// checkpoint of the shipped state in the workspace's checkpoint store.
+// checkpoint of the shipped state in the project folder's checkpoint store.
 func TestDeploy_CapturesCheckpoint(t *testing.T) {
 	root := newDeployProject(t)
 	installDeploySeams(t, deploy.NewFake())
@@ -38,9 +38,9 @@ func TestDeploy_CapturesCheckpoint(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, res.IsError, "output: %s", res.Output)
 
-	// Read the workspace store directly, the same store the deploy path
+	// Read the project folder store directly, the same store the deploy path
 	// writes to (not the process-wide store).
-	cps, err := history.ListCheckpointsInWorkspace(root, false)
+	cps, err := history.ListCheckpointsInProjectFolder(root, false)
 	require.NoError(t, err)
 	require.Len(t, cps, 1)
 	assert.Equal(t, history.CheckpointDeploy, cps[0].Origin)

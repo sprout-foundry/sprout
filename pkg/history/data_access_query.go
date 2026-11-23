@@ -307,23 +307,23 @@ func fileExists(path string) bool {
 }
 
 // resolvePaths returns the changes and revisions directory to use.
-// If workspace is non-empty, it constructs absolute paths under that workspace.
+// If project folder is non-empty, it constructs absolute paths under that project folder.
 // Otherwise it falls back to the global GetChangesDir()/GetRevisionsDir().
-func resolvePaths(workspace string) (changesDir, revisionsDir string) {
-	if workspace != "" {
-		return filepath.Join(workspace, ".sprout", "changes"),
-			filepath.Join(workspace, ".sprout", "revisions")
+func resolvePaths(projectFolder string) (changesDir, revisionsDir string) {
+	if projectFolder != "" {
+		return filepath.Join(projectFolder, ".sprout", "changes"),
+			filepath.Join(projectFolder, ".sprout", "revisions")
 	}
 	return GetChangesDir(), GetRevisionsDir()
 }
 
 // ClearOlderThan removes all change entries and revision directories where the
 // change timestamp is strictly before 'since'.
-// If workspace is non-empty, it operates on that workspace's .sprout directory.
-// If workspace is empty, it uses the globally configured paths.
+// If project folder is non-empty, it operates on that project folder's .sprout directory.
+// If project folder is empty, it uses the globally configured paths.
 // Returns the number of changes cleared, revisions cleared, and any error.
-func ClearOlderThan(workspace string, since time.Time) (changesCleared int, revisionsCleared int, err error) {
-	changesDir, revisionsDir := resolvePaths(workspace)
+func ClearOlderThan(projectFolder string, since time.Time) (changesCleared int, revisionsCleared int, err error) {
+	changesDir, revisionsDir := resolvePaths(projectFolder)
 
 	// Read all change directories
 	changeEntries, err := os.ReadDir(changesDir)
@@ -393,11 +393,11 @@ func ClearOlderThan(workspace string, since time.Time) (changesCleared int, revi
 }
 
 // ClearAll removes all change entries and all revision directories.
-// If workspace is non-empty, it operates on that workspace's .sprout directory.
-// If workspace is empty, it uses the globally configured paths.
+// If project folder is non-empty, it operates on that project folder's .sprout directory.
+// If project folder is empty, it uses the globally configured paths.
 // Returns the number of changes cleared, revisions cleared, and any error.
-func ClearAll(workspace string) (changesCleared int, revisionsCleared int, err error) {
-	changesDir, revisionsDir := resolvePaths(workspace)
+func ClearAll(projectFolder string) (changesCleared int, revisionsCleared int, err error) {
+	changesDir, revisionsDir := resolvePaths(projectFolder)
 
 	// Clear all change directories
 	changeEntries, err := os.ReadDir(changesDir)

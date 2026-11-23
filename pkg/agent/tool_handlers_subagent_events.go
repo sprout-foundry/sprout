@@ -174,9 +174,9 @@ func stripAnsiCodes(s string) string {
 	return ansiEscape.ReplaceAllString(s, "")
 }
 
-// isPathInWorkspace checks if a path is within the workspace directory
-func isPathInWorkspace(path, workspaceDir string) bool {
-	rel, err := filepath.Rel(workspaceDir, path)
+// isPathInProjectFolder checks if a path is within the project folder
+func isPathInProjectFolder(path, projectFolderDir string) bool {
+	rel, err := filepath.Rel(projectFolderDir, path)
 	if err != nil {
 		return false
 	}
@@ -189,7 +189,7 @@ func isPathInTmp(path string) bool {
 	return strings.Contains(path, "/tmp/") ||
 		strings.Contains(path, "/var/folders/.../T/") ||
 		strings.Contains(strings.ToLower(path), "/tmp/") ||
-		(filepath.IsAbs(path) && isPathInWorkspace(path, os.TempDir()))
+		(filepath.IsAbs(path) && isPathInProjectFolder(path, os.TempDir()))
 }
 
 // commonParent finds the common parent directory of multiple paths
@@ -202,7 +202,7 @@ func commonParent(paths []string) string {
 	}
 	result := paths[0]
 	for _, p := range paths[1:] {
-		for !isPathInWorkspace(p, result) {
+		for !isPathInProjectFolder(p, result) {
 			parent := filepath.Dir(result)
 			// A volume root is its own parent ("C:\" on Windows); paths on
 			// different drives share no parent at all.

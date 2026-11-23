@@ -15,11 +15,11 @@ func (ws *ReactWebServer) handleAPIGitBranches(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 
-	// Return an empty success response when the workspace isn't a git repository
+	// Return an empty success response when the project folder isn't a git repository
 	// instead of a 500, to avoid spurious console errors in the client.
-	checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir")
+	checkCmd := ws.gitCommandForProjectFolder(projectFolder, "rev-parse", "--git-dir")
 	if err := checkCmd.Run(); err != nil {
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"message":         "not_git_repo",
@@ -31,21 +31,21 @@ func (ws *ReactWebServer) handleAPIGitBranches(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	currentBranch, err := gitOutputStringForWorkspace(ws, workspaceRoot, "branch", "--show-current")
+	currentBranch, err := gitOutputStringForProjectFolder(ws, projectFolder, "branch", "--show-current")
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_get_current_branch", fmt.Sprintf("Failed to get current branch: %v", err))
 		return
 	}
 
 	// Query local branches from refs/heads
-	localBranchesOutput, err := gitOutputStringForWorkspace(ws, workspaceRoot, "for-each-ref", "--format=%(refname:short)", "refs/heads")
+	localBranchesOutput, err := gitOutputStringForProjectFolder(ws, projectFolder, "for-each-ref", "--format=%(refname:short)", "refs/heads")
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_list_local_branches", fmt.Sprintf("Failed to list local branches: %v", err))
 		return
 	}
 
 	// Query remote branches from refs/remotes
-	remoteBranchesOutput, err := gitOutputStringForWorkspace(ws, workspaceRoot, "for-each-ref", "--format=%(refname:short)", "refs/remotes")
+	remoteBranchesOutput, err := gitOutputStringForProjectFolder(ws, projectFolder, "for-each-ref", "--format=%(refname:short)", "refs/remotes")
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_list_remote_branches", fmt.Sprintf("Failed to list remote branches: %v", err))
 		return
@@ -127,17 +127,17 @@ func (ws *ReactWebServer) handleAPIGitCheckout(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	root := ws.getWorkspaceRootForRequest(r)
+	root := ws.getProjectFolderForRequest(r)
 	// A branch that exists only on the remote (one a task pushed after this
 	// clone was made) is fetched first, so checkout creates the local
 	// branch tracking it.
-	if _, err := gitOutputStringForWorkspace(ws, root, "rev-parse", "--verify", "--quiet", "refs/heads/"+req.Branch); err != nil {
-		if _, ferr := gitOutputStringForWorkspace(ws, root, "fetch", "origin", req.Branch); ferr != nil {
+	if _, err := gitOutputStringForProjectFolder(ws, root, "rev-parse", "--verify", "--quiet", "refs/heads/"+req.Branch); err != nil {
+		if _, ferr := gitOutputStringForProjectFolder(ws, root, "fetch", "origin", req.Branch); ferr != nil {
 			writeJSONErr(w, http.StatusNotFound, "branch_not_found", fmt.Sprintf("Branch %s was not found here or on the remote: %v", req.Branch, ferr))
 			return
 		}
 	}
-	if _, err := gitOutputStringForWorkspace(ws, root, "checkout", req.Branch); err != nil {
+	if _, err := gitOutputStringForProjectFolder(ws, root, "checkout", req.Branch); err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_checkout_branch", fmt.Sprintf("Failed to checkout branch: %v", err))
 		return
 	}
@@ -167,14 +167,14 @@ func (ws *ReactWebServer) handleAPIGitCreateBranch(w http.ResponseWriter, r *htt
 		return
 	}
 
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	validateCmd := ws.gitCommandForWorkspace(workspaceRoot, "check-ref-format", "--branch", req.Name)
+	projectFolder := ws.getProjectFolderForRequest(r)
+	validateCmd := ws.gitCommandForProjectFolder(projectFolder, "check-ref-format", "--branch", req.Name)
 	if output, err := validateCmd.CombinedOutput(); err != nil {
 		writeJSONErr(w, http.StatusBadRequest, "invalid_branch_name", fmt.Sprintf("Invalid branch name: %s", strings.TrimSpace(string(output))))
 		return
 	}
 
-	if _, err := gitOutputStringForWorkspace(ws, workspaceRoot, "checkout", "-b", req.Name); err != nil {
+	if _, err := gitOutputStringForProjectFolder(ws, projectFolder, "checkout", "-b", req.Name); err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_create_branch", fmt.Sprintf("Failed to create branch: %v", err))
 		return
 	}
@@ -191,7 +191,7 @@ func (ws *ReactWebServer) handleAPIGitPull(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	output, err := gitOutputStringForWorkspace(ws, ws.getWorkspaceRootForRequest(r), "pull", "--ff-only")
+	output, err := gitOutputStringForProjectFolder(ws, ws.getProjectFolderForRequest(r), "pull", "--ff-only")
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_pull", fmt.Sprintf("Failed to pull: %v", err))
 		return
@@ -208,7 +208,7 @@ func (ws *ReactWebServer) handleAPIGitPush(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	output, err := gitOutputStringForWorkspace(ws, ws.getWorkspaceRootForRequest(r), "push")
+	output, err := gitOutputStringForProjectFolder(ws, ws.getProjectFolderForRequest(r), "push")
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_push", fmt.Sprintf("Failed to push: %v", err))
 		return

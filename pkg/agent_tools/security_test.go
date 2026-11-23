@@ -537,7 +537,7 @@ func TestNewCautionPatterns(t *testing.T) {
 		{"docker kill", "docker kill container", SecurityCaution},
 		{"docker rmi", "docker rmi image", SecurityCaution},
 		{"docker volume rm", "docker volume rm vol", SecurityCaution},
-		// output redirection to workspace files
+		// output redirection to project folder files
 		{"redirect to file", "echo hello > output.txt", SecurityCaution},
 		{"append to file", "echo hello >> output.txt", SecurityCaution},
 		// git rebase (history-rewriting)
@@ -626,8 +626,8 @@ func TestRiskTypeClassification(t *testing.T) {
 	}
 }
 
-// TestPathIsWorkspaceSafe tests path validation for workspace operations
-func TestPathIsWorkspaceSafe(t *testing.T) {
+// TestPathIsProjectFolderSafe tests path validation for project folder operations
+func TestPathIsProjectFolderSafe(t *testing.T) {
 	tests := []struct {
 		name     string
 		path     string
@@ -681,7 +681,7 @@ func TestPathIsWorkspaceSafe(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := pathIsWorkspaceSafe(tt.path)
+			result := pathIsProjectFolderSafe(tt.path)
 			if result != tt.expected {
 				t.Errorf("pathIsWorkspaceSafe(%q) = %v, want %v", tt.path, result, tt.expected)
 			}

@@ -36,9 +36,9 @@ func newAutomateTestServer(t *testing.T) (*ReactWebServer, string) {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.workspaceRoot = daemonRoot
+	ws.projectFolder = daemonRoot
 
-	if _, err := ws.setClientWorkspaceRoot("test-client", daemonRoot); err != nil {
+	if _, err := ws.setClientProjectFolder("test-client", daemonRoot); err != nil {
 		t.Fatalf("setClientWorkspaceRoot: %v", err)
 	}
 
@@ -46,9 +46,9 @@ func newAutomateTestServer(t *testing.T) (*ReactWebServer, string) {
 }
 
 // createSessionFile writes a session file into the .sprout/automate/ directory
-// under the given workspace root, returning the sproutDir path.
-func createSessionFile(workspaceRoot, sessionID string, info *automate.AutomateSessionInfo) string {
-	sproutDir := filepath.Join(workspaceRoot, ".sprout")
+// under the given project folder, returning the sproutDir path.
+func createSessionFile(projectFolder, sessionID string, info *automate.AutomateSessionInfo) string {
+	sproutDir := filepath.Join(projectFolder, ".sprout")
 	if err := automate.WriteSessionFile(sproutDir, sessionID, info); err != nil {
 		panic(err)
 	}
@@ -1340,17 +1340,17 @@ func TestGetSproutDir(t *testing.T) {
 }
 
 func TestGetSproutDir_FallbackToCWD(t *testing.T) {
-	// Create a server with a workspace root within the test temp dir.
+	// Create a server with a project folder within the test temp dir.
 	tmpDir := t.TempDir()
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = tmpDir
-	ws.workspaceRoot = tmpDir
+	ws.projectFolder = tmpDir
 
-	// Create a client context so getWorkspaceRootForRequest works.
-	if _, err := ws.setClientWorkspaceRoot("test-client", tmpDir); err != nil {
+	// Create a client context so getProjectFolderForRequest works.
+	if _, err := ws.setClientProjectFolder("test-client", tmpDir); err != nil {
 		t.Fatal(err)
 	}
 

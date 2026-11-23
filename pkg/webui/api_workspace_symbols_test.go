@@ -24,7 +24,7 @@ func newSymbolsTestServer(t *testing.T, files map[string]string) *ReactWebServer
 		}
 	}
 	return &ReactWebServer{
-		workspaceRoot:   root,
+		projectFolder:   root,
 		daemonRoot:      root,
 		terminalManager: NewTerminalManager(root),
 	}
@@ -69,7 +69,7 @@ func doGetSymbols(t *testing.T, ws *ReactWebServer, query string) symbolsRespons
 }
 
 // TestAPIWorkspaceSymbolsNoQueryReturnsAllSymbols verifies that GET /api/workspace/symbols
-// with no query parameter returns all symbols from workspace files.
+// with no query parameter returns all symbols from project folder files.
 func TestAPIWorkspaceSymbolsNoQueryReturnsAllSymbols(t *testing.T) {
 	ws := newSymbolsTestServer(t, map[string]string{
 		"main.go": "package main\n\nfunc Hello() {}\nfunc World() {}\n",
@@ -208,7 +208,7 @@ func TestAPIWorkspaceSymbolsResponseStructure(t *testing.T) {
 func TestAPIWorkspaceSymbolsMethodNotAllowed(t *testing.T) {
 	root := t.TempDir()
 	ws := &ReactWebServer{
-		workspaceRoot:   root,
+		projectFolder:   root,
 		daemonRoot:      root,
 		terminalManager: NewTerminalManager(root),
 	}

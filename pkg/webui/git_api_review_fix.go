@@ -166,17 +166,17 @@ func (ws *ReactWebServer) startFixReviewJob(reviewOutput, clientID, fixPrompt st
 
 	provider := ""
 	model := ""
-	workspaceRoot := ""
+	projectFolder := ""
 	if agentInst, err := ws.getClientAgent(clientID); err == nil && agentInst != nil {
 		provider = strings.TrimSpace(agentInst.GetProvider())
 		model = strings.TrimSpace(agentInst.GetModel())
-		workspaceRoot = agentInst.GetWorkspaceRoot()
+		projectFolder = agentInst.GetProjectFolder()
 	}
-	// Fallback: if getClientAgent failed or returned empty workspace root,
+	// Fallback: if getClientAgent failed or returned empty project folder,
 	// resolve from the client context directly.
-	if strings.TrimSpace(workspaceRoot) == "" {
+	if strings.TrimSpace(projectFolder) == "" {
 		if clientCtx := ws.getOrCreateClientContext(clientID); clientCtx != nil {
-			workspaceRoot = clientCtx.WorkspaceRoot
+			projectFolder = clientCtx.ProjectFolder
 		}
 	}
 
@@ -186,7 +186,7 @@ func (ws *ReactWebServer) startFixReviewJob(reviewOutput, clientID, fixPrompt st
 		ID:            jobID,
 		SessionID:     sessionID,
 		ClientID:      clientID,
-		WorkspaceRoot: workspaceRoot,
+		ProjectFolder: projectFolder,
 		Status:        "running",
 		Logs:          []string{"Starting isolated fix session..."},
 		StartedAt:     time.Now(),
@@ -197,29 +197,29 @@ func (ws *ReactWebServer) startFixReviewJob(reviewOutput, clientID, fixPrompt st
 	ws.fixReviewJobs[jobID] = job
 	ws.fixReviewMu.Unlock()
 
-	go ws.runFixReviewJob(job, prompt, provider, model, workspaceRoot)
+	go ws.runFixReviewJob(job, prompt, provider, model, projectFolder)
 
 	return job, prompt, nil
 }
 
-func (ws *ReactWebServer) runFixReviewJob(job *gitFixReviewJob, prompt, provider, model, workspaceRoot string) {
+func (ws *ReactWebServer) runFixReviewJob(job *gitFixReviewJob, prompt, provider, model, projectFolder string) {
 	// When running in daemon mode, the process CWD is the daemon's directory, not the
-	// client's workspace. Many downstream code paths (agent init, SaveState, context
+	// client's project folder. Many downstream code paths (agent init, SaveState, context
 	// discovery, git operations) rely on os.Getwd(), so we must switch to the correct
-	// workspace directory before creating the agent.
-	// Use withAgentWorkspace to serialize CWD changes via workspaceExecMu, avoiding
-	// races with other goroutines that also change CWD (e.g. withAgentWorkspace calls
+	// project folder before creating the agent.
+	// Use withAgentProjectFolder to serialize CWD changes via projectFolderExecMu, avoiding
+	// races with other goroutines that also change CWD (e.g. withAgentProjectFolder calls
 	// from getClientAgent / regular chat).
-	workspaceRoot = strings.TrimSpace(workspaceRoot)
+	projectFolder = strings.TrimSpace(projectFolder)
 
-	if workspaceRoot == "" {
+	if projectFolder == "" {
 		job.setError("No workspace root resolved; cannot run fix review in daemon mode. " +
 			"Ensure the browser has set a workspace before triggering fix review.")
 		return
 	}
 
-	err := ws.withAgentWorkspace(workspaceRoot, func() error {
-		job.appendLog(fmt.Sprintf("Changed CWD to workspace: %s", workspaceRoot))
+	err := ws.withAgentProjectFolder(projectFolder, func() error {
+		job.appendLog(fmt.Sprintf("Changed CWD to workspace: %s", projectFolder))
 
 		reviewAgent, agentErr := agent.NewAgentWithModel("")
 		if agentErr != nil {
@@ -228,7 +228,7 @@ func (ws *ReactWebServer) runFixReviewJob(job *gitFixReviewJob, prompt, provider
 		}
 		defer reviewAgent.Shutdown()
 
-		reviewAgent.SetWorkspaceRoot(workspaceRoot)
+		reviewAgent.SetProjectFolder(projectFolder)
 
 		reviewAgent.SetSessionID(job.SessionID)
 		if p := strings.TrimSpace(provider); p != "" {
@@ -258,7 +258,7 @@ func (ws *ReactWebServer) runFixReviewJob(job *gitFixReviewJob, prompt, provider
 		return nil
 	})
 
-	// If withAgentWorkspace itself failed (e.g. CWD change error) and we haven't
+	// If withAgentProjectFolder itself failed (e.g. CWD change error) and we haven't
 	// already recorded a more specific error via job.setError, record it now.
 	if err != nil && job.Status == "running" {
 		job.setError(fmt.Sprintf("Workspace setup failed: %v", err))

@@ -86,7 +86,7 @@ func (k *KeysCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		if len(rest) > 1 {
 			apiKey = strings.TrimSpace(rest[1])
 		}
-		return k.setKeyScoped(configManager, provider, apiKey, scope, chatAgent.GetWorkspaceRoot())
+		return k.setKeyScoped(configManager, provider, apiKey, scope, chatAgent.GetProjectFolder())
 	case "remove", "delete", "unset":
 		if len(args) < 2 {
 			return fmt.Errorf("usage: /keys remove <provider>")
@@ -273,7 +273,7 @@ const (
 	keyScopeDefault keyScope = iota
 	// keyScopeGlobal forces the user-level config root.
 	keyScopeGlobal
-	// keyScopeLocal forces the workspace .sprout root.
+	// keyScopeLocal forces the project folder .sprout root.
 	keyScopeLocal
 	// keyScopeConflict is reported when --global and --local are both given.
 	keyScopeConflict
@@ -317,12 +317,12 @@ func (k *KeysCommand) setKey(configManager *configuration.Manager, provider stri
 // setKeyScoped stores a credential for a provider, honouring an explicit
 // scope choice. --global and --local bypass the resolved backend and write
 // straight to the file store under the chosen config root, because the
-// keyring backend is process-wide and has no per-workspace notion.
+// keyring backend is process-wide and has no per-project-folder notion.
 //
-// workspaceRoot is the agent's authoritative workspace root (not the raw
+// projectFolder is the agent's authoritative project folder (not the raw
 // cwd — from a repo subdirectory those differ, and using cwd would create
 // a store the rest of the process never reads).
-func (k *KeysCommand) setKeyScoped(configManager *configuration.Manager, provider string, apiKey string, scope keyScope, workspaceRoot string) error {
+func (k *KeysCommand) setKeyScoped(configManager *configuration.Manager, provider string, apiKey string, scope keyScope, projectFolder string) error {
 	// Validate provider exists
 	providers := configManager.GetAvailableProviders()
 	valid := false
@@ -344,7 +344,7 @@ func (k *KeysCommand) setKeyScoped(configManager *configuration.Manager, provide
 
 	// Explicit scope: write to the named config root's file store.
 	if scope != keyScopeDefault {
-		configDir, err := scopeConfigDir(scope, workspaceRoot)
+		configDir, err := scopeConfigDir(scope, projectFolder)
 		if err != nil {
 			return err
 		}
@@ -399,26 +399,26 @@ func (k *KeysCommand) setKeyScoped(configManager *configuration.Manager, provide
 }
 
 // scopeConfigDir resolves the config root for an explicit scope.
-func scopeConfigDir(scope keyScope, workspaceRoot string) (string, error) {
+func scopeConfigDir(scope keyScope, projectFolder string) (string, error) {
 	switch scope {
 	case keyScopeGlobal:
 		return configuration.DefaultConfigDir()
 	case keyScopeLocal:
-		return workspaceConfigDir(workspaceRoot)
+		return projectFolderConfigDir(projectFolder)
 	default:
 		return "", fmt.Errorf("internal error: scopeConfigDir called with default scope")
 	}
 }
 
-// workspaceConfigDir returns the workspace-local .sprout config root. It
-// prefers the agent's resolved workspace root; only when that is unknown
+// projectFolderConfigDir returns the project-folder-local .sprout config root. It
+// prefers the agent's resolved project folder; only when that is unknown
 // does it fall back to walking up from cwd to the enclosing git repo,
 // mirroring the root command's auto-detection. Joining the raw cwd would
 // be wrong: from a repo subdirectory it would create <subdir>/.sprout, a
 // store the rest of the process never reads.
-func workspaceConfigDir(workspaceRoot string) (string, error) {
-	if root := strings.TrimSpace(workspaceRoot); root != "" {
-		return requireWorkspaceLayer(root)
+func projectFolderConfigDir(projectFolder string) (string, error) {
+	if root := strings.TrimSpace(projectFolder); root != "" {
+		return requireProjectFolderLayer(root)
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -430,7 +430,7 @@ func workspaceConfigDir(workspaceRoot string) (string, error) {
 		// submodule gitdir pointer). Accept either, matching git's own
 		// notion of a work tree.
 		if _, statErr := os.Stat(filepath.Join(dir, ".git")); statErr == nil {
-			return requireWorkspaceLayer(dir)
+			return requireProjectFolderLayer(dir)
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
@@ -438,16 +438,16 @@ func workspaceConfigDir(workspaceRoot string) (string, error) {
 		}
 		dir = parent
 	}
-	// Not in a git repo: the workspace root is the cwd itself.
-	return requireWorkspaceLayer(cwd)
+	// Not in a git repo: the project folder is the cwd itself.
+	return requireProjectFolderLayer(cwd)
 }
 
-// requireWorkspaceLayer resolves root's .sprout layer, refusing when the
-// root has none. configuration.WorkspaceConfigDir deliberately returns ""
+// requireProjectFolderLayer resolves root's .sprout layer, refusing when the
+// root has none. configuration.ProjectFolderConfigDir deliberately returns ""
 // for $HOME (a ~/.sprout layer is a documented footgun), so --local there
 // must error rather than create a store nothing reads.
-func requireWorkspaceLayer(root string) (string, error) {
-	if dir := configuration.WorkspaceConfigDir(root); dir != "" {
+func requireProjectFolderLayer(root string) (string, error) {
+	if dir := configuration.ProjectFolderConfigDir(root); dir != "" {
 		return dir, nil
 	}
 	return "", fmt.Errorf("cannot use --local: %s has no workspace config layer (the home directory is not a workspace)", root)

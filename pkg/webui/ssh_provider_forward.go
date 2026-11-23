@@ -23,7 +23,7 @@ const sshForwardEnd = "SPROUT_FORWARD_END"
 var sshForwardNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
 
 // sshForwardedProvider is this machine's active provider, handed to an SSH
-// host's daemon so every workspace works with the same model and key. The key
+// host's daemon so every project folder works with the same model and key. The key
 // only ever lives in the remote daemon's environment: it travels over the ssh
 // connection's stdin (never the command line) and is never written to disk.
 type sshForwardedProvider struct {

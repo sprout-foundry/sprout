@@ -107,7 +107,7 @@ func previewDevDeclaration(root string) (port, code int, errCode, msg string) {
 }
 
 // handleAPIPreviewStatus handles GET /api/preview/status: the dev
-// server's lifecycle state for the current workspace root. The response
+// server's lifecycle state for the current project folder. The response
 // is always 200 — a state observation, never a caller fault: a project
 // without a dev server reports stopped, with the reason.
 //
@@ -124,7 +124,7 @@ func (ws *ReactWebServer) handleAPIPreviewStatus(w http.ResponseWriter, r *http.
 		writeJSON(w, http.StatusOK, st)
 		return
 	}
-	m := ws.previewManager(ws.GetWorkspaceRoot())
+	m := ws.previewManager(ws.GetProjectFolder())
 	writeJSON(w, http.StatusOK, m.State())
 }
 
@@ -146,7 +146,7 @@ func (ws *ReactWebServer) handleAPIPreviewStart(w http.ResponseWriter, r *http.R
 	if ws.hostedPreviewShortcut(w) {
 		return
 	}
-	root := ws.GetWorkspaceRoot()
+	root := ws.GetProjectFolder()
 	port, code, errCode, msg := previewDevDeclaration(root)
 	if code != 0 {
 		writeJSONErr(w, code, errCode, msg)
@@ -195,7 +195,7 @@ func (ws *ReactWebServer) handleAPIPreviewRestart(w http.ResponseWriter, r *http
 	if ws.hostedPreviewShortcut(w) {
 		return
 	}
-	root := ws.GetWorkspaceRoot()
+	root := ws.GetProjectFolder()
 	_, code, errCode, msg := previewDevDeclaration(root)
 	if code != 0 {
 		writeJSONErr(w, code, errCode, msg)
@@ -225,6 +225,6 @@ func (ws *ReactWebServer) handleAPIPreviewStop(w http.ResponseWriter, r *http.Re
 	if ws.hostedPreviewShortcut(w) {
 		return
 	}
-	m := ws.previewManager(ws.GetWorkspaceRoot())
+	m := ws.previewManager(ws.GetProjectFolder())
 	writeJSON(w, http.StatusOK, m.Stop())
 }

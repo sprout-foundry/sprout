@@ -13,7 +13,7 @@ func TestClassifyPathAccess(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix paths only; see TestClassifyPathAccess_Windows")
 	}
-	workspace := "/home/alan/proj"
+	projectFolder := "/home/alan/proj"
 	home := "/home/alan"
 
 	tests := []struct {
@@ -25,19 +25,19 @@ func TestClassifyPathAccess(t *testing.T) {
 		{
 			name: "inside workspace",
 			path: "/home/alan/proj/src/main.go",
-			cwd:  workspace,
-			want: PathTierWorkspace,
+			cwd:  projectFolder,
+			want: PathTierProjectFolder,
 		},
 		{
 			name: "workspace root itself",
-			path: workspace,
-			cwd:  workspace,
-			want: PathTierWorkspace,
+			path: projectFolder,
+			cwd:  projectFolder,
+			want: PathTierProjectFolder,
 		},
 		{
 			name: "system /etc always sensitive (CWD in workspace)",
 			path: "/etc/passwd",
-			cwd:  workspace,
+			cwd:  projectFolder,
 			want: PathTierSensitive,
 		},
 		{
@@ -49,7 +49,7 @@ func TestClassifyPathAccess(t *testing.T) {
 		{
 			name: "Mac /Library is sensitive",
 			path: "/Library/Application Support/foo",
-			cwd:  workspace,
+			cwd:  projectFolder,
 			want: PathTierSensitive,
 		},
 		{
@@ -61,13 +61,13 @@ func TestClassifyPathAccess(t *testing.T) {
 		{
 			name: "home path AND cwd in home → external (allowlistable)",
 			path: "/home/alan/other-project/main.go",
-			cwd:  workspace, // workspace is under /home/alan
+			cwd:  projectFolder, // project folder is under /home/alan
 			want: PathTierExternal,
 		},
 		{
 			name: "random external path → external",
 			path: "/tmp/scratch/notes.md",
-			cwd:  workspace,
+			cwd:  projectFolder,
 			want: PathTierExternal,
 		},
 		{
@@ -76,23 +76,23 @@ func TestClassifyPathAccess(t *testing.T) {
 			// would match "/etc". The component-aware check should
 			// classify this as external, not sensitive.
 			path: "/etc-mirror/file",
-			cwd:  workspace,
+			cwd:  projectFolder,
 			want: PathTierExternal,
 		},
 		{
 			name: "empty path returns unknown",
 			path: "",
-			cwd:  workspace,
+			cwd:  projectFolder,
 			want: PathTierUnknown,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := ClassifyPathAccess(tc.path, workspace, home, tc.cwd)
+			got := ClassifyPathAccess(tc.path, projectFolder, home, tc.cwd)
 			if got != tc.want {
 				t.Errorf("ClassifyPathAccess(%q, ws=%q, home=%q, cwd=%q) = %v, want %v",
-					tc.path, workspace, home, tc.cwd, got, tc.want)
+					tc.path, projectFolder, home, tc.cwd, got, tc.want)
 			}
 		})
 	}
@@ -150,7 +150,7 @@ func TestClassifyPathAccess_NormalizationStripsTrailingSlash(t *testing.T) {
 		t.Skip("Unix only")
 	}
 	got := ClassifyPathAccess("/home/alan/proj/", "/home/alan/proj/", "/home/alan", "/home/alan/proj/")
-	if got != PathTierWorkspace {
+	if got != PathTierProjectFolder {
 		t.Errorf("trailing slashes broke workspace detection: got %v", got)
 	}
 }
@@ -162,15 +162,15 @@ func TestClassifyPathAccess_Windows(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("Windows fixtures")
 	}
-	workspace := `C:\projects\foo`
+	projectFolder := `C:\projects\foo`
 	home := `C:\Users\alan`
 
 	// System path on Windows.
-	if got := ClassifyPathAccess(`C:\Windows\System32\drivers\etc\hosts`, workspace, home, workspace); got != PathTierSensitive {
+	if got := ClassifyPathAccess(`C:\Windows\System32\drivers\etc\hosts`, projectFolder, home, projectFolder); got != PathTierSensitive {
 		t.Errorf("C:\\Windows path should be sensitive, got %v", got)
 	}
-	// Workspace.
-	if got := ClassifyPathAccess(filepath.Join(workspace, "main.go"), workspace, home, workspace); got != PathTierWorkspace {
+	// Project folder.
+	if got := ClassifyPathAccess(filepath.Join(projectFolder, "main.go"), projectFolder, home, projectFolder); got != PathTierProjectFolder {
 		t.Errorf("path inside workspace should be Workspace, got %v", got)
 	}
 }

@@ -10,16 +10,16 @@ import (
 	"testing"
 )
 
-// TestHandleRecoverFile_RefusesOutOfWorkspaceWrite verifies the C1 fix:
-// recover_file must NOT write to a path outside the workspace root. A
-// crafted tracker entry whose FilePath escapes the workspace must be
+// TestHandleRecoverFile_RefusesOutOfProjectFolderWrite verifies the C1 fix:
+// recover_file must NOT write to a path outside the project folder. A
+// crafted tracker entry whose FilePath escapes the project folder must be
 // refused with recovered=false, and the external file must remain
 // untouched on disk.
-func TestHandleRecoverFile_RefusesOutOfWorkspaceWrite(t *testing.T) {
+func TestHandleRecoverFile_RefusesOutOfProjectFolderWrite(t *testing.T) {
 	ws := t.TempDir()
 
 	// External target under the user's home dir (NOT /tmp, which the
-	// workspace check treats as inside). Build a sibling temp dir so
+	// project folder check treats as inside). Build a sibling temp dir so
 	// the path is real but definitely outside ws.
 	externalDir := t.TempDir()
 	externalTarget := filepath.Join(externalDir, "victim.txt")
@@ -42,7 +42,7 @@ func TestHandleRecoverFile_RefusesOutOfWorkspaceWrite(t *testing.T) {
 		},
 	}, "test")
 
-	a := &Agent{changeTracker: tracker, workspaceRoot: ws}
+	a := &Agent{changeTracker: tracker, projectFolder: ws}
 	tracker.SetView(a.changesView())
 
 	out, err := handleRecoverFile(context.Background(), a, map[string]interface{}{"path": externalTarget})
@@ -68,10 +68,10 @@ func TestHandleRecoverFile_RefusesOutOfWorkspaceWrite(t *testing.T) {
 	}
 }
 
-// TestHandleRecoverFile_RefusesOutOfWorkspaceDelete verifies the C1 fix
+// TestHandleRecoverFile_RefusesOutOfProjectFolderDelete verifies the C1 fix
 // for the "create" recovery branch (which deletes the file). A created
-// file outside the workspace must NOT be deleted by recover_file.
-func TestHandleRecoverFile_RefusesOutOfWorkspaceDelete(t *testing.T) {
+// file outside the project folder must NOT be deleted by recover_file.
+func TestHandleRecoverFile_RefusesOutOfProjectFolderDelete(t *testing.T) {
 	ws := t.TempDir()
 
 	externalDir := t.TempDir()
@@ -92,7 +92,7 @@ func TestHandleRecoverFile_RefusesOutOfWorkspaceDelete(t *testing.T) {
 		},
 	}, "test")
 
-	a := &Agent{changeTracker: tracker, workspaceRoot: ws}
+	a := &Agent{changeTracker: tracker, projectFolder: ws}
 	tracker.SetView(a.changesView())
 
 	out, err := handleRecoverFile(context.Background(), a, map[string]interface{}{"path": externalTarget})
@@ -114,9 +114,9 @@ func TestHandleRecoverFile_RefusesOutOfWorkspaceDelete(t *testing.T) {
 	}
 }
 
-// TestHandleRecoverFile_InWorkspaceStillWorks is a regression test: the
-// C1 boundary check must NOT break legitimate in-workspace recovery.
-func TestHandleRecoverFile_InWorkspaceStillWorks(t *testing.T) {
+// TestHandleRecoverFile_InProjectFolderStillWorks is a regression test: the
+// C1 boundary check must NOT break legitimate in-project-folder recovery.
+func TestHandleRecoverFile_InProjectFolderStillWorks(t *testing.T) {
 	ws := t.TempDir()
 	inFile := filepath.Join(ws, "config.toml")
 
@@ -131,7 +131,7 @@ func TestHandleRecoverFile_InWorkspaceStillWorks(t *testing.T) {
 		},
 	}, "test")
 
-	a := &Agent{changeTracker: tracker, workspaceRoot: ws}
+	a := &Agent{changeTracker: tracker, projectFolder: ws}
 	tracker.SetView(a.changesView())
 
 	out, err := handleRecoverFile(context.Background(), a, map[string]interface{}{"path": inFile})
@@ -178,7 +178,7 @@ func TestHandleRecoverFile_RefusesRedactedMarkerWrite(t *testing.T) {
 		},
 	}, "test")
 
-	a := &Agent{changeTracker: tracker, workspaceRoot: ws}
+	a := &Agent{changeTracker: tracker, projectFolder: ws}
 	tracker.SetView(a.changesView())
 
 	out, err := handleRecoverFile(context.Background(), a, map[string]interface{}{"path": inFile})
@@ -207,14 +207,14 @@ func TestHandleRecoverFile_RefusesRedactedMarkerWrite(t *testing.T) {
 	}
 }
 
-// TestHandleRevertMyChanges_SkipsOutOfWorkspace verifies the C1 fix for
-// revert_my_changes: out-of-workspace entries are reported as skipped
-// (not failures), and their content is NOT written. In-workspace
+// TestHandleRevertMyChanges_SkipsOutOfProjectFolder verifies the C1 fix for
+// revert_my_changes: out-of-project-folder entries are reported as skipped
+// (not failures), and their content is NOT written. In-project-folder
 // siblings are still reverted successfully.
-func TestHandleRevertMyChanges_SkipsOutOfWorkspace(t *testing.T) {
+func TestHandleRevertMyChanges_SkipsOutOfProjectFolder(t *testing.T) {
 	ws := t.TempDir()
 
-	// In-workspace file that should be reverted.
+	// In-project-folder file that should be reverted.
 	inFile := filepath.Join(ws, "inside.txt")
 	if err := os.WriteFile(inFile, []byte("AFTER"), 0o644); err != nil {
 		t.Fatalf("setup write: %v", err)
@@ -227,7 +227,7 @@ func TestHandleRevertMyChanges_SkipsOutOfWorkspace(t *testing.T) {
 		t.Fatalf("setup write: %v", err)
 	}
 
-	a := &Agent{workspaceRoot: ws}
+	a := &Agent{projectFolder: ws}
 	a.changeTracker = changes.NewChangeTracker(nil, "")
 	a.changeTracker.Enable()
 	a.changeTracker.MergeChild([]TrackedFileChange{
@@ -255,7 +255,7 @@ func TestHandleRevertMyChanges_SkipsOutOfWorkspace(t *testing.T) {
 		t.Fatalf("output not JSON: %v\n%s", jsonErr, out)
 	}
 
-	// In-workspace file should be restored.
+	// In-project-folder file should be restored.
 	if res.Restored != 1 {
 		t.Errorf("expected 1 restored (in-workspace only), got %d: %s", res.Restored, out)
 	}

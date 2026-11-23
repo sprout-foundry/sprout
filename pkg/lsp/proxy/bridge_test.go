@@ -254,7 +254,7 @@ func TestBridgeHandlerParameterValidation(t *testing.T) {
 
 		handler(w, req)
 
-		// Workspace check no longer enforces strict equality against the
+		// Project folder check no longer enforces strict equality against the
 		// handler-level root — the frontend is trusted. The request proceeds
 		// to LSP startup, which fails because /forbidden doesn't exist.
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
@@ -270,10 +270,10 @@ func TestBridgeHandlerParameterValidation(t *testing.T) {
 			CheckOrigin: func(r *http.Request) bool { return true },
 		}
 
-		workspace := "/tmp"
-		handler := BridgeHandler(manager, upgrader, workspace)
+		projectFolder := "/tmp"
+		handler := BridgeHandler(manager, upgrader, projectFolder)
 
-		req := httptest.NewRequest("GET", "/?language=unknown-language-xyz&workspace="+workspace, nil)
+		req := httptest.NewRequest("GET", "/?language=unknown-language-xyz&workspace="+projectFolder, nil)
 		w := httptest.NewRecorder()
 
 		handler(w, req)

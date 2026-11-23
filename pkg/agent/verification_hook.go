@@ -118,7 +118,7 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 	// "passing" means.
 	snap := a.getTurnVerifySnapshot()
 	if snap == nil {
-		snap = runner.Snapshot(a.GetWorkspaceRoot())
+		snap = runner.Snapshot(a.GetProjectFolder())
 		a.setTurnVerifySnapshot(snap)
 	}
 
@@ -147,7 +147,7 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 		if qc.runCtx.Err() != nil {
 			return finalResult, fmt.Errorf("%w: %w", core.ErrInterrupted, qc.runCtx.Err())
 		}
-		res, err := runner.RunSnapshot(qc.runCtx, a.GetWorkspaceRoot(), snap)
+		res, err := runner.RunSnapshot(qc.runCtx, a.GetProjectFolder(), snap)
 		if err != nil {
 			a.Logger().Debug("turn-end verification setup error: %v\n", err)
 			a.markTurnVerificationSetupError()
@@ -210,11 +210,11 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 
 // captureCheckpoint is the checkpoint seam the turn-end verification hook
 // calls when a verification run passes. It is a package-level variable so a
-// test can observe the capture without constructing a workspace; production
-// uses captureCheckpointForWorkspace. revisionID is the revision the turn
+// test can observe the capture without constructing a project folder; production
+// uses captureCheckpointForProjectFolder. revisionID is the revision the turn
 // left behind — the state the checkpoint must identify — so the capture does
 // not have to guess it from the process history store.
-var captureCheckpoint func(workspace, revisionID string, res *verify.Result) error
+var captureCheckpoint func(projectFolder, revisionID string, res *verify.Result) error
 
 // CaptureVerificationCheckpoint creates a checkpoint of the project's
 // current state after the agent's verification run passed. It is the seam
@@ -234,12 +234,12 @@ func (a *Agent) CaptureVerificationCheckpoint(res *verify.Result) {
 	if res == nil || !res.Passed() {
 		return
 	}
-	workspace := a.currentWorkspaceRoot()
+	projectFolder := a.currentProjectFolder()
 	capture := captureCheckpoint
 	if capture == nil {
-		capture = captureCheckpointForWorkspace
+		capture = captureCheckpointForProjectFolder
 	}
-	if err := capture(workspace, a.GetRevisionID(), res); err != nil && a.Logger() != nil {
+	if err := capture(projectFolder, a.GetRevisionID(), res); err != nil && a.Logger() != nil {
 		// Warn, not Debug: the turn passed, but no restorable marker was
 		// recorded — a silently lost checkpoint is worth surfacing even
 		// though it never gates the turn.
@@ -247,16 +247,16 @@ func (a *Agent) CaptureVerificationCheckpoint(res *verify.Result) {
 	}
 }
 
-// captureCheckpointForWorkspace is the production checkpoint capture: it
-// stores a verification checkpoint under the workspace's
+// captureCheckpointForProjectFolder is the production checkpoint capture: it
+// stores a verification checkpoint under the project folder's
 // .sprout/checkpoints/ directory, capturing revisionID — the revision the
 // turn produced — so the marker identifies the state verification passed on.
-func captureCheckpointForWorkspace(workspace, revisionID string, res *verify.Result) error {
+func captureCheckpointForProjectFolder(projectFolder, revisionID string, res *verify.Result) error {
 	summary := "verification passed"
 	if res != nil {
 		summary = "verification passed: " + res.Summary()
 	}
-	_, err := history.CreateCheckpointForRevision(workspace, history.CheckpointVerification, revisionID, summary, nil)
+	_, err := history.CreateCheckpointForRevision(projectFolder, history.CheckpointVerification, revisionID, summary, nil)
 	return err
 }
 

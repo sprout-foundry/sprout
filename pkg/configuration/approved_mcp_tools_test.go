@@ -41,24 +41,24 @@ func TestApprovedMCPToolsEmptyOmitted(t *testing.T) {
 	}
 }
 
-// TestApprovedMCPToolsMerge_Union confirms workspace-layer entries stack on
+// TestApprovedMCPToolsMerge_Union confirms project-folder-layer entries stack on
 // the global layer with de-dup. Without this branch a layered load would
 // silently forget an allowlist entry and start denying an approved tool.
 func TestApprovedMCPToolsMerge_Union(t *testing.T) {
 	tmpRoot := t.TempDir()
 	globalDir := filepath.Join(tmpRoot, "global")
-	workspaceDir := filepath.Join(tmpRoot, "workspace", ".sprout")
+	projectFolderDir := filepath.Join(tmpRoot, "workspace", ".sprout")
 	if mkErr := os.MkdirAll(globalDir, 0o755); mkErr != nil {
 		t.Fatal(mkErr)
 	}
-	if mkErr := os.MkdirAll(workspaceDir, 0o755); mkErr != nil {
+	if mkErr := os.MkdirAll(projectFolderDir, 0o755); mkErr != nil {
 		t.Fatal(mkErr)
 	}
 
 	global := Config{ApprovedMCPTools: []string{"github", "gitlab__create_issue"}}
-	workspace := Config{ApprovedMCPTools: []string{"gitlab__create_issue", "acme"}}
+	projectFolder := Config{ApprovedMCPTools: []string{"gitlab__create_issue", "acme"}}
 
-	merged := MergeConfig(&global, &workspace)
+	merged := MergeConfig(&global, &projectFolder)
 
 	want := map[string]int{"github": 1, "gitlab__create_issue": 1, "acme": 1}
 	got := map[string]int{}

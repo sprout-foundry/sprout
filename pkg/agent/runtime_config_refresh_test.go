@@ -221,7 +221,7 @@ func writeConfig(t *testing.T, servers map[string]mcp.MCPServerConfig) *configur
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", dir)
-	// LoadMCPConfigForWorkspace auto-discovers extra servers (github,
+	// LoadMCPConfigForProjectFolder auto-discovers extra servers (github,
 	// playwright) on machines that have the tools; the dev box does, so pin
 	// auto-discovery off or reconcile sees servers the test never accounted
 	// for.
@@ -398,7 +398,7 @@ func TestReconcileMCPServers_AggregatesErrors(t *testing.T) {
 }
 
 // writeLegacyMCPConfig writes a standalone mcp_config.json into the
-// workspace layer of a fresh temp workspace and returns the workspace root.
+// project folder layer of a fresh temp project folder and returns the project folder.
 // This is the file `sprout login` writes the platform's MCP server to — the
 // reconcile under test must treat it as a first-class server source.
 func writeLegacyMCPConfig(t *testing.T, servers map[string]mcp.MCPServerConfig) string {
@@ -409,7 +409,7 @@ func writeLegacyMCPConfig(t *testing.T, servers map[string]mcp.MCPServerConfig) 
 		Servers:   servers,
 		AutoStart: true,
 	}
-	if err := mcp.SaveMCPConfigForWorkspace(&cfg, ws); err != nil {
+	if err := mcp.SaveMCPConfigForProjectFolder(&cfg, ws); err != nil {
 		t.Fatalf("SaveMCPConfigForWorkspace: %v", err)
 	}
 	if path := mcp.MCPConfigSourcePath(ws); path == "" {
@@ -428,7 +428,7 @@ func TestReconcileMCPServers_AddsServerFromLegacyFile(t *testing.T) {
 	})
 	mock := newMockMCPManager()
 	a := buildAgentWithMockMCP(t, mgr, mock)
-	a.SetWorkspaceRoot(ws)
+	a.SetProjectFolder(ws)
 
 	if err := a.reconcileMCPServers(context.Background()); err != nil {
 		t.Fatalf("reconcileMCPServers: %v", err)
@@ -467,7 +467,7 @@ func TestReconcileMCPServers_DoesNotPruneLegacyFileServer(t *testing.T) {
 		t.Fatalf("seed mock: %v", err)
 	}
 	a := buildAgentWithMockMCP(t, mgr, mock)
-	a.SetWorkspaceRoot(ws)
+	a.SetProjectFolder(ws)
 
 	if err := a.reconcileMCPServers(context.Background()); err != nil {
 		t.Fatalf("reconcileMCPServers: %v", err)
@@ -498,7 +498,7 @@ func TestReconcileMCPServers_MainConfigWinsOverLegacyFile(t *testing.T) {
 		t.Fatalf("seed mock: %v", err)
 	}
 	a := buildAgentWithMockMCP(t, mgr, mock)
-	a.SetWorkspaceRoot(ws)
+	a.SetProjectFolder(ws)
 
 	if err := a.reconcileMCPServers(context.Background()); err != nil {
 		t.Fatalf("reconcileMCPServers: %v", err)
@@ -581,7 +581,7 @@ func fakeFoundryMCP(t *testing.T) (url string, toolName string) {
 func TestRefreshRuntimeConfig_PicksUpServerWrittenToLegacyFileAfterStart(t *testing.T) {
 	// Simulate the exact gap: the session's MCP manager is initialized and
 	// empty (nothing configured at startup), then `sprout login` writes the
-	// platform's MCP server to the workspace's mcp_config.json. A refresh —
+	// platform's MCP server to the project folder's mcp_config.json. A refresh —
 	// the only in-session path — must register, start and list that server's
 	// tools against the real manager.
 	mgr := writeConfig(t, map[string]mcp.MCPServerConfig{}) // main config: empty
@@ -592,13 +592,13 @@ func TestRefreshRuntimeConfig_PicksUpServerWrittenToLegacyFileAfterStart(t *test
 		Servers:   map[string]mcp.MCPServerConfig{"sprout-foundry": {Name: "sprout-foundry", Type: "http", URL: srvURL, AutoStart: true, Timeout: 30 * time.Second}},
 		AutoStart: true,
 	}
-	if err := mcp.SaveMCPConfigForWorkspace(&legacy, ws); err != nil {
+	if err := mcp.SaveMCPConfigForProjectFolder(&legacy, ws); err != nil {
 		t.Fatalf("SaveMCPConfigForWorkspace: %v", err)
 	}
 
 	realManager := mcp.NewMCPManager(nil)
 	a := buildAgentWithMockMCP(t, mgr, realManager)
-	a.SetWorkspaceRoot(ws)
+	a.SetProjectFolder(ws)
 
 	// The session already ran its startup init with an empty config: mark it
 	// initialized so getMCPTools takes the cache path, not initializeMCP.
@@ -638,7 +638,7 @@ func TestMaybeRefreshMCPFromDisk(t *testing.T) {
 	srvURL, toolName := fakeFoundryMCP(t)
 	realManager := mcp.NewMCPManager(nil)
 	a := buildAgentWithMockMCP(t, mgr, realManager)
-	a.SetWorkspaceRoot(ws)
+	a.SetProjectFolder(ws)
 	a.mcpSub.SetInitialized(true)
 
 	// No file yet: the stamp is 0 and nothing happens.
@@ -653,7 +653,7 @@ func TestMaybeRefreshMCPFromDisk(t *testing.T) {
 		Servers:   map[string]mcp.MCPServerConfig{"sprout-foundry": {Name: "sprout-foundry", Type: "http", URL: srvURL, AutoStart: true, Timeout: 30 * time.Second}},
 		AutoStart: true,
 	}
-	if err := mcp.SaveMCPConfigForWorkspace(&legacy, ws); err != nil {
+	if err := mcp.SaveMCPConfigForProjectFolder(&legacy, ws); err != nil {
 		t.Fatalf("SaveMCPConfigForWorkspace: %v", err)
 	}
 

@@ -122,16 +122,16 @@ func TestPersonaNew_RefusesCoreID(t *testing.T) {
 }
 
 // TestPersonaAccept_RecordsHash pins `/persona accept <id>`: the project
-// persona becomes usable, and the record is keyed by workspace root and
+// persona becomes usable, and the record is keyed by project folder and
 // content hash.
 func TestPersonaAccept_RecordsHash(t *testing.T) {
 	chatAgent := createTestAgentWithTempConfig(t)
-	workspaceRoot := chatAgent.GetWorkspaceRoot()
-	if workspaceRoot == "" {
+	projectFolder := chatAgent.GetProjectFolder()
+	if projectFolder == "" {
 		t.Fatal("test agent has no workspace root")
 	}
-	workspaceConfigDir := filepath.Join(workspaceRoot, configuration.ConfigDirName)
-	projectDir := configuration.ProjectPersonasDir(workspaceConfigDir)
+	projectFolderConfigDir := filepath.Join(projectFolder, configuration.ConfigDirName)
+	projectDir := configuration.ProjectPersonasDir(projectFolderConfigDir)
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestPersonaAccept_RecordsHash(t *testing.T) {
 
 	// The pending state is what the agent sees.
 	if err := chatAgent.GetConfigManager().UpdateConfigNoSave(func(cfg *configuration.Config) error {
-		configuration.HydrateCustomPersonas(cfg, workspaceConfigDir)
+		configuration.HydrateCustomPersonas(cfg, projectFolderConfigDir)
 		return nil
 	}); err != nil {
 		t.Fatal(err)
@@ -160,7 +160,7 @@ func TestPersonaAccept_RecordsHash(t *testing.T) {
 		t.Fatalf("persona accept: %v", err)
 	}
 
-	accepted := chatAgent.GetConfigManager().GetConfig().ProjectPersonaAcceptances(workspaceRoot)
+	accepted := chatAgent.GetConfigManager().GetConfig().ProjectPersonaAcceptances(projectFolder)
 	if accepted["repo_persona"] != personas.ContentHash([]byte(body)) {
 		t.Fatalf("acceptance = %v, want the file's hash", accepted)
 	}

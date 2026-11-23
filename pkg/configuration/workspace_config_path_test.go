@@ -15,56 +15,56 @@ func writeFile(t *testing.T, path, content string) {
 	require.NoError(t, os.WriteFile(path, []byte(content), 0600))
 }
 
-func TestWorkspaceConfigResolution(t *testing.T) {
+func TestProjectFolderConfigResolution(t *testing.T) {
 	t.Run("prefers workspace.json when present", func(t *testing.T) {
 		root := t.TempDir()
 		writeFile(t, filepath.Join(root, ".sprout", "workspace.json"), `{}`)
 		writeFile(t, filepath.Join(root, ".sprout", "config.json"), `{}`)
 
-		assert.Equal(t, filepath.Join(root, ".sprout", "workspace.json"), GetWorkspaceConfigPath(root))
+		assert.Equal(t, filepath.Join(root, ".sprout", "workspace.json"), GetProjectFolderConfigPath(root))
 	})
 
-	// Existing workspaces must keep working with no migration.
+	// Existing project folders must keep working with no migration.
 	t.Run("falls back to a legacy config.json", func(t *testing.T) {
 		root := t.TempDir()
 		writeFile(t, filepath.Join(root, ".sprout", "config.json"), `{}`)
 
-		assert.Equal(t, filepath.Join(root, ".sprout", "config.json"), GetWorkspaceConfigPath(root))
-		assert.True(t, IsWorkspaceConfigPresent(root))
+		assert.Equal(t, filepath.Join(root, ".sprout", "config.json"), GetProjectFolderConfigPath(root))
+		assert.True(t, IsProjectFolderConfigPresent(root))
 	})
 
 	t.Run("writes always target workspace.json", func(t *testing.T) {
 		root := t.TempDir()
 		writeFile(t, filepath.Join(root, ".sprout", "config.json"), `{}`)
 
-		assert.Equal(t, filepath.Join(root, ".sprout", "workspace.json"), WorkspaceConfigWritePath(root))
+		assert.Equal(t, filepath.Join(root, ".sprout", "workspace.json"), ProjectFolderConfigWritePath(root))
 	})
 
 	t.Run("empty workspace root yields empty paths", func(t *testing.T) {
-		assert.Equal(t, "", GetWorkspaceConfigPath(""))
-		assert.Equal(t, "", WorkspaceConfigWritePath(""))
-		assert.Equal(t, "", WorkspaceConfigDir(""))
-		assert.False(t, IsWorkspaceConfigPresent(""))
+		assert.Equal(t, "", GetProjectFolderConfigPath(""))
+		assert.Equal(t, "", ProjectFolderConfigWritePath(""))
+		assert.Equal(t, "", ProjectFolderConfigDir(""))
+		assert.False(t, IsProjectFolderConfigPresent(""))
 	})
 }
 
-// At $HOME the workspace layer and the user-level state directory are the same
+// At $HOME the project folder layer and the user-level state directory are the same
 // folder, so a legacy config.json there is the user's GLOBAL config. Reading it
-// as a workspace layer aliases a global preference into a per-workspace
-// override — and every existing install has that file. $HOME resolves to no workspace layer at all.
-func TestWorkspaceConfigNeverFallsBackToGlobalAtHome(t *testing.T) {
+// as a project folder layer aliases a global preference into a per-project-folder
+// override — and every existing install has that file. $HOME resolves to no project folder layer at all.
+func TestProjectFolderConfigNeverFallsBackToGlobalAtHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
 	writeFile(t, filepath.Join(home, ".sprout", "config.json"), `{"skip_prompt":true}`)
 
-	assert.Equal(t, "", GetWorkspaceConfigPath(home),
+	assert.Equal(t, "", GetProjectFolderConfigPath(home),
 		"home must not resolve its workspace layer to the user-level config.json")
-	assert.False(t, IsWorkspaceConfigPresent(home))
+	assert.False(t, IsProjectFolderConfigPresent(home))
 }
 
-// A directory merely named like home, or nested under it, is a normal workspace.
-func TestWorkspaceConfigFallbackAppliesBelowHome(t *testing.T) {
+// A directory merely named like home, or nested under it, is a normal project folder.
+func TestProjectFolderConfigFallbackAppliesBelowHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -72,13 +72,13 @@ func TestWorkspaceConfigFallbackAppliesBelowHome(t *testing.T) {
 	legacy := filepath.Join(project, ".sprout", "config.json")
 	writeFile(t, legacy, `{}`)
 
-	assert.Equal(t, legacy, GetWorkspaceConfigPath(project),
+	assert.Equal(t, legacy, GetProjectFolderConfigPath(project),
 		"a subdirectory of home is an ordinary workspace and keeps its legacy config")
 }
 
 // The layered manager must persist to workspace.json, never back into the
 // legacy file and never into the user's global config.json.
-func TestLayeredManagerWritesWorkspaceFile(t *testing.T) {
+func TestLayeredManagerWritesProjectFolderFile(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -89,17 +89,17 @@ func TestLayeredManagerWritesWorkspaceFile(t *testing.T) {
 	globalBefore, err := os.ReadFile(globalCfg)
 	require.NoError(t, err)
 
-	workspaceDir := filepath.Join(home, "proj", ".sprout")
-	require.NoError(t, os.MkdirAll(workspaceDir, 0700))
+	projectFolderDir := filepath.Join(home, "proj", ".sprout")
+	require.NoError(t, os.MkdirAll(projectFolderDir, 0700))
 
-	mgr, err := NewManagerWithLayers(globalDir, workspaceDir)
+	mgr, err := NewManagerWithLayers(globalDir, projectFolderDir)
 	require.NoError(t, err)
 	require.NoError(t, mgr.SaveConfig())
 
-	_, err = os.Stat(filepath.Join(workspaceDir, WorkspaceConfigFileName))
+	_, err = os.Stat(filepath.Join(projectFolderDir, ProjectFolderConfigFileName))
 	assert.NoError(t, err, "workspace layer should be saved as workspace.json")
 
-	_, err = os.Stat(filepath.Join(workspaceDir, ConfigFileName))
+	_, err = os.Stat(filepath.Join(projectFolderDir, ConfigFileName))
 	assert.True(t, os.IsNotExist(err), "must not create a legacy config.json in the workspace")
 
 	globalAfter, err := os.ReadFile(globalCfg)
@@ -107,42 +107,42 @@ func TestLayeredManagerWritesWorkspaceFile(t *testing.T) {
 	assert.Equal(t, string(globalBefore), string(globalAfter), "global config must be untouched")
 }
 
-// $HOME has no workspace layer at all — not for reads, and critically not for
-// writes. NewManagerWithLayers uses the workspace dir as the SAVE target, so a
-// daemon running with workspace=$HOME (what `sprout service install` produces)
+// $HOME has no project folder layer at all — not for reads, and critically not for
+// writes. NewManagerWithLayers uses the project folder dir as the SAVE target, so a
+// daemon running with project folder=$HOME (what `sprout service install` produces)
 // would otherwise write its full merged config to ~/.sprout/workspace.json on
 // the first settings save, and read it back next start as a deliberate
-// per-workspace opt-in.
-func TestHomeHasNoWorkspaceLayer(t *testing.T) {
+// per-project-folder opt-in.
+func TestHomeHasNoProjectFolderLayer(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	if got := WorkspaceConfigDir(home); got != "" {
+	if got := ProjectFolderConfigDir(home); got != "" {
 		t.Errorf("WorkspaceConfigDir($HOME) = %q, want \"\"", got)
 	}
-	if got := WorkspaceConfigWritePath(home); got != "" {
+	if got := ProjectFolderConfigWritePath(home); got != "" {
 		t.Errorf("WorkspaceConfigWritePath($HOME) = %q, want \"\"", got)
 	}
-	if got := GetWorkspaceConfigPath(home); got != "" {
+	if got := GetProjectFolderConfigPath(home); got != "" {
 		t.Errorf("GetWorkspaceConfigPath($HOME) = %q, want \"\"", got)
 	}
-	if IsWorkspaceConfigPresent(home) {
+	if IsProjectFolderConfigPresent(home) {
 		t.Error("IsWorkspaceConfigPresent($HOME) = true, want false")
 	}
 }
 
 // Even when a workspace.json already exists at $HOME — which is exactly the
 // state a previous daemon left behind — it must not be picked up.
-func TestHomeIgnoresPreexistingWorkspaceFile(t *testing.T) {
+func TestHomeIgnoresPreexistingProjectFolderFile(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	writeFile(t, filepath.Join(home, ".sprout", WorkspaceConfigFileName),
+	writeFile(t, filepath.Join(home, ".sprout", ProjectFolderConfigFileName),
 		`{"skip_prompt":true}`)
 
-	if got := GetWorkspaceConfigPath(home); got != "" {
+	if got := GetProjectFolderConfigPath(home); got != "" {
 		t.Errorf("a machine-written workspace.json at $HOME must be ignored, got %q", got)
 	}
-	if IsWorkspaceConfigPresent(home) {
+	if IsProjectFolderConfigPresent(home) {
 		t.Error("IsWorkspaceConfigPresent($HOME) = true despite no workspace layer")
 	}
 }
@@ -157,11 +157,11 @@ func TestLayeredManagerAtHomeSavesGlobally(t *testing.T) {
 	require.NoError(t, os.MkdirAll(globalDir, 0700))
 	writeFile(t, filepath.Join(globalDir, ConfigFileName), `{"version":"2.0"}`)
 
-	mgr, err := NewManagerWithLayers(globalDir, WorkspaceConfigDir(home))
+	mgr, err := NewManagerWithLayers(globalDir, ProjectFolderConfigDir(home))
 	require.NoError(t, err)
 	require.NoError(t, mgr.SaveConfig())
 
-	_, err = os.Stat(filepath.Join(home, ".sprout", WorkspaceConfigFileName))
+	_, err = os.Stat(filepath.Join(home, ".sprout", ProjectFolderConfigFileName))
 	assert.True(t, os.IsNotExist(err),
 		"saving with workspace=$HOME must not create ~/.sprout/workspace.json")
 

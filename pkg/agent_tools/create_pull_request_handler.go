@@ -22,7 +22,7 @@ var CreatePullRequestFunc func(ctx context.Context, args map[string]any) (string
 
 // createPullRequestHandler implements ToolHandler for the create_pull_request tool.
 // It creates a pull request after a feature branch has been pushed: on GitHub,
-// or on any host the platform supports from a Sprout Foundry workspace.
+// or on any host the platform supports from a Sprout Foundry project folder.
 //
 // This is a THIN WRAPPER that delegates Execute to the function pointer
 // CreatePullRequestFunc. All metadata (Name, Definition, Validate, Aliases,

@@ -138,7 +138,7 @@ func TestRunInitialContinuation_WorkingTreeEditsAreNotProgress(t *testing.T) {
 		t.Fatalf("SetModel: %v", err)
 	}
 	chatAgent := newTestLoopAgent(t, client)
-	chatAgent.SetWorkspaceRoot(dir)
+	chatAgent.SetProjectFolder(dir)
 
 	// Every turn edits files, stages them and even rewrites the item's
 	// text, but never commits or ticks: the loop must still stop.

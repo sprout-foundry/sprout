@@ -235,11 +235,11 @@ type deploySubject struct {
 }
 
 // deployProjectRoot resolves the project root the tools operate on:
-// env.WorkspaceRoot when set, or an explicit project_dir argument resolved
+// env.ProjectFolder when set, or an explicit project_dir argument resolved
 // against it. It refuses an absolute or escaping project_dir, so a tool
-// argument cannot reach outside the workspace.
+// argument cannot reach outside the project folder.
 func deployProjectRoot(env ToolEnv, args map[string]any) (string, error) {
-	base := strings.TrimSpace(env.WorkspaceRoot)
+	base := strings.TrimSpace(env.ProjectFolder)
 	if base == "" {
 		return "", errors.New("no workspace root is available to resolve the project; run inside a workspace")
 	}
@@ -520,12 +520,12 @@ func (h *deployHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 	// the timeline carries a marker for what was deployed and, when the
 	// history store holds the revision, a restorable one. The checkpoint
 	// records the revision current in the process history store — for the
-	// agent that is the workspace's revision, i.e. the tree the deploy
+	// agent that is the project folder's revision, i.e. the tree the deploy
 	// built — rather than d.Version, which is the opaque starter/plan
 	// version and not a history revision a restore could act on. A capture
 	// failure never changes the deploy result: the deploy succeeded, and
 	// the checkpoint is a convenience over it.
-	_, _ = history.CreateCheckpointInWorkspace(subject.root, history.CheckpointDeploy,
+	_, _ = history.CreateCheckpointInProjectFolder(subject.root, history.CheckpointDeploy,
 		fmt.Sprintf("deployed %s %s", d.Kind, d.ID), nil)
 
 	return ToolResult{Output: fmt.Sprintf("Deployed %s %s to %s", d.Kind, d.ID, d.URL)}, nil

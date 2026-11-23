@@ -89,7 +89,7 @@ func pasWritePlanFile(t *testing.T, root, content string) {
 // result (failing the test on a Go error, which the handler never returns).
 func pasExecute(t *testing.T, root string, args map[string]any) ToolResult {
 	t.Helper()
-	res, err := (&planAddScopeHandler{}).Execute(context.Background(), ToolEnv{WorkspaceRoot: root}, args)
+	res, err := (&planAddScopeHandler{}).Execute(context.Background(), ToolEnv{ProjectFolder: root}, args)
 	if err != nil {
 		t.Fatalf("Execute returned a Go error: %v", err)
 	}
@@ -519,10 +519,10 @@ func TestPlanAddScopeHandlerConformance_GoalIgnoredWhenPlanExists(t *testing.T) 
 	}
 }
 
-// TestPlanAddScopeHandlerConformance_NoWorkspaceRoot pins the write refusal
-// when the handler has no workspace root (the plan files would have
+// TestPlanAddScopeHandlerConformance_NoProjectFolder pins the write refusal
+// when the handler has no project folder (the plan files would have
 // nowhere to land).
-func TestPlanAddScopeHandlerConformance_NoWorkspaceRoot(t *testing.T) {
+func TestPlanAddScopeHandlerConformance_NoProjectFolder(t *testing.T) {
 	t.Parallel()
 	res, err := (&planAddScopeHandler{}).Execute(context.Background(), ToolEnv{}, pasValidArgs)
 	if err != nil {

@@ -88,7 +88,7 @@ func starterUpgradeNotice(starterID, projectVersion, embeddedVersion string) str
 //
 // It returns "" when there is nothing to propose:
 //
-//   - the agent has no workspace root;
+//   - the agent has no project folder;
 //   - the project has no .sprout/starter.json (starterstore.ErrNoManifest);
 //   - the manifest is unreadable or invalid (logged; a corrupt manifest is
 //     not an upgrade signal, mirroring autoActivateStarterSkill);
@@ -105,7 +105,7 @@ func starterUpgradeNotice(starterID, projectVersion, embeddedVersion string) str
 // catalogue and never writes a file — so the turn-start hook can never apply
 // an upgrade by itself ("it never applies them silently").
 func (a *Agent) starterUpgradeNotice() string {
-	root := a.currentWorkspaceRoot()
+	root := a.currentProjectFolder()
 	if root == "" {
 		return ""
 	}

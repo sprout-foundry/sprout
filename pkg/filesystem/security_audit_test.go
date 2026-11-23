@@ -27,12 +27,12 @@ func auditTestRoot(t *testing.T) string {
 }
 
 func TestSafeResolvePathWithBypass_AuditLoggerAllowed(t *testing.T) {
-	// Create a test workspace outside /tmp so audit is emitted
+	// Create a test project folder outside /tmp so audit is emitted
 	root := auditTestRoot(t)
-	workspace := filepath.Join(root, "fs-audit-workspace-"+t.Name())
-	os.MkdirAll(workspace, 0755)
-	defer os.RemoveAll(workspace)
-	testFile := filepath.Join(workspace, "test.txt")
+	projectFolder := filepath.Join(root, "fs-audit-workspace-"+t.Name())
+	os.MkdirAll(projectFolder, 0755)
+	defer os.RemoveAll(projectFolder)
+	testFile := filepath.Join(projectFolder, "test.txt")
 	os.WriteFile(testFile, []byte("hello"), 0644)
 
 	// Create a simple audit logger wrapper that captures entries
@@ -41,10 +41,10 @@ func TestSafeResolvePathWithBypass_AuditLoggerAllowed(t *testing.T) {
 
 	// Build context with audit logger
 	ctx := context.Background()
-	ctx = WithWorkspaceRoot(ctx, workspace)
+	ctx = WithProjectFolder(ctx, projectFolder)
 	ctx = WithAuditLogger(ctx, logger)
 
-	// Resolve path within workspace (should be allowed)
+	// Resolve path within project folder (should be allowed)
 	result, err := SafeResolvePathWithBypass(ctx, testFile)
 	if err != nil {
 		t.Fatalf("SafeResolvePathWithBypass failed: %v", err)
@@ -72,9 +72,9 @@ func TestSafeResolvePathWithBypass_AuditLoggerAllowed(t *testing.T) {
 }
 
 func TestSafeResolvePathWithBypass_AuditLoggerDenied(t *testing.T) {
-	// Create a test workspace
-	workspace, _ := os.MkdirTemp("", "fs-audit-workspace-*")
-	defer os.RemoveAll(workspace)
+	// Create a test project folder
+	projectFolder, _ := os.MkdirTemp("", "fs-audit-workspace-*")
+	defer os.RemoveAll(projectFolder)
 
 	// Create a simple audit logger wrapper that captures entries
 	var entries []AuditEntry
@@ -82,7 +82,7 @@ func TestSafeResolvePathWithBypass_AuditLoggerDenied(t *testing.T) {
 
 	// Build context with audit logger
 	ctx := context.Background()
-	ctx = WithWorkspaceRoot(ctx, workspace)
+	ctx = WithProjectFolder(ctx, projectFolder)
 	ctx = WithAuditLogger(ctx, logger)
 
 	// The read gate only audits paths that exist, and Windows has no /etc/passwd.
@@ -94,7 +94,7 @@ func TestSafeResolvePathWithBypass_AuditLoggerDenied(t *testing.T) {
 		}
 	}
 
-	// Try to resolve path outside workspace (should be denied)
+	// Try to resolve path outside project folder (should be denied)
 	_, err := SafeResolvePathWithBypass(ctx, outside)
 	if err == nil {
 		t.Fatal("expected error for path outside workspace")
@@ -120,9 +120,9 @@ func TestSafeResolvePathWithBypass_AuditLoggerDenied(t *testing.T) {
 
 func TestSafeResolvePathWithBypass_AuditLoggerAllowedViaSessionFolder(t *testing.T) {
 	root := auditTestRoot(t)
-	workspace := filepath.Join(root, "fs-audit-workspace-"+t.Name())
-	os.MkdirAll(workspace, 0755)
-	defer os.RemoveAll(workspace)
+	projectFolder := filepath.Join(root, "fs-audit-workspace-"+t.Name())
+	os.MkdirAll(projectFolder, 0755)
+	defer os.RemoveAll(projectFolder)
 	allowedFolder := filepath.Join(root, "fs-audit-allowed-"+t.Name())
 	os.MkdirAll(allowedFolder, 0755)
 	defer os.RemoveAll(allowedFolder)
@@ -135,9 +135,9 @@ func TestSafeResolvePathWithBypass_AuditLoggerAllowedViaSessionFolder(t *testing
 	var entries []AuditEntry
 	logger := &capturingAuditLogger{entries: &entries}
 
-	// Build context with workspace and session allowlist
+	// Build context with project folder and session allowlist
 	ctx := context.Background()
-	ctx = WithWorkspaceRoot(ctx, workspace)
+	ctx = WithProjectFolder(ctx, projectFolder)
 	ctx = WithSessionAllowedFolders(ctx, []string{allowedFolder})
 	ctx = WithAuditLogger(ctx, logger)
 
@@ -163,13 +163,13 @@ func TestSafeResolvePathWithBypass_NilLoggerNoPanic(t *testing.T) {
 	t.Parallel()
 
 	root := auditTestRoot(t)
-	workspace := filepath.Join(root, "fs-audit-workspace-"+t.Name())
-	os.MkdirAll(workspace, 0755)
-	defer os.RemoveAll(workspace)
+	projectFolder := filepath.Join(root, "fs-audit-workspace-"+t.Name())
+	os.MkdirAll(projectFolder, 0755)
+	defer os.RemoveAll(projectFolder)
 
 	// Build context with nil audit logger
 	ctx := context.Background()
-	ctx = WithWorkspaceRoot(ctx, workspace)
+	ctx = WithProjectFolder(ctx, projectFolder)
 
 	// Should not panic
 	_, err := SafeResolvePathWithBypass(ctx, "/etc/passwd")
@@ -180,9 +180,9 @@ func TestSafeResolvePathWithBypass_NilLoggerNoPanic(t *testing.T) {
 
 func TestSafeResolvePathForWriteWithBypass_AuditLoggerAllowed(t *testing.T) {
 	root := auditTestRoot(t)
-	workspace := filepath.Join(root, "fs-audit-workspace-"+t.Name())
-	os.MkdirAll(workspace, 0755)
-	defer os.RemoveAll(workspace)
+	projectFolder := filepath.Join(root, "fs-audit-workspace-"+t.Name())
+	os.MkdirAll(projectFolder, 0755)
+	defer os.RemoveAll(projectFolder)
 
 	// Create a simple audit logger wrapper that captures entries
 	var entries []AuditEntry
@@ -190,11 +190,11 @@ func TestSafeResolvePathForWriteWithBypass_AuditLoggerAllowed(t *testing.T) {
 
 	// Build context with audit logger
 	ctx := context.Background()
-	ctx = WithWorkspaceRoot(ctx, workspace)
+	ctx = WithProjectFolder(ctx, projectFolder)
 	ctx = WithAuditLogger(ctx, logger)
 
-	// Resolve write path within workspace (should be allowed)
-	result, err := SafeResolvePathForWriteWithBypass(ctx, filepath.Join(workspace, "newfile.txt"))
+	// Resolve write path within project folder (should be allowed)
+	result, err := SafeResolvePathForWriteWithBypass(ctx, filepath.Join(projectFolder, "newfile.txt"))
 	if err != nil {
 		t.Fatalf("SafeResolvePathForWriteWithBypass failed: %v", err)
 	}
@@ -218,9 +218,9 @@ func TestSafeResolvePathForWriteWithBypass_AuditLoggerAllowed(t *testing.T) {
 }
 
 func TestSafeResolvePathForWriteWithBypass_AuditLoggerDenied(t *testing.T) {
-	// Create a test workspace
-	workspace, _ := os.MkdirTemp("", "fs-audit-workspace-*")
-	defer os.RemoveAll(workspace)
+	// Create a test project folder
+	projectFolder, _ := os.MkdirTemp("", "fs-audit-workspace-*")
+	defer os.RemoveAll(projectFolder)
 
 	// Create a simple audit logger wrapper that captures entries
 	var entries []AuditEntry
@@ -228,10 +228,10 @@ func TestSafeResolvePathForWriteWithBypass_AuditLoggerDenied(t *testing.T) {
 
 	// Build context with audit logger
 	ctx := context.Background()
-	ctx = WithWorkspaceRoot(ctx, workspace)
+	ctx = WithProjectFolder(ctx, projectFolder)
 	ctx = WithAuditLogger(ctx, logger)
 
-	// Try to resolve write path outside workspace (should be denied)
+	// Try to resolve write path outside project folder (should be denied)
 	_, err := SafeResolvePathForWriteWithBypass(ctx, "/etc/passwd")
 	if err == nil {
 		t.Fatal("expected error for write path outside workspace")
@@ -254,9 +254,9 @@ func TestSafeResolvePathForWriteWithBypass_AuditLoggerDenied(t *testing.T) {
 
 func TestSafeResolvePathForWriteWithBypass_AuditLoggerSymlinkRedirected(t *testing.T) {
 	root := auditTestRoot(t)
-	workspace := filepath.Join(root, "fs-audit-workspace-"+t.Name())
-	os.MkdirAll(workspace, 0755)
-	defer os.RemoveAll(workspace)
+	projectFolder := filepath.Join(root, "fs-audit-workspace-"+t.Name())
+	os.MkdirAll(projectFolder, 0755)
+	defer os.RemoveAll(projectFolder)
 	allowedFolder := filepath.Join(root, "fs-audit-allowed-"+t.Name())
 	os.MkdirAll(allowedFolder, 0755)
 	defer os.RemoveAll(allowedFolder)
@@ -265,7 +265,7 @@ func TestSafeResolvePathForWriteWithBypass_AuditLoggerSymlinkRedirected(t *testi
 	existingFile := filepath.Join(allowedFolder, "existing.txt")
 	os.WriteFile(existingFile, []byte("existing content"), 0644)
 
-	// Create a symlink in workspace pointing to the file in allowed folder
+	// Create a symlink in project folder pointing to the file in allowed folder
 	symlinkPath := existingFile + ".symlink"
 	os.Symlink(existingFile, symlinkPath)
 
@@ -273,9 +273,9 @@ func TestSafeResolvePathForWriteWithBypass_AuditLoggerSymlinkRedirected(t *testi
 	var entries []AuditEntry
 	logger := &capturingAuditLogger{entries: &entries}
 
-	// Build context with workspace and session allowlist
+	// Build context with project folder and session allowlist
 	ctx := context.Background()
-	ctx = WithWorkspaceRoot(ctx, workspace)
+	ctx = WithProjectFolder(ctx, projectFolder)
 	ctx = WithSessionAllowedFolders(ctx, []string{allowedFolder})
 	ctx = WithAuditLogger(ctx, logger)
 
@@ -308,13 +308,13 @@ func TestSafeResolvePathForWriteWithBypass_NilLoggerNoPanic(t *testing.T) {
 	t.Parallel()
 
 	root := auditTestRoot(t)
-	workspace := filepath.Join(root, "fs-audit-workspace-"+t.Name())
-	os.MkdirAll(workspace, 0755)
-	defer os.RemoveAll(workspace)
+	projectFolder := filepath.Join(root, "fs-audit-workspace-"+t.Name())
+	os.MkdirAll(projectFolder, 0755)
+	defer os.RemoveAll(projectFolder)
 
 	// Build context with nil audit logger
 	ctx := context.Background()
-	ctx = WithWorkspaceRoot(ctx, workspace)
+	ctx = WithProjectFolder(ctx, projectFolder)
 
 	// Should not panic
 	_, err := SafeResolvePathForWriteWithBypass(ctx, "/etc/passwd")

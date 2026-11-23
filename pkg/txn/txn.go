@@ -1,5 +1,5 @@
 // ETH-2 "transactional escalation": the container-side execution surface of
-// a three-phase transaction the platform drives against a workspace
+// a three-phase transaction the platform drives against a project folder
 // container — push deltas (browser→container), run a command, pull deltas
 // (container→browser). The browser keeps a WASM editing plane; this package
 // is the executor the daemon exposes over HTTP and the CLI wraps.

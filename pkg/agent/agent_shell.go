@@ -24,16 +24,16 @@ func (a *Agent) SetShellCwd(dir string) {
 }
 
 // effectiveCwd returns the directory that tools should use for file/git operations.
-// It returns shellCwd when set (updated by cd commands), falling back to the workspace root.
+// It returns shellCwd when set (updated by cd commands), falling back to the project folder.
 func (a *Agent) effectiveCwd() string {
 	if cwd := a.GetShellCwd(); cwd != "" {
 		return cwd
 	}
-	return a.currentWorkspaceRoot()
+	return a.currentProjectFolder()
 }
 
 // updateShellCwd parses a shell command and updates the tracked CWD for cd directives.
-// Validates targets against the workspace root and allowlisted folders.
+// Validates targets against the project folder and allowlisted folders.
 func (a *Agent) updateShellCwd(cmd string) {
 	trimmed := strings.TrimSpace(cmd)
 
@@ -86,10 +86,10 @@ func (a *Agent) updateShellCwd(cmd string) {
 		}
 	}
 
-	// Read current and previous cwd atomically; fall back to workspace root if unset.
+	// Read current and previous cwd atomically; fall back to project folder if unset.
 	current, prev := a.ensureShellCwd().GetBoth()
 	if current == "" {
-		current = a.currentWorkspaceRoot()
+		current = a.currentProjectFolder()
 	}
 
 	tracker := a.ensureShellCwd()
@@ -165,24 +165,24 @@ func (a *Agent) writeCdRejectionMessage(target, reason string) {
 	logger := a.GetAuditLogger()
 	if logger != nil {
 		sessionID := ""
-		workspace := ""
+		projectFolder := ""
 		if a.state != nil {
 			sessionID = a.state.GetSessionID()
 		}
-		if ws := strings.TrimSpace(a.GetWorkspaceRoot()); ws != "" {
-			workspace = ws
+		if ws := strings.TrimSpace(a.GetProjectFolder()); ws != "" {
+			projectFolder = ws
 		}
 		entry := tools.AuditEntry{
-			Timestamp: time.Now(),
-			Tool:      "shell_cd",
-			Args:      target,
-			RiskLevel: "high",
-			Category:  "cd_gate",
-			Action:    "denied",
-			Reasoning: "cd target " + target + " " + reason,
-			Source:    "unified-gate",
-			SessionID: sessionID,
-			Workspace: workspace,
+			Timestamp:     time.Now(),
+			Tool:          "shell_cd",
+			Args:          target,
+			RiskLevel:     "high",
+			Category:      "cd_gate",
+			Action:        "denied",
+			Reasoning:     "cd target " + target + " " + reason,
+			Source:        "unified-gate",
+			SessionID:     sessionID,
+			ProjectFolder: projectFolder,
 		}
 		data, err := json.Marshal(entry)
 		if err != nil {
@@ -230,7 +230,7 @@ func resolveShellCdArg(arg, currentCwd string) string {
 // resolveWindowsRootedCdArg handles POSIX-style rooted paths, which the
 // agent's shell (Git Bash) accepts but filepath.IsAbs rejects. "/c/x" is
 // the MSYS spelling of C:\x. Any other rooted path ("/etc") points into
-// the shell's own filesystem view, never under the workspace, so it is
+// the shell's own filesystem view, never under the project folder, so it is
 // returned as-is — still non-absolute to Windows, IsCdTargetAllowed
 // refuses it — rather than being joined onto the cwd.
 func resolveWindowsRootedCdArg(arg string) (string, bool) {

@@ -1,4 +1,4 @@
-// Package filediscovery: workspace structure building (split from filediscovery.go)
+// Package filediscovery: project folder structure building (split from filediscovery.go)
 
 package filediscovery
 
@@ -11,23 +11,23 @@ import (
 	"time"
 )
 
-// BuildWorkspaceStructure builds workspace structure information.
-// It applies a hard timeout (BuildWorkspaceTimeout), respects directory depth limits,
-// emits progress events for large workspaces, and uses an in-memory cache.
-func (fd *FileDiscovery) BuildWorkspaceStructure() *WorkspaceInfo {
+// BuildProjectFolderStructure builds project folder structure information.
+// It applies a hard timeout (BuildProjectFolderTimeout), respects directory depth limits,
+// emits progress events for large project folders, and uses an in-memory cache.
+func (fd *FileDiscovery) BuildProjectFolderStructure() *ProjectFolderInfo {
 	startTime := time.Now()
 
 	root := "."
 	absRoot, errAbs := filepath.Abs(root)
 	if errAbs != nil {
-		return &WorkspaceInfo{
+		return &ProjectFolderInfo{
 			Error:   fmt.Errorf("failed to resolve root path: %w", errAbs),
 			RootDir: ".",
 		}
 	}
 
 	// Check cache before doing any work
-	if cached := fd.getCachedWorkspace(absRoot); cached != nil {
+	if cached := fd.getCachedProjectFolder(absRoot); cached != nil {
 		if fd.logger != nil {
 			fd.logger.Logf("Workspace structure served from cache: %d files", len(cached.AllFiles))
 		}
@@ -35,7 +35,7 @@ func (fd *FileDiscovery) BuildWorkspaceStructure() *WorkspaceInfo {
 	}
 
 	// Create context with hard timeout
-	ctx, cancel := context.WithTimeout(context.Background(), BuildWorkspaceTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), BuildProjectFolderTimeout)
 	defer cancel()
 
 	var allFiles []string
@@ -81,7 +81,7 @@ func (fd *FileDiscovery) BuildWorkspaceStructure() *WorkspaceInfo {
 			filesByDir[dir] = append(filesByDir[dir], path)
 			fileCount++
 
-			// For large workspaces, log progress periodically
+			// For large project folders, log progress periodically
 			if fileCount%ProgressEmitInterval == 0 && fd.logger != nil {
 				fd.logger.Logf("BuildWorkspaceStructure progress: %d files so far...", fileCount)
 			}
@@ -111,7 +111,7 @@ func (fd *FileDiscovery) BuildWorkspaceStructure() *WorkspaceInfo {
 	}
 
 	// Build the final result
-	wi := &WorkspaceInfo{
+	wi := &ProjectFolderInfo{
 		ProjectType: projectType,
 		AllFiles:    allFiles,
 		FilesByDir:  filesByDir,
@@ -121,14 +121,14 @@ func (fd *FileDiscovery) BuildWorkspaceStructure() *WorkspaceInfo {
 
 	// Cache the actual result (we passed a placeholder above; cache now)
 	if err == nil && fileCount > 0 {
-		fd.cacheWorkspaceResult(absRoot, wi)
+		fd.cacheProjectFolderResult(absRoot, wi)
 	}
 
 	return wi
 }
 
-// getCachedWorkspace returns a cached workspace structure if available and not expired.
-func (fd *FileDiscovery) getCachedWorkspace(rootDir string) *WorkspaceInfo {
+// getCachedProjectFolder returns a cached project folder structure if available and not expired.
+func (fd *FileDiscovery) getCachedProjectFolder(rootDir string) *ProjectFolderInfo {
 	if fd.cacheMap == nil {
 		return nil
 	}
@@ -153,8 +153,8 @@ func (fd *FileDiscovery) getCachedWorkspace(rootDir string) *WorkspaceInfo {
 	return entry.data
 }
 
-// cacheWorkspaceResult stores a workspace structure result in the cache.
-func (fd *FileDiscovery) cacheWorkspaceResult(rootDir string, data *WorkspaceInfo) {
+// cacheProjectFolderResult stores a project folder structure result in the cache.
+func (fd *FileDiscovery) cacheProjectFolderResult(rootDir string, data *ProjectFolderInfo) {
 	if fd.cacheMap == nil {
 		return
 	}
@@ -178,7 +178,7 @@ func (fd *FileDiscovery) cacheWorkspaceResult(rootDir string, data *WorkspaceInf
 }
 
 // getDirModTime returns the most recent modification time of immediate children of rootDir.
-// This is used to detect if the workspace has changed since it was last cached.
+// This is used to detect if the project folder has changed since it was last cached.
 func (fd *FileDiscovery) getDirModTime(rootDir string) (time.Time, error) {
 	entries, err := os.ReadDir(rootDir)
 	if err != nil {

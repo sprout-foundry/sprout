@@ -80,11 +80,11 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 
 	fullResult, err := tools.ExecuteShellCommand(ctx, command)
 
-	// Diff the workspace against the ChangeTracker's cached baseline and
+	// Diff the project folder against the ChangeTracker's cached baseline and
 	// record any file mutations the shell introduced (sed -i, mv, rm,
 	// cp, tee, etc.). The tracker keeps a long-lived snapshot rebased
 	// after every call, so the typical cost per shell_command is one
-	// stat-only walk (~5–20 ms on a 5000-file workspace) rather than
+	// stat-only walk (~5–20 ms on a 5000-file project folder) rather than
 	// two full content reads (~280 ms each). Cold prime happens once
 	// at EnableChangeTracking time.
 	//
@@ -105,10 +105,10 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 			// auto-skip can't silently drop reverts the user wanted
 			// recoverable. shell_destructive.go has the classifier.
 			//
-			// Pass the workspace root, NOT effectiveCwd: the shell cwd
+			// Pass the project folder, NOT effectiveCwd: the shell cwd
 			// follows cd, and a cwd-keyed cache re-primes (cold walk +
 			// dropped diff) on every command after a cd.
-			tracker.TrackShellCommandTurn(a.currentWorkspaceRoot(), command, shellIsDestructive(command))
+			tracker.TrackShellCommandTurn(a.currentProjectFolder(), command, shellIsDestructive(command))
 		}
 	}
 
@@ -362,7 +362,7 @@ func (a *Agent) executeShellCommandBackground(ctx context.Context, command strin
 }
 
 // ShellExecutionContext returns a context carrying the wiring a shell command
-// needs to reach the user and the workspace: workspace root, process manager,
+// needs to reach the user and the project folder: project folder, process manager,
 // and the password prompter.
 //
 // It deliberately does NOT install the TerminalManager. A context carrying one
@@ -378,8 +378,8 @@ func (a *Agent) executeShellCommandBackground(ctx context.Context, command strin
 func (a *Agent) ShellExecutionContext() context.Context {
 	ctx := a.InterruptCtx()
 
-	if root := a.GetWorkspaceRoot(); root != "" {
-		ctx = filesystem.WithWorkspaceRoot(ctx, root)
+	if root := a.GetProjectFolder(); root != "" {
+		ctx = filesystem.WithProjectFolder(ctx, root)
 	}
 
 	ctx = tools.WithBackgroundProcessManager(ctx, a.getOrCreateBackgroundProcessManager())

@@ -29,14 +29,14 @@ func (f *fakeSummaryClient) Complete(ctx context.Context, systemPrompt, userProm
 }
 
 // summaryTestAgent returns a bare agent with messages and task actions set
-// and its workspace root pointed at a plan-free temp dir, so the plan-goal
+// and its project folder pointed at a plan-free temp dir, so the plan-goal
 // signal is deterministically absent.
 func summaryTestAgent(t *testing.T, messages []api.Message, actions []TaskAction) *Agent {
 	t.Helper()
 	a := &Agent{state: NewAgentStateManager(false)}
 	a.state.SetMessages(messages)
 	a.replaceTaskActions(actions)
-	a.SetWorkspaceRoot(t.TempDir())
+	a.SetProjectFolder(t.TempDir())
 	return a
 }
 
@@ -371,7 +371,7 @@ func TestTopicSummaryPlanGoalSignal(t *testing.T) {
 	}
 
 	a := summaryTestAgent(t, []api.Message{{Role: "user", Content: "continue"}}, nil)
-	a.SetWorkspaceRoot(root)
+	a.SetProjectFolder(root)
 	withTopicSummaryClient(t, func(*Agent) topicSummaryModelClient { return nil })
 
 	got := a.generateTopicSummary(context.Background())

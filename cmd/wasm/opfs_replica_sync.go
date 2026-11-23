@@ -139,7 +139,7 @@ func storeReplicaMetadataFunc(_ js.Value, args []js.Value) interface{} {
 		return map[string]interface{}{"error": "empty metadata"}
 	}
 
-	var meta agent.WorkspaceFileMetadata
+	var meta agent.ProjectFolderFileMetadata
 	if err := json.Unmarshal([]byte(metaJSON), &meta); err != nil {
 		return map[string]interface{}{"error": "invalid metadata JSON: " + err.Error()}
 	}

@@ -1,6 +1,6 @@
 //go:build !js
 
-// Package webui: SSH workspace launch orchestration (split from ssh_launch.go).
+// Package webui: SSH project folder launch orchestration (split from ssh_launch.go).
 
 package webui
 
@@ -13,27 +13,27 @@ import (
 	"time"
 )
 
-func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *sshLaunchResult, err error) {
+func (ws *ReactWebServer) launchSSHProjectFolder(req sshLaunchRequestDTO) (result *sshLaunchResult, err error) {
 	hostAlias := strings.TrimSpace(req.HostAlias)
 	if hostAlias == "" {
 		return nil, fmt.Errorf("SSH host alias is required")
 	}
 
-	remoteWorkspacePath := strings.TrimSpace(req.RemoteWorkspacePath)
-	if remoteWorkspacePath == "" {
-		remoteWorkspacePath = "$HOME"
+	remoteProjectFolderPath := strings.TrimSpace(req.RemoteProjectFolderPath)
+	if remoteProjectFolderPath == "" {
+		remoteProjectFolderPath = "$HOME"
 	}
 	// Normalize tilde shortcuts so ~/project and $HOME/project resolve to the
 	// same session key and don't fork separate in-flight state.
-	remoteWorkspacePath = normalizeRemoteWorkspacePath(remoteWorkspacePath)
+	remoteProjectFolderPath = normalizeRemoteProjectFolderPath(remoteProjectFolderPath)
 
-	logger, loggerErr := newSSHLaunchLogger(hostAlias, remoteWorkspacePath)
+	logger, loggerErr := newSSHLaunchLogger(hostAlias, remoteProjectFolderPath)
 	if loggerErr != nil {
 		return nil, fmt.Errorf("failed to create SSH launch logger for %s: %w", hostAlias, loggerErr)
 	}
 	defer logger.Close()
 
-	sessionKey := hostAlias + "::" + remoteWorkspacePath
+	sessionKey := hostAlias + "::" + remoteProjectFolderPath
 	ws.setSSHLaunchStatus(sessionKey, "connecting", fmt.Sprintf("Connecting to %s...", hostAlias), true, "")
 	defer func() {
 		if err != nil {
@@ -184,7 +184,7 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 
 	launcherURL := fmt.Sprintf("http://127.0.0.1:%d", ws.port)
 	ws.setSSHLaunchStatus(sessionKey, "starting-remote-backend", fmt.Sprintf("Starting remote backend on %s...", hostAlias), true, "")
-	remotePort, remotePID, reusedDaemon, err := startRemoteSSHBackend(launchCtx, hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary, binaryWasUploaded, req.forward, logger)
+	remotePort, remotePID, reusedDaemon, err := startRemoteSSHBackend(launchCtx, hostAlias, sessionKey, launcherURL, remoteProjectFolderPath, remoteBinary, binaryWasUploaded, req.forward, logger)
 	if err != nil {
 		return nil, fmt.Errorf("start remote SSH backend: %w", err)
 	}
@@ -241,17 +241,17 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 	}
 	logger.Logf("health check passed for local port %d", localPort)
 
-	session := &sshWorkspaceSession{
-		Key:                 sessionKey,
-		HostAlias:           hostAlias,
-		RemoteWorkspacePath: remoteWorkspacePath,
-		LocalPort:           localPort,
-		RemotePort:          remotePort,
-		RemotePID:           remotePID,
-		URL:                 fmt.Sprintf("http://127.0.0.1:%d", localPort),
-		TunnelCmd:           tunnelCmd,
-		StartedAt:           time.Now(),
-		ReusedDaemon:        reusedDaemon,
+	session := &sshProjectFolderSession{
+		Key:                     sessionKey,
+		HostAlias:               hostAlias,
+		RemoteProjectFolderPath: remoteProjectFolderPath,
+		LocalPort:               localPort,
+		RemotePort:              remotePort,
+		RemotePID:               remotePID,
+		URL:                     fmt.Sprintf("http://127.0.0.1:%d", localPort),
+		TunnelCmd:               tunnelCmd,
+		StartedAt:               time.Now(),
+		ReusedDaemon:            reusedDaemon,
 	}
 
 	ws.sshSessionsMu.Lock()

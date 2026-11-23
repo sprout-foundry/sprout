@@ -28,7 +28,7 @@ func newSubagentProfileTestRunner(t *testing.T, parentWindow, subagentWindow int
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	runner := NewSubagentRunner(parent, shared)
 	runner.testClientFactory = func(clientType api.ClientType, model string) (api.ClientInterface, error) {

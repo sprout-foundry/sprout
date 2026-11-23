@@ -24,7 +24,7 @@ func (s *skillLoaderAdapter) LoadSkill(skillID string) (*tools.SkillInfo, error)
 	configManager := s.agent.GetConfigManager()
 	config := configManager.GetConfig()
 
-	skillInfo, err := LoadSkillInWorkspace(skillID, config, s.agent.GetWorkspaceRoot())
+	skillInfo, err := LoadSkillInProjectFolder(skillID, config, s.agent.GetProjectFolder())
 	if err != nil {
 		return nil, err
 	}

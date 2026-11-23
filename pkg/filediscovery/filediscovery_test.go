@@ -393,9 +393,9 @@ func TestGetIgnoreRules_SproutPriority(t *testing.T) {
 	}
 }
 
-// --- BuildWorkspaceStructure tests ---
+// --- BuildProjectFolderStructure tests ---
 
-func TestBuildWorkspaceStructure_GroupsFilesByDirectory(t *testing.T) {
+func TestBuildProjectFolderStructure_GroupsFilesByDirectory(t *testing.T) {
 	root := makeTree(t, map[string]string{
 		"main.go":        "package main",
 		"util.go":        "package main",
@@ -414,7 +414,7 @@ func TestBuildWorkspaceStructure_GroupsFilesByDirectory(t *testing.T) {
 	}
 	defer os.Chdir(old)
 
-	info := fd.BuildWorkspaceStructure()
+	info := fd.BuildProjectFolderStructure()
 
 	if info.Error != nil {
 		t.Fatalf("unexpected error: %v", info.Error)
@@ -453,7 +453,7 @@ func TestBuildWorkspaceStructure_GroupsFilesByDirectory(t *testing.T) {
 	}
 }
 
-func TestBuildWorkspaceStructure_RootDir(t *testing.T) {
+func TestBuildProjectFolderStructure_RootDir(t *testing.T) {
 	root := makeTree(t, map[string]string{
 		"main.go": "package main",
 	})
@@ -465,7 +465,7 @@ func TestBuildWorkspaceStructure_RootDir(t *testing.T) {
 	defer os.Chdir(old)
 
 	fd := newFD()
-	info := fd.BuildWorkspaceStructure()
+	info := fd.BuildProjectFolderStructure()
 
 	if info.Error != nil {
 		t.Fatalf("unexpected error: %v", info.Error)
@@ -486,7 +486,7 @@ func TestBuildWorkspaceStructure_RootDir(t *testing.T) {
 	}
 }
 
-func TestBuildWorkspaceStructure_DetectProjectType(t *testing.T) {
+func TestBuildProjectFolderStructure_DetectProjectType(t *testing.T) {
 	tests := []struct {
 		name         string
 		markerFile   string
@@ -518,7 +518,7 @@ func TestBuildWorkspaceStructure_DetectProjectType(t *testing.T) {
 			defer os.Chdir(old)
 
 			fd := newFD()
-			info := fd.BuildWorkspaceStructure()
+			info := fd.BuildProjectFolderStructure()
 
 			if info.Error != nil {
 				t.Fatalf("unexpected error: %v", info.Error)
@@ -1488,7 +1488,7 @@ func TestDeduplicateAndFilter_RemovesDuplicates(t *testing.T) {
 	})
 
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{RootDir: root}
+	wsInfo := &ProjectFolderInfo{RootDir: root}
 
 	files := []string{
 		filepath.Join(root, "main.go"),
@@ -1544,7 +1544,7 @@ func TestDeduplicateAndFilter_ConvertsToAbsolutePath(t *testing.T) {
 	if evaled, err := filepath.EvalSymlinks(resolvedRoot); err == nil {
 		resolvedRoot = evaled
 	}
-	wsInfo := &WorkspaceInfo{RootDir: resolvedRoot}
+	wsInfo := &ProjectFolderInfo{RootDir: resolvedRoot}
 
 	files := []string{
 		"main.go",   // Relative path
@@ -1564,23 +1564,23 @@ func TestDeduplicateAndFilter_ConvertsToAbsolutePath(t *testing.T) {
 	}
 }
 
-func TestDeduplicateAndFilter_ExcludesFilesOutsideWorkspace(t *testing.T) {
+func TestDeduplicateAndFilter_ExcludesFilesOutsideProjectFolder(t *testing.T) {
 	root := makeTree(t, map[string]string{
 		"main.go": "package main",
 	})
 
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{RootDir: root}
+	wsInfo := &ProjectFolderInfo{RootDir: root}
 
 	otherDir := t.TempDir()
 	files := []string{
 		filepath.Join(root, "main.go"),
-		filepath.Join(otherDir, "outside.go"), // Outside workspace
+		filepath.Join(otherDir, "outside.go"), // Outside project folder
 	}
 
 	result := fd.deduplicateAndFilter(files, wsInfo)
 
-	// Should only include files inside workspace
+	// Should only include files inside project folder
 	if len(result) != 1 {
 		t.Errorf("expected 1 file (only inside workspace), got %d", len(result))
 	}
@@ -1598,7 +1598,7 @@ func TestDeduplicateAndFilter_SkipsNonExistentFiles(t *testing.T) {
 	})
 
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{RootDir: root}
+	wsInfo := &ProjectFolderInfo{RootDir: root}
 
 	files := []string{
 		filepath.Join(root, "main.go"),
@@ -1625,7 +1625,7 @@ func TestDeduplicateAndFilter_SkipsDirectories(t *testing.T) {
 	})
 
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{RootDir: root}
+	wsInfo := &ProjectFolderInfo{RootDir: root}
 
 	absSrc := filepath.Join(root, "src")
 
@@ -1655,7 +1655,7 @@ func TestDeduplicateAndFilter_SkipsDirectories(t *testing.T) {
 func TestDeduplicateAndFilter_EmptyInput(t *testing.T) {
 	root := t.TempDir()
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{RootDir: root}
+	wsInfo := &ProjectFolderInfo{RootDir: root}
 
 	files := []string{}
 	result := fd.deduplicateAndFilter(files, wsInfo)
@@ -1676,7 +1676,7 @@ func TestFindWithDirectoryWalk_BasicMatching(t *testing.T) {
 	})
 
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{
+	wsInfo := &ProjectFolderInfo{
 		RootDir:     root,
 		ProjectType: "go",
 	}
@@ -1703,7 +1703,7 @@ func TestFindWithDirectoryWalk_CaseInsensitive(t *testing.T) {
 	})
 
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{
+	wsInfo := &ProjectFolderInfo{
 		RootDir:     root,
 		ProjectType: "go",
 	}
@@ -1736,7 +1736,7 @@ func TestFindWithDirectoryWalk_SkipsHiddenFiles(t *testing.T) {
 	})
 
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{
+	wsInfo := &ProjectFolderInfo{
 		RootDir:     root,
 		ProjectType: "go",
 	}
@@ -1764,7 +1764,7 @@ func TestFindWithDirectoryWalk_SkipsCommonExcludedDirs(t *testing.T) {
 	})
 
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{
+	wsInfo := &ProjectFolderInfo{
 		RootDir:     root,
 		ProjectType: "go",
 	}
@@ -1790,7 +1790,7 @@ func TestFindWithDirectoryWalk_NoMatch(t *testing.T) {
 	})
 
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{
+	wsInfo := &ProjectFolderInfo{
 		RootDir:     root,
 		ProjectType: "go",
 	}
@@ -1810,7 +1810,7 @@ func TestFindWithDirectoryWalk_EmptyQuery(t *testing.T) {
 	})
 
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{
+	wsInfo := &ProjectFolderInfo{
 		RootDir:     root,
 		ProjectType: "go",
 	}
@@ -2048,9 +2048,9 @@ func TestRerankWithSymbols_Sorting(t *testing.T) {
 	}
 }
 
-// --- WorkspaceInfo integration tests ---
+// --- ProjectFolderInfo integration tests ---
 
-func TestWorkspaceInfo_BuildsCorrectly(t *testing.T) {
+func TestProjectFolderInfo_BuildsCorrectly(t *testing.T) {
 	root := makeTree(t, map[string]string{
 		"main.go":        "package main",
 		"src/handler.go": "package src",
@@ -2074,7 +2074,7 @@ func TestWorkspaceInfo_BuildsCorrectly(t *testing.T) {
 	}
 
 	fd := newFD()
-	wsInfo := fd.BuildWorkspaceStructure()
+	wsInfo := fd.BuildProjectFolderStructure()
 
 	if wsInfo.Error != nil {
 		t.Fatalf("unexpected error: %v", wsInfo.Error)
@@ -2124,7 +2124,7 @@ func TestDeduplicateAndFilter_HandlesSymlinks(t *testing.T) {
 	}
 
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{RootDir: root}
+	wsInfo := &ProjectFolderInfo{RootDir: root}
 
 	files := []string{
 		originalFile,
@@ -2150,7 +2150,7 @@ func TestDeduplicateAndFilter_ReadOnlyFiles(t *testing.T) {
 	}
 
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{RootDir: root}
+	wsInfo := &ProjectFolderInfo{RootDir: root}
 
 	files := []string{readOnlyFile}
 	result := fd.deduplicateAndFilter(files, wsInfo)
@@ -2184,7 +2184,7 @@ func TestFindWithFindCommand_BasicPattern(t *testing.T) {
 	})
 
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{
+	wsInfo := &ProjectFolderInfo{
 		RootDir:     root,
 		ProjectType: "go",
 	}
@@ -2258,7 +2258,7 @@ func TestFindWithFindCommand_MultiplePatterns(t *testing.T) {
 	})
 
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{
+	wsInfo := &ProjectFolderInfo{
 		RootDir:     root,
 		ProjectType: "go",
 	}
@@ -2296,7 +2296,7 @@ func TestFindWithFindCommand_ExcludesHiddenFiles(t *testing.T) {
 	})
 
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{
+	wsInfo := &ProjectFolderInfo{
 		RootDir:     root,
 		ProjectType: "go",
 	}
@@ -2339,7 +2339,7 @@ func TestFindWithFindCommand_ExcludesCommonDirs(t *testing.T) {
 	})
 
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{
+	wsInfo := &ProjectFolderInfo{
 		RootDir:     root,
 		ProjectType: "go",
 	}
@@ -2370,7 +2370,7 @@ func TestFindWithFindCommand_CommandFailure(t *testing.T) {
 
 	root := t.TempDir()
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{
+	wsInfo := &ProjectFolderInfo{
 		RootDir:     root,
 		ProjectType: "go",
 	}
@@ -2403,7 +2403,7 @@ func TestFindWithGrepCommand_ContentSearch(t *testing.T) {
 	})
 
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{
+	wsInfo := &ProjectFolderInfo{
 		RootDir:     root,
 		ProjectType: "go",
 	}
@@ -2446,7 +2446,7 @@ func TestFindWithGrepCommand_MultipleTerms(t *testing.T) {
 	})
 
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{
+	wsInfo := &ProjectFolderInfo{
 		RootDir:     root,
 		ProjectType: "go",
 	}
@@ -2499,7 +2499,7 @@ func TestFindWithGrepCommand_IncludesSupportedExtensions(t *testing.T) {
 	})
 
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{
+	wsInfo := &ProjectFolderInfo{
 		RootDir:     root,
 		ProjectType: "go",
 	}
@@ -2545,7 +2545,7 @@ func TestFindWithGrepCommand_CommandFailure(t *testing.T) {
 
 	root := t.TempDir()
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{
+	wsInfo := &ProjectFolderInfo{
 		RootDir:     root,
 		ProjectType: "go",
 	}
@@ -2864,13 +2864,13 @@ func TestFindFilesUsingShellCommands_NonexistentRoot(t *testing.T) {
 	}
 
 	fd := newFD()
-	workspaceInfo := &WorkspaceInfo{
+	projectFolderInfo := &ProjectFolderInfo{
 		RootDir:     "/nonexistent/directory",
 		ProjectType: "go",
 	}
 
 	// Should not crash on non-existent directory
-	result := fd.findFilesUsingShellCommands("test", workspaceInfo)
+	result := fd.findFilesUsingShellCommands("test", projectFolderInfo)
 
 	// Should return empty result (could be nil or empty slice)
 	// The important thing is it doesn't crash
@@ -2897,13 +2897,13 @@ func TestDeduplicateAndFilter_InvalidPaths(t *testing.T) {
 	}
 
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{RootDir: root}
+	wsInfo := &ProjectFolderInfo{RootDir: root}
 
 	files := []string{
 		validFile,                      // valid
 		"",                             // empty path
 		"\x00invalid",                  // invalid path with null byte (may not work on all platforms)
-		"/nonexistent/outside/file.go", // outside workspace
+		"/nonexistent/outside/file.go", // outside project folder
 	}
 
 	// Should not crash on invalid paths
@@ -2938,13 +2938,13 @@ func TestApplyFiltersAndLimits_EmptyFileList(t *testing.T) {
 
 func TestFindWithDirectoryWalk_InvalidRoot(t *testing.T) {
 	fd := newFD()
-	workspaceInfo := &WorkspaceInfo{
+	projectFolderInfo := &ProjectFolderInfo{
 		RootDir:     "/nonexistent/path/xyz123",
 		ProjectType: "go",
 	}
 
 	// Should not crash on invalid root
-	result := fd.findWithDirectoryWalk("test", workspaceInfo)
+	result := fd.findWithDirectoryWalk("test", projectFolderInfo)
 
 	// Should return empty result (could be nil or empty slice)
 	// The important thing is it doesn't crash

@@ -8,7 +8,7 @@ package webui
 // so it cannot ride the runner relay's request/response stream model
 // (pkg/runner/relay/mux.go). An SSE response is ordinary HTTP, so the
 // relay's existing transport carries it unchanged — the runner's host
-// server already reverse-proxies /daemon/{workspaceID}/... with
+// server already reverse-proxies /daemon/{projectFolderID}/... with
 // FlushInterval: -1, streaming bytes as they arrive.
 //
 // Security boundary: the auth middleware lets GET through unauthenticated
@@ -17,7 +17,7 @@ package webui
 // GET. The handler therefore enforces the same bearer itself whenever
 // SPROUT_AUTH_TOKEN is configured, using the same constant-time compare
 // the middleware uses. The relay path is additionally gated by the
-// runner's per-workspace secret before the daemon is reached.
+// runner's per-project-folder secret before the daemon is reached.
 
 import (
 	"crypto/subtle"

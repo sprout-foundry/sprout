@@ -29,10 +29,10 @@ func (ws *ReactWebServer) handleAPIGitWorktrees(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 
-	// Return an empty success response when the workspace isn't a git repository
-	checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir")
+	// Return an empty success response when the project folder isn't a git repository
+	checkCmd := ws.gitCommandForProjectFolder(projectFolder, "rev-parse", "--git-dir")
 	if err := checkCmd.Run(); err != nil {
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"message":   "not_git_repo",
@@ -43,20 +43,20 @@ func (ws *ReactWebServer) handleAPIGitWorktrees(w http.ResponseWriter, r *http.R
 	}
 
 	// Get current branch
-	currentBranch, err := gitOutputStringForWorkspace(ws, workspaceRoot, "branch", "--show-current")
+	currentBranch, err := gitOutputStringForProjectFolder(ws, projectFolder, "branch", "--show-current")
 	if err != nil {
 		currentBranch = ""
 	}
 
 	// Get all worktrees using git worktree list
 	// Format: worktree path | branch branch-name (HEAD detached at abc123...)
-	worktreesOutput, err := gitOutputStringForWorkspace(ws, workspaceRoot, "worktree", "list", "--porcelain")
+	worktreesOutput, err := gitOutputStringForProjectFolder(ws, projectFolder, "worktree", "list", "--porcelain")
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_list_worktrees", fmt.Sprintf("Failed to list worktrees: %v", err))
 		return
 	}
 
-	worktrees := ws.parseWorktreeListOutput(worktreesOutput, strings.TrimSpace(currentBranch), workspaceRoot)
+	worktrees := ws.parseWorktreeListOutput(worktreesOutput, strings.TrimSpace(currentBranch), projectFolder)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":   "success",
@@ -71,7 +71,7 @@ func (ws *ReactWebServer) handleAPIGitWorktrees(w http.ResponseWriter, r *http.R
 // HEAD abc123def456...
 // branch refs/heads/feature-xyz
 // root /path/to/repo/.git
-func (ws *ReactWebServer) parseWorktreeListOutput(output, currentBranch, workspaceRoot string) []WorktreeInfo {
+func (ws *ReactWebServer) parseWorktreeListOutput(output, currentBranch, projectFolder string) []WorktreeInfo {
 	if output == "" {
 		return []WorktreeInfo{}
 	}
@@ -121,16 +121,16 @@ func (ws *ReactWebServer) parseWorktreeListOutput(output, currentBranch, workspa
 	}
 
 	// git always lists the main (primary) worktree first — mark it regardless
-	// of which workspace the server is currently rooted in.
+	// of which project folder the server is currently rooted in.
 	var mainWorktree *WorktreeInfo
 	if len(worktrees) > 0 {
 		mainWorktree = &worktrees[0]
 		mainWorktree.IsMain = true
 	}
 
-	// Mark whichever worktree matches the active workspace as current.
+	// Mark whichever worktree matches the active project folder as current.
 	for i := range worktrees {
-		if sameWorktreePath(worktrees[i].Path, workspaceRoot) {
+		if sameWorktreePath(worktrees[i].Path, projectFolder) {
 			worktrees[i].IsCurrent = true
 			break
 		}
@@ -180,31 +180,31 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 		return
 	}
 
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 
 	// Resolve path relative to the WORKSPACE ROOT (the UI documents
 	// "../feature-x" as sibling-of-repo). filepathAbsEval resolved against
 	// the daemon's process CWD, so a daemon started in $HOME rejected or
 	// misplaced every relative worktree path.
-	absPath, err := filepathAbsEvalFrom(req.Path, workspaceRoot)
+	absPath, err := filepathAbsEvalFrom(req.Path, projectFolder)
 	if err != nil {
 		writeJSONErr(w, http.StatusBadRequest, "invalid_worktree_path", fmt.Sprintf("Invalid worktree path: %v", err))
 		return
 	}
 
-	// Boundary: daemon root OR the workspace's parent directory (git's
+	// Boundary: daemon root OR the project folder's parent directory (git's
 	// conventional sibling-worktree location, which ../ paths target and
 	// which the checkout handler already trusts via git worktree list).
 	ws.mutex.RLock()
 	daemonRoot := ws.daemonRoot
 	ws.mutex.RUnlock()
-	if !worktreePathAllowed(absPath, daemonRoot, workspaceRoot) {
+	if !worktreePathAllowed(absPath, daemonRoot, projectFolder) {
 		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within the workspace or sit beside it (../)")
 		return
 	}
 
 	// Validate branch name
-	validateCmd := ws.gitCommandForWorkspace(workspaceRoot, "check-ref-format", "--branch", req.Branch)
+	validateCmd := ws.gitCommandForProjectFolder(projectFolder, "check-ref-format", "--branch", req.Branch)
 	if output, err := validateCmd.CombinedOutput(); err != nil {
 		writeJSONErr(w, http.StatusBadRequest, "invalid_branch_name", fmt.Sprintf("Invalid branch name: %s", strings.TrimSpace(string(output))))
 		return
@@ -218,7 +218,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 		args = append(args, "-b", req.Branch, absPath)
 	}
 
-	cmd := ws.gitCommandForWorkspace(workspaceRoot, args...)
+	cmd := ws.gitCommandForProjectFolder(projectFolder, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		outputStr := string(output)
@@ -265,17 +265,17 @@ func (ws *ReactWebServer) handleAPIGitWorktreeRemove(w http.ResponseWriter, r *h
 		return
 	}
 
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 
-	// Resolve relative to the workspace root (see the create handler).
-	absPath, err := filepathAbsEvalFrom(req.Path, workspaceRoot)
+	// Resolve relative to the project folder (see the create handler).
+	absPath, err := filepathAbsEvalFrom(req.Path, projectFolder)
 	if err != nil {
 		writeJSONErr(w, http.StatusBadRequest, "invalid_worktree_path", fmt.Sprintf("Invalid worktree path: %v", err))
 		return
 	}
 
 	// Prevent removing the current worktree
-	if absPath == workspaceRoot {
+	if absPath == projectFolder {
 		writeJSONErr(w, http.StatusBadRequest, "cannot_remove_current_worktree", "Cannot remove the current worktree")
 		return
 	}
@@ -283,12 +283,12 @@ func (ws *ReactWebServer) handleAPIGitWorktreeRemove(w http.ResponseWriter, r *h
 	ws.mutex.RLock()
 	daemonRoot := ws.daemonRoot
 	ws.mutex.RUnlock()
-	if !worktreePathAllowed(absPath, daemonRoot, workspaceRoot) {
+	if !worktreePathAllowed(absPath, daemonRoot, projectFolder) {
 		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within the workspace or sit beside it (../)")
 		return
 	}
 
-	cmd := ws.gitCommandForWorkspace(workspaceRoot, "worktree", "remove", "--force", absPath)
+	cmd := ws.gitCommandForProjectFolder(projectFolder, "worktree", "remove", "--force", absPath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_remove_worktree", fmt.Sprintf("Failed to remove worktree: %v\nOutput: %s", err, string(output)))
@@ -298,7 +298,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeRemove(w http.ResponseWriter, r *h
 	// Prune now that the worktree is gone so a stale .git/worktrees/<name>
 	// registration can't make a later `worktree add` to the same path fail
 	// with "already exists". Mirrors the subagent-isolation cleanup path.
-	if pruneCmd := ws.gitCommandForWorkspace(workspaceRoot, "worktree", "prune"); pruneCmd != nil {
+	if pruneCmd := ws.gitCommandForProjectFolder(projectFolder, "worktree", "prune"); pruneCmd != nil {
 		_ = pruneCmd.Run()
 	}
 
@@ -333,17 +333,17 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCheckout(w http.ResponseWriter, r 
 		return
 	}
 
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 
-	// Resolve relative to the workspace root (see the create handler).
-	absPath, err := filepathAbsEvalFrom(req.Path, workspaceRoot)
+	// Resolve relative to the project folder (see the create handler).
+	absPath, err := filepathAbsEvalFrom(req.Path, projectFolder)
 	if err != nil {
 		writeJSONErr(w, http.StatusBadRequest, "invalid_worktree_path", fmt.Sprintf("Invalid worktree path: %v", err))
 		return
 	}
 
 	// Check if the path exists and is a valid worktree
-	checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "worktree", "list", "--porcelain")
+	checkCmd := ws.gitCommandForProjectFolder(projectFolder, "worktree", "list", "--porcelain")
 	checkOutput, err := checkCmd.CombinedOutput()
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_list_worktrees", fmt.Sprintf("Failed to list worktrees: %v", err))
@@ -366,17 +366,17 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCheckout(w http.ResponseWriter, r 
 		return
 	}
 
-	// Switch workspace root directly — do NOT call setClientWorkspaceRoot
+	// Switch project folder directly — do NOT call setClientProjectFolder
 	// because it nukes all chat sessions. We preserve chat sessions but
-	// clear transient state (agent, terminals) like setClientWorkspaceRoot does.
+	// clear transient state (agent, terminals) like setClientProjectFolder does.
 	//
 	// The worktree was already validated via git worktree list --porcelain
 	// above, so we trust git as the source of truth and do not reject
-	// sibling worktrees with an isWithinWorkspace(daemonRoot) check.
+	// sibling worktrees with an isWithinProjectFolder(daemonRoot) check.
 	clientID := ws.resolveClientID(r)
 	ws.mutex.Lock()
 	ctx := ws.getOrCreateClientContextLocked(clientID)
-	// A checkout moves the whole workspace (every chat follows below), so it
+	// A checkout moves the whole project folder (every chat follows below), so it
 	// becomes the project root that chats without a worktree, worktree
 	// clears and a recreated context return to. Only the default client
 	// moves the server-level root; the remembered per-client selection is
@@ -385,18 +385,18 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCheckout(w http.ResponseWriter, r 
 	ws.setClientActiveRootLocked(clientID, ctx, absPath)
 
 	// Update chat session worktree paths: follow the switch for all sessions
-	// whose WorktreePath is empty or matches the previous workspace root.
+	// whose WorktreePath is empty or matches the previous project folder.
 	// Do NOT clobber a chat explicitly bound to a different worktree.
 	for _, cs := range ctx.ChatSessions {
 		cs.mu.Lock()
-		if cs.WorktreePath == "" || cs.WorktreePath == workspaceRoot {
+		if cs.WorktreePath == "" || cs.WorktreePath == projectFolder {
 			cs.WorktreePath = absPath
 		}
 		cs.mu.Unlock()
 	}
 
 	// Close terminal sessions before clearing the reference, so active PTY
-	// processes in the old workspace are cleaned up rather than leaked.
+	// processes in the old project folder are cleaned up rather than leaked.
 	if ctx.Terminal != nil {
 		ctx.Terminal.CloseAllSessions()
 	}
@@ -404,11 +404,11 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCheckout(w http.ResponseWriter, r 
 	ctx.Terminal = nil
 	ws.mutex.Unlock()
 
-	// Publish event to notify frontend of workspace change
-	ws.publishClientEvent(clientID, events.EventTypeWorkspaceChanged, map[string]interface{}{
+	// Publish event to notify frontend of project folder change
+	ws.publishClientEvent(clientID, events.EventTypeProjectFolderChanged, map[string]interface{}{
 		"daemon_root":             ws.GetDaemonRoot(),
 		"workspace_root":          absPath,
-		"previous_workspace_root": workspaceRoot,
+		"previous_workspace_root": projectFolder,
 		"source":                  "checkout",
 	})
 
@@ -425,20 +425,20 @@ func (wt WorktreeInfo) IsZero() bool {
 }
 
 // worktreePathAllowed reports whether a worktree path is creatable from
-// this workspace: inside the daemon root, the workspace itself, or the
-// workspace's PARENT directory (git's conventional sibling-worktree
+// this project folder: inside the daemon root, the project folder itself, or the
+// project folder's PARENT directory (git's conventional sibling-worktree
 // location — "../feature-x"). The checkout handler already trusts sibling
 // worktrees validated by git worktree list; this extends the same trust to
 // creation and removal so the ../ form the UI documents actually works.
-func worktreePathAllowed(absPath, daemonRoot, workspaceRoot string) bool {
-	if isWithinWorkspace(absPath, daemonRoot) || absPath == daemonRoot {
+func worktreePathAllowed(absPath, daemonRoot, projectFolder string) bool {
+	if isWithinProjectFolder(absPath, daemonRoot) || absPath == daemonRoot {
 		return true
 	}
-	if workspaceRoot == "" {
+	if projectFolder == "" {
 		return false
 	}
-	parent := filepath.Dir(workspaceRoot)
-	return absPath == parent || isWithinWorkspace(absPath, parent)
+	parent := filepath.Dir(projectFolder)
+	return absPath == parent || isWithinProjectFolder(absPath, parent)
 }
 
 // sameWorktreePath reports whether a path from `git worktree list` names

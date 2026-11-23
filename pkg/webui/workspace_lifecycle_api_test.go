@@ -22,7 +22,7 @@ func newLifecycleServer(t *testing.T, root string) *ReactWebServer {
 	ws := &ReactWebServer{
 		eventBus:       events.NewEventBus(),
 		clientContexts: map[string]*webClientContext{},
-		workspaceRoot:  root,
+		projectFolder:  root,
 	}
 	ws.clientContexts["c1"] = &webClientContext{
 		ChatSessions:  map[string]*chatSession{"chat-1": newChatSession("chat-1", "Chat")},
@@ -184,7 +184,7 @@ func TestPrepareStop_DrainsPersistsCheckpointsAndIsIdempotent(t *testing.T) {
 	for !sawNotice {
 		select {
 		case ev := <-sub:
-			if ev.Type == events.EventTypeWorkspaceStopping {
+			if ev.Type == events.EventTypeDevSpaceStopping {
 				sawNotice = true
 				if ev.Data.(map[string]interface{})["reason"] != "idle" {
 					t.Fatalf("notice payload = %v", ev.Data)
@@ -232,13 +232,13 @@ func TestPrepareStop_RejectsNewQueries(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	ws.runChatQuery(rec, httptest.NewRequest(http.MethodPost, "/api/query", nil), "c1", "chat-1", "hello", chatQueryOptions{})
-	if rec.Code != http.StatusServiceUnavailable || !strings.Contains(rec.Body.String(), errCodeWorkspaceStopping) {
+	if rec.Code != http.StatusServiceUnavailable || !strings.Contains(rec.Body.String(), errCodeDevSpaceStopping) {
 		t.Fatalf("status %d body %s", rec.Code, rec.Body)
 	}
 	select {
 	case ev := <-sub:
 		data := ev.Data.(map[string]interface{})
-		if ev.Type != events.EventTypeError || data["terminal"] != true || data["chat_id"] != "chat-1" || data["code"] != errCodeWorkspaceStopping {
+		if ev.Type != events.EventTypeError || data["terminal"] != true || data["chat_id"] != "chat-1" || data["code"] != errCodeDevSpaceStopping {
 			t.Fatalf("rejection event = %s %v", ev.Type, data)
 		}
 	case <-time.After(time.Second):
@@ -286,7 +286,7 @@ func TestLifecycleRoutes_AuthAndNotice(t *testing.T) {
 	select {
 	case ev := <-sub:
 		data := ev.Data.(map[string]interface{})
-		if ev.Type != events.EventTypeWorkspaceStopping || data["reason"] != "idle" || data["deadline_seconds"] != 600 {
+		if ev.Type != events.EventTypeDevSpaceStopping || data["reason"] != "idle" || data["deadline_seconds"] != 600 {
 			t.Fatalf("notice event = %s %v", ev.Type, data)
 		}
 		if !ws.shouldForwardEventToConnection(ev, &ConnectionInfo{ClientID: "any", ChatID: "chat-x"}) {

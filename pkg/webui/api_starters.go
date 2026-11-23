@@ -14,7 +14,7 @@
 // The handlers are stateless with respect to client context: the client
 // sends a real absolute target path (the new-project dialog's file
 // browser is rooted at the daemon root and returns absolute paths), so
-// neither a workspace root nor a client ID is consulted.
+// neither a project folder nor a client ID is consulted.
 package webui
 
 import (
@@ -223,14 +223,14 @@ func (ws *ReactWebServer) handleAPIStartersInstantiate(w http.ResponseWriter, r 
 	// Contain the instantiate target to the daemon root.
 	// Without this, a client could point `path` anywhere the daemon process
 	// can write and drop a full project tree there. Mirror
-	// handleAPIWorkspaceBrowse: resolve the daemon root's symlinks and reject
+	// handleAPIProjectFolderBrowse: resolve the daemon root's symlinks and reject
 	// a canonical target that is neither the root nor strictly under it.
 	daemonRoot := ws.GetDaemonRoot()
 	resolvedDaemonRoot := daemonRoot
 	if evaled, err := filepath.EvalSymlinks(daemonRoot); err == nil {
 		resolvedDaemonRoot = evaled
 	}
-	if target != resolvedDaemonRoot && !isWithinWorkspace(target, resolvedDaemonRoot) {
+	if target != resolvedDaemonRoot && !isWithinProjectFolder(target, resolvedDaemonRoot) {
 		writeJSONErr(w, http.StatusForbidden, "target_outside_daemon_root",
 			"target directory is outside the daemon root")
 		return

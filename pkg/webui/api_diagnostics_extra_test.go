@@ -70,7 +70,7 @@ func TestHandleAPIDiagnostics_WhitespaceOnlyPath(t *testing.T) {
 	}
 }
 
-func TestHandleAPIDiagnostics_PathOutsideWorkspace(t *testing.T) {
+func TestHandleAPIDiagnostics_PathOutsideProjectFolder(t *testing.T) {
 	ws, _ := newTestWebServer(t)
 
 	outside := filepath.Join(t.TempDir(), "passwd")

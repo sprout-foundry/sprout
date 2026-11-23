@@ -136,14 +136,14 @@ func TestWorkerSpawn_FocusedContextNoParentHistory(t *testing.T) {
 
 	dir := t.TempDir()
 	writeFile(t, dir, "note.txt", "NOTE_MARKER: the file content the worker must summarise")
-	agent.workspaceRoot = dir
+	agent.projectFolder = dir
 
 	// Distinct parent conversation history that must NOT leak into the
 	// subagent's prompt.
 	agent.AddMessage(api.Message{Role: "user", Content: "HISTORY_MARKER: earlier we discussed the database schema and the migration plan"})
 	agent.AddMessage(api.Message{Role: "assistant", Content: "HISTORY_MARKER: noted, I will keep the schema changes in mind"})
 
-	spec, err := prepareSubagentLaunch(filesystem.WithWorkspaceRoot(context.Background(), dir), agent, map[string]interface{}{
+	spec, err := prepareSubagentLaunch(filesystem.WithProjectFolder(context.Background(), dir), agent, map[string]interface{}{
 		"persona": "worker",
 		"prompt":  "TASK_MARKER: summarise the provided file; reply with a one-line summary",
 		"files":   "note.txt",

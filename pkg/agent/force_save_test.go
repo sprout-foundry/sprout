@@ -18,7 +18,7 @@ func TestForceSaveAndExitPersistsState(t *testing.T) {
 
 		a := &Agent{state: NewAgentStateManager(false)}
 		a.SetSessionID("forcesave")
-		a.SetWorkspaceRoot(workingDir)
+		a.SetProjectFolder(workingDir)
 		a.state.SetMessages([]api.Message{{Role: "user", Content: "saved on force quit"}})
 		a.ForceSaveAndExit(3)
 		return

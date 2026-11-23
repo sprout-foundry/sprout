@@ -82,19 +82,19 @@ func (a *Agent) GetContextProfile() configuration.ContextProfile {
 	return a.contextProfile
 }
 
-// SetWorkspaceRoot records the logical workspace root for this agent instance.
-func (a *Agent) SetWorkspaceRoot(workspaceRoot string) {
-	a.workspaceRootMu.Lock()
-	defer a.workspaceRootMu.Unlock()
-	a.workspaceRoot = strings.TrimSpace(workspaceRoot)
-	tools.StartCodeIndex(a.workspaceRoot)
+// SetProjectFolder records the logical project folder for this agent instance.
+func (a *Agent) SetProjectFolder(projectFolder string) {
+	a.projectFolderMu.Lock()
+	defer a.projectFolderMu.Unlock()
+	a.projectFolder = strings.TrimSpace(projectFolder)
+	tools.StartCodeIndex(a.projectFolder)
 }
 
-// GetWorkspaceRoot returns the logical workspace root for this agent instance.
-func (a *Agent) GetWorkspaceRoot() string {
-	a.workspaceRootMu.RLock()
-	defer a.workspaceRootMu.RUnlock()
-	return strings.TrimSpace(a.workspaceRoot)
+// GetProjectFolder returns the logical project folder for this agent instance.
+func (a *Agent) GetProjectFolder() string {
+	a.projectFolderMu.RLock()
+	defer a.projectFolderMu.RUnlock()
+	return strings.TrimSpace(a.projectFolder)
 }
 
 // SetConfigOverrides stores session-scoped config overrides on the agent.
@@ -108,9 +108,9 @@ func (a *Agent) GetConfigOverrides() map[string]interface{} {
 	return a.state.GetConfigOverrides()
 }
 
-// currentWorkspaceRoot resolves the agent workspace, falling back to the process cwd.
-func (a *Agent) currentWorkspaceRoot() string {
-	if root := a.GetWorkspaceRoot(); root != "" {
+// currentProjectFolder resolves the agent project folder, falling back to the process cwd.
+func (a *Agent) currentProjectFolder() string {
+	if root := a.GetProjectFolder(); root != "" {
 		return root
 	}
 	if wd, err := os.Getwd(); err == nil {
@@ -234,7 +234,7 @@ func (a *Agent) GetSubagentRunner() *SubagentRunner {
 			EventBus:      a.eventBus,
 			TodoManager:   a.todoMgr,
 			ConfigManager: a.configManager,
-			WorkspaceRoot: a.GetWorkspaceRoot(),
+			ProjectFolder: a.GetProjectFolder(),
 		})
 	}
 	return a.subagentRunner

@@ -35,7 +35,7 @@ var fileTouchingTools = map[string]bool{
 //   - filePath is the user-supplied path (may be relative or absolute).
 //   - resolvedPath is the symlink-evaluated canonical target (empty if the path
 //     does not exist or the caller did not perform resolution).
-//   - When resolvedPath is non-empty, classifyFileAccess uses it for workspace
+//   - When resolvedPath is non-empty, classifyFileAccess uses it for project folder
 //     containment and sensitive-path checks, falling back to filePath if the
 //     resolved target does not exist.
 //   - When resolvedPath is empty, the function uses filePath directly for the
@@ -61,7 +61,7 @@ func extractFilePathAndMode(toolName string, args map[string]interface{}) (fileP
 type FileAccessDecision int
 
 const (
-	// FileAccessAllow: path is in an allowlisted location (workspace root,
+	// FileAccessAllow: path is in an allowlisted location (project folder,
 	// session-allowlisted folder, or /tmp).
 	FileAccessAllow FileAccessDecision = iota
 	// FileAccessPrompt: path is outside the allowlist and not hard-blocked;
@@ -82,7 +82,7 @@ const (
 //   - mode: "read" or "write" (controls which allowlists apply)
 //
 // Returns:
-//   - FileAccessAllow when the path lands in workspace root, session-allowlisted
+//   - FileAccessAllow when the path lands in project folder, session-allowlisted
 //     folder, /tmp, or another gate-bypass-visible location.
 //   - FileAccessPrompt when the path is outside the allowlist and not hard-blocked.
 //   - FileAccessDeny when the path targets a known hard-block location or when
@@ -100,8 +100,8 @@ func (a *Agent) classifyFileAccess(filePath, resolvedPath, mode string) FileAcce
 	if filesystem.IsUnderTmpPath(target) {
 		return FileAccessAllow
 	}
-	// Workspace root and subdirectories are always allowed.
-	if a.IsUnderWorkspaceRoot(target) {
+	// Project folder and subdirectories are always allowed.
+	if a.IsUnderProjectFolder(target) {
 		return FileAccessAllow
 	}
 	// Session-allowlisted folders (workflow-declared allowed_paths + user
@@ -166,7 +166,7 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 	// Sensitive-tier paths (system dirs, off-CWD home) still prompt
 	// even under elevation — they're never session-allowlisted.
 	if agent.IsSessionElevated() {
-		tier := ClassifyPathAccess(filePath, agent.GetWorkspaceRoot(), detectHomeDir(), agent.effectiveCwd())
+		tier := ClassifyPathAccess(filePath, agent.GetProjectFolder(), detectHomeDir(), agent.effectiveCwd())
 		if tier != PathTierSensitive {
 			agent.debugLog("[UNLOCK] Session elevated: automatically allowing file access outside working directory: %s (tier=%s)\n", filePath, tier)
 			return filesystem.WithSecurityBypass(ctx), true
@@ -186,11 +186,11 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 		// surface ErrOutsideWorkingDirectory. When the path is on the
 		// allowlist but the mode says read_only, return (ctx, false)
 		// so the caller returns a workflow-specific error instead
-		// of the generic off-workspace sentinel.
+		// of the generic off-project-folder sentinel.
 		if errors.Is(err, filesystem.ErrWriteOutsideWorkingDirectory) && !agent.IsFolderSessionWriteAllowed(filePath) {
 			agent.debugLog("[APPROVAL] write blocked: %s is declared read_only in the active workflow's allowed_paths; filesystem gate refuses to authorize write\n", filePath)
 			// Return a workflow-specific error so the caller surfaces the
-			// workflow-specific message instead of the generic off-workspace
+			// workflow-specific message instead of the generic off-project-folder
 			// sentinel. errors.Is still matches via %w wrapping.
 			return ctx, false
 		}
@@ -201,12 +201,12 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 	// Classify the path so we can pick the right dialog mode and
 	// scope. Sensitive (system dirs, off-CWD home) gets 2 options;
 	// External gets 3 options including "Allow folder this session".
-	tier := ClassifyPathAccess(filePath, agent.GetWorkspaceRoot(), detectHomeDir(), agent.effectiveCwd())
+	tier := ClassifyPathAccess(filePath, agent.GetProjectFolder(), detectHomeDir(), agent.effectiveCwd())
 	folder := filepath.Dir(filePath)
 
 	// Display target = the user-typed path, with the canonical target
 	// appended when it diverges (i.e. when filePath is a symlink).
-	// Without this, a workspace symlink to /etc/passwd would prompt
+	// Without this, a project folder symlink to /etc/passwd would prompt
 	// "Allow access to workspace/link?" and approval would silently
 	// widen access to /etc/passwd.
 	displayPath := filePath

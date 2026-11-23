@@ -22,7 +22,7 @@ func resolveParallelTaskPersonas(ctx context.Context, a *Agent, tasks []Subagent
 	if len(tasks) == 0 {
 		return nil
 	}
-	workspaceRoot, err := filepath.Abs(a.currentWorkspaceRoot())
+	projectFolder, err := filepath.Abs(a.currentProjectFolder())
 	if err != nil {
 		return agenterrors.NewConfig("failed to resolve absolute workspace path", err)
 	}
@@ -34,7 +34,7 @@ func resolveParallelTaskPersonas(ctx context.Context, a *Agent, tasks []Subagent
 		if explicit && a.GetConfig() != nil && a.GetConfig().GetSubagentType(persona) == nil {
 			return agenterrors.NewValidation(fmt.Sprintf("task %s: unknown or disabled persona %q", tasks[i].ID, tasks[i].Persona), nil)
 		}
-		provider, model, role, systemPrompt, err := resolveSubagentProviderModel(a, persona, explicit, workspaceRoot)
+		provider, model, role, systemPrompt, err := resolveSubagentProviderModel(a, persona, explicit, projectFolder)
 		if err != nil {
 			return agenterrors.Wrap(err, fmt.Sprintf("task %s", tasks[i].ID))
 		}
@@ -46,7 +46,7 @@ func resolveParallelTaskPersonas(ctx context.Context, a *Agent, tasks []Subagent
 
 		if isReviewerPersona(a, persona) {
 			if reviewContext == nil {
-				rc := buildReviewerChangeContext(ctx, workspaceRoot, changeContextBudgetFor(a.subagentContextWindow(provider, model)))
+				rc := buildReviewerChangeContext(ctx, projectFolder, changeContextBudgetFor(a.subagentContextWindow(provider, model)))
 				reviewContext = &rc
 			}
 			if *reviewContext != "" {

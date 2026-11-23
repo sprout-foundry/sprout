@@ -52,18 +52,18 @@ func writeChangeDir(t *testing.T, changesDir, hash, filename, description, model
 	}
 }
 
-// setupFileChangeTest creates a temp workspace with .sprout/changes and
+// setupFileChangeTest creates a temp project folder with .sprout/changes and
 // a session that points to it, so discoverChangeDirs finds it.
-func setupFileChangeTest(t *testing.T) (workspace, changesDir string) {
+func setupFileChangeTest(t *testing.T) (projectFolder, changesDir string) {
 	t.Helper()
 	dir := t.TempDir()
-	workspace = dir
-	changesDir = filepath.Join(workspace, ".sprout", "changes")
+	projectFolder = dir
+	changesDir = filepath.Join(projectFolder, ".sprout", "changes")
 	if err := os.MkdirAll(changesDir, 0o755); err != nil {
 		t.Fatalf("mkdir changes dir: %v", err)
 	}
 
-	// Create a session pointing to this workspace so discoverChangeDirs finds it.
+	// Create a session pointing to this project folder so discoverChangeDirs finds it.
 	stateDir := filepath.Join(dir, "sessions")
 	restore := agent.SetStateDirFuncForTesting(func() (string, error) {
 		return stateDir, nil
@@ -71,12 +71,12 @@ func setupFileChangeTest(t *testing.T) (workspace, changesDir string) {
 	t.Cleanup(restore)
 
 	state := emptyConversationState("fc-test-session")
-	state.WorkingDirectory = workspace
-	if err := agent.WriteTestSessionFile(stateDir, state.SessionID, workspace, &state); err != nil {
+	state.WorkingDirectory = projectFolder
+	if err := agent.WriteTestSessionFile(stateDir, state.SessionID, projectFolder, &state); err != nil {
 		t.Fatalf("WriteTestSessionFile: %v", err)
 	}
 
-	return workspace, changesDir
+	return projectFolder, changesDir
 }
 
 const sampleGoOriginal = `package main

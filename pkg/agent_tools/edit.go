@@ -24,7 +24,7 @@ func EditFile(ctx context.Context, filePath, oldString, newString string) (strin
 	// Step 2: Resolve and validate file. The gate is consulted only
 	// here — the rest of the edit operates on an already-resolved
 	// path, so a successful resolve means the work happens inside the
-	// approved scope (workspace, session-allowed folder, or bypass
+	// approved scope (project folder, session-allowed folder, or bypass
 	// from a one-shot / elevation approval).
 	cleanPath, originalMode, err := resolveAndValidateFileWithGate(ctx, filePath)
 	if err != nil {

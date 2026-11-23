@@ -95,7 +95,7 @@ func TestCommitHandler_GeneratesConventionalSubjectWhenMessageOmitted(t *testing
 	}
 
 	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		ToolFuncs:     &ToolFuncSet{GenerateCommitMessage: gen},
 	}, map[string]any{"notes": "context notes"})
 	require.NoError(t, err)
@@ -129,7 +129,7 @@ func TestCommitHandler_MessageWinsOverNotes(t *testing.T) {
 	}
 
 	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		ToolFuncs:     &ToolFuncSet{GenerateCommitMessage: gen},
 	}, map[string]any{"message": "explicit: my message", "notes": "ignored context"})
 	require.NoError(t, err)
@@ -152,7 +152,7 @@ func TestCommitHandler_GeneratorFailureCommitsNothing(t *testing.T) {
 	}
 
 	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		ToolFuncs:     &ToolFuncSet{GenerateCommitMessage: gen},
 	}, map[string]any{"notes": "context notes"})
 	require.NoError(t, err)
@@ -174,7 +174,7 @@ func TestCommitHandler_MissingGeneratorCommitsNothing(t *testing.T) {
 	setPackageGenerateCommitMessage(t, nil) // ensure the fallback var is clear too
 
 	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		ToolFuncs:     &ToolFuncSet{}, // GenerateCommitMessage is nil
 	}, map[string]any{"notes": "context notes"})
 	require.NoError(t, err)
@@ -196,7 +196,7 @@ func TestCommitHandler_PackageLevelGeneratorFallback(t *testing.T) {
 	})
 
 	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
-		WorkspaceRoot: dir, // no ToolFuncs → package-var fallback
+		ProjectFolder: dir, // no ToolFuncs → package-var fallback
 	}, map[string]any{"notes": "context notes"})
 	require.NoError(t, err)
 	require.False(t, res.IsError, "tool output: %s", res.Output)
@@ -217,7 +217,7 @@ func TestCommitHandler_NoStagedChanges(t *testing.T) {
 	}
 
 	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		ToolFuncs:     &ToolFuncSet{GenerateCommitMessage: gen},
 	}, map[string]any{"notes": "context notes"})
 	require.NoError(t, err)

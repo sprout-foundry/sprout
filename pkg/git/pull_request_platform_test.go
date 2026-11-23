@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// platformEnv makes the test process look like a platform workspace whose
+// platformEnv makes the test process look like a platform project folder whose
 // platform API is srv.
 func platformEnv(t *testing.T, srv *httptest.Server) {
 	t.Setenv("PLATFORM_API_URL", srv.URL)

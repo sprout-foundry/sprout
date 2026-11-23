@@ -309,7 +309,7 @@ func TestApplyRecoveredState_PrimesSupplementOnce(t *testing.T) {
 
 	a := newScopedStateAgent()
 	a.initSubManagers()
-	a.SetWorkspaceRoot(workingDir)
+	a.SetProjectFolder(workingDir)
 
 	recovered := &ConversationState{
 		Messages:             []api.Message{{Role: "user", Content: "recovered"}},

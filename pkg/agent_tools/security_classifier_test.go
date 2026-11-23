@@ -128,7 +128,7 @@ func TestClassifyToolCallCategories(t *testing.T) {
 		{"shell empty command", "shell_command", map[string]interface{}{"command": ""}, RiskCategoryReadOnly},
 		{"shell no command key", "shell_command", map[string]interface{}{}, RiskCategoryReadOnly},
 
-		// write_file — normal workspace path
+		// write_file — normal project folder path
 		{"write_file workspace", "write_file", map[string]interface{}{"path": "src/main.go", "content": "test"}, RiskCategoryFileWrite},
 		// write_file — tmp directory
 		{"write_file tmp", "write_file", map[string]interface{}{"path": "/tmp/test.txt", "content": "test"}, RiskCategoryFileWrite},
@@ -711,7 +711,7 @@ func TestClassifyChainedCommand(t *testing.T) {
 		{"&& safe rm -rf then safe", "rm -rf dist/ && mkdir -p dist && echo rebuilt", SecuritySafe},
 
 		// ── || chains ──────────────────────────────────────────────
-		// Both ls and mkdir are safe workspace operations. Under the
+		// Both ls and mkdir are safe project folder operations. Under the
 		// behavior-based classifier (default-SAFE), the full chain is SAFE.
 		{"|| two safe", "ls /tmp || mkdir /tmp", SecuritySafe},
 		{"|| safe then caution", "ls || rm -rf src/", SecurityCaution},

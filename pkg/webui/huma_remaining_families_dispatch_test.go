@@ -56,7 +56,7 @@ func TestHumaRemainingFamiliesDispatch(t *testing.T) {
 		return b
 	}
 
-	// --- workspace/instances: GET /api/workspace (workspaceGet) ---
+	// --- workspace/instances: GET /api/workspace (projectFolderGet) ---
 	resp := do(t, http.MethodGet, "/api/workspace", "")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /api/workspace: status = %d, want %d (body: %s)", resp.StatusCode, http.StatusOK, readAll(t, resp))
@@ -70,7 +70,7 @@ func TestHumaRemainingFamiliesDispatch(t *testing.T) {
 		t.Fatalf("GET /api/workspace: payload = %v, want a workspace_root key", wsGet)
 	}
 
-	// POST /api/workspace (workspaceSet) — empty path is 400, proving the
+	// POST /api/workspace (projectFolderSet) — empty path is 400, proving the
 	// POST operation is registered and the handler ran (not a 404 catch-all).
 	resp = do(t, http.MethodPost, "/api/workspace", `{}`)
 	if resp.StatusCode != http.StatusBadRequest {
@@ -92,7 +92,7 @@ func TestHumaRemainingFamiliesDispatch(t *testing.T) {
 	}
 
 	// --- sync/txn: GET /api/txn/status (txnStatus, read-only) ---
-	// The test workspace is a fresh temp dir (not a git repo), so the
+	// The test project folder is a fresh temp dir (not a git repo), so the
 	// preflight reports in_git_repo=false. Proves the GET operation is the
 	// read-only half (not the POSTs).
 	resp = do(t, http.MethodGet, "/api/txn/status", "")

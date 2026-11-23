@@ -44,7 +44,7 @@ func makeFileRewindAgent(t *testing.T, dir, path, original, newContent, modified
 	}, "test")
 	a := &Agent{changeTracker: tracker, state: NewAgentStateManager(false)}
 	tracker.SetView(a.changesView())
-	a.SetWorkspaceRoot(dir)
+	a.SetProjectFolder(dir)
 	return a
 }
 
@@ -255,7 +255,7 @@ func TestRewind_WithoutFileRevert(t *testing.T) {
 	defer a.Shutdown()
 
 	dir := t.TempDir()
-	a.SetWorkspaceRoot(dir)
+	a.SetProjectFolder(dir)
 
 	// Create and track a file
 	path := filepath.Join(dir, "tracked.txt")

@@ -83,10 +83,10 @@ func (c *InfoCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// Cost
 	totalCost := chatAgent.GetTotalCost()
 
-	// Workspace
-	workspace := chatAgent.GetWorkspaceRoot()
-	if workspace == "" {
-		workspace = "(none)"
+	// Project folder
+	projectFolder := chatAgent.GetProjectFolder()
+	if projectFolder == "" {
+		projectFolder = "(none)"
 	}
 
 	// Persona
@@ -113,7 +113,7 @@ func (c *InfoCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	fmt.Fprintf(c.out(), "Agent: %s (%s)\n", model, provider)
 	fmt.Fprintf(c.out(), "Context: %d/%d tokens (%.1f%%)\n", used, limit, pct)
 	fmt.Fprintf(c.out(), "Cost: $%.6f\n", totalCost)
-	fmt.Fprintf(c.out(), "Workspace: %s\n", workspace)
+	fmt.Fprintf(c.out(), "Workspace: %s\n", projectFolder)
 	fmt.Fprintf(c.out(), "Persona: %s\n", persona)
 	_, _ = fmt.Fprintf(c.out(), "Risk profile: %s\n", riskProfile)
 	fmt.Fprintf(c.out(), "Subagent provider: %s model: %s\n", subagentProvider, subagentModel)
@@ -130,7 +130,7 @@ type infoJSONPayload struct {
 	ContextLimit     int     `json:"context_limit"`
 	ContextPct       float64 `json:"context_pct"`
 	Cost             float64 `json:"cost"`
-	Workspace        string  `json:"workspace"`
+	ProjectFolder    string  `json:"workspace"`
 	Persona          string  `json:"persona"`
 	RiskProfile      string  `json:"risk_profile"`
 	SubagentProvider string  `json:"subagent_provider"`
@@ -158,9 +158,9 @@ func (c *InfoCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Agen
 		pct = float64(used) / float64(limit) * 100
 	}
 
-	workspace := chatAgent.GetWorkspaceRoot()
-	if workspace == "" {
-		workspace = "(none)"
+	projectFolder := chatAgent.GetProjectFolder()
+	if projectFolder == "" {
+		projectFolder = "(none)"
 	}
 
 	persona := chatAgent.GetActivePersona()
@@ -186,7 +186,7 @@ func (c *InfoCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Agen
 		ContextLimit:     limit,
 		ContextPct:       pct,
 		Cost:             chatAgent.GetTotalCost(),
-		Workspace:        workspace,
+		ProjectFolder:    projectFolder,
 		Persona:          persona,
 		RiskProfile:      riskProfile,
 		SubagentProvider: subagentProvider,

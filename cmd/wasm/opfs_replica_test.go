@@ -103,14 +103,14 @@ func TestInitOPFSReplicaFunc_MultipleFiles(t *testing.T) {
 
 	manifest := []manifestEntry{
 		{
-			Path:                  "src/a.go",
-			Size:                  100,
-			WorkspaceFileMetadata: agent.WorkspaceFileMetadata{BrowserSeq: 1},
+			Path:                      "src/a.go",
+			Size:                      100,
+			ProjectFolderFileMetadata: agent.ProjectFolderFileMetadata{BrowserSeq: 1},
 		},
 		{
-			Path:                  "src/b.go",
-			Size:                  200,
-			WorkspaceFileMetadata: agent.WorkspaceFileMetadata{BrowserSeq: 2},
+			Path:                      "src/b.go",
+			Size:                      200,
+			ProjectFolderFileMetadata: agent.ProjectFolderFileMetadata{BrowserSeq: 2},
 		},
 	}
 	data, _ := json.Marshal(manifest)
@@ -255,7 +255,7 @@ func TestSyncOPFSReplicaUpsert_WithMetadata(t *testing.T) {
 	patch := patchEvent{
 		Op:   "upsert",
 		Path: "src/app.go",
-		Metadata: &agent.WorkspaceFileMetadata{
+		Metadata: &agent.ProjectFolderFileMetadata{
 			BrowserSeq:        5,
 			ContainerSeq:      3,
 			LastSyncedBrowser: 4,
@@ -297,7 +297,7 @@ func TestSyncOPFSReplicaUpsert_WithContentBase64(t *testing.T) {
 		Op:            "upsert",
 		Path:          "src/hello.go",
 		ContentBase64: contentB64,
-		Metadata:      &agent.WorkspaceFileMetadata{BrowserSeq: 1},
+		Metadata:      &agent.ProjectFolderFileMetadata{BrowserSeq: 1},
 	}
 	data, _ := json.Marshal(patch)
 	args := []js.Value{js.ValueOf(string(data))}
@@ -365,7 +365,7 @@ func TestSyncOPFSReplicaUpsert_UpdatesExisting(t *testing.T) {
 			Path:     "src/existing.go",
 			Size:     10,
 			Content:  "bG9sZA==",
-			Metadata: agent.WorkspaceFileMetadata{BrowserSeq: 1},
+			Metadata: agent.ProjectFolderFileMetadata{BrowserSeq: 1},
 		},
 	}
 	opfsReplicaMu.Unlock()
@@ -376,7 +376,7 @@ func TestSyncOPFSReplicaUpsert_UpdatesExisting(t *testing.T) {
 		Op:            "upsert",
 		Path:          "src/existing.go",
 		ContentBase64: contentB64,
-		Metadata:      &agent.WorkspaceFileMetadata{BrowserSeq: 5},
+		Metadata:      &agent.ProjectFolderFileMetadata{BrowserSeq: 5},
 	}
 	data, _ := json.Marshal(patch)
 	args := []js.Value{js.ValueOf(string(data))}
@@ -407,7 +407,7 @@ func TestSyncOPFSReplicaUpsert_MetadataOnly(t *testing.T) {
 	patch := patchEvent{
 		Op:       "upsert",
 		Path:     "src/metaOnly.go",
-		Metadata: &agent.WorkspaceFileMetadata{BrowserSeq: 7},
+		Metadata: &agent.ProjectFolderFileMetadata{BrowserSeq: 7},
 		// No ContentBase64
 	}
 	data, _ := json.Marshal(patch)
@@ -533,7 +533,7 @@ func TestGetOPFSFileFunc_Exists(t *testing.T) {
 			Path:     "src/hello.go",
 			Size:     25,
 			Content:  "cGFja2FnZSBoZWxsbw==",
-			Metadata: agent.WorkspaceFileMetadata{BrowserSeq: 5},
+			Metadata: agent.ProjectFolderFileMetadata{BrowserSeq: 5},
 		},
 	}
 	opfsReplicaMu.Unlock()
@@ -547,7 +547,7 @@ func TestGetOPFSFileFunc_Exists(t *testing.T) {
 	if exists, _ := resMap["exists"].(bool); !exists {
 		t.Errorf("exists = %v, want true", exists)
 	}
-	meta, ok := resMap["metadata"].(agent.WorkspaceFileMetadata)
+	meta, ok := resMap["metadata"].(agent.ProjectFolderFileMetadata)
 	if !ok {
 		t.Fatal("metadata should be WorkspaceFileMetadata")
 	}
@@ -597,7 +597,7 @@ func TestStoreReplicaMetadata_PartialUpdate(t *testing.T) {
 			Path:    "src/app.go",
 			Size:    100,
 			Content: "b3JpZ2luYWw=",
-			Metadata: agent.WorkspaceFileMetadata{
+			Metadata: agent.ProjectFolderFileMetadata{
 				BrowserSeq:        3,
 				ContainerSeq:      7,
 				LastSyncedBrowser: 2,
@@ -607,7 +607,7 @@ func TestStoreReplicaMetadata_PartialUpdate(t *testing.T) {
 	opfsReplicaMu.Unlock()
 
 	// Update only BrowserSeq — other fields should be preserved (merge).
-	metaData := agent.WorkspaceFileMetadata{BrowserSeq: 4}
+	metaData := agent.ProjectFolderFileMetadata{BrowserSeq: 4}
 	metaJSON, _ := json.Marshal(metaData)
 
 	args := []js.Value{js.ValueOf("src/app.go"), js.ValueOf(string(metaJSON))}
@@ -640,7 +640,7 @@ func TestStoreReplicaMetadata_FullUpdate(t *testing.T) {
 	}
 	opfsReplicaMu.Unlock()
 
-	metaData := agent.WorkspaceFileMetadata{
+	metaData := agent.ProjectFolderFileMetadata{
 		BrowserSeq:          10,
 		ContainerSeq:        20,
 		LastSyncedBrowser:   9,
@@ -673,7 +673,7 @@ func TestStoreReplicaMetadata_FullUpdate(t *testing.T) {
 }
 
 func TestStoreReplicaMetadata_MissingPath(t *testing.T) {
-	metaJSON, _ := json.Marshal(agent.WorkspaceFileMetadata{})
+	metaJSON, _ := json.Marshal(agent.ProjectFolderFileMetadata{})
 	args := []js.Value{js.Null(), js.ValueOf(string(metaJSON))}
 	result := storeReplicaMetadataFunc(js.Null(), args)
 
@@ -710,7 +710,7 @@ func TestStoreReplicaMetadata_NewFile(t *testing.T) {
 	opfsReplicaFiles = make(map[string]*replicaFileEntry)
 	opfsReplicaMu.Unlock()
 
-	metaData := agent.WorkspaceFileMetadata{BrowserSeq: 1}
+	metaData := agent.ProjectFolderFileMetadata{BrowserSeq: 1}
 	metaJSON, _ := json.Marshal(metaData)
 
 	args := []js.Value{js.ValueOf("src/new.go"), js.ValueOf(string(metaJSON))}
@@ -740,7 +740,7 @@ func TestStoreReplicaMetadata_ZeroValuesNotOverwritten(t *testing.T) {
 	opfsReplicaFiles = map[string]*replicaFileEntry{
 		"src/x.go": {
 			Path: "src/x.go",
-			Metadata: agent.WorkspaceFileMetadata{
+			Metadata: agent.ProjectFolderFileMetadata{
 				BrowserSeq:   10,
 				ContainerSeq: 8,
 			},
@@ -749,7 +749,7 @@ func TestStoreReplicaMetadata_ZeroValuesNotOverwritten(t *testing.T) {
 	opfsReplicaMu.Unlock()
 
 	// Send ContainerSeq=5 only. BrowserSeq=0 should be ignored.
-	metaData := agent.WorkspaceFileMetadata{BrowserSeq: 0, ContainerSeq: 5}
+	metaData := agent.ProjectFolderFileMetadata{BrowserSeq: 0, ContainerSeq: 5}
 	metaJSON, _ := json.Marshal(metaData)
 
 	args := []js.Value{js.ValueOf("src/x.go"), js.ValueOf(string(metaJSON))}
@@ -772,7 +772,7 @@ func TestStoreReplicaMetadata_UpdatesLastSync(t *testing.T) {
 	opfsReplicaLastSync = time.Time{}
 	opfsReplicaMu.Unlock()
 
-	metaJSON, _ := json.Marshal(agent.WorkspaceFileMetadata{BrowserSeq: 1})
+	metaJSON, _ := json.Marshal(agent.ProjectFolderFileMetadata{BrowserSeq: 1})
 	args := []js.Value{js.ValueOf("x.txt"), js.ValueOf(string(metaJSON))}
 	storeReplicaMetadataFunc(js.Null(), args)
 
@@ -811,7 +811,7 @@ func TestSyncOPFSReplicaUpsert_UpdatesLastSync(t *testing.T) {
 
 	patch := patchEvent{
 		Op: "upsert", Path: "src/x.go",
-		Metadata: &agent.WorkspaceFileMetadata{BrowserSeq: 1},
+		Metadata: &agent.ProjectFolderFileMetadata{BrowserSeq: 1},
 	}
 	data, _ := json.Marshal(patch)
 	args := []js.Value{js.ValueOf(string(data))}

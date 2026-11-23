@@ -161,12 +161,12 @@ func TestLoadConfigWithLayers_DisableLanguageGuard(t *testing.T) {
 	t.Setenv("HOME", home)
 
 	globalDir := filepath.Join(home, ".config", "sprout")
-	workspaceDir := filepath.Join(home, "proj", ".sprout")
+	projectFolderDir := filepath.Join(home, "proj", ".sprout")
 	globalPath := filepath.Join(globalDir, ConfigFileName)
-	workspacePath := filepath.Join(workspaceDir, WorkspaceConfigFileName)
+	projectFolderPath := filepath.Join(projectFolderDir, ProjectFolderConfigFileName)
 
 	load := func() *Config {
-		cfg, err := LoadConfigWithLayers(globalPath, workspacePath, "", globalDir)
+		cfg, err := LoadConfigWithLayers(globalPath, projectFolderPath, "", globalDir)
 		require.NoError(t, err)
 		return cfg
 	}
@@ -176,18 +176,18 @@ func TestLoadConfigWithLayers_DisableLanguageGuard(t *testing.T) {
 	assert.False(t, cfg.DisableLanguageGuard)
 	assert.True(t, cfg.LanguageGuardEnabled(), "no layer naming the key means the guard is on")
 
-	// Global explicitly enables the guard; the workspace explicitly
+	// Global explicitly enables the guard; the project folder explicitly
 	// disables it — the narrower layer's disable must win.
 	writeFile(t, globalPath, `{"version":"2.1","disable_language_guard":false}`)
-	writeFile(t, workspacePath, `{"disable_language_guard":true}`)
+	writeFile(t, projectFolderPath, `{"disable_language_guard":true}`)
 	cfg = load()
 	assert.True(t, cfg.DisableLanguageGuard, "workspace disable_language_guard:true must win")
 	assert.False(t, cfg.LanguageGuardEnabled())
 
-	// The global disables the guard; the workspace never names the key —
+	// The global disables the guard; the project folder never names the key —
 	// the broader disable must persist.
 	writeFile(t, globalPath, `{"version":"2.1","disable_language_guard":true}`)
-	writeFile(t, workspacePath, `{"reasoning_effort":"high"}`)
+	writeFile(t, projectFolderPath, `{"reasoning_effort":"high"}`)
 	cfg = load()
 	assert.True(t, cfg.DisableLanguageGuard, "a silent workspace layer must keep the global disable")
 	assert.False(t, cfg.LanguageGuardEnabled())

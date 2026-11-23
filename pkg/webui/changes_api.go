@@ -15,7 +15,7 @@
 //
 // All endpoints resolve the calling client's Agent via the existing
 // client-context pattern so the panel reflects state for THAT browser
-// session's agent (multi-client / multi-workspace safe). They only read an
+// session's agent (multi-client / multi-project-folder safe). They only read an
 // agent that already exists (peekClientAgent) and never build one: a new
 // agent has no session changes, so the no-agent fallbacks give the same
 // answer without waiting on an agent build.

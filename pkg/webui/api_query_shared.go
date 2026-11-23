@@ -36,7 +36,7 @@ import (
 type chatQueryOptions struct {
 	Provider           string
 	Model              string
-	WorkspaceRoot      string
+	ProjectFolder      string
 	SystemPrompt       string
 	AllowSlashCommands bool
 	// EchoQueryInAccept controls whether the 202 Accepted response body
@@ -153,7 +153,7 @@ func (ws *ReactWebServer) rollbackActiveQuery(clientID, chatID string) {
 // runChatQuery is the unified backend for /api/query and /api/proxy/chat
 // (post-Steer dispatch). It encapsulates the full query lifecycle:
 //
-//  1. Workspace-root resolution (worktree-aware, then request default).
+//  1. Project-folder-root resolution (worktree-aware, then request default).
 //  2. Atomic active-query check-and-set under ws.mutex (TOCTOU-safe).
 //  3. Agent resolution OUTSIDE the lock — provider init can block.
 //  4. Per-query overrides (provider / model / workspace_root /
@@ -194,10 +194,10 @@ func (ws *ReactWebServer) runChatQuery(
 	}
 	ws.markUserActivity()
 
-	// Resolve workspace root with worktree awareness - check if chat has a worktree path
-	workspaceRoot := ws.resolveWorkspaceRootForChat(clientID, chatID)
-	if workspaceRoot == "" {
-		workspaceRoot = ws.getWorkspaceRootForRequest(r)
+	// Resolve project folder with worktree awareness - check if chat has a worktree path
+	projectFolder := ws.resolveProjectFolderForChat(clientID, chatID)
+	if projectFolder == "" {
+		projectFolder = ws.getProjectFolderForRequest(r)
 	}
 
 	ws.mutex.Lock()
@@ -212,13 +212,13 @@ func (ws *ReactWebServer) runChatQuery(
 		writeJSONErr(w, http.StatusConflict, "query_in_progress", "A query is already running for this chat")
 		return
 	}
-	// Workspace gate (SP-142 §3): one workspace, one runner. The chats of a
+	// Project folder gate (SP-142 §3): one project folder, one runner. The chats of a
 	// client context share the same file tree, so a query from another chat
 	// must not start concurrently — the client gets a machine-readable busy
 	// payload naming the running chat so it can offer send-anyway queueing.
 	// The wire mirrors the 142.1 mode_mismatch 409 (error/code) plus the
 	// running-chat fields the protocol names.
-	if busy := ctx.busyChatInWorkspace(chatID); busy != nil {
+	if busy := ctx.busyChatInProjectFolder(chatID); busy != nil {
 		busy.mu.RLock()
 		runningChatID := busy.ID
 		runningChatName := busy.Name
@@ -297,9 +297,9 @@ func (ws *ReactWebServer) runChatQuery(
 		}
 	}
 
-	// Apply per-query workspace root override
-	if opts.WorkspaceRoot != "" {
-		workspaceRoot = opts.WorkspaceRoot
+	// Apply per-query project folder override
+	if opts.ProjectFolder != "" {
+		projectFolder = opts.ProjectFolder
 	}
 
 	// Apply per-query system prompt override (session-scoped, resets after query not needed)
@@ -386,7 +386,7 @@ func (ws *ReactWebServer) runChatQuery(
 			)
 			ws.publishClientEventWithChat(clientID, chatID, events.EventTypeQueryStarted, queryEventData)
 
-			clientAgent.SetWorkspaceRoot(workspaceRoot)
+			clientAgent.SetProjectFolder(projectFolder)
 
 			// Route command output through an invocation-local pipe. This avoids
 			// mutating process-global os.Stdout and allows slash commands from
@@ -455,7 +455,7 @@ func (ws *ReactWebServer) runChatQuery(
 			slog.String("model", clientAgent.GetModel()),
 		)
 		queryStart := time.Now()
-		clientAgent.SetWorkspaceRoot(workspaceRoot)
+		clientAgent.SetProjectFolder(projectFolder)
 		_, err := clientAgent.ProcessQueryWithContinuityAs(agent.QuerySourceWebUI, query)
 		queryDuration := time.Since(queryStart)
 
@@ -525,7 +525,7 @@ func recordQueryCost(a *agent.Agent, chatID string) {
 			a.GetSessionID(),
 			chatID,
 			a.GetSessionName(),
-			a.GetWorkspaceRoot(),
+			a.GetProjectFolder(),
 			billingType,
 			u.Role,
 			u.PromptTokens,

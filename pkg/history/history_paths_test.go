@@ -51,7 +51,7 @@ func TestInitializeHistoryPaths_GlobalScope(t *testing.T) {
 	defer setPathsForTesting(originalChanges, originalRevisions)
 
 	// SP-133: "global" history scope is no longer supported.
-	// changes/ and revisions/ are always workspace-local.
+	// changes/ and revisions/ are always project-folder-local.
 	// Verify that even with HistoryScope="global", the paths remain
 	// project-scoped.
 	config := &configuration.Config{

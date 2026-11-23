@@ -560,7 +560,7 @@ func TestGoAdapterRunDefinitionNoGopls(t *testing.T) {
 		Method:        "definition",
 		Content:       "package main\n",
 		FilePath:      "main.go",
-		WorkspaceRoot: "/tmp",
+		ProjectFolder: "/tmp",
 		Position:      &Position{Line: 1, Column: 1},
 	})
 	if err != nil {
@@ -579,7 +579,7 @@ func TestGoAdapterRunHoverNoGopls(t *testing.T) {
 		Method:        "hover",
 		Content:       "package main\n",
 		FilePath:      "main.go",
-		WorkspaceRoot: "/tmp",
+		ProjectFolder: "/tmp",
 		Position:      &Position{Line: 1, Column: 1},
 	})
 	if err != nil {
@@ -598,7 +598,7 @@ func TestGoAdapterRunRenameNoGopls(t *testing.T) {
 		Method:        "rename",
 		Content:       "package main\n",
 		FilePath:      "main.go",
-		WorkspaceRoot: "/tmp",
+		ProjectFolder: "/tmp",
 		Position:      &Position{Line: 1, Column: 1},
 	})
 	if err != nil {
@@ -617,7 +617,7 @@ func TestGoAdapterRunReferencesNoGopls(t *testing.T) {
 		Method:        "references",
 		Content:       "package main\n",
 		FilePath:      "main.go",
-		WorkspaceRoot: "/tmp",
+		ProjectFolder: "/tmp",
 		Position:      &Position{Line: 1, Column: 1},
 	})
 	if err != nil {
@@ -1187,7 +1187,7 @@ func TestGoSessionAdapterRunRenameNoGopls(t *testing.T) {
 		Method:        "rename",
 		Content:       "package main\n",
 		FilePath:      "main.go",
-		WorkspaceRoot: "/tmp",
+		ProjectFolder: "/tmp",
 		Position:      &Position{Line: 1, Column: 1},
 	})
 	if err != nil {
@@ -1208,7 +1208,7 @@ func TestGoSessionAdapterRunReferencesNoGopls(t *testing.T) {
 		Method:        "references",
 		Content:       "package main\n",
 		FilePath:      "main.go",
-		WorkspaceRoot: "/tmp",
+		ProjectFolder: "/tmp",
 		Position:      &Position{Line: 1, Column: 1},
 	})
 	if err != nil {
@@ -1271,7 +1271,7 @@ func TestGoSessionAdapterRunRenameNilPosition(t *testing.T) {
 		Method:        "rename",
 		Content:       "package main\n",
 		FilePath:      "main.go",
-		WorkspaceRoot: "/tmp",
+		ProjectFolder: "/tmp",
 		Position:      nil,
 	})
 	if err != nil {
@@ -1399,7 +1399,7 @@ func TestRunGoDefinitionWithRemoteNilPosition(t *testing.T) {
 	result, _ := runGoDefinitionWithRemote(ToolInput{
 		Content:       "package main\n",
 		FilePath:      "main.go",
-		WorkspaceRoot: "/tmp",
+		ProjectFolder: "/tmp",
 		Position:      nil,
 	}, "gopls", "unix;/nonexistent/socket")
 	// The result will have no definition since gopls won't be available
@@ -1426,7 +1426,7 @@ func TestNewGoSessionPoolWithGopls(t *testing.T) {
 		Method:        "definition",
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 3, Column: 1},
 	})
 	if err != nil {
@@ -1441,7 +1441,7 @@ func TestNewGoSessionPoolWithGopls(t *testing.T) {
 		Method:        "definition",
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 3, Column: 1},
 	})
 	if err != nil {
@@ -1551,7 +1551,7 @@ func TestRunGoHoverNilPosition(t *testing.T) {
 	result, err := runGoHover(ToolInput{
 		Content:       "package main\n\nfunc main() {}\n",
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      nil, // should default to 1:1
 	})
 	if err != nil {
@@ -1598,7 +1598,7 @@ func TestRunGoSignatureHelpNilPosition(t *testing.T) {
 	result, err := runGoSignatureHelp(ToolInput{
 		Content:       "package main\n\nfunc main() {}\n",
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      nil, // should default to 1:1
 	})
 	if err != nil {
@@ -1616,12 +1616,12 @@ func TestRunGoSignatureHelpNilPosition(t *testing.T) {
 func TestRequestEvictMismatchedAdapter(t *testing.T) {
 	first := &fakeSessionAdapter{healthy: true}
 	second := &fakeSessionAdapter{healthy: true}
-	pool := NewSessionPool(func(workspaceRoot string) (SessionAdapter, error) {
+	pool := NewSessionPool(func(projectFolder string) (SessionAdapter, error) {
 		return first, nil
 	}, 0)
 
 	// Run to create session
-	_, _ = pool.Run(ToolInput{WorkspaceRoot: "/repo-a"})
+	_, _ = pool.Run(ToolInput{ProjectFolder: "/repo-a"})
 
 	// Request evict with a different adapter — should be a no-op
 	pool.requestEvict("/repo-a", second)
@@ -1640,7 +1640,7 @@ func TestRequestEvictMismatchedAdapter(t *testing.T) {
 func TestReleaseMismatchedAdapter(t *testing.T) {
 	first := &fakeSessionAdapter{healthy: true}
 	second := &fakeSessionAdapter{healthy: true}
-	pool := NewSessionPool(func(workspaceRoot string) (SessionAdapter, error) {
+	pool := NewSessionPool(func(projectFolder string) (SessionAdapter, error) {
 		return first, nil
 	}, 0)
 
@@ -1698,10 +1698,10 @@ func TestGoAdapterRunCodeActionsSyntaxError(t *testing.T) {
 }
 
 // =============================================================================
-// runGoReferences with workspace-relative paths
+// runGoReferences with project-folder-relative paths
 // =============================================================================
 
-func TestRunGoReferencesWorkspaceRelativePath(t *testing.T) {
+func TestRunGoReferencesProjectFolderRelativePath(t *testing.T) {
 	requireGopls(t)
 
 	content := "package main\n\nfunc main() { println() }\n"
@@ -1710,7 +1710,7 @@ func TestRunGoReferencesWorkspaceRelativePath(t *testing.T) {
 	result, err := runGoReferences(ToolInput{
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 3, Column: 17}, // on println
 	})
 	if err != nil {
@@ -1742,7 +1742,7 @@ func TestRunGoRenameMultipleOccurrences(t *testing.T) {
 	result, err := runGoRename(ToolInput{
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 3, Column: 5}, // on 'x' in "var x int"
 	})
 	if err != nil {
@@ -1815,7 +1815,7 @@ func TestRunGoInlayHintsDirectlyWithGopls(t *testing.T) {
 	result, err := runGoInlayHints(ToolInput{
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1842,7 +1842,7 @@ func TestGoSessionAdapterRunDefinitionWithGopls(t *testing.T) {
 		Method:        "definition",
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 6, Column: 6},
 	})
 	if err != nil {
@@ -1901,7 +1901,7 @@ func TestRunGoReferencesExtractsLineText(t *testing.T) {
 	result, err := runGoReferences(ToolInput{
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 3, Column: 5}, // on 'config' in "var config string"
 	})
 	if err != nil {
@@ -1918,7 +1918,7 @@ func TestRunGoReferencesExtractsLineText(t *testing.T) {
 		if loc.LineText == "" {
 			t.Errorf("location[%d] has empty LineText", i)
 		}
-		// Paths should be relative (workspace-root-relative)
+		// Paths should be relative (project-folder-root-relative)
 		if strings.HasPrefix(loc.FilePath, "/") {
 			t.Errorf("location[%d] has absolute path: %s", i, loc.FilePath)
 		}
@@ -1949,7 +1949,7 @@ func TestRunGoReferencesMultiFileSymbolSorting(t *testing.T) {
 	result, err := runGoReferences(ToolInput{
 		Content:       mainContent,
 		FilePath:      mainFile,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 3, Column: 6}, // on 'greet'
 	})
 	if err != nil {
@@ -1983,7 +1983,7 @@ func TestRunGoRenameWithSameFileRefs(t *testing.T) {
 	result, err := runGoRename(ToolInput{
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 3, Column: 5}, // on 'x' in "var x int"
 	})
 	if err != nil {
@@ -2035,7 +2035,7 @@ func TestRunGoRenameFiltersOtherFiles(t *testing.T) {
 	result, err := runGoRename(ToolInput{
 		Content:       mainContent,
 		FilePath:      mainFile,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 3, Column: 6}, // on 'greet' in main.go
 	})
 	if err != nil {
@@ -2069,7 +2069,7 @@ func TestGoSessionAdapterRunHoverWithGopls(t *testing.T) {
 		Method:        "hover",
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 6, Column: 6}, // on fmt
 	})
 	if err != nil {
@@ -2093,7 +2093,7 @@ func TestGoSessionAdapterRunRenameWithGopls(t *testing.T) {
 		Method:        "rename",
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 3, Column: 6}, // on 'greet'
 	})
 	if err != nil {
@@ -2117,7 +2117,7 @@ func TestGoSessionAdapterRunReferencesWithGopls(t *testing.T) {
 		Method:        "references",
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 3, Column: 5}, // on 'config'
 	})
 	if err != nil {
@@ -2165,7 +2165,7 @@ func TestGoSessionAdapterRunSignatureHelpWithGopls(t *testing.T) {
 		Method:        "signature_help",
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 6, Column: 14}, // inside Println(
 	})
 	if err != nil {
@@ -2189,7 +2189,7 @@ func TestGoSessionAdapterRunInlayHintsWithGopls(t *testing.T) {
 		Method:        "inlay_hints",
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -2213,7 +2213,7 @@ func TestRunGoHoverEmptyContent(t *testing.T) {
 	result, err := runGoHover(ToolInput{
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 2, Column: 1}, // empty line
 	})
 	if err != nil {
@@ -2237,7 +2237,7 @@ func TestRunGoHoverCommentLine(t *testing.T) {
 	result, err := runGoHover(ToolInput{
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 2, Column: 3}, // on comment
 	})
 	if err != nil {
@@ -2299,7 +2299,7 @@ func TestRunTypeScriptToolDiagnostics(t *testing.T) {
 	result, err := runTypeScriptTool(ToolInput{
 		Content:       content,
 		FilePath:      "test.ts",
-		WorkspaceRoot: t.TempDir(),
+		ProjectFolder: t.TempDir(),
 		Method:        "diagnostics",
 	})
 	if err != nil {
@@ -2327,7 +2327,7 @@ func TestRunTypeScriptToolDiagnosticsNoTs(t *testing.T) {
 	result, err := runTypeScriptTool(ToolInput{
 		Content:       "const x = 1\n",
 		FilePath:      "test.ts",
-		WorkspaceRoot: tmpDir,
+		ProjectFolder: tmpDir,
 		Method:        "diagnostics",
 	})
 	// When typescript is not available, we expect an error about it
@@ -2524,7 +2524,7 @@ func TestRunTypeScriptToolNodeError(t *testing.T) {
 	result, err := runTypeScriptTool(ToolInput{
 		Content:       "const x = 1\n",
 		FilePath:      "test.ts",
-		WorkspaceRoot: tmpDir,
+		ProjectFolder: tmpDir,
 		Method:        "diagnostics",
 	})
 	// The error should contain info about typescript not being available
@@ -2544,7 +2544,7 @@ func TestRunTypeScriptToolNodeError(t *testing.T) {
 
 func TestRequestEvictEvictsOnRelease(t *testing.T) {
 	callCount := 0
-	pool := NewSessionPool(func(workspaceRoot string) (SessionAdapter, error) {
+	pool := NewSessionPool(func(projectFolder string) (SessionAdapter, error) {
 		callCount++
 		return &fakeSessionAdapter{healthy: true}, nil
 	}, 0)
@@ -2581,15 +2581,15 @@ func TestRequestEvictEvictsOnRelease(t *testing.T) {
 }
 
 // =============================================================================
-// session_pool requestEvict — uncovered path: nonexistent workspace key
+// session_pool requestEvict — uncovered path: nonexistent project folder key
 // =============================================================================
 
-func TestRequestEvictNonexistentWorkspace(t *testing.T) {
-	pool := NewSessionPool(func(workspaceRoot string) (SessionAdapter, error) {
+func TestRequestEvictNonexistentProjectFolder(t *testing.T) {
+	pool := NewSessionPool(func(projectFolder string) (SessionAdapter, error) {
 		return &fakeSessionAdapter{healthy: true}, nil
 	}, 0)
 
-	// requestEvict on a workspace that was never created — should be a no-op
+	// requestEvict on a project folder that was never created — should be a no-op
 	pool.requestEvict("/nonexistent", &fakeSessionAdapter{healthy: true})
 
 	pool.Close()
@@ -2642,13 +2642,13 @@ func (a *errSessionAdapter) Close() error {
 
 func TestSessionPoolRunWithAdapterRunError(t *testing.T) {
 	callCount := 0
-	pool := NewSessionPool(func(workspaceRoot string) (SessionAdapter, error) {
+	pool := NewSessionPool(func(projectFolder string) (SessionAdapter, error) {
 		callCount++
 		return &errSessionAdapter{err: errors.New("adapter crashed")}, nil
 	}, 0)
 	defer pool.Close()
 
-	_, err := pool.Run(ToolInput{WorkspaceRoot: "/repo-a"})
+	_, err := pool.Run(ToolInput{ProjectFolder: "/repo-a"})
 	if err == nil {
 		t.Fatal("expected error from adapter Run")
 	}
@@ -2657,7 +2657,7 @@ func TestSessionPoolRunWithAdapterRunError(t *testing.T) {
 	}
 
 	// After error, the adapter should be evicted, and the next call creates a new one
-	_, err = pool.Run(ToolInput{WorkspaceRoot: "/repo-a"})
+	_, err = pool.Run(ToolInput{ProjectFolder: "/repo-a"})
 	if err == nil {
 		t.Fatal("expected error from second adapter Run")
 	}
@@ -2669,7 +2669,7 @@ func TestSessionPoolRunWithAdapterRunError(t *testing.T) {
 func TestSessionPoolReleasesInUseOnSuccess(t *testing.T) {
 	var mu sync.Mutex
 	runCount := 0
-	pool := NewSessionPool(func(workspaceRoot string) (SessionAdapter, error) {
+	pool := NewSessionPool(func(projectFolder string) (SessionAdapter, error) {
 		return &trackRunAdapter{runFn: func() {
 			mu.Lock()
 			runCount++
@@ -2678,7 +2678,7 @@ func TestSessionPoolReleasesInUseOnSuccess(t *testing.T) {
 	}, 0)
 	defer pool.Close()
 
-	_, err := pool.Run(ToolInput{WorkspaceRoot: "/repo-a"})
+	_, err := pool.Run(ToolInput{ProjectFolder: "/repo-a"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -2721,7 +2721,7 @@ func TestTypeScriptSessionAdapterRunStdoutReadError(t *testing.T) {
 		Method:        "diagnostics",
 		Content:       "const x = 1",
 		FilePath:      "test.ts",
-		WorkspaceRoot: t.TempDir(),
+		ProjectFolder: t.TempDir(),
 	})
 	if err == nil {
 		t.Fatal("expected error when stdout read fails")
@@ -2743,7 +2743,7 @@ func TestTypeScriptSessionAdapterRunWriteError(t *testing.T) {
 		Method:        "diagnostics",
 		Content:       "const x = 1",
 		FilePath:      "test.ts",
-		WorkspaceRoot: t.TempDir(),
+		ProjectFolder: t.TempDir(),
 	})
 	if err == nil {
 		t.Fatal("expected error when stdin write fails")
@@ -2765,7 +2765,7 @@ func TestTypeScriptSessionAdapterRunJSONParseError(t *testing.T) {
 		Method:        "diagnostics",
 		Content:       "const x = 1",
 		FilePath:      "test.ts",
-		WorkspaceRoot: t.TempDir(),
+		ProjectFolder: t.TempDir(),
 	})
 	if err == nil {
 		t.Fatal("expected JSON parse error")
@@ -2792,7 +2792,7 @@ func TestTypeScriptSessionAdapterRunWithSuccessResponse(t *testing.T) {
 		Method:        "diagnostics",
 		Content:       "const x = 1",
 		FilePath:      "test.ts",
-		WorkspaceRoot: t.TempDir(),
+		ProjectFolder: t.TempDir(),
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -2838,7 +2838,7 @@ func TestRunTypeScriptToolNodeExecError(t *testing.T) {
 	result, err := runTypeScriptTool(ToolInput{
 		Content:       "const x = 1",
 		FilePath:      "test.ts",
-		WorkspaceRoot: tmpDir,
+		ProjectFolder: tmpDir,
 		Method:        "diagnostics",
 	})
 	// Either the tool runs successfully or returns an error — both are valid.
@@ -2860,7 +2860,7 @@ func TestRunTypeScriptToolWithUnknownMethod(t *testing.T) {
 	result, err := runTypeScriptTool(ToolInput{
 		Content:       "",
 		FilePath:      "test.ts",
-		WorkspaceRoot: tmpDir,
+		ProjectFolder: tmpDir,
 		Method:        "unknown_method",
 	})
 	// Either outcome is valid; the test ensures no panic.
@@ -2886,7 +2886,7 @@ func TestGoSessionAdapterRunReferencesNoGoplsDispatch(t *testing.T) {
 		Method:        "references",
 		Content:       "package main\n",
 		FilePath:      "main.go",
-		WorkspaceRoot: "/tmp",
+		ProjectFolder: "/tmp",
 		Position:      &Position{Line: 1, Column: 1},
 	})
 	if err != nil {
@@ -2974,7 +2974,7 @@ func TestRegistrySingletonOverridesFactory(t *testing.T) {
 func TestSessionPoolConcurrentAccess(t *testing.T) {
 	var createMu sync.Mutex
 	created := 0
-	pool := NewSessionPool(func(workspaceRoot string) (SessionAdapter, error) {
+	pool := NewSessionPool(func(projectFolder string) (SessionAdapter, error) {
 		createMu.Lock()
 		created++
 		createMu.Unlock()
@@ -2991,8 +2991,8 @@ func TestSessionPoolConcurrentAccess(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			root := fmt.Sprintf("/repo-%d", idx%3) // 3 different workspaces
-			if _, err := pool.Run(ToolInput{WorkspaceRoot: root}); err != nil {
+			root := fmt.Sprintf("/repo-%d", idx%3) // 3 different project folders
+			if _, err := pool.Run(ToolInput{ProjectFolder: root}); err != nil {
 				errMu.Lock()
 				errs = append(errs, fmt.Errorf("goroutine %d: %w", idx, err))
 				errMu.Unlock()
@@ -3373,7 +3373,7 @@ func TestRunGoRenameOnlyCurrentFile(t *testing.T) {
 	result, err := runGoRename(ToolInput{
 		Content:       mainContent,
 		FilePath:      filepath.Join(dir, "main.go"),
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 3, Column: 5},
 	})
 	if err != nil {
@@ -3402,7 +3402,7 @@ func TestRunGoReferencesSymbolName(t *testing.T) {
 	result, err := runGoReferences(ToolInput{
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 3, Column: 5}, // on 'myVar'
 	})
 	if err != nil {
@@ -3426,7 +3426,7 @@ func TestRunGoReferencesEmptyContentAtPosition(t *testing.T) {
 	result, err := runGoReferences(ToolInput{
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 5, Column: 5}, // beyond content
 	})
 	if err != nil {
@@ -3531,7 +3531,7 @@ func TestRunGoInlayHintsWithRemoteNonexistentSocket(t *testing.T) {
 	result, err := runGoInlayHintsWithRemote(ToolInput{
 		Content:       "package main\n",
 		FilePath:      "main.go",
-		WorkspaceRoot: "/tmp",
+		ProjectFolder: "/tmp",
 	}, "", "unix;/nonexistent/path/to/socket.sock")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -3560,7 +3560,7 @@ func TestNewTypeScriptAdapterImplementsAdapter(t *testing.T) {
 
 func TestSessionPoolEvictIdleLeavesActiveSessions(t *testing.T) {
 	created := 0
-	pool := NewSessionPool(func(workspaceRoot string) (SessionAdapter, error) {
+	pool := NewSessionPool(func(projectFolder string) (SessionAdapter, error) {
 		created++
 		return &fakeSessionAdapter{healthy: true}, nil
 	}, 50*time.Millisecond)

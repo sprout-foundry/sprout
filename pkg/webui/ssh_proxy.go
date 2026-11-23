@@ -35,7 +35,7 @@ var sshProxyUpgrader = websocket.Upgrader{
 	WriteBufferSize: 65536,
 }
 
-// resolveInitialWorkspace expands shell-like home references in a workspace path
+// resolveInitialProjectFolder expands shell-like home references in a project folder path
 // so the frontend receives a concrete path it can pass to the backend API.
 //
 //	"$HOME"   → "$HOME"   (kept as-is; parsed by BROWSER=none frontend context)
@@ -45,8 +45,8 @@ var sshProxyUpgrader = websocket.Upgrader{
 //
 // The actual expansion of $HOME happens on the remote sprout daemon side;
 // this function only handles ~/ shortcuts that the frontend needs to resolve
-// to send a valid absolute path to the setWorkspace API.
-func resolveInitialWorkspace(path string) string {
+// to send a valid absolute path to the setProjectFolder API.
+func resolveInitialProjectFolder(path string) string {
 	if strings.HasPrefix(path, "~/") {
 		rest := strings.TrimPrefix(path, "~/")
 		if rest != "" {
@@ -101,7 +101,7 @@ func (srv *ReactWebServer) handleSSHProxy(w http.ResponseWriter, r *http.Request
 	}
 
 	// Re-encode the session key so SPROUT_PROXY_BASE is consistently
-	// percent-encoded, matching what launchSSHWorkspace returns as ProxyBase.
+	// percent-encoded, matching what launchSSHProjectFolder returns as ProxyBase.
 	proxyBase := "/ssh/" + url.PathEscape(sessionKey)
 
 	// WebSocket upgrade — proxy to the tunnel.
@@ -113,7 +113,7 @@ func (srv *ReactWebServer) handleSSHProxy(w http.ResponseWriter, r *http.Request
 	// Static assets served locally (no round-trip to the remote backend).
 	switch {
 	case rest == "/" || rest == "" || rest == "/index.html":
-		sshServeIndexWithBase(w, proxyBase, resolveInitialWorkspace(session.RemoteWorkspacePath))
+		sshServeIndexWithBase(w, proxyBase, resolveInitialProjectFolder(session.RemoteProjectFolderPath))
 		return
 	case strings.HasPrefix(rest, "/static/"):
 		// Reuse the existing handler by rewriting URL.Path temporarily.
@@ -183,7 +183,7 @@ func (srv *ReactWebServer) handleSSHProxy(w http.ResponseWriter, r *http.Request
 // sshServeIndexWithBase reads the embedded index.html and injects a small
 // inline script that sets window.SPROUT_PROXY_BASE and window.SPROUT_INITIAL_WORKSPACE
 // before the </head> tag.
-func sshServeIndexWithBase(w http.ResponseWriter, proxyBase, initialWorkspace string) {
+func sshServeIndexWithBase(w http.ResponseWriter, proxyBase, initialProjectFolder string) {
 	data, err := readStaticFile("index.html")
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "internal_error", "internal error")
@@ -193,10 +193,10 @@ func sshServeIndexWithBase(w http.ResponseWriter, proxyBase, initialWorkspace st
 	// JSON-encode the values so any characters that require escaping in a JS
 	// string literal are handled correctly.
 	proxyBaseJSON, _ := json.Marshal(proxyBase)
-	initialWorkspaceJSON, _ := json.Marshal(initialWorkspace)
+	initialProjectFolderJSON, _ := json.Marshal(initialProjectFolder)
 	script := []byte(
 		"<script>window.SPROUT_PROXY_BASE=" + string(proxyBaseJSON) +
-			";window.SPROUT_INITIAL_WORKSPACE=" + string(initialWorkspaceJSON) +
+			";window.SPROUT_INITIAL_WORKSPACE=" + string(initialProjectFolderJSON) +
 			";</script>",
 	)
 	data = bytes.Replace(data, []byte("</head>"), append(script, []byte("</head>")...), 1)

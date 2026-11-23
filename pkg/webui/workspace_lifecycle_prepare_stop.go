@@ -37,8 +37,8 @@ type wipCheckpoint struct {
 }
 
 // prepareStopResult is the POST /api/lifecycle/prepare-stop response. The
-// top-level wip_ref/wip_sha describe the primary workspace's checkpoint;
-// checkpoints lists every workspace root that had uncommitted work.
+// top-level wip_ref/wip_sha describe the primary project folder's checkpoint;
+// checkpoints lists every project folder that had uncommitted work.
 type prepareStopResult struct {
 	Checkpointed       bool            `json:"checkpointed"`
 	WipRef             string          `json:"wip_ref,omitempty"`
@@ -84,7 +84,7 @@ func (ws *ReactWebServer) handleAPILifecyclePrepareStop(w http.ResponseWriter, r
 	writeJSON(w, http.StatusOK, result)
 }
 
-// prepareStop drains the daemon ahead of a workspace stop. It runs once per
+// prepareStop drains the daemon ahead of a project folder stop. It runs once per
 // process: later calls wait for (and return) the first call's result. ok is
 // false only when the caller's ctx ended while another call was still
 // running. The drain itself is detached from ctx so a client hang-up cannot
@@ -120,7 +120,7 @@ func (ws *ReactWebServer) runPrepareStop(reason string, deadline time.Duration) 
 	start := time.Now()
 	ws.lifecycle.stopping.Store(true)
 	ws.log().Info("prepare-stop started", slog.String("reason", reason), slog.Duration("deadline", deadline))
-	ws.publishWorkspaceStopping(reason, int(deadline/time.Second))
+	ws.publishDevSpaceStopping(reason, int(deadline/time.Second))
 
 	result := prepareStopResult{Checkpoints: []wipCheckpoint{}}
 
@@ -156,7 +156,7 @@ func (ws *ReactWebServer) runPrepareStop(reason string, deadline time.Duration) 
 	ws.lifecycle.checkpointing.Store(true)
 	ts := time.Now().Unix()
 	ctx, cancel := context.WithDeadline(context.Background(), start.Add(deadline))
-	for i, root := range ws.lifecycleWorkspaceRoots() {
+	for i, root := range ws.lifecycleProjectFolders() {
 		cp, err := checkpointWorkingTree(ctx, root, ts, i == 0, reason)
 		if err != nil {
 			ws.log().Warn("prepare-stop checkpoint failed", slog.String("root", root), slog.Any("err", err))
@@ -285,9 +285,9 @@ func (ws *ReactWebServer) rejectWhileStopping(w http.ResponseWriter, clientID, c
 	const msg = "The workspace is stopping and is not accepting new work"
 	ws.publishClientEventWithChat(clientID, chatID, "error", map[string]interface{}{
 		"message":  msg,
-		"code":     errCodeWorkspaceStopping,
+		"code":     errCodeDevSpaceStopping,
 		"terminal": true,
 	})
-	writeJSONErr(w, http.StatusServiceUnavailable, errCodeWorkspaceStopping, msg)
+	writeJSONErr(w, http.StatusServiceUnavailable, errCodeDevSpaceStopping, msg)
 	return true
 }

@@ -49,7 +49,7 @@ type Definition struct {
 	// persona is fundamentally allowed to do".
 	Capabilities []string `json:"capabilities,omitempty"`
 	// WritePaths confines the persona. When non-empty, the persona may write
-	// files only under these workspace-relative directories (e.g. "design/"),
+	// files only under these project-folder-relative directories (e.g. "design/"),
 	// a tool call naming a tool outside AllowedTools is refused at execution
 	// (not only hidden from the tool list), and browse_url is limited to
 	// reading a page (no scripted steps, sessions, or file:// URLs). Tools

@@ -34,7 +34,7 @@ func TestSubagentCancellationPropagates(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	runner := NewSubagentRunner(parent, shared)
 	runner.testClientFactory = func(clientType api.ClientType, model string) (api.ClientInterface, error) {
@@ -102,7 +102,7 @@ func TestSubagentInterruptCtxPreservedAcrossReset(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	runner := NewSubagentRunner(parent, shared)
 	runner.testClientFactory = func(clientType api.ClientType, model string) (api.ClientInterface, error) {
@@ -146,7 +146,7 @@ func TestSubagentInterruptCtxPreservedAcrossClear(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	runner := NewSubagentRunner(parent, shared)
 	runner.testClientFactory = func(clientType api.ClientType, model string) (api.ClientInterface, error) {
@@ -234,7 +234,7 @@ func TestSubagentMaxIterationsBounded(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	runner := NewSubagentRunner(parent, shared)
 	runner.testClientFactory = func(clientType api.ClientType, model string) (api.ClientInterface, error) {
@@ -271,7 +271,7 @@ func TestInjectInputIntoActiveRoutesToPrimary(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	runner := NewSubagentRunner(parent, shared)
 	runner.testClientFactory = func(clientType api.ClientType, model string) (api.ClientInterface, error) {
@@ -337,7 +337,7 @@ func TestSubagentOutputFlushUsesTryLockOnCancel(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	runner := NewSubagentRunner(parent, shared)
 	runner.testClientFactory = func(clientType api.ClientType, model string) (api.ClientInterface, error) {

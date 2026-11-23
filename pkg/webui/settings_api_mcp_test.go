@@ -47,20 +47,20 @@ func setupMCPCredTestServer(t *testing.T) (*ReactWebServer, string) {
 	t.Cleanup(func() { configuration.SetValidateAndSaveAPIKeyValidation(false) })
 
 	daemonRoot := t.TempDir()
-	workspaceDir := filepath.Join(daemonRoot, "workspace")
-	require.NoError(t, os.MkdirAll(workspaceDir, 0o755))
+	projectFolderDir := filepath.Join(daemonRoot, "workspace")
+	require.NoError(t, os.MkdirAll(projectFolderDir, 0o755))
 
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.SetWorkspaceRoot(daemonRoot)
+	ws.SetProjectFolder(daemonRoot)
 	ws.terminalManager = NewTerminalManager(daemonRoot)
 	ws.fileConsents = newFileConsentManager()
 
 	clientID := "test-client"
-	_, err = ws.setClientWorkspaceRoot(clientID, workspaceDir)
+	_, err = ws.setClientProjectFolder(clientID, projectFolderDir)
 	require.NoError(t, err)
 
 	return ws, tmpDir
@@ -100,7 +100,7 @@ func getConfigManager(t *testing.T, ws *ReactWebServer) *configuration.Manager {
 	}
 	// No agent (e.g. editor mode gates creation). Use the server's layered
 	// manager so the read reflects what onboarding handlers persist to
-	// (global + workspace) — NOT a global-only silent manager, which would
+	// (global + project folder) — NOT a global-only silent manager, which would
 	// auto-pick a provider from ambient env vars and misreport the result.
 	cm, createErr := ws.getLayeredConfigManager("test-client")
 	require.NoError(t, createErr)

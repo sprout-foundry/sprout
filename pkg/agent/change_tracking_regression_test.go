@@ -12,10 +12,10 @@ import (
 )
 
 // These run the primary agent from a process CWD (the package dir) that is
-// not the workspace root — the daemon/WebUI situation that exposed the
+// not the project folder — the daemon/WebUI situation that exposed the
 // tracking bugs below.
 
-func TestChangeTracking_RelativePathsResolveAgainstWorkspace(t *testing.T) {
+func TestChangeTracking_RelativePathsResolveAgainstProjectFolder(t *testing.T) {
 	dir := changeTrackingRepo(t)
 	ag, _ := probeAgent(t, dir,
 		tc("e1", "edit_file", map[string]any{"path": "a.txt", "old_str": "alpha", "new_str": "ALPHA"}),

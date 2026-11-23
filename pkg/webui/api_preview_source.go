@@ -1,7 +1,7 @@
 //go:build !js
 
 // api_preview_source.go exposes the HTML preview's source URL: the editor asks
-// for a URL for a workspace file, and the server mints a short-lived token and
+// for a URL for a project folder file, and the server mints a short-lived token and
 // returns the address on the preview origin (see preview_origin.go).
 //
 // The editor cannot build this URL itself: the preview listener binds a random
@@ -16,7 +16,7 @@ import (
 	"strings"
 )
 
-// handleAPIPreviewSource serves GET /api/preview/source?path=<workspace path>.
+// handleAPIPreviewSource serves GET /api/preview/source?path=<project folder path>.
 //
 // Response:
 //
@@ -36,13 +36,13 @@ func (ws *ReactWebServer) handleAPIPreviewSource(w http.ResponseWriter, r *http.
 		return
 	}
 
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	canonical, err := canonicalizePath(relPath, workspaceRoot, false)
+	projectFolder := ws.getProjectFolderForRequest(r)
+	canonical, err := canonicalizePath(relPath, projectFolder, false)
 	if err != nil {
 		writeJSONErr(w, http.StatusNotFound, "file_not_found", fmt.Sprintf("File not found: %v", err))
 		return
 	}
-	if !isWithinWorkspace(canonical, workspaceRoot) {
+	if !isWithinProjectFolder(canonical, projectFolder) {
 		writeJSONErr(w, http.StatusForbidden, "path_outside_workspace", "Path is outside the workspace")
 		return
 	}
@@ -62,9 +62,9 @@ func (ws *ReactWebServer) handleAPIPreviewSource(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// The preview origin resolves paths against the workspace root, so hand it
-	// the workspace-relative form rather than the absolute one.
-	rel, err := workspaceRelativePath(canonical, workspaceRoot)
+	// The preview origin resolves paths against the project folder, so hand it
+	// the project-folder-relative form rather than the absolute one.
+	rel, err := projectFolderRelativePath(canonical, projectFolder)
 	if err != nil {
 		writeJSONErr(w, http.StatusBadRequest, "invalid_file_path", err.Error())
 		return
@@ -76,9 +76,9 @@ func (ws *ReactWebServer) handleAPIPreviewSource(w http.ResponseWriter, r *http.
 	})
 }
 
-// workspaceRelativePath returns canonical relative to root, rejecting a path
+// projectFolderRelativePath returns canonical relative to root, rejecting a path
 // that escapes it.
-func workspaceRelativePath(canonical, root string) (string, error) {
+func projectFolderRelativePath(canonical, root string) (string, error) {
 	rel, err := filepath.Rel(root, canonical)
 	if err != nil {
 		return "", fmt.Errorf("resolving path within workspace: %w", err)

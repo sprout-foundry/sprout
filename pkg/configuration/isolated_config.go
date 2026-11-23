@@ -59,7 +59,7 @@ func BootstrapIsolatedConfig(configDir string) error {
 	// Ship a .gitignore covering personal overrides and state directories.
 	gitignorePath := filepath.Join(targetDir, ".gitignore")
 	if _, err := os.Stat(gitignorePath); os.IsNotExist(err) {
-		_ = os.WriteFile(gitignorePath, []byte(workspaceGitignoreContent), 0644)
+		_ = os.WriteFile(gitignorePath, []byte(projectFolderGitignoreContent), 0644)
 	}
 
 	return nil

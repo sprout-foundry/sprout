@@ -59,7 +59,7 @@ func (ws *ReactWebServer) handleAPIQuerySearchReplace(w http.ResponseWriter, r *
 	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxSearchBodyBytes)
 
@@ -82,10 +82,10 @@ func (ws *ReactWebServer) handleAPIQuerySearchReplace(w http.ResponseWriter, r *
 		return
 	}
 
-	// Validate files are within workspace
+	// Validate files are within project folder
 	for _, file := range req.Files {
-		canonicalPath, err := canonicalizePath(file, workspaceRoot, false)
-		if err != nil || !isWithinWorkspace(canonicalPath, workspaceRoot) {
+		canonicalPath, err := canonicalizePath(file, projectFolder, false)
+		if err != nil || !isWithinProjectFolder(canonicalPath, projectFolder) {
 			writeJSONErr(w, http.StatusBadRequest, "file_outside_workspace", fmt.Sprintf("File outside workspace: %s", file))
 			return
 		}
@@ -99,7 +99,7 @@ func (ws *ReactWebServer) handleAPIQuerySearchReplace(w http.ResponseWriter, r *
 	}
 
 	// Perform replace
-	changes, err := ws.performReplace(ws.resolveClientID(r), workspaceRoot, req, pattern)
+	changes, err := ws.performReplace(ws.resolveClientID(r), projectFolder, req, pattern)
 	if err != nil {
 		ws.log().Error("search replacement failed", slog.Any("err", err))
 		writeJSONErr(w, http.StatusInternalServerError, "replace_failed", fmt.Sprintf("Replace failed: %v", err))
@@ -120,14 +120,14 @@ func (ws *ReactWebServer) handleAPIQuerySearchReplace(w http.ResponseWriter, r *
 }
 
 // performReplace performs the search and replace operation
-func (ws *ReactWebServer) performReplace(clientID, workspaceRoot string, req ReplaceRequest, pattern *regexp.Regexp) ([]ReplaceFileChange, error) {
+func (ws *ReactWebServer) performReplace(clientID, projectFolder string, req ReplaceRequest, pattern *regexp.Regexp) ([]ReplaceFileChange, error) {
 	var changes []ReplaceFileChange
 
 	for _, filePath := range req.Files {
-		// Resolve relative path against workspace root
+		// Resolve relative path against project folder
 		absFilePath := filePath
 		if !filepath.IsAbs(filePath) {
-			absFilePath = filepath.Join(workspaceRoot, filePath)
+			absFilePath = filepath.Join(projectFolder, filePath)
 		}
 
 		// Open file, skipping files that exceed the read size limit

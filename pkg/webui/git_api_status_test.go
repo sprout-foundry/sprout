@@ -41,7 +41,7 @@ func TestHandleAPIGitStageMissingPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.SetWorkspaceRoot("/tmp")
+	ws.SetProjectFolder("/tmp")
 	req := httptest.NewRequest(http.MethodPost, "/api/git/stage", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitStage(rec, req)
@@ -56,7 +56,7 @@ func TestHandleAPIGitStageInvalidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.SetWorkspaceRoot("/tmp")
+	ws.SetProjectFolder("/tmp")
 	req := httptest.NewRequest(http.MethodPost, "/api/git/stage", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitStage(rec, req)
@@ -137,7 +137,7 @@ func TestHandleAPIGitCheckoutMissingBranch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.SetWorkspaceRoot("/tmp")
+	ws.SetProjectFolder("/tmp")
 	req := httptest.NewRequest(http.MethodPost, "/api/git/checkout", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitCheckout(rec, req)
@@ -152,7 +152,7 @@ func TestHandleAPIGitCheckoutInvalidBranchName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.SetWorkspaceRoot("/tmp")
+	ws.SetProjectFolder("/tmp")
 	req := httptest.NewRequest(http.MethodPost, "/api/git/checkout", strings.NewReader(`{"branch":"--bad"}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitCheckout(rec, req)
@@ -167,7 +167,7 @@ func TestHandleAPIGitCheckoutInvalidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.SetWorkspaceRoot("/tmp")
+	ws.SetProjectFolder("/tmp")
 	req := httptest.NewRequest(http.MethodPost, "/api/git/checkout", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitCheckout(rec, req)
@@ -193,7 +193,7 @@ func TestHandleAPIGitCreateBranchMissingName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.SetWorkspaceRoot("/tmp")
+	ws.SetProjectFolder("/tmp")
 	req := httptest.NewRequest(http.MethodPost, "/api/git/create-branch", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitCreateBranch(rec, req)
@@ -241,7 +241,7 @@ func TestHandleAPIGitCommitMissingMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.SetWorkspaceRoot("/tmp")
+	ws.SetProjectFolder("/tmp")
 	req := httptest.NewRequest(http.MethodPost, "/api/git/commit", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitCommit(rec, req)
@@ -256,7 +256,7 @@ func TestHandleAPIGitCommitInvalidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.SetWorkspaceRoot("/tmp")
+	ws.SetProjectFolder("/tmp")
 	req := httptest.NewRequest(http.MethodPost, "/api/git/commit", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitCommit(rec, req)
@@ -293,7 +293,7 @@ func TestHandleAPIGitRevertMissingCommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.SetWorkspaceRoot("/tmp")
+	ws.SetProjectFolder("/tmp")
 	req := httptest.NewRequest(http.MethodPost, "/api/git/revert", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitRevert(rec, req)
@@ -308,7 +308,7 @@ func TestHandleAPIGitRevertInvalidCommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.SetWorkspaceRoot("/tmp")
+	ws.SetProjectFolder("/tmp")
 	req := httptest.NewRequest(http.MethodPost, "/api/git/revert", strings.NewReader(`{"commit":"--bad"}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitRevert(rec, req)
@@ -323,7 +323,7 @@ func TestHandleAPIGitRevertInvalidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.SetWorkspaceRoot("/tmp")
+	ws.SetProjectFolder("/tmp")
 	req := httptest.NewRequest(http.MethodPost, "/api/git/revert", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitRevert(rec, req)
@@ -391,7 +391,7 @@ func TestHandleAPIGitCheckoutFetchesRemoteBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = clone
-	ws.workspaceRoot = clone
+	ws.projectFolder = clone
 	req := httptest.NewRequest(http.MethodPost, "/api/git/checkout", strings.NewReader(`{"branch":"sprout/add-a-form-abcd1234"}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitCheckout(rec, req)

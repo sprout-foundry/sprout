@@ -22,15 +22,15 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	// Home-workspace hardening (SP-130). When the workspace root resolves
+	projectFolder := ws.getProjectFolderForRequest(r)
+	// Home-project-folder hardening (SP-130). When the project folder resolves
 	// to the user's home directory without explicit consent, refuse the
-	// listing. In daemon/service mode the CWD-derived workspace IS $HOME
+	// listing. In daemon/service mode the CWD-derived project folder IS $HOME
 	// until the user picks a project, and each directory listing of a
 	// TCC-protected folder (Documents, Music, …) raises a macOS privacy
-	// prompt. The frontend shows the workspace gate instead; until a
-	// real workspace is selected there is nothing legitimate to browse.
-	if isHomeWorkspace(workspaceRoot) && !hasHomeWorkspaceConsent() {
+	// prompt. The frontend shows the project folder gate instead; until a
+	// real project folder is selected there is nothing legitimate to browse.
+	if isHomeProjectFolder(projectFolder) && !hasHomeProjectFolderConsent() {
 		writeJSONErr(w, http.StatusForbidden, "workspace_not_selected",
 			"Workspace is the home directory and no consent was granted; select a workspace first")
 		return
@@ -40,12 +40,12 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 	if dir == "" {
 		dir = "."
 	}
-	canonicalDir, err := canonicalizePath(dir, workspaceRoot, false)
+	canonicalDir, err := canonicalizePath(dir, projectFolder, false)
 	if err != nil {
 		writeJSONErr(w, http.StatusBadRequest, "invalid_directory", fmt.Sprintf("Invalid directory: %v", err))
 		return
 	}
-	if !isWithinWorkspace(canonicalDir, workspaceRoot) {
+	if !isWithinProjectFolder(canonicalDir, projectFolder) {
 		writeJSONErr(w, http.StatusForbidden, "directory_outside_workspace", "Directory outside workspace")
 		return
 	}
@@ -54,7 +54,7 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 	filterIgnored := r.URL.Query().Get("ignore") == "true"
 	var ignoreRules *ignore.GitIgnore
 	if filterIgnored {
-		ignoreRules = filediscovery.GetIgnoreRules(workspaceRoot)
+		ignoreRules = filediscovery.GetIgnoreRules(projectFolder)
 	}
 
 	// Read directory
@@ -78,7 +78,7 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 		// Skip entries that match gitignore rules when filtering is enabled
 		if filterIgnored && ignoreRules != nil {
 			absPath := filepath.Join(canonicalDir, name)
-			relPath, _ := filepath.Rel(workspaceRoot, absPath)
+			relPath, _ := filepath.Rel(projectFolder, absPath)
 			if ignoreRules.MatchesPath(relPath) || (isDir && ignoreRules.MatchesPath(relPath+"/")) {
 				continue
 			}
@@ -117,7 +117,7 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 // handleAPIOpenInFileBrowser opens a path (or its parent directory for files)
 // in the system file browser using the platform-appropriate command.
 func (ws *ReactWebServer) handleAPIOpenInFileBrowser(w http.ResponseWriter, r *http.Request) {
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{"error": "Method not allowed"})
 		return
@@ -131,7 +131,7 @@ func (ws *ReactWebServer) handleAPIOpenInFileBrowser(w http.ResponseWriter, r *h
 		return
 	}
 
-	canonicalPath, err := canonicalizePath(req.Path, workspaceRoot, false)
+	canonicalPath, err := canonicalizePath(req.Path, projectFolder, false)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": fmt.Sprintf("invalid path: %v", err)})
 		return

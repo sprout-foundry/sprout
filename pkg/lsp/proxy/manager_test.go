@@ -14,34 +14,34 @@ import (
 
 func TestServerKey(t *testing.T) {
 	tests := []struct {
-		name          string
-		workspacePath string
-		languageID    string
-		wantContains  []string // parts that should be in the key
+		name              string
+		projectFolderPath string
+		languageID        string
+		wantContains      []string // parts that should be in the key
 	}{
 		{
-			name:          "simple absolute path",
-			workspacePath: "/foo/bar",
-			languageID:    "go",
-			wantContains:  []string{filepath.FromSlash("/foo/bar"), "go"},
+			name:              "simple absolute path",
+			projectFolderPath: "/foo/bar",
+			languageID:        "go",
+			wantContains:      []string{filepath.FromSlash("/foo/bar"), "go"},
 		},
 		{
-			name:          "simple absolute path with typescript",
-			workspacePath: "/workspace",
-			languageID:    "typescript",
-			wantContains:  []string{filepath.FromSlash("/workspace"), "typescript"},
+			name:              "simple absolute path with typescript",
+			projectFolderPath: "/workspace",
+			languageID:        "typescript",
+			wantContains:      []string{filepath.FromSlash("/workspace"), "typescript"},
 		},
 		{
-			name:          "relative path (gets normalized to absolute)",
-			workspacePath: "./src",
-			languageID:    "go",
-			wantContains:  []string{"go"}, // Can't predict exact absolute path
+			name:              "relative path (gets normalized to absolute)",
+			projectFolderPath: "./src",
+			languageID:        "go",
+			wantContains:      []string{"go"}, // Can't predict exact absolute path
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			key := serverKey(tt.workspacePath, tt.languageID)
+			key := serverKey(tt.projectFolderPath, tt.languageID)
 
 			// Verify key is not empty
 			assert.NotEmpty(t, key)

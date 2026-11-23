@@ -216,10 +216,10 @@ func RunInitialContinuation(ctx context.Context, chatAgent *agent.Agent, eventBu
 	var prevStallLeadItem string
 	// The git-HEAD probe needs a directory inside the repository. Prefer the
 	// TODO file's location (correct under test, where CWD is the package
-	// dir) and fall back to the agent's workspace root.
+	// dir) and fall back to the agent's project folder.
 	gitDir := filepath.Dir(todoFile)
 	if chatAgent != nil {
-		if root := strings.TrimSpace(chatAgent.GetWorkspaceRoot()); root != "" {
+		if root := strings.TrimSpace(chatAgent.GetProjectFolder()); root != "" {
 			gitDir = root
 		}
 	}
@@ -376,7 +376,7 @@ func snapshotContinuationProgress(gitDir, todoFile string) continuationProgress 
 // madeContinuationProgress reports whether a turn advanced the session: a new
 // git commit (HEAD changed) or a newly ticked item (done-count increased).
 // When git is unavailable (head == "" before and after) it falls back to the
-// tick count alone — a no-git workspace still gets a working progress gate.
+// tick count alone — a no-git project folder still gets a working progress gate.
 func madeContinuationProgress(before, after continuationProgress) bool {
 	if before.head != "" && after.head != "" && before.head != after.head {
 		return true

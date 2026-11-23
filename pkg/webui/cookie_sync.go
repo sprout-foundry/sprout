@@ -36,7 +36,7 @@ const clientIDResponseHeader = "X-Sprout-Client-ID"
 // live on different origins. The browser sends the X-Sprout-Client-ID header
 // on every request, but custom headers are not persisted across page reloads.
 // Without a cookie, every reload generates a new client_id, losing all
-// server-side state (workspace, agent session, terminal sessions, etc.).
+// server-side state (project folder, agent session, terminal sessions, etc.).
 //
 // This middleware solves that by:
 //

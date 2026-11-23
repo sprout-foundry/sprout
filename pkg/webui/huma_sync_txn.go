@@ -2,7 +2,7 @@
 
 // huma_sync_txn.go holds the Huma operations and their thin handlers for the
 // sync/txn family: the /api/txn/* (container-side git transaction) and
-// /api/sync* (workspace sync) routes, plus the /api/lifecycle/* routes the
+// /api/sync* (project folder sync) routes, plus the /api/lifecycle/* routes the
 // platform drives alongside them (registered via registerSyncTxnHumaOperations
 // from registerHumaOperations in huma_routes.go).
 //

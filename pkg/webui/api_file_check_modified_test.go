@@ -36,9 +36,9 @@ func TestHandleAPIFileCheckModified(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		server.workspaceRoot = dir
-		// Ensure client context gets the right workspaceRoot
-		server.getOrCreateClientContext(defaultWebClientID).WorkspaceRoot = dir
+		server.projectFolder = dir
+		// Ensure client context gets the right projectFolder
+		server.getOrCreateClientContext(defaultWebClientID).ProjectFolder = dir
 
 		req := httptest.NewRequest(http.MethodPost, "/api/file/check-modified", bytes.NewReader([]byte("not json")))
 		rec := httptest.NewRecorder()
@@ -56,10 +56,10 @@ func TestHandleAPIFileCheckModified(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		server.workspaceRoot = dir
-		server.getOrCreateClientContext(defaultWebClientID).WorkspaceRoot = dir
+		server.projectFolder = dir
+		server.getOrCreateClientContext(defaultWebClientID).ProjectFolder = dir
 
-		// Create a file in workspace
+		// Create a file in project folder
 		filePath := filepath.Join(dir, "test.txt")
 		if err := os.WriteFile(filePath, []byte("hello"), 0644); err != nil {
 			t.Fatal(err)
@@ -106,8 +106,8 @@ func TestHandleAPIFileCheckModified(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		server.workspaceRoot = dir
-		server.getOrCreateClientContext(defaultWebClientID).WorkspaceRoot = dir
+		server.projectFolder = dir
+		server.getOrCreateClientContext(defaultWebClientID).ProjectFolder = dir
 
 		filePath := filepath.Join(dir, "unchanged.txt")
 		if err := os.WriteFile(filePath, []byte("hello"), 0644); err != nil {
@@ -147,10 +147,10 @@ func TestHandleAPIFileCheckModified(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		server.workspaceRoot = dir
-		server.getOrCreateClientContext(defaultWebClientID).WorkspaceRoot = dir
+		server.projectFolder = dir
+		server.getOrCreateClientContext(defaultWebClientID).ProjectFolder = dir
 
-		// Request a file outside the workspace — should be skipped
+		// Request a file outside the project folder — should be skipped
 		reqBody := checkModifiedRequest{
 			Files: map[string]int64{
 				filepath.Join(t.TempDir(), "passwd"): 0,

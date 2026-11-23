@@ -23,7 +23,7 @@ func (ws *ReactWebServer) handleAPISettingsGet(w http.ResponseWriter, r *http.Re
 		ws.handleGetGlobalSettings(w, r)
 		return
 	case "workspace":
-		ws.handleGetWorkspaceSettings(w, r)
+		ws.handleGetProjectFolderSettings(w, r)
 		return
 	case "session":
 		ws.handleGetSessionSettings(w, r)
@@ -81,15 +81,15 @@ func (ws *ReactWebServer) handleGetGlobalSettings(w http.ResponseWriter, r *http
 	writeJSON(w, http.StatusOK, sanitizedConfig(&cfg))
 }
 
-// handleGetWorkspaceSettings returns the workspace config if it exists, else empty.
-func (ws *ReactWebServer) handleGetWorkspaceSettings(w http.ResponseWriter, r *http.Request) {
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	if workspaceRoot == "" {
+// handleGetProjectFolderSettings returns the project folder config if it exists, else empty.
+func (ws *ReactWebServer) handleGetProjectFolderSettings(w http.ResponseWriter, r *http.Request) {
+	projectFolder := ws.getProjectFolderForRequest(r)
+	if projectFolder == "" {
 		writeJSON(w, http.StatusOK, map[string]interface{}{})
 		return
 	}
-	workspacePath := configuration.GetWorkspaceConfigPath(workspaceRoot)
-	data, err := os.ReadFile(workspacePath)
+	projectFolderPath := configuration.GetProjectFolderConfigPath(projectFolder)
+	data, err := os.ReadFile(projectFolderPath)
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]interface{}{})
 		return
@@ -129,7 +129,7 @@ func (ws *ReactWebServer) handleGetSessionSettings(w http.ResponseWriter, r *htt
 }
 
 // handleGetProvenanceSettings returns per-key source information for the effective config.
-// Response shape: { "sources": { "key": "global"|"workspace"|"session" } }
+// Response shape: { "sources": { "key": "global"|"project folder"|"session" } }
 func (ws *ReactWebServer) handleGetProvenanceSettings(w http.ResponseWriter, r *http.Request) {
 	// Load global config
 	var globalCfg configuration.Config
@@ -139,12 +139,12 @@ func (ws *ReactWebServer) handleGetProvenanceSettings(w http.ResponseWriter, r *
 		}
 	}
 
-	// Load workspace config
-	var workspaceCfg configuration.Config
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	if workspaceRoot != "" {
-		if data, err := os.ReadFile(configuration.GetWorkspaceConfigPath(workspaceRoot)); err == nil {
-			_ = json.Unmarshal(data, &workspaceCfg)
+	// Load project folder config
+	var projectFolderCfg configuration.Config
+	projectFolder := ws.getProjectFolderForRequest(r)
+	if projectFolder != "" {
+		if data, err := os.ReadFile(configuration.GetProjectFolderConfigPath(projectFolder)); err == nil {
+			_ = json.Unmarshal(data, &projectFolderCfg)
 		}
 	}
 
@@ -182,15 +182,15 @@ func (ws *ReactWebServer) handleGetProvenanceSettings(w http.ResponseWriter, r *
 		sources[k] = "session"
 	}
 
-	// Compare workspace vs global (using expanded maps for nested keys).
-	// Merge in defaults from a fresh config so that explicit workspace zero
+	// Compare project folder vs global (using expanded maps for nested keys).
+	// Merge in defaults from a fresh config so that explicit project folder zero
 	// values (e.g., reasoning_effort="") match the implicit global default
-	// instead of being falsely attributed to "workspace".
+	// instead of being falsely attributed to "project folder".
 	globalJSON, _ := json.Marshal(globalCfg)
-	workspaceJSON, _ := json.Marshal(workspaceCfg)
-	var globalMap, workspaceMap map[string]interface{}
+	projectFolderJSON, _ := json.Marshal(projectFolderCfg)
+	var globalMap, projectFolderMap map[string]interface{}
 	_ = json.Unmarshal(globalJSON, &globalMap)
-	_ = json.Unmarshal(workspaceJSON, &workspaceMap)
+	_ = json.Unmarshal(projectFolderJSON, &projectFolderMap)
 
 	defaultJSON, _ := json.Marshal(configuration.NewConfig())
 	var defaultMap map[string]interface{}
@@ -202,9 +202,9 @@ func (ws *ReactWebServer) handleGetProvenanceSettings(w http.ResponseWriter, r *
 			expandedGlobal[k] = v
 		}
 	}
-	expandedWorkspace := expandNestedKeys(workspaceMap)
+	expandedProjectFolder := expandNestedKeys(projectFolderMap)
 
-	for k, wv := range expandedWorkspace {
+	for k, wv := range expandedProjectFolder {
 		if _, isSession := sources[k]; isSession {
 			continue
 		}

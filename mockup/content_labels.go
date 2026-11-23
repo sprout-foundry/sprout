@@ -1,0 +1,101 @@
+package mockup
+
+import (
+	"regexp"
+	"strings"
+
+	nethtml "golang.org/x/net/html"
+)
+
+var (
+	priceRe = regexp.MustCompile(`(?i)^(from\s+)?[£$€]\s?\d[\d,]*(\.\d\d)?(\s?(each|pp|a head|per \w+|/\s?\w+))?$|^\d[\d,]*(\.\d\d)?\s?(€|pts?|points)$`)
+	timeRe  = regexp.MustCompile(`(?i)^(\w+day,?\s+)?\d{1,2}([:.]\d{2})?\s?(am|pm)?(\s?[–-]\s?\d{1,2}([:.]\d{2})?\s?(am|pm)?)?$`)
+	dateRe  = regexp.MustCompile(`(?i)^(mon|tues|wednes|thurs|fri|satur|sun)day\b|\b\d{1,2}(st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}(st|nd|rd|th)?\b`)
+	phoneRe = regexp.MustCompile(`^\+?[\d ()-]{9,}$`)
+	emailRe = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[a-z]{2,}$`)
+)
+
+// textLabel names a piece of text by what it says or the kit part it is, for
+// one the drawing gave no label: a price, a time, a date, contact details,
+// the business's name. "" when it is none of those.
+func textLabel(text, class string) string {
+	classes := " " + class + " "
+	has := func(c string) bool { return strings.Contains(classes, " "+c+" ") }
+	t := strings.TrimSpace(text)
+	switch {
+	case has("nav-brand") || has("logo"):
+		return "Name"
+	case has("price") || priceRe.MatchString(t):
+		return "Price"
+	case emailRe.MatchString(t):
+		return "Email"
+	case phoneRe.MatchString(t) && strings.Count(t, " ") < 5:
+		return "Phone"
+	case has("time") || timeRe.MatchString(t):
+		return "Time"
+	case has("day") || (len(t) < 40 && dateRe.MatchString(t)):
+		return "Date"
+	case has("eyebrow") || has("kicker"):
+		return "Small label"
+	case has("lead"):
+		return "Intro"
+	case has("stat"):
+		return "Figure"
+	case has("stat-label"):
+		return "Figure label"
+	case has("badge") || has("chip"):
+		return "Tag"
+	}
+	return ""
+}
+
+// interactiveTag is text the person acts on or a form names: it keeps its
+// element's label (a button saying a date is still a button).
+func interactiveTag(tag, class string) bool {
+	if strings.Contains(" "+class+" ", " nav-brand ") {
+		return false
+	}
+	switch tag {
+	case "a", "button", "option", "label", "title":
+		return true
+	}
+	return strings.Contains(" "+class+" ", " btn")
+}
+
+func elementLabel(tag, class string) string {
+	switch tag {
+	case "title":
+		return "Page title"
+	case "h1":
+		return "Main heading"
+	case "h2", "h3", "h4", "h5", "h6":
+		return "Heading"
+	case "button":
+		return "Button"
+	case "a":
+		if strings.Contains(" "+class+" ", " btn") {
+			return "Button"
+		}
+		return "Link"
+	case "label":
+		return "Field label"
+	case "li":
+		return "List item"
+	case "th", "td":
+		return "Table cell"
+	case "option":
+		return "Choice"
+	case "blockquote", "q":
+		return "Quote"
+	}
+	return "Text"
+}
+
+func placeholderLabel(t nethtml.Token) string {
+	if l := attr(t, labelAttr); l != "" {
+		return l
+	}
+	return "Placeholder"
+}
+
+// humanize turns a screen id ("host-view") into words ("Host view").

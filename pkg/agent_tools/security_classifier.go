@@ -168,7 +168,7 @@ func ClassifyToolCall(toolName string, args map[string]interface{}) SecurityResu
 	case "write_file", "edit_file", "write_structured_file", "patch_structured_file":
 		result = classifyWriteOperation(args)
 	case "mkdir":
-		result = SecurityResult{Risk: SecuritySafe, Reasoning: "Directory creation in workspace", Category: RiskCategoryFileWrite}
+		result = SecurityResult{Risk: SecuritySafe, Reasoning: "Directory creation in project folder", Category: RiskCategoryFileWrite}
 	case "fetch_url", "web_search":
 		result = SecurityResult{Risk: SecuritySafe, Reasoning: "Network access tool", Category: RiskCategoryNetwork}
 	case "browse_url":

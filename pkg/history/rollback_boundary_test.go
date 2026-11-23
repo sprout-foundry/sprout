@@ -118,7 +118,7 @@ func TestRollbackWritesFileInsideProjectFolder(t *testing.T) {
 	}
 
 	if err := handleRevisionRollback(groups[0]); err != nil {
-		t.Fatalf("handleRevisionRollback failed for inside-workspace file: %v", err)
+		t.Fatalf("handleRevisionRollback failed for inside-project-folder file: %v", err)
 	}
 
 	restored, err := os.ReadFile(insideFile)
@@ -206,7 +206,7 @@ func TestRestoreWritesFileInsideProjectFolder(t *testing.T) {
 	}
 
 	if err := handleRevisionRestore(groups[0]); err != nil {
-		t.Fatalf("handleRevisionRestore failed for inside-workspace file: %v", err)
+		t.Fatalf("handleRevisionRestore failed for inside-project-folder file: %v", err)
 	}
 
 	restored, err := os.ReadFile(insideFile)
@@ -241,7 +241,7 @@ func TestIsWithinProjectFolderDirect(t *testing.T) {
 	}{
 		{"relative inside", "foo.txt", true},
 		{"nested relative inside", "sub/dir/foo.txt", true},
-		{"absolute inside workspace", filepath.Join(dir, "abs.txt"), true},
+		{"absolute inside project folder", filepath.Join(dir, "abs.txt"), true},
 		{"tmp path allowed", filepath.Join(os.TempDir(), "rollboundary-ok.txt"), true},
 		{"empty rejected", "", false},
 	}
@@ -250,16 +250,16 @@ func TestIsWithinProjectFolderDirect(t *testing.T) {
 			name   string
 			path   string
 			within bool
-		}{"absolute outside workspace and tmp", homeOutside, false})
+		}{"absolute outside project folder and tmp", homeOutside, false})
 	} else {
-		t.Logf("could not find a non-/tmp external path; skipping 'outside workspace and tmp' case")
+		t.Logf("could not find a non-/tmp external path; skipping 'outside project folder and tmp' case")
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			got := isWithinProjectFolder(tc.path)
 			if got != tc.within {
-				t.Errorf("isWithinWorkspace(%q) = %v, want %v", tc.path, got, tc.within)
+				t.Errorf("isWithinProjectFolder(%q) = %v, want %v", tc.path, got, tc.within)
 			}
 		})
 	}

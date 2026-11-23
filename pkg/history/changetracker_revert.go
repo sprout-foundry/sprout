@@ -323,7 +323,7 @@ func handleRevisionRollback(group RevisionGroup) error {
 		// or committed elsewhere; blindly restoring them would clobber
 		// intentional changes outside this project.
 		if !isWithinProjectFolder(change.Filename) {
-			fmt.Printf("  Skipping %s: outside current workspace (safety check)\n", change.Filename)
+			fmt.Printf("  Skipping %s: outside current project folder (safety check)\n", change.Filename)
 			skipped++
 			continue
 		}
@@ -386,7 +386,7 @@ func handleRevisionRestore(group RevisionGroup) error {
 		// Safety check: never write to files outside the current project folder.
 		// See handleRevisionRollback for rationale.
 		if !isWithinProjectFolder(change.Filename) {
-			fmt.Printf("  Skipping %s: outside current workspace (safety check)\n", change.Filename)
+			fmt.Printf("  Skipping %s: outside current project folder (safety check)\n", change.Filename)
 			skipped++
 			continue
 		}

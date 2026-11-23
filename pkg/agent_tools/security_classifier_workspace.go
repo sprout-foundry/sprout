@@ -63,7 +63,7 @@ func ClassifyToolCallWithProjectFolder(toolName string, args map[string]interfac
 	if offProjectFolderPathInCommand(cmd, projectFolder, extraAllowed) {
 		return SecurityResult{
 			Risk:         SecurityCaution,
-			Reasoning:    "Command references paths outside the workspace root — approval required",
+			Reasoning:    "Command references paths outside the project folder — approval required",
 			ShouldPrompt: true,
 			RiskType:     "filesystem_outside_workspace",
 			Category:     RiskCategoryFileWrite,

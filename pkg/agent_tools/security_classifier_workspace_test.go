@@ -25,7 +25,7 @@ func TestClassifyToolCallWithProjectFolder(t *testing.T) {
 		safe bool
 	}{
 		{"relative ls", "ls -la", true},
-		{"workspace abs path", "cat /home/dev/ws/main.go", true},
+		{"project folder abs path", "cat /home/dev/ws/main.go", true},
 		{"tmp allowed", "cp file /tmp/sprout/x.txt", true},
 		{"dev null", "make build > /dev/null 2>&1", true},
 		{"system binary env", "/usr/bin/env python3 script.py", true},
@@ -104,7 +104,7 @@ func TestOffProjectFolderPathInCommandDotDot(t *testing.T) {
 		t.Fatal("mixed ../ escape must be detected")
 	}
 	if offProjectFolderPathInCommand("ls ../ws-sub/../ws", ws, nil) {
-		t.Fatal("path resolving back into workspace must not flag")
+		t.Fatal("path resolving back into project folder must not flag")
 	}
 }
 

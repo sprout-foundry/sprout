@@ -89,7 +89,7 @@ func runHostE2E(t *testing.T, bin string, sandboxed bool) {
 		t.Fatalf("txn run: %d %v", code, body)
 	}
 	if out, _ := body["stdout"].(string); !strings.Contains(out, filepath.Join("e2e-ws", "repo")) {
-		t.Errorf("command must run in the workspace clone; stdout %q", out)
+		t.Errorf("command must run in the project folder clone; stdout %q", out)
 	}
 	if code, _ := run("wrong", "true"); code != http.StatusForbidden {
 		t.Errorf("wrong bearer through the host server: %d", code)
@@ -113,7 +113,7 @@ func runHostE2E(t *testing.T, bin string, sandboxed bool) {
 		_, body := run("e2e-secret", "touch "+outside+"; echo exit=$?")
 		if _, err := os.Stat(outside); err == nil {
 			_ = os.Remove(outside)
-			t.Errorf("native mode let a command write outside the workspace: %v", body)
+			t.Errorf("native mode let a command write outside the project folder: %v", body)
 		}
 	}
 }
@@ -147,7 +147,7 @@ func runLocalDirE2E(t *testing.T, bin string, sandboxed bool) {
 	if err := os.MkdirAll(local, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(local, "hello.txt"), []byte("local workspace\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(local, "hello.txt"), []byte("local project folder\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -179,7 +179,7 @@ func runLocalDirE2E(t *testing.T, bin string, sandboxed bool) {
 		t.Fatalf("txn run in a local directory: %d %v", resp.StatusCode, body)
 	}
 	out, _ := body["stdout"].(string)
-	if !strings.Contains(out, "myproject") || !strings.Contains(out, "local workspace") {
+	if !strings.Contains(out, "myproject") || !strings.Contains(out, "local project folder") {
 		t.Errorf("command must run in the user's directory; stdout %q", out)
 	}
 	if _, err := os.Stat(filepath.Join(local, "made.txt")); err != nil {
@@ -204,7 +204,7 @@ func runLocalDirE2E(t *testing.T, bin string, sandboxed bool) {
 		}
 		if escape() {
 			_ = os.Remove(outside)
-			t.Error("native mode let a command write outside the local workspace and its metadata dir")
+			t.Error("native mode let a command write outside the local project folder and its metadata dir")
 		}
 	}
 }

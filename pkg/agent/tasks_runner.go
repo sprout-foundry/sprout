@@ -162,7 +162,7 @@ func (r *taskRegistry) reserve(projectFolder string, limit int) (*taskRecord, er
 	}
 	if n >= limit {
 		return nil, agenterrors.NewValidation(
-			fmt.Sprintf("%d tasks are already running for this workspace (limit %d); stop one with /tasks stop <id>", n, limit), nil)
+			fmt.Sprintf("%d tasks are already running for this project folder (limit %d); stop one with /tasks stop <id>", n, limit), nil)
 	}
 	rec := &taskRecord{Status: "running", ProjectFolder: projectFolder, Started: time.Now()}
 	// The placeholder's slot in order is recorded on the record itself, so
@@ -456,14 +456,14 @@ func (a *Agent) MergeTask(ctx context.Context, id string) (string, error) {
 	if dirty, err := runGitIn(ctx, repoRoot, "status", "--porcelain"); err != nil {
 		return "", err
 	} else if strings.TrimSpace(dirty) != "" {
-		return "", agenterrors.NewValidation("the workspace has uncommitted changes; commit or stash them before merging a task", nil)
+		return "", agenterrors.NewValidation("the project folder has uncommitted changes; commit or stash them before merging a task", nil)
 	}
 
 	// --no-commit first so a conflict aborts without leaving a half-merged
 	// tree behind.
 	if _, err := runGitIn(ctx, repoRoot, "merge", "--no-commit", "--no-ff", branch); err != nil {
 		_, _ = runGitIn(ctx, repoRoot, "merge", "--abort")
-		return "", fmt.Errorf("merge %s into the workspace: %w", branch, err)
+		return "", fmt.Errorf("merge %s into the project folder: %w", branch, err)
 	}
 	// The merge commit lands on the user's own branch, so the repo's hooks
 	// run: this is the one commit in the feature a human would have made.
@@ -473,13 +473,13 @@ func (a *Agent) MergeTask(ctx context.Context, id string) (string, error) {
 
 	if restored {
 		processTasks.setTerminal(id, "merged", "", "")
-		return fmt.Sprintf("Merged %s into the workspace. The worktree at %s was kept: it may hold work the task "+
+		return fmt.Sprintf("Merged %s into the project folder. The worktree at %s was kept: it may hold work the task "+
 			"never committed. Branch %s is kept — remove the worktree with `git worktree remove %s` once you have "+
 			"salvaged anything you need, or the branch stays checked out there.", branch, path, branch, path), nil
 	}
 
 	wt.remove(ctx)
 	processTasks.setTerminal(id, "merged", "", "")
-	return fmt.Sprintf("Merged %s into the workspace. The worktree at %s was removed; branch %s is kept.",
+	return fmt.Sprintf("Merged %s into the project folder. The worktree at %s was removed; branch %s is kept.",
 		branch, path, branch), nil
 }

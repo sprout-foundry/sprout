@@ -92,7 +92,7 @@ func TestHandleAPISemanticIncludesDurationAndNormalizesTrigger(t *testing.T) {
 		expectedPath = evaled
 	}
 	if adapter.lastInput.FilePath != expectedPath {
-		t.Fatalf("expected canonical file path inside workspace, got %q", adapter.lastInput.FilePath)
+		t.Fatalf("expected canonical file path inside project folder, got %q", adapter.lastInput.FilePath)
 	}
 	if resp.DurationMs <= 0 {
 		t.Fatalf("expected duration_ms > 0, got %d", resp.DurationMs)

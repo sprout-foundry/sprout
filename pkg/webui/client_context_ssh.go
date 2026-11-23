@@ -45,15 +45,15 @@ func (ws *ReactWebServer) clearClientSSHContextForSessionKey(sessionKey string) 
 func (ws *ReactWebServer) setClientProjectFolder(clientID, path string) (string, error) {
 	projectFolder, err := filepathAbsEval(path)
 	if err != nil {
-		return "", fmt.Errorf("resolve workspace root: %w", err)
+		return "", fmt.Errorf("resolve project folder: %w", err)
 	}
 
 	info, err := os.Stat(projectFolder)
 	if err != nil {
-		return "", fmt.Errorf("stat workspace root: %w", err)
+		return "", fmt.Errorf("stat project folder: %w", err)
 	}
 	if !info.IsDir() {
-		return "", fmt.Errorf("workspace root %q must be a directory", projectFolder)
+		return "", fmt.Errorf("project folder %q must be a directory", projectFolder)
 	}
 
 	ws.mutex.Lock()
@@ -67,7 +67,7 @@ func (ws *ReactWebServer) setClientProjectFolder(clientID, path string) (string,
 	}
 
 	if !isWithinProjectFolder(projectFolder, resolvedDaemonRoot) && projectFolder != resolvedDaemonRoot {
-		return "", fmt.Errorf("workspace root must stay within daemon root %s", ws.daemonRoot)
+		return "", fmt.Errorf("project folder must stay within daemon root %s", ws.daemonRoot)
 	}
 
 	// Defense-in-depth: reject the home directory as a project folder without
@@ -76,7 +76,7 @@ func (ws *ReactWebServer) setClientProjectFolder(clientID, path string) (string,
 	// this prevents any other internal caller from silently setting home as
 	// the project folder. SP-130.
 	if isHomeProjectFolder(projectFolder) && !hasHomeProjectFolderConsent() {
-		return "", fmt.Errorf("workspace root must not be the home directory without explicit consent")
+		return "", fmt.Errorf("project folder must not be the home directory without explicit consent")
 	}
 
 	if ws.clientContexts == nil {

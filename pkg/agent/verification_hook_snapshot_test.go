@@ -137,7 +137,7 @@ func TestPathResolvesToStarterManifest(t *testing.T) {
 	ag := snapGuardAgent(t, root, &configuration.VerificationConfig{Enabled: true})
 
 	assert.True(t, pathResolvesToStarterManifest(ag, manifest), "the absolute manifest path must match")
-	assert.True(t, pathResolvesToStarterManifest(ag, ".sprout/starter.json"), "a relative manifest path must resolve against the workspace root")
+	assert.True(t, pathResolvesToStarterManifest(ag, ".sprout/starter.json"), "a relative manifest path must resolve against the project folder")
 	assert.False(t, pathResolvesToStarterManifest(ag, filepath.Join(root, "src", "app.js")), "an unrelated path must not match")
 }
 

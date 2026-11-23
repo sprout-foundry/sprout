@@ -26,7 +26,7 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 	// gate exists to prevent.
 	if isHomeProjectFolder(projectFolder) && !hasHomeProjectFolderConsent() {
 		writeJSON(w, http.StatusForbidden, map[string]interface{}{
-			"error": "Workspace is the home directory and no consent was granted; select a workspace first",
+			"error": "Project folder is the home directory and no consent was granted; select a project folder first",
 			"code":  "workspace_not_selected",
 		})
 		return
@@ -53,7 +53,7 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 	}
 	if !isWithinProjectFolder(canonicalDir, projectFolder) && !ws.allowExternalAccessForRequest(r, canonicalDir) {
 		writeJSON(w, http.StatusForbidden, map[string]interface{}{
-			"error": "Directory outside workspace",
+			"error": "Directory outside project folder",
 			"code":  "directory_outside_workspace",
 		})
 		return

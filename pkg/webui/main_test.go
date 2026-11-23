@@ -191,7 +191,7 @@ func assertNoRecentProjectFoldersLeak(path string, before []byte) int {
 		return 0
 	}
 	fmt.Fprintf(os.Stderr,
-		"STATE LEAK: %s was modified during the test run — a RecordWorkspace "+
+		"STATE LEAK: %s was modified during the test run — a RecordProjectFolder "+
 			"bypassed the TestMain redirect and wrote to the real user file.\n", path)
 	return 1
 }

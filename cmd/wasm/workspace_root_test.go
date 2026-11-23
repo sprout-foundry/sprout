@@ -41,7 +41,7 @@ func TestProjectFolderPathResolvesHostPathsAgainstTheProjectFolder(t *testing.T)
 	}
 	for in, want := range cases {
 		if got := projectFolderPath(in); got != want {
-			t.Errorf("workspacePath(%q) = %q, want %q", in, got, want)
+			t.Errorf("projectFolderPath(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
@@ -56,7 +56,7 @@ func TestProjectFolderPathIgnoresTheTerminalsCwd(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got := projectFolderPath("go.mod"); got != filepath.Join(root, "go.mod") {
-		t.Errorf("after cd api, workspacePath(go.mod) = %q, want the workspace's go.mod", got)
+		t.Errorf("after cd api, projectFolderPath(go.mod) = %q, want the project folder's go.mod", got)
 	}
 }
 
@@ -72,7 +72,7 @@ func TestFromProjectFolderRunsAtTheRootAndRestoresTheCwd(t *testing.T) {
 	})
 
 	if !samePath(ran, root) {
-		t.Errorf("ran in %q, want the workspace root %q", ran, root)
+		t.Errorf("ran in %q, want the project folder %q", ran, root)
 	}
 	if cwd, _ := os.Getwd(); !samePath(cwd, sub) {
 		t.Errorf("cwd after = %q, want it restored to %q", cwd, sub)

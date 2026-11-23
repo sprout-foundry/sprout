@@ -122,7 +122,7 @@ func (a *Agent) ReviewChanges(ctx context.Context, opts ReviewChangesOptions) (*
 	}
 	projectFolder, err := filepath.Abs(dir)
 	if err != nil {
-		return nil, agenterrors.NewConfig("failed to resolve absolute workspace path", err)
+		return nil, agenterrors.NewConfig("failed to resolve absolute project folder path", err)
 	}
 	repoRoot := reviewRepoRoot(ctx, projectFolder)
 	if repoRoot == "" {

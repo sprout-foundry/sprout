@@ -129,7 +129,7 @@ func (ws *ReactWebServer) handleGetSessionSettings(w http.ResponseWriter, r *htt
 }
 
 // handleGetProvenanceSettings returns per-key source information for the effective config.
-// Response shape: { "sources": { "key": "global"|"project folder"|"session" } }
+// Response shape: { "sources": { "key": "global"|"workspace"|"session" } }
 func (ws *ReactWebServer) handleGetProvenanceSettings(w http.ResponseWriter, r *http.Request) {
 	// Load global config
 	var globalCfg configuration.Config
@@ -185,7 +185,7 @@ func (ws *ReactWebServer) handleGetProvenanceSettings(w http.ResponseWriter, r *
 	// Compare project folder vs global (using expanded maps for nested keys).
 	// Merge in defaults from a fresh config so that explicit project folder zero
 	// values (e.g., reasoning_effort="") match the implicit global default
-	// instead of being falsely attributed to "project folder".
+	// instead of being falsely attributed to "workspace".
 	globalJSON, _ := json.Marshal(globalCfg)
 	projectFolderJSON, _ := json.Marshal(projectFolderCfg)
 	var globalMap, projectFolderMap map[string]interface{}

@@ -207,7 +207,7 @@ func (ws *ReactWebServer) handleAPIAutomateSessionOutput(w http.ResponseWriter, 
 		// Add trailing separator to avoid prefix mismatches like
 		// "/tmp/ws2" matching "/tmp/ws".
 		if !strings.HasPrefix(absOutput, absProjectFolder+string(filepath.Separator)) {
-			writeJSONError(w, http.StatusBadRequest, "output file path outside workspace")
+			writeJSONError(w, http.StatusBadRequest, "output file path outside project folder")
 			return
 		}
 	}

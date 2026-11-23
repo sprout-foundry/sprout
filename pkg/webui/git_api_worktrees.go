@@ -199,7 +199,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 	daemonRoot := ws.daemonRoot
 	ws.mutex.RUnlock()
 	if !worktreePathAllowed(absPath, daemonRoot, projectFolder) {
-		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within the workspace or sit beside it (../)")
+		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within the project folder or sit beside it (../)")
 		return
 	}
 
@@ -284,7 +284,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeRemove(w http.ResponseWriter, r *h
 	daemonRoot := ws.daemonRoot
 	ws.mutex.RUnlock()
 	if !worktreePathAllowed(absPath, daemonRoot, projectFolder) {
-		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within the workspace or sit beside it (../)")
+		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within the project folder or sit beside it (../)")
 		return
 	}
 

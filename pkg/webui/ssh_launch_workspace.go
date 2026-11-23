@@ -50,7 +50,7 @@ func (ws *ReactWebServer) launchSSHProjectFolder(req sshLaunchRequestDTO) (resul
 			ws.sshLaunchStatuses[sessionKey] = &sshLaunchStatus{
 				Key:        sessionKey,
 				Step:       step,
-				Status:     "SSH workspace launch failed",
+				Status:     "SSH project folder launch failed",
 				InProgress: false,
 				LastError:  err.Error(),
 				Details:    details,
@@ -72,7 +72,7 @@ func (ws *ReactWebServer) launchSSHProjectFolder(req sshLaunchRequestDTO) (resul
 		ws.sshLaunchStatuses[sessionKey] = &sshLaunchStatus{
 			Key:        sessionKey,
 			Step:       "ready",
-			Status:     fmt.Sprintf("SSH workspace ready: %s", hostAlias),
+			Status:     fmt.Sprintf("SSH project folder ready: %s", hostAlias),
 			InProgress: false,
 			UpdatedAt:  time.Now(),
 			ProxyBase:  proxyBase,
@@ -201,7 +201,7 @@ func (ws *ReactWebServer) launchSSHProjectFolder(req sshLaunchRequestDTO) (resul
 	}
 	logger.Logf("ssh tunnel started local_port=%d remote_port=%d", localPort, remotePort)
 
-	ws.setSSHLaunchStatus(sessionKey, "health-check", "Waiting for SSH workspace health check...", true, "")
+	ws.setSSHLaunchStatus(sessionKey, "health-check", "Waiting for SSH project folder health check...", true, "")
 	if err := waitForWebHealth(localPort, sshLaunchHealthTimeout); err != nil {
 		logger.Logf("health check failed: %v", err)
 		if isRetryableSSHHealthError(err) {
@@ -236,7 +236,7 @@ func (ws *ReactWebServer) launchSSHProjectFolder(req sshLaunchRequestDTO) (resul
 			if !reusedDaemon {
 				_ = stopRemoteSSHBackend(hostAlias, remotePID)
 			}
-			return nil, newSSHLaunchFailure("health-check", "failed to connect to SSH workspace", details, logger)
+			return nil, newSSHLaunchFailure("health-check", "failed to connect to SSH project folder", details, logger)
 		}
 	}
 	logger.Logf("health check passed for local port %d", localPort)

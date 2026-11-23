@@ -106,7 +106,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 	if daemonRoot == "" {
 		daemonRoot = projectFolder
 		if serviceMode {
-			webuiLogger.Warn("user home could not be resolved; workspace browser may not reach projects",
+			webuiLogger.Warn("user home could not be resolved; project folder browser may not reach projects",
 				slog.String("workspace_root", projectFolder),
 				slog.String("remediation", "sprout service uninstall && sprout service install"),
 			)

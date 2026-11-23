@@ -181,7 +181,7 @@ func TestLoadConfigWithLayers_DisableLanguageGuard(t *testing.T) {
 	writeFile(t, globalPath, `{"version":"2.1","disable_language_guard":false}`)
 	writeFile(t, projectFolderPath, `{"disable_language_guard":true}`)
 	cfg = load()
-	assert.True(t, cfg.DisableLanguageGuard, "workspace disable_language_guard:true must win")
+	assert.True(t, cfg.DisableLanguageGuard, "project folder disable_language_guard:true must win")
 	assert.False(t, cfg.LanguageGuardEnabled())
 
 	// The global disables the guard; the project folder never names the key —
@@ -189,7 +189,7 @@ func TestLoadConfigWithLayers_DisableLanguageGuard(t *testing.T) {
 	writeFile(t, globalPath, `{"version":"2.1","disable_language_guard":true}`)
 	writeFile(t, projectFolderPath, `{"reasoning_effort":"high"}`)
 	cfg = load()
-	assert.True(t, cfg.DisableLanguageGuard, "a silent workspace layer must keep the global disable")
+	assert.True(t, cfg.DisableLanguageGuard, "a silent project folder layer must keep the global disable")
 	assert.False(t, cfg.LanguageGuardEnabled())
 	assert.Equal(t, "high", cfg.ReasoningEffort)
 }

@@ -30,9 +30,9 @@ func TestLayerCanDisableFlatBooleans(t *testing.T) {
 		"", globalDir)
 	require.NoError(t, err)
 
-	assert.False(t, cfg.SkipPrompt, "workspace skip_prompt:false must win")
-	assert.False(t, cfg.DisableThinking, "workspace disable_thinking:false must win")
-	assert.False(t, cfg.MCP.Enabled, "workspace mcp.enabled:false must win")
+	assert.False(t, cfg.SkipPrompt, "project folder skip_prompt:false must win")
+	assert.False(t, cfg.DisableThinking, "project folder disable_thinking:false must win")
+	assert.False(t, cfg.MCP.Enabled, "project folder mcp.enabled:false must win")
 }
 
 // Presence tracking must not make silence destructive: a layer that never names

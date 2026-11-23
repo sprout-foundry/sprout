@@ -95,7 +95,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSet(w http.ResponseWriter,
 		daemonRoot := ws.daemonRoot
 		ws.mutex.RUnlock()
 		if !isWithinProjectFolder(absPath, daemonRoot) && absPath != daemonRoot {
-			writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within workspace boundary")
+			writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within project folder boundary")
 			return
 		}
 
@@ -198,7 +198,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 	daemonRoot := ws.daemonRoot
 	ws.mutex.RUnlock()
 	if !isWithinProjectFolder(absPath, daemonRoot) && absPath != daemonRoot {
-		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within workspace boundary")
+		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within project folder boundary")
 		return
 	}
 
@@ -236,7 +236,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 	ws.mutex.Unlock()
 
 	if cs == nil {
-		writeJSONErr(w, http.StatusInternalServerError, "chat_session_not_found", "Chat session not found after workspace switch")
+		writeJSONErr(w, http.StatusInternalServerError, "chat_session_not_found", "Chat session not found after project folder switch")
 		return
 	}
 
@@ -360,7 +360,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 	daemonRoot := ws.daemonRoot
 	ws.mutex.RUnlock()
 	if !isWithinProjectFolder(worktreePath, daemonRoot) && worktreePath != daemonRoot {
-		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within workspace boundary")
+		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within project folder boundary")
 		return
 	}
 

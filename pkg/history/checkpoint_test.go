@@ -298,19 +298,19 @@ func TestCheckpointProjectFolder_ReaderMatchesWriter(t *testing.T) {
 
 	cp, err := CreateCheckpointInProjectFolder(projectFolder, CheckpointVerification, "passed", nil)
 	if err != nil {
-		t.Fatalf("CreateCheckpointInWorkspace: %v", err)
+		t.Fatalf("CreateCheckpointInProjectFolder: %v", err)
 	}
 
 	inProjectFolder, err := ListCheckpointsInProjectFolder(projectFolder, false)
 	if err != nil {
-		t.Fatalf("ListCheckpointsInWorkspace: %v", err)
+		t.Fatalf("ListCheckpointsInProjectFolder: %v", err)
 	}
 	if len(inProjectFolder) != 1 || inProjectFolder[0].ID != cp.ID {
-		t.Fatalf("workspace store = %v, want the created checkpoint %s", ids(inProjectFolder), cp.ID)
+		t.Fatalf("project folder store = %v, want the created checkpoint %s", ids(inProjectFolder), cp.ID)
 	}
 
 	if _, found, err := GetCheckpointInProjectFolder(projectFolder, cp.ID); err != nil || !found {
-		t.Fatalf("GetCheckpointInWorkspace(%s) found=%v err=%v, want found", cp.ID, found, err)
+		t.Fatalf("GetCheckpointInProjectFolder(%s) found=%v err=%v, want found", cp.ID, found, err)
 	}
 
 	// The process-wide store must not contain it (proves the scoping is real,
@@ -318,7 +318,7 @@ func TestCheckpointProjectFolder_ReaderMatchesWriter(t *testing.T) {
 	if _, found, err := GetCheckpoint(cp.ID); err != nil {
 		t.Fatalf("GetCheckpoint: %v", err)
 	} else if found {
-		t.Errorf("process-wide store found a workspace-scoped checkpoint %s", cp.ID)
+		t.Errorf("process-wide store found a project-folder-scoped checkpoint %s", cp.ID)
 	}
 }
 
@@ -332,10 +332,10 @@ func TestRestoreCheckpointInProjectFolder_RecordsRestoreInSameStore(t *testing.T
 
 	cp, err := CreateCheckpointInProjectFolder(workdir, CheckpointManual, "point", nil)
 	if err != nil {
-		t.Fatalf("CreateCheckpointInWorkspace: %v", err)
+		t.Fatalf("CreateCheckpointInProjectFolder: %v", err)
 	}
 	if _, err := RestoreCheckpointInProjectFolder(workdir, cp.ID); err != nil {
-		t.Fatalf("RestoreCheckpointInWorkspace: %v", err)
+		t.Fatalf("RestoreCheckpointInProjectFolder: %v", err)
 	}
 
 	got, _ := os.ReadFile(target)
@@ -345,10 +345,10 @@ func TestRestoreCheckpointInProjectFolder_RecordsRestoreInSameStore(t *testing.T
 
 	cps, err := ListCheckpointsInProjectFolder(workdir, false)
 	if err != nil {
-		t.Fatalf("ListCheckpointsInWorkspace: %v", err)
+		t.Fatalf("ListCheckpointsInProjectFolder: %v", err)
 	}
 	if len(cps) != 2 || cps[1].Origin != CheckpointRestore {
-		t.Fatalf("workspace store after restore = %v, want [%s, restore]", ids(cps), cp.ID)
+		t.Fatalf("project folder store after restore = %v, want [%s, restore]", ids(cps), cp.ID)
 	}
 }
 
@@ -379,7 +379,7 @@ func TestCreateCheckpointForRevision_UsesGivenRevision(t *testing.T) {
 
 	stored, found, err := GetCheckpointInProjectFolder(projectFolder, cp.ID)
 	if err != nil || !found {
-		t.Fatalf("GetCheckpointInWorkspace(%s) found=%v err=%v", cp.ID, found, err)
+		t.Fatalf("GetCheckpointInProjectFolder(%s) found=%v err=%v", cp.ID, found, err)
 	}
 	if stored.RevisionID != "rev-old" {
 		t.Errorf("stored revision = %q, want rev-old", stored.RevisionID)

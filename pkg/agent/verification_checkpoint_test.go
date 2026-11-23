@@ -57,7 +57,7 @@ func TestCaptureVerificationCheckpoint_PassingCaptures(t *testing.T) {
 
 	ag.CaptureVerificationCheckpoint(vcPassingResult())
 	if capturedProjectFolder != root {
-		t.Errorf("captured workspace = %q, want %q", capturedProjectFolder, root)
+		t.Errorf("captured project folder = %q, want %q", capturedProjectFolder, root)
 	}
 }
 
@@ -137,7 +137,7 @@ func TestCaptureCheckpointForProjectFolder_WritesStore(t *testing.T) {
 	}
 
 	if err := captureCheckpointForProjectFolder(root, "rev-1", vcPassingResult()); err != nil {
-		t.Fatalf("captureCheckpointForWorkspace: %v", err)
+		t.Fatalf("captureCheckpointForProjectFolder: %v", err)
 	}
 
 	// The production capture writes under the project folder, not the
@@ -196,7 +196,7 @@ func TestCaptureCheckpointForProjectFolder_UsesGivenRevisionNotMostRecent(t *tes
 
 	// The turn produced rev-old; capture names exactly that.
 	if err := captureCheckpointForProjectFolder(root, "rev-old", vcPassingResult()); err != nil {
-		t.Fatalf("captureCheckpointForWorkspace: %v", err)
+		t.Fatalf("captureCheckpointForProjectFolder: %v", err)
 	}
 
 	prevStore := history.GetCheckpointsDir()

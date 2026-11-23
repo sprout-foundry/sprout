@@ -399,7 +399,7 @@ func TestHandleAPIGitCheckoutFetchesRemoteBranch(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 	if _, err := os.Stat(filepath.Join(clone, "form.html")); err != nil {
-		t.Fatalf("the task's work is not in the workspace: %v", err)
+		t.Fatalf("the task's work is not in the project folder: %v", err)
 	}
 
 	missing := httptest.NewRequest(http.MethodPost, "/api/git/checkout", strings.NewReader(`{"branch":"sprout/nope"}`))

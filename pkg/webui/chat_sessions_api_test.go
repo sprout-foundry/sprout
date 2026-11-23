@@ -509,6 +509,6 @@ func TestDeleteAllReturnsRootFromDeletedWorktree(t *testing.T) {
 	}
 
 	if root, _ := p.clientRoots(client); root != p.project {
-		t.Errorf("workspace root = %q, want the selected project %q", root, p.project)
+		t.Errorf("project folder = %q, want the selected project %q", root, p.project)
 	}
 }

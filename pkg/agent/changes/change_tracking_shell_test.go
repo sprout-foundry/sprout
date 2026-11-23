@@ -495,7 +495,7 @@ func TestCaptureShellSnapshot_WorksWithoutGit(t *testing.T) {
 	}
 	notes := snap[filepath.Join(dir, "notes.txt")]
 	if notes == nil || string(notes.Content) != "user's untracked work" {
-		t.Errorf("notes.txt not captured in non-git workspace: %+v", notes)
+		t.Errorf("notes.txt not captured in non-git project folder: %+v", notes)
 	}
 }
 
@@ -720,7 +720,7 @@ func TestTrackShellTurn_SubdirWorkDirKeepsRootCache(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("mutation at workspace root lost after cd; changes: %+v", tracker.changes)
+		t.Errorf("mutation at project folder lost after cd; changes: %+v", tracker.changes)
 	}
 }
 
@@ -1194,7 +1194,7 @@ func TestCaptureShellSnapshot_SkipsSymlinks(t *testing.T) {
 		t.Errorf("expected real file to be captured")
 	}
 	if _, ok := snap[link]; ok {
-		t.Errorf("symlink should NOT be captured (security: could point outside workspace); got entry in snapshot")
+		t.Errorf("symlink should NOT be captured (security: could point outside project folder); got entry in snapshot")
 	}
 }
 
@@ -1635,10 +1635,10 @@ func TestShellSkipDirs_EvictsLRUWhenOverCap(t *testing.T) {
 
 	got := readShellSkipDirsFile(t, tmpDir)
 	if len(got.ProjectFolders) > maxPersistedProjectFolders {
-		t.Fatalf("expected at most %d workspaces, got %d", maxPersistedProjectFolders, len(got.ProjectFolders))
+		t.Fatalf("expected at most %d project folders, got %d", maxPersistedProjectFolders, len(got.ProjectFolders))
 	}
 	if _, ok := got.ProjectFolders[newRoot]; !ok {
-		t.Errorf("new workspace %q not persisted", newRoot)
+		t.Errorf("new project folder %q not persisted", newRoot)
 	}
 
 	// The 2 oldest (by LastUsed) should have been evicted.
@@ -1651,7 +1651,7 @@ func TestShellSkipDirs_EvictsLRUWhenOverCap(t *testing.T) {
 	// (second oldest). Verify by checking LastUsed values.
 	for _, r := range roots {
 		if r == filepath.Join(tmpDir, "ws", "a") || r == filepath.Join(tmpDir, "ws", "b") {
-			t.Errorf("oldest workspace %q should have been evicted", r)
+			t.Errorf("oldest project folder %q should have been evicted", r)
 		}
 	}
 }
@@ -1734,7 +1734,7 @@ func TestShellSkipDirs_AtomicWriteProducesValidJSON(t *testing.T) {
 func TestShellSkipDirs_EmptyProjectFolderNoOp(t *testing.T) {
 	tmpDir := withShellSkipDirsFile(t)
 	if err := saveAutoSkipDirsFor("", map[string]bool{"a": true}); err != nil {
-		t.Errorf("save with empty workspace: %v", err)
+		t.Errorf("save with empty project folder: %v", err)
 	}
 	if err := saveAutoSkipDirsFor("/ws", map[string]bool{}); err != nil {
 		t.Errorf("save with empty dirs: %v", err)

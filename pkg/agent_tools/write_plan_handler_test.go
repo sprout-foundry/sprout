@@ -355,8 +355,8 @@ func TestWritePlanHandlerConformance_NoProjectFolder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute returned a Go error: %v", err)
 	}
-	if !res.IsError || !strings.Contains(res.Output, "no workspace root") {
-		t.Errorf("without a workspace root the write must be refused, got: %s (IsError=%v)", res.Output, res.IsError)
+	if !res.IsError || !strings.Contains(res.Output, "no project folder") {
+		t.Errorf("without a project folder the write must be refused, got: %s (IsError=%v)", res.Output, res.IsError)
 	}
 }
 

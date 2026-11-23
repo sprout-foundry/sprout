@@ -72,7 +72,7 @@ func TestServerKeyConsistency(t *testing.T) {
 		assert.NotEqual(t, key1, key2)
 	})
 
-	t.Run("different workspace produces different key", func(t *testing.T) {
+	t.Run("different project folder produces different key", func(t *testing.T) {
 		key1 := serverKey("/workspace1", "go")
 		key2 := serverKey("/workspace2", "go")
 
@@ -769,13 +769,13 @@ func TestManagerWithCustomConfig(t *testing.T) {
 }
 
 func TestManagerServerKeyEdgeCases(t *testing.T) {
-	t.Run("handles workspace with spaces", func(t *testing.T) {
+	t.Run("handles project folder with spaces", func(t *testing.T) {
 		key := serverKey("/path with spaces", "go")
 		assert.NotEmpty(t, key)
 		assert.Contains(t, key, "go")
 	})
 
-	t.Run("handles special characters in workspace", func(t *testing.T) {
+	t.Run("handles special characters in project folder", func(t *testing.T) {
 		key := serverKey("/path-with_special.chars", "typescript")
 		assert.NotEmpty(t, key)
 		assert.Contains(t, key, "typescript")

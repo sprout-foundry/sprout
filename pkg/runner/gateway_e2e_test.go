@@ -95,7 +95,7 @@ func TestGatewayWiringEndToEnd(t *testing.T) {
 	select {
 	case key := <-gotKey:
 		if key != "gw-ws-key-123" {
-			t.Errorf("the daemon must present the workspace gateway key; got %q", key)
+			t.Errorf("the daemon must present the project folder gateway key; got %q", key)
 		}
 	default:
 		t.Error("the daemon never called the gateway's /v1/models")
@@ -111,6 +111,6 @@ func TestGatewayWiringEndToEnd(t *testing.T) {
 	}
 	provPath := filepath.Join(stateDir, "runner", "workspaces", task.DevSpaceID, "config", "providers", "gateway.json")
 	if _, err := os.Stat(provPath); err != nil { //nolint:gosec // G703: test-only stat of the runner's own t.TempDir state dir
-		t.Errorf("gateway provider file must be in the workspace's scoped config dir: %v", err)
+		t.Errorf("gateway provider file must be in the project folder's scoped config dir: %v", err)
 	}
 }

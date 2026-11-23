@@ -75,7 +75,7 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 	// in arbitrary directories via the recovery path. The doc comment
 	// has always claimed this guarantee; this enforces it.
 	if a.IsPathOutsideProjectFolder(abs) {
-		return jsonRecoverResult(false, abs, "", "path is outside the workspace — refusing cross-workspace restore"), nil
+		return jsonRecoverResult(false, abs, "", "path is outside the project folder — refusing cross-project-folder restore"), nil
 	}
 
 	// Staleness guard: if the file on disk no longer matches what the
@@ -115,7 +115,7 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 	// Past the create branch, an empty original is a genuinely empty file
 	// (existence is recorded explicitly), so it restores as empty.
 	if match.OriginalCode != "" && !isRecoverableOriginal(match.OriginalCode) {
-		reason := "original content was not captured (file too large, binary, or outside workspace)"
+		reason := "original content was not captured (file too large, binary, or outside project folder)"
 		return jsonRecoverResult(false, abs, "", reason), nil
 	}
 
@@ -179,7 +179,7 @@ func recoverFromPersistedStore(a *Agent, abs string) (string, error) {
 	}
 
 	if a.IsPathOutsideProjectFolder(abs) {
-		return jsonRecoverResult(false, abs, "", "path is outside the workspace — refusing cross-workspace restore"), nil
+		return jsonRecoverResult(false, abs, "", "path is outside the project folder — refusing cross-project-folder restore"), nil
 	}
 	if match, statErr := os.Stat(abs); statErr == nil && match.IsDir() {
 		return jsonRecoverResult(false, abs, "", "path is a directory — refusing to overwrite"), nil

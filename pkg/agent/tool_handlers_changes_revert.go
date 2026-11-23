@@ -155,7 +155,7 @@ func (a *Agent) revertOne(ch TrackedFileChange) (string, bool, string) {
 	// failures) so a bulk revert still succeeds for the in-project-folder
 	// majority without aborting on a single stray path.
 	if a.IsPathOutsideProjectFolder(abs) {
-		return "skip", false, "path is outside the workspace — skipped"
+		return "skip", false, "path is outside the project folder — skipped"
 	}
 
 	// Already at its pre-session state (e.g. a later `git checkout`
@@ -196,7 +196,7 @@ func (a *Agent) revertOne(ch TrackedFileChange) (string, bool, string) {
 	// Past the create branch, an empty original is a genuinely empty file
 	// (existence is recorded explicitly), so it restores as empty.
 	if ch.OriginalCode != "" && !isRecoverableOriginal(ch.OriginalCode) {
-		return "", false, "original content was not captured (binary, oversized, or outside workspace)"
+		return "", false, "original content was not captured (binary, oversized, or outside project folder)"
 	}
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		return "", false, fmt.Sprintf("create parent dir: %v", err)

@@ -130,7 +130,7 @@ func TestDevSpaceEnvCarriesTheLocalDirectoryInsteadOfTheRepo(t *testing.T) {
 		TxnSecret:   "s3cret",
 	})
 	if env["REPO_URL"] != "" {
-		t.Errorf("a local workspace has no repo; REPO_URL = %q", env["REPO_URL"])
+		t.Errorf("a local project folder has no repo; REPO_URL = %q", env["REPO_URL"])
 	}
 	if env["WORKSPACE_DIR"] != "/Users/me/src/proj" {
 		t.Errorf("WORKSPACE_DIR = %q, want the served directory", env["WORKSPACE_DIR"])
@@ -139,7 +139,7 @@ func TestDevSpaceEnvCarriesTheLocalDirectoryInsteadOfTheRepo(t *testing.T) {
 		t.Errorf("a local workspace still authenticates; WORKSPACE_TOKEN = %q", env["WORKSPACE_TOKEN"])
 	}
 	if env["SPROUT_GIT_HOST"] != "" {
-		t.Errorf("a local workspace has no git host; SPROUT_GIT_HOST = %q", env["SPROUT_GIT_HOST"])
+		t.Errorf("a local project folder has no git host; SPROUT_GIT_HOST = %q", env["SPROUT_GIT_HOST"])
 	}
 
 	// Execution follows dev_space_dir regardless of a stale repo_url, and

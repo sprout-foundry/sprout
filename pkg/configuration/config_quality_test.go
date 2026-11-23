@@ -212,21 +212,21 @@ func TestLoadConfigWithLayers_Quality(t *testing.T) {
 	writeFile(t, globalPath, `{"version":"2.1","quality":{"enabled":true}}`)
 	writeFile(t, projectFolderPath, `{"reasoning_effort":"high"}`)
 	cfg = load()
-	assert.True(t, cfg.QualityEnabled(), "a global enable must persist through a silent workspace")
+	assert.True(t, cfg.QualityEnabled(), "a global enable must persist through a silent project folder")
 
 	// Per-project enable: the global never names the key, the project folder
 	// (project) enables it.
 	require.NoError(t, os.Remove(globalPath))
 	writeFile(t, projectFolderPath, `{"quality":{"enabled":true,"format_command":"gofmt -w ."}}`)
 	cfg = load()
-	assert.True(t, cfg.QualityEnabled(), "a workspace enable must turn quality on for the project")
+	assert.True(t, cfg.QualityEnabled(), "a project folder enable must turn quality on for the project")
 	assert.Equal(t, "gofmt -w .", cfg.QualityFormatCommand())
 
 	// The narrower layer disables a broader enable with an explicit false.
 	writeFile(t, globalPath, `{"version":"2.1","quality":{"enabled":true}}`)
 	writeFile(t, projectFolderPath, `{"quality":{"enabled":false}}`)
 	cfg = load()
-	assert.False(t, cfg.QualityEnabled(), "an explicit workspace disable must beat the global enable")
+	assert.False(t, cfg.QualityEnabled(), "an explicit project folder disable must beat the global enable")
 
 	// The commands stack across layers: a narrower explicit command wins, a
 	// silent narrower layer keeps the broader command.
@@ -239,7 +239,7 @@ func TestLoadConfigWithLayers_Quality(t *testing.T) {
 
 	writeFile(t, projectFolderPath, `{"reasoning_effort":"high"}`)
 	cfg = load()
-	assert.Equal(t, "go vet", cfg.QualityLintCommand(), "a silent workspace must keep the global command")
+	assert.Equal(t, "go vet", cfg.QualityLintCommand(), "a silent project folder must keep the global command")
 }
 
 // TestQualityAccessors pins the accessors' default and configured behavior:

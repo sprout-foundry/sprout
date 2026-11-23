@@ -340,7 +340,7 @@ func TestResolveToolRisk_FileWriteExternalPath(t *testing.T) {
 	// the cwd/home relationship. At minimum it should not be project folder tier.
 	tier := ClassifyPathAccess(externalPath, projectFolder, home, projectFolder)
 	if tier == PathTierProjectFolder {
-		t.Errorf("path %q should not be workspace tier when workspace is %q", externalPath, projectFolder)
+		t.Errorf("path %q should not be project folder tier when project folder is %q", externalPath, projectFolder)
 	}
 
 	// When the path is external (not project folder, not sensitive), fs-tier should contribute Medium
@@ -473,7 +473,7 @@ func TestResolveToolRisk_FileWriteProjectFolderPath(t *testing.T) {
 		}
 	}
 	if found {
-		t.Error("Sources should NOT contain fs-tier for a workspace-internal path")
+		t.Error("Sources should NOT contain fs-tier for a project-folder-internal path")
 	}
 }
 
@@ -519,10 +519,10 @@ func TestResolveToolRisk_SecurityPolicyDeny(t *testing.T) {
 	}
 
 	if assessment.Level != configuration.RiskLevelCritical {
-		t.Errorf("Level = %q, want Critical when workspace policy denies", assessment.Level)
+		t.Errorf("Level = %q, want Critical when project folder policy denies", assessment.Level)
 	}
 	if !assessment.IsHardBlock {
-		t.Error("IsHardBlock should be true when workspace policy denies")
+		t.Error("IsHardBlock should be true when project folder policy denies")
 	}
 }
 
@@ -971,14 +971,14 @@ func TestResolveToolRisk_FileOperationPathTier_ProjectFolder(t *testing.T) {
 	assessment := agent.ResolveToolRisk("write_file", args)
 
 	if assessment.PathTier != PathTierProjectFolder {
-		t.Errorf("PathTier = %v, want PathTierWorkspace", assessment.PathTier)
+		t.Errorf("PathTier = %v, want PathTierProjectFolder", assessment.PathTier)
 	}
 	if assessment.FileMode != "write" {
 		t.Errorf("FileMode = %q, want %q", assessment.FileMode, "write")
 	}
 	// Project folder writes should NOT contribute fs-tier risk
 	if containsSource(assessment.Sources, RiskSourceFSTier) {
-		t.Errorf("Sources should NOT include RiskSourceFSTier for workspace path, got %v", assessment.Sources)
+		t.Errorf("Sources should NOT include RiskSourceFSTier for project folder path, got %v", assessment.Sources)
 	}
 }
 
@@ -1004,7 +1004,7 @@ func TestResolveToolRisk_FileOperationPathTier_ReadMode(t *testing.T) {
 		t.Errorf("FileMode = %q, want %q", assessment.FileMode, "read")
 	}
 	if assessment.PathTier != PathTierProjectFolder {
-		t.Errorf("PathTier = %v, want PathTierWorkspace", assessment.PathTier)
+		t.Errorf("PathTier = %v, want PathTierProjectFolder", assessment.PathTier)
 	}
 	// Read operations should NOT contribute fs-tier risk
 	if containsSource(assessment.Sources, RiskSourceFSTier) {

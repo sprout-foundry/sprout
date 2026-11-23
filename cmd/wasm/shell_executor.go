@@ -346,13 +346,13 @@ func escalateUnavailableCommand(command string, local wasmshell.CmdResult) (stdo
 		}
 		return local.Stdout, local.Stderr + note, local.ExitCode
 	case errMsg := <-errCh:
-		return local.Stdout, local.Stderr + "\n[sprout] Running this in the cloud workspace failed: " + errMsg + "\n", local.ExitCode
+		return local.Stdout, local.Stderr + "\n[sprout] Running this in the cloud dev space failed: " + errMsg + "\n", local.ExitCode
 	case <-time.After(escalationTimeout):
-		return local.Stdout, local.Stderr + "\n[sprout] The cloud workspace run timed out.\n", 124
+		return local.Stdout, local.Stderr + "\n[sprout] The cloud dev space run timed out.\n", 124
 	}
 }
 
 // browserShellNote explains a 127 from the in-browser shell to the model.
 const browserShellNote = "\n[sprout] This command isn't available in the in-browser shell, which runs " +
 	"shell scripts and built-in file and text tools but no compilers, package managers, interpreters or " +
-	"network tools. It needs a cloud workspace to run.\n"
+	"network tools. It needs a cloud dev space to run.\n"

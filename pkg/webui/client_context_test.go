@@ -182,7 +182,7 @@ func TestGetOrCreateClientContextDefault(t *testing.T) {
 
 	ctx := ws.getOrCreateClientContext("")
 	if ctx.ProjectFolder != "/workspace" {
-		t.Errorf("expected default client to use workspace root, got %q", ctx.ProjectFolder)
+		t.Errorf("expected default client to use project folder, got %q", ctx.ProjectFolder)
 	}
 }
 
@@ -443,14 +443,14 @@ func TestCleanupInactiveClientContextsRemembersProjectFolder(t *testing.T) {
 	remembered := ws.clientProjectFolders["idle-client"]
 	ws.mutex.RUnlock()
 	if remembered != dir {
-		t.Fatalf("expected remembered workspace %q after eviction, got %q", dir, remembered)
+		t.Fatalf("expected remembered project folder %q after eviction, got %q", dir, remembered)
 	}
 
 	// The recreated context must restore the remembered project folder, not the
 	// server-level launch dir.
 	ctx := ws.getOrCreateClientContext("idle-client")
 	if ctx.ProjectFolder != dir {
-		t.Fatalf("recreated context workspace = %q, want %q", ctx.ProjectFolder, dir)
+		t.Fatalf("recreated context project folder = %q, want %q", ctx.ProjectFolder, dir)
 	}
 	if ctx.Terminal == nil || ctx.Terminal.projectFolder != dir {
 		t.Fatalf("recreated context terminal manager rooted at %v, want %q", ctx.Terminal, dir)
@@ -482,17 +482,17 @@ func TestCleanupInactiveClientContextsDropsVanishedProjectFolder(t *testing.T) {
 
 	ctx := ws.getOrCreateClientContext("idle-client")
 	if ctx.ProjectFolder == dir {
-		t.Fatalf("recreated context kept vanished workspace %q", dir)
+		t.Fatalf("recreated context kept vanished project folder %q", dir)
 	}
 	if ctx.ProjectFolder != ws.projectFolder {
-		t.Fatalf("recreated context workspace = %q, want server-level fallback %q", ctx.ProjectFolder, ws.projectFolder)
+		t.Fatalf("recreated context project folder = %q, want server-level fallback %q", ctx.ProjectFolder, ws.projectFolder)
 	}
 
 	ws.mutex.RLock()
 	_, stillRemembered := ws.clientProjectFolders["idle-client"]
 	ws.mutex.RUnlock()
 	if stillRemembered {
-		t.Fatal("vanished workspace was not pruned from clientWorkspaces")
+		t.Fatal("vanished project folder was not pruned from clientProjectFolders")
 	}
 }
 

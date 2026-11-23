@@ -163,7 +163,7 @@ func TestMakeGitRelativePath_ParentDirOutside(t *testing.T) {
 	// /tmp is outside /ws, so the path should be returned unchanged
 	got := makeGitRelativePath("/tmp/file.go", "/ws")
 	if got != "/tmp/file.go" {
-		t.Errorf("got %q, want /tmp/file.go (outside workspace)", got)
+		t.Errorf("got %q, want /tmp/file.go (outside project folder)", got)
 	}
 }
 
@@ -171,7 +171,7 @@ func TestMakeGitRelativePath_CurrentDirOutside(t *testing.T) {
 	// "." in path.Rel would start with ".."
 	got := makeGitRelativePath("/other/sub/file.go", "/ws")
 	if got != "/other/sub/file.go" {
-		t.Errorf("got %q, want /other/sub/file.go (outside workspace)", got)
+		t.Errorf("got %q, want /other/sub/file.go (outside project folder)", got)
 	}
 }
 

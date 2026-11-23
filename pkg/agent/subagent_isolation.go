@@ -244,9 +244,9 @@ func copyFile(src, dst string) error {
 // isolationPreamble tells an isolated subagent where it is working, so paths
 // to the primary project folder in its task aren't edited directly.
 func isolationPreamble(w *isolatedProjectFolder, originalRoot string) string {
-	return fmt.Sprintf("# Isolated Workspace\n\nYou are working in an isolated copy of the repository at `%s` (it already includes the current uncommitted changes). "+
+	return fmt.Sprintf("# Isolated Project folder\n\nYou are working in an isolated copy of the repository at `%s` (it already includes the current uncommitted changes). "+
 		"Paths under `%s` in this task refer to the same files in your copy — read and edit them under `%s`, never under `%s`. "+
-		"Your changes are applied back to the original workspace when you finish.\n\n---\n\n",
+		"Your changes are applied back to the original project folder when you finish.\n\n---\n\n",
 		w.dir(), originalRoot, w.dir(), originalRoot)
 }
 
@@ -262,7 +262,7 @@ func runIsolatedSubagent(ctx context.Context, a *Agent, spec *subagentLaunchSpec
 	}
 	ws, err := createIsolatedProjectFolder(ctx, originalRoot, taskID)
 	if err != nil {
-		return &SubagentResult{ID: taskID, Error: fmt.Errorf("create isolated workspace: %w", err)}
+		return &SubagentResult{ID: taskID, Error: fmt.Errorf("create isolated project folder: %w", err)}
 	}
 
 	result := a.GetSubagentRunner().runTask(ctx, taskID, isolationPreamble(ws, originalRoot)+spec.enhancedPrompt, SubagentOptions{
@@ -310,11 +310,11 @@ func finishIsolatedRun(ctx context.Context, ws *isolatedProjectFolder, result *S
 	}
 	if err := ws.applyPatch(ctx, ws.repoRoot, patch, true); err != nil {
 		result.FileChanges = nil
-		return fmt.Sprintf("The changes no longer apply cleanly to the workspace (it changed meanwhile): %v. "+
+		return fmt.Sprintf("The changes no longer apply cleanly to the project folder (it changed meanwhile): %v. "+
 			"Nothing was changed. The work is kept in %s; to merge it, run `git apply --3way %s` in %s and resolve any conflicts.",
 			err, ws.path, ws.patchPath, ws.repoRoot)
 	}
 	result.FileChanges = ws.remapChanges(result.FileChanges)
 	ws.remove(ctx)
-	return fmt.Sprintf("Changes applied to the workspace (%d tracked file change(s)).", len(result.FileChanges))
+	return fmt.Sprintf("Changes applied to the project folder (%d tracked file change(s)).", len(result.FileChanges))
 }

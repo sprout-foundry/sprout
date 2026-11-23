@@ -59,7 +59,7 @@ Examples:
 
 func init() {
 	historyClearCmd.Flags().StringVar(&clearOlderThan, "older-than", "", "Duration threshold (e.g. 30d, 7d, 24h). Entries older than this are cleared. Empty means clear ALL.")
-	historyClearCmd.Flags().StringVar(&clearProjectFolder, "dir", "", "Workspace directory to clear history from (default: current directory)")
+	historyClearCmd.Flags().StringVar(&clearProjectFolder, "dir", "", "Project folder directory to clear history from (default: current directory)")
 	stringFlagAlias(historyClearCmd.Flags(), &clearProjectFolder, "workspace", "dir", aliasDeprecated)
 	historyClearCmd.Flags().BoolVarP(&clearYes, "yes", "y", false, "Skip confirmation prompt")
 	boolFlagAlias(historyClearCmd.Flags(), &clearYes, "force", "yes", aliasDeprecated)

@@ -20,10 +20,10 @@ func TestBuildToolEnvFromAgentWiresFileAccessInterfaces(t *testing.T) {
 	env := buildToolEnvFromAgent(a)
 
 	if env.FileAccessClassifier == nil {
-		t.Fatal("FileAccessClassifier not wired: off-workspace precheck falls through to raw errors (no allow/prompt/deny verdicts)")
+		t.Fatal("FileAccessClassifier not wired: off-project-folder precheck falls through to raw errors (no allow/prompt/deny verdicts)")
 	}
 	if env.FileAccessPrompter == nil {
-		t.Fatal("FileAccessPrompter not wired: off-workspace 'prompt' verdicts never reach the WebUI dialog or CLI prompt")
+		t.Fatal("FileAccessPrompter not wired: off-project-folder 'prompt' verdicts never reach the WebUI dialog or CLI prompt")
 	}
 }
 
@@ -37,7 +37,7 @@ func TestBuildToolEnvClassifierAnswers(t *testing.T) {
 
 	inside := filepath.Join(a.GetProjectFolder(), "inside.go")
 	if verdict := classifier.ClassifyFileAccess(context.Background(), inside, inside, "read"); verdict != "allow" {
-		t.Fatalf("in-workspace absolute path should be 'allow', got %q", verdict)
+		t.Fatalf("in-project-folder absolute path should be 'allow', got %q", verdict)
 	}
 
 	outside := filepath.Join(detectHomeDir(), "..", "..", "etc", "passwd")

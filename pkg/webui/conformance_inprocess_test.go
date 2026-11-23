@@ -71,7 +71,7 @@ func newConformanceDaemon(t *testing.T) (*httptest.Server, string) {
 	ws.daemonRoot = projectFolder
 	ws.projectFolder = projectFolder
 	if _, err := ws.setClientProjectFolder("conformance-client", projectFolder); err != nil {
-		t.Fatalf("setClientWorkspaceRoot: %v", err)
+		t.Fatalf("setClientProjectFolder: %v", err)
 	}
 
 	// Stage the project folder as a git repository with one committed file so the

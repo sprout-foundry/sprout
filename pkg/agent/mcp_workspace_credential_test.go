@@ -26,7 +26,7 @@ func TestInitializeMCP_RegistersProjectFolderCredentialDir(t *testing.T) {
 	require.NoError(t, agent.initializeMCP())
 
 	assert.Equal(t, filepath.Join(projectFolder, ".sprout"), mcp.GetProjectFolderCredentialDir(),
-		"the workspace config dir must become the MCP credential fallback scope")
+		"the project folder config dir must become the MCP credential fallback scope")
 }
 
 // A $HOME project folder has no separate .sprout layer — the fallback must not be
@@ -46,5 +46,5 @@ func TestInitializeMCP_HomeProjectFolderSkipsCredentialDir(t *testing.T) {
 	require.NoError(t, agent.initializeMCP())
 
 	assert.Equal(t, "/nonexistent/previous", mcp.GetProjectFolderCredentialDir(),
-		"a $HOME workspace shares the global store; the fallback must stay untouched")
+		"a $HOME project folder shares the global store; the fallback must stay untouched")
 }

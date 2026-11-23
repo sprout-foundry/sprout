@@ -342,7 +342,7 @@ func TestPerProjectFolderRiskProfileOverride(t *testing.T) {
 
 	// Project folder overrides the single-value RiskProfile selector.
 	if merged.RiskProfile != "readonly" {
-		t.Errorf("merged RiskProfile = %q, want %q (workspace should override global)", merged.RiskProfile, "readonly")
+		t.Errorf("merged RiskProfile = %q, want %q (project folder should override global)", merged.RiskProfile, "readonly")
 	}
 
 	// RiskProfiles map should contain BOTH custom entries (global +
@@ -351,10 +351,10 @@ func TestPerProjectFolderRiskProfileOverride(t *testing.T) {
 		t.Errorf("merged RiskProfiles missing global entry 'my_custom': %v", keys(merged.RiskProfiles))
 	}
 	if _, ok := merged.RiskProfiles["sandbox"]; !ok {
-		t.Errorf("merged RiskProfiles missing workspace entry 'sandbox': %v", keys(merged.RiskProfiles))
+		t.Errorf("merged RiskProfiles missing project folder entry 'sandbox': %v", keys(merged.RiskProfiles))
 	}
 	if merged.RiskProfiles["sandbox"].DefaultRisk != RiskLevelLow {
-		t.Errorf("workspace 'sandbox' DefaultRisk = %q, want Low", merged.RiskProfiles["sandbox"].DefaultRisk)
+		t.Errorf("project folder 'sandbox' DefaultRisk = %q, want Low", merged.RiskProfiles["sandbox"].DefaultRisk)
 	}
 }
 
@@ -402,7 +402,7 @@ func TestPerProjectFolderRiskProfileSameKey(t *testing.T) {
 	}
 
 	if got := merged.RiskProfiles["default"].DefaultRisk; got != RiskLevelHigh {
-		t.Errorf("workspace should override global for same key: got DefaultRisk=%q, want High", got)
+		t.Errorf("project folder should override global for same key: got DefaultRisk=%q, want High", got)
 	}
 }
 

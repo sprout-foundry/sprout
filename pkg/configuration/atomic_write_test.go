@@ -59,7 +59,7 @@ func TestProjectFolderSave_OverlappingManagersNeverFailRename(t *testing.T) {
 
 	got := readJSONFile(t, filepath.Join(ws, ProjectFolderConfigFileName))
 	if p, _ := got["last_used_provider"].(string); !strings.HasPrefix(p, "provider-") {
-		t.Errorf("workspace config lost the provider selection: %v", got["last_used_provider"])
+		t.Errorf("project folder config lost the provider selection: %v", got["last_used_provider"])
 	}
 	assertNoTempFiles(t, ws)
 }

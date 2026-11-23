@@ -59,7 +59,7 @@ func TestInitializeMCP_ReadsProjectFolderConfigNotProcessRoot(t *testing.T) {
 
 	names := mcpServerNames(agent)
 	assert.Contains(t, names, "repo-local",
-		"the agent must see its workspace's MCP servers regardless of the process config root")
+		"the agent must see its project folder's MCP servers regardless of the process config root")
 	// Both layers are consulted, so the process-root server is present too;
 	// the point is that the project folder one is not lost.
 	assert.Contains(t, names, "process-root")

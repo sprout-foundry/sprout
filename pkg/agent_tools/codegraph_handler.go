@@ -155,8 +155,8 @@ func (h *findDeadCodeHandler) Execute(ctx context.Context, env ToolEnv, args map
 			if ctx2, approved := promptForOffProjectFolderPath(ctx, env, "find_dead_code", dir, resolvedPath, "read"); approved {
 				ctx = ctx2
 			} else {
-				return ToolResult{Output: fmt.Sprintf("read blocked: off-workspace access to %s was not approved", dir), IsError: true},
-					fmt.Errorf("read blocked: off-workspace access to %s was not approved", dir)
+				return ToolResult{Output: fmt.Sprintf("read blocked: off-project-folder access to %s was not approved", dir), IsError: true},
+					fmt.Errorf("read blocked: off-project-folder access to %s was not approved", dir)
 			}
 		}
 	}

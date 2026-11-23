@@ -316,7 +316,7 @@ func TestCreateSubagent_SystemPromptIncludesRepoConventions(t *testing.T) {
 	}
 	defer bare.Shutdown()
 	if strings.Contains(bare.systemPrompt, "Repo Conventions") {
-		t.Error("conventions section added for a workspace without a conventions file")
+		t.Error("conventions section added for a project folder without a conventions file")
 	}
 }
 

@@ -198,7 +198,7 @@ func TestSharedAgentService_Query_EndToEnd(t *testing.T) {
 	for _, a := range agents {
 		require.Eventually(t, func() bool { return a.IsShutdown() },
 			10*time.Second, 20*time.Millisecond,
-			"ephemeral agent must finish shutting down before the workspace temp dir is removed")
+			"ephemeral agent must finish shutting down before the project folder temp dir is removed")
 	}
 }
 

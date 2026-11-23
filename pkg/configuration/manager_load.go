@@ -95,7 +95,7 @@ func loadConfigWithLayers(globalPath, projectFolderPath, sessionPath, globalDir,
 		if data, err := os.ReadFile(projectFolderPath); err == nil {
 			var projectFolderCfg Config
 			if err := unmarshalLayer(data, &projectFolderCfg); err != nil {
-				log.Printf("[config] warning: failed to parse workspace config %s: %v", projectFolderPath, err)
+				log.Printf("[config] warning: failed to parse project folder config %s: %v", projectFolderPath, err)
 			} else {
 				result = MergeConfig(result, &projectFolderCfg)
 			}
@@ -241,7 +241,7 @@ func (m *Manager) saveConfigLocked() error {
 func (m *Manager) saveConfigDirectLocked() error {
 	if m.configDir != "" && m.configFileName == ProjectFolderConfigFileName {
 		if err := m.config.SaveProjectFolderOverlay(m.configDir, m.configFileName, m.lastSaved); err != nil {
-			return fmt.Errorf("save workspace config: %w", err)
+			return fmt.Errorf("save project folder config: %w", err)
 		}
 	} else if m.configDir != "" {
 		if err := m.config.SaveToDirAs(m.configDir, m.configFileName); err != nil {

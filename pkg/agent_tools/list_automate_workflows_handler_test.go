@@ -25,7 +25,7 @@ func TestListAutomateWorkflowsHandler_UsesProjectFolder(t *testing.T) {
 		t.Fatalf("mkdir automate/: %v", err)
 	}
 	validJSON := `{
-		"description": "Workspace-local workflow",
+		"description": "Project-folder-local workflow",
 		"initial": {"prompt": "hi"}
 	}`
 	if err := os.WriteFile(filepath.Join(automateDir, "hello.json"), []byte(validJSON), 0644); err != nil {

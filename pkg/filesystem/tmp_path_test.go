@@ -103,6 +103,6 @@ func TestSafeResolveAbsRootedPathLeavesProjectFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 	if isUnderPrefix(got, ws) {
-		t.Errorf("SafeResolveAbs(/etc/passwd) = %q, resolved inside workspace %q", got, ws)
+		t.Errorf("SafeResolveAbs(/etc/passwd) = %q, resolved inside project folder %q", got, ws)
 	}
 }

@@ -113,7 +113,7 @@ func TestRegisterPreviewPort_NoEventWhenProjectFolderIDUnset(t *testing.T) {
 	result, got, _ := runRegister(t, env, map[string]any{"port": 8080}, 500*time.Millisecond)
 
 	if !strings.Contains(result.Output, "WORKSPACE_ID not set") {
-		t.Fatalf("expected the missing-workspace error, got %q", result.Output)
+		t.Fatalf("expected the missing-project-folder error, got %q", result.Output)
 	}
 	if !result.IsError {
 		t.Error("a missing WORKSPACE_ID must be an error result")

@@ -129,7 +129,7 @@ func TestClassifyToolCallCategories(t *testing.T) {
 		{"shell no command key", "shell_command", map[string]interface{}{}, RiskCategoryReadOnly},
 
 		// write_file — normal project folder path
-		{"write_file workspace", "write_file", map[string]interface{}{"path": "src/main.go", "content": "test"}, RiskCategoryFileWrite},
+		{"write_file project folder", "write_file", map[string]interface{}{"path": "src/main.go", "content": "test"}, RiskCategoryFileWrite},
 		// write_file — tmp directory
 		{"write_file tmp", "write_file", map[string]interface{}{"path": "/tmp/test.txt", "content": "test"}, RiskCategoryFileWrite},
 		// write_file — critical system path
@@ -138,16 +138,16 @@ func TestClassifyToolCallCategories(t *testing.T) {
 		{"write_file /usr/local", "write_file", map[string]interface{}{"path": "/usr/local/bin/test", "content": "test"}, RiskCategoryDestructive},
 
 		// edit_file — normal path
-		{"edit_file workspace", "edit_file", map[string]interface{}{"path": "src/main.go"}, RiskCategoryFileWrite},
+		{"edit_file project folder", "edit_file", map[string]interface{}{"path": "src/main.go"}, RiskCategoryFileWrite},
 		// edit_file — critical system path
 		{"edit_file /etc/passwd", "edit_file", map[string]interface{}{"path": "/etc/passwd"}, RiskCategoryDestructive},
 
 		// write_structured_file
-		{"write_structured_file workspace", "write_structured_file", map[string]interface{}{"path": "config.yaml"}, RiskCategoryFileWrite},
+		{"write_structured_file project folder", "write_structured_file", map[string]interface{}{"path": "config.yaml"}, RiskCategoryFileWrite},
 		{"write_structured_file /etc", "write_structured_file", map[string]interface{}{"path": "/etc/config.yaml"}, RiskCategoryDestructive},
 
 		// patch_structured_file
-		{"patch_structured_file workspace", "patch_structured_file", map[string]interface{}{"path": "config.json"}, RiskCategoryFileWrite},
+		{"patch_structured_file project folder", "patch_structured_file", map[string]interface{}{"path": "config.json"}, RiskCategoryFileWrite},
 		{"patch_structured_file /etc", "patch_structured_file", map[string]interface{}{"path": "/etc/config.yaml"}, RiskCategoryDestructive},
 
 		// mkdir
@@ -367,7 +367,7 @@ func TestSecurityResultCategoryConsistency(t *testing.T) {
 		{"ls is not destructive", "shell_command", map[string]interface{}{"command": "ls -la"}, false},
 		{"sudo install is not destructive", "shell_command", map[string]interface{}{"command": "sudo apt-get install foo"}, false},
 		{"write_file /etc/shadow is destructive", "write_file", map[string]interface{}{"path": "/etc/shadow"}, true},
-		{"write_file workspace is not destructive", "write_file", map[string]interface{}{"path": "src/main.go"}, false},
+		{"write_file project folder is not destructive", "write_file", map[string]interface{}{"path": "src/main.go"}, false},
 		{"git branch_delete is destructive", "git", map[string]interface{}{"operation": "branch_delete"}, true},
 		{"git commit is not destructive", "git", map[string]interface{}{"operation": "commit"}, false},
 		{"git reset is not destructive", "git", map[string]interface{}{"operation": "reset"}, false},

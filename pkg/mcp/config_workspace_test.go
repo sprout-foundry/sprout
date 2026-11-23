@@ -70,7 +70,7 @@ func TestLoadMCPConfigForProjectFolder_ProjectFolderWinsCollision(t *testing.T) 
 
 	cfg, err := LoadMCPConfigForProjectFolder(projectFolder)
 	require.NoError(t, err)
-	assert.Equal(t, "workspace-cmd", cfg.Servers["shared"].Command, "workspace layer must win the collision")
+	assert.Equal(t, "workspace-cmd", cfg.Servers["shared"].Command, "project folder layer must win the collision")
 	assert.Equal(t, "global-only-cmd", cfg.Servers["global"].Command, "global-only servers must survive")
 }
 
@@ -103,7 +103,7 @@ func TestMCPConfigCandidates_HomeRootHasNoProjectFolderLayer(t *testing.T) {
 	t.Setenv("HOME", home)
 
 	paths := mcpConfigCandidates(home)
-	require.Len(t, paths, 1, "a home workspace root must not add a workspace layer")
+	require.Len(t, paths, 1, "a home project folder must not add a project folder layer")
 	assert.Equal(t, filepath.Join(globalDir, mcpConfigFileName), paths[0])
 }
 
@@ -151,7 +151,7 @@ func TestSaveMCPConfigForProjectFolder_WritesProjectFolderLayer(t *testing.T) {
 
 	projectFolderFile := filepath.Join(projectFolder, ".sprout", mcpConfigFileName)
 	_, err := os.Stat(projectFolderFile)
-	require.NoError(t, err, "save must write the workspace layer")
+	require.NoError(t, err, "save must write the project folder layer")
 
 	// And a load for that project folder sees it.
 	loaded, err := LoadMCPConfigForProjectFolder(projectFolder)

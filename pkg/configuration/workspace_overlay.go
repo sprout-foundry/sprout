@@ -23,10 +23,10 @@ func (c *Config) SaveProjectFolderOverlay(dir, fileName string, since *Config) e
 	overlay := map[string]interface{}{}
 	if data, err := os.ReadFile(path); err == nil {
 		if err := json.Unmarshal(data, &overlay); err != nil {
-			return fmt.Errorf("parse workspace config %q: %w", path, err)
+			return fmt.Errorf("parse project folder config %q: %w", path, err)
 		}
 	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("read workspace config %q: %w", path, err)
+		return fmt.Errorf("read project folder config %q: %w", path, err)
 	}
 
 	current, err := persistedJSONMap(c)
@@ -44,10 +44,10 @@ func (c *Config) SaveProjectFolderOverlay(dir, fileName string, since *Config) e
 
 	data, err := json.MarshalIndent(overlay, "", "  ")
 	if err != nil {
-		return fmt.Errorf("marshal workspace config: %w", err)
+		return fmt.Errorf("marshal project folder config: %w", err)
 	}
 	if err := writeFileAtomic(path, data, 0600); err != nil {
-		return fmt.Errorf("write workspace config: %w", err)
+		return fmt.Errorf("write project folder config: %w", err)
 	}
 	return nil
 }

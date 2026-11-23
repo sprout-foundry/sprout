@@ -50,7 +50,7 @@ func TestIsHomeProjectFolder(t *testing.T) {
 			}
 			got := isHomeProjectFolder(tc.path)
 			if got != tc.want {
-				t.Errorf("isHomeWorkspace(%q) = %v, want %v", tc.path, got, tc.want)
+				t.Errorf("isHomeProjectFolder(%q) = %v, want %v", tc.path, got, tc.want)
 			}
 		})
 	}
@@ -70,11 +70,11 @@ func TestHomeProjectFolderConsentRoundTrip(t *testing.T) {
 	}
 
 	if err := recordHomeProjectFolderConsent(); err != nil {
-		t.Fatalf("recordHomeWorkspaceConsent failed: %v", err)
+		t.Fatalf("recordHomeProjectFolderConsent failed: %v", err)
 	}
 
 	if !hasHomeProjectFolderConsent() {
-		t.Fatal("expected consent to be recorded after recordHomeWorkspaceConsent")
+		t.Fatal("expected consent to be recorded after recordHomeProjectFolderConsent")
 	}
 
 	// Verify the consent file landed inside the temp home, not the real one.
@@ -107,7 +107,7 @@ func TestSetClientProjectFolderRejectsHome(t *testing.T) {
 	// Without consent: setting home must fail.
 	_, err = ws.setClientProjectFolder(clientID, resolvedHome)
 	if err == nil {
-		t.Fatal("expected error setting home workspace without consent, got nil")
+		t.Fatal("expected error setting home project folder without consent, got nil")
 	}
 	if !strings.Contains(err.Error(), "home directory") {
 		t.Fatalf("expected error mentioning home directory, got: %v", err)
@@ -115,7 +115,7 @@ func TestSetClientProjectFolderRejectsHome(t *testing.T) {
 
 	// Record consent, then retry: should succeed now.
 	if err := recordHomeProjectFolderConsent(); err != nil {
-		t.Fatalf("recordHomeWorkspaceConsent failed: %v", err)
+		t.Fatalf("recordHomeProjectFolderConsent failed: %v", err)
 	}
 
 	got, err := ws.setClientProjectFolder(clientID, resolvedHome)
@@ -124,7 +124,7 @@ func TestSetClientProjectFolderRejectsHome(t *testing.T) {
 	}
 	// Confirm the project folder was actually set.
 	if got != resolvedHome {
-		t.Fatalf("expected workspace root %q, got %q", resolvedHome, got)
+		t.Fatalf("expected project folder %q, got %q", resolvedHome, got)
 	}
 }
 
@@ -187,7 +187,7 @@ func TestHasHomeProjectFolderConsent_MalformedFile(t *testing.T) {
 
 			got := hasHomeProjectFolderConsent()
 			if got != tc.want {
-				t.Errorf("hasHomeWorkspaceConsent() with %s = %v, want %v", tc.name, got, tc.want)
+				t.Errorf("hasHomeProjectFolderConsent() with %s = %v, want %v", tc.name, got, tc.want)
 			}
 		})
 	}
@@ -229,7 +229,7 @@ func TestHomeGateIgnoresProjectMarkers(t *testing.T) {
 
 			projectFolderIsHome := isHomeProjectFolder(home)
 			if !projectFolderIsHome {
-				t.Fatal("precondition: workspace should resolve to home")
+				t.Fatal("precondition: project folder should resolve to home")
 			}
 			needsSelection := !isProject
 			if projectFolderIsHome {

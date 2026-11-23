@@ -30,7 +30,7 @@ var personaCmd = &cobra.Command{
 
 Core personas ship with Sprout and cannot be changed. A custom persona is a
 file you own: <config dir>/personas/*.json (user scope) or
-<workspace>/.sprout/personas/*.json (project scope, which a repository
+<project folder>/.sprout/personas/*.json (project scope, which a repository
 provides and you accept). Everything about a custom persona is yours to set —
 its prompt, its tools, its skills, its MCP servers, where it may write.
 
@@ -49,7 +49,7 @@ var personaValidateCmd = &cobra.Command{
 	Long: `Validate custom persona definitions.
 
 With no path, validates the user-scope persona directory and the current
-workspace's project-scope directory. With a path, validates that file (or
+project folder's project-scope directory. With a path, validates that file (or
 every .json file in that directory).
 
 A persona that fails to load is reported and skipped; the others are still
@@ -88,7 +88,7 @@ func runPersonaDirs(w io.Writer) error {
 	if projectFolderDir, ok := currentProjectFolderConfigDir(); ok {
 		_, _ = fmt.Fprintf(w, "Project scope: %s\n", dirState(configuration.ProjectPersonasDir(projectFolderDir)))
 	} else {
-		_, _ = fmt.Fprintln(w, "Project scope: (no workspace here)")
+		_, _ = fmt.Fprintln(w, "Project scope: (no project folder here)")
 	}
 	return nil
 }

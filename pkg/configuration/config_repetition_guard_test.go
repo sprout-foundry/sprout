@@ -126,12 +126,12 @@ func TestLoadConfigWithLayers_RepetitionGuard(t *testing.T) {
 	writeFile(t, globalPath, `{"version":"2.1","repetition_guard":{"enabled":false}}`)
 	writeFile(t, projectFolderPath, `{"reasoning_effort":"high"}`)
 	cfg = load()
-	assert.False(t, cfg.RepetitionGuardEnabled(), "a global disable must persist through a silent workspace")
+	assert.False(t, cfg.RepetitionGuardEnabled(), "a global disable must persist through a silent project folder")
 
 	// The project folder (project) re-enables over the global disable.
 	writeFile(t, projectFolderPath, `{"repetition_guard":{"enabled":true,"min_repetitions":5}}`)
 	cfg = load()
-	assert.True(t, cfg.RepetitionGuardEnabled(), "a workspace enable must override the global disable")
+	assert.True(t, cfg.RepetitionGuardEnabled(), "a project folder enable must override the global disable")
 	assert.Equal(t, 5, cfg.RepetitionGuardMinRepetitions())
 }
 

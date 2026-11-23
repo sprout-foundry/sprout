@@ -234,14 +234,14 @@ func BridgeHandler(manager *Manager, upgrader websocket.Upgrader, projectFolder 
 
 		projectFolderPath := r.URL.Query().Get("workspace")
 		if projectFolderPath == "" {
-			http.Error(w, "workspace parameter is required", http.StatusBadRequest)
+			http.Error(w, "project folder parameter is required", http.StatusBadRequest)
 			return
 		}
 
 		// Resolve project folder path
 		_, err := filepath.Abs(projectFolderPath)
 		if err != nil {
-			http.Error(w, "workspace not allowed", http.StatusForbidden)
+			http.Error(w, "project folder not allowed", http.StatusForbidden)
 			return
 		}
 

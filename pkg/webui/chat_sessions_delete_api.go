@@ -205,8 +205,8 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 					resp["worktree_removed"] = true
 				}
 			} else {
-				ws.log().Warn("skipping removal of current workspace", slog.String("worktree_path", absWorktree))
-				resp["worktree_error"] = "Cannot remove the current workspace"
+				ws.log().Warn("skipping removal of current project folder", slog.String("worktree_path", absWorktree))
+				resp["worktree_error"] = "Cannot remove the current project folder"
 			}
 		}
 	}

@@ -131,7 +131,7 @@ func TestNormalizeRemoteProjectFolderPath(t *testing.T) {
 	for _, tc := range cases {
 		got := normalizeRemoteProjectFolderPath(tc.in)
 		if got != tc.want {
-			t.Errorf("normalizeRemoteWorkspacePath(%q) = %q; want %q", tc.in, got, tc.want)
+			t.Errorf("normalizeRemoteProjectFolderPath(%q) = %q; want %q", tc.in, got, tc.want)
 		}
 	}
 }

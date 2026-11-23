@@ -241,7 +241,7 @@ type deploySubject struct {
 func deployProjectRoot(env ToolEnv, args map[string]any) (string, error) {
 	base := strings.TrimSpace(env.ProjectFolder)
 	if base == "" {
-		return "", errors.New("no workspace root is available to resolve the project; run inside a workspace")
+		return "", errors.New("no project folder is available to resolve the project; run inside a project folder")
 	}
 	dir, _ := extractString(args, "project_dir")
 	dir = strings.TrimSpace(dir)
@@ -253,7 +253,7 @@ func deployProjectRoot(env ToolEnv, args map[string]any) (string, error) {
 	}
 	cleaned := filepath.Clean(dir)
 	if cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("project_dir %q must stay under the workspace root", dir)
+		return "", fmt.Errorf("project_dir %q must stay under the project folder", dir)
 	}
 	return filepath.Join(filepath.Clean(base), cleaned), nil
 }
@@ -378,7 +378,7 @@ func (h *deployStatusHandler) Definition() ToolDefinition {
 		Required: []string{},
 		Parameters: []ParameterDef{
 			{Name: "project_dir", Type: "string",
-				Description: "Project subdirectory within the workspace to read (relative path). Defaults to the workspace root."},
+				Description: "Project subdirectory within the project folder to read (relative path). Defaults to the project folder."},
 			{Name: "target", Type: "string",
 				Description: "Deploy target id, overriding the deploy config's target. Defaults to the config's target."},
 		},
@@ -442,7 +442,7 @@ func (h *deployHandler) Definition() ToolDefinition {
 			{Name: "production", Type: "boolean",
 				Description: "Deploy to production (the live site). Always requires explicit user approval; unapproved production deploys are refused. Defaults to false (preview)."},
 			{Name: "project_dir", Type: "string",
-				Description: "Project subdirectory within the workspace to deploy (relative path). Defaults to the workspace root."},
+				Description: "Project subdirectory within the project folder to deploy (relative path). Defaults to the project folder."},
 			{Name: "target", Type: "string",
 				Description: "Deploy target id, overriding the deploy config's target. Defaults to the config's target."},
 			{Name: "version", Type: "string",

@@ -81,7 +81,7 @@ func createTaskWorktree(ctx context.Context, projectFolder, branch, base string)
 		// branch" would be meaningless.
 		current, err := runGitIn(ctx, repoRoot, "symbolic-ref", "--quiet", "--short", "HEAD")
 		if err != nil || strings.TrimSpace(current) == "" {
-			return nil, agenterrors.NewValidation("the workspace is on a detached HEAD; check out a branch before starting a task", nil)
+			return nil, agenterrors.NewValidation("the project folder is on a detached HEAD; check out a branch before starting a task", nil)
 		}
 		base = strings.TrimSpace(current)
 	}

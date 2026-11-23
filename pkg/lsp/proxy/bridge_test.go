@@ -218,7 +218,7 @@ func TestBridgeHandlerParameterValidation(t *testing.T) {
 		assert.Contains(t, w.Body.String(), "language parameter is required")
 	})
 
-	t.Run("missing workspace parameter returns 400", func(t *testing.T) {
+	t.Run("missing project folder parameter returns 400", func(t *testing.T) {
 		ctx := context.Background()
 		manager := NewManager(ctx)
 		defer manager.Close()
@@ -235,10 +235,10 @@ func TestBridgeHandlerParameterValidation(t *testing.T) {
 		handler(w, req)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.Contains(t, w.Body.String(), "workspace parameter is required")
+		assert.Contains(t, w.Body.String(), "project folder parameter is required")
 	})
 
-	t.Run("non-existent workspace path proceeds to LSP startup which fails with 500", func(t *testing.T) {
+	t.Run("non-existent project folder path proceeds to LSP startup which fails with 500", func(t *testing.T) {
 		ctx := context.Background()
 		manager := NewManager(ctx)
 		defer manager.Close()
@@ -284,7 +284,7 @@ func TestBridgeHandlerParameterValidation(t *testing.T) {
 }
 
 func TestBridgeHandlerEdgeCases(t *testing.T) {
-	t.Run("empty language and workspace", func(t *testing.T) {
+	t.Run("empty language and project folder", func(t *testing.T) {
 		ctx := context.Background()
 		manager := NewManager(ctx)
 		defer manager.Close()
@@ -338,8 +338,8 @@ func TestBridgeHandlerWithCustomConfig(t *testing.T) {
 		// That's fine - we're just checking params passed
 		body := w.Body.String()
 		assert.NotContains(t, body, "language parameter is required")
-		assert.NotContains(t, body, "workspace parameter is required")
-		assert.NotContains(t, body, "workspace not allowed")
+		assert.NotContains(t, body, "project folder parameter is required")
+		assert.NotContains(t, body, "project folder not allowed")
 	})
 }
 

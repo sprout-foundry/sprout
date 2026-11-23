@@ -100,21 +100,21 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 		wantClassifier FileAccessDecision
 	}{
 		{
-			name:           "workspace root file",
+			name:           "project folder file",
 			filePath:       filepath.Join(projectFolder, "main.go"),
 			resolvedPath:   filepath.Join(projectFolder, "main.go"),
 			mode:           "read",
 			wantClassifier: FileAccessAllow,
 		},
 		{
-			name:           "workspace nested file write",
+			name:           "project folder nested file write",
 			filePath:       filepath.Join(projectFolder, "a", "b", "c.txt"),
 			resolvedPath:   filepath.Join(projectFolder, "a", "b", "c.txt"),
 			mode:           "write",
 			wantClassifier: FileAccessAllow,
 		},
 		{
-			name:           "workspace symlink",
+			name:           "project folder symlink",
 			filePath:       filepath.Join(projectFolder, "link"),
 			resolvedPath:   filepath.Join(projectFolder, "real"),
 			mode:           "read",
@@ -177,14 +177,14 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 			wantClassifier: FileAccessAllow,
 		},
 		{
-			name:           "off-workspace external file",
+			name:           "off-project-folder external file",
 			filePath:       externalFile,
 			resolvedPath:   externalFile,
 			mode:           "read",
 			wantClassifier: FileAccessPrompt,
 		},
 		{
-			name:           "off-workspace external file write",
+			name:           "off-project-folder external file write",
 			filePath:       externalFile,
 			resolvedPath:   externalFile,
 			mode:           "write",
@@ -238,7 +238,7 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 		// classifier should return FileAccessPrompt, not FileAccessAllow.
 		// This verifies IsUnderProjectFolder correctly resolves symlinks.
 		{
-			name:         "workspace symlink escape to /etc/passwd",
+			name:         "project folder symlink escape to /etc/passwd",
 			filePath:     filepath.Join(projectFolder, "evil_link"),
 			resolvedPath: "/etc/passwd",
 			mode:         "read",
@@ -310,7 +310,7 @@ func TestClassifyFileAccess_Conformance(t *testing.T) {
 		},
 		// --- Test #4: list_directory on project folder ---
 		{
-			name:           "list_directory workspace root",
+			name:           "list_directory project folder",
 			filePath:       projectFolder,
 			resolvedPath:   projectFolder,
 			mode:           "read",
@@ -400,7 +400,7 @@ func TestStaticGateAutoApprove_PathTier(t *testing.T) {
 
 	// Project folder path should auto-approve even without bypass flags.
 	if !a.staticGateAutoApprove(secResult, filepath.Join(projectFolder, "main.go"), "", "read") {
-		t.Error("staticGateAutoApprove should allow workspace path")
+		t.Error("staticGateAutoApprove should allow project folder path")
 	}
 
 	// Off-project-folder path should NOT auto-approve (no bypass flags).
@@ -409,7 +409,7 @@ func TestStaticGateAutoApprove_PathTier(t *testing.T) {
 	externalDir := NonTmpTempDir(t)
 	externalPath := filepath.Join(externalDir, "other.txt")
 	if a.staticGateAutoApprove(secResult, externalPath, "", "read") {
-		t.Error("staticGateAutoApprove should NOT auto-approve off-workspace path without bypass flags")
+		t.Error("staticGateAutoApprove should NOT auto-approve off-project-folder path without bypass flags")
 	}
 }
 

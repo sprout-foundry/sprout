@@ -219,7 +219,7 @@ func TestKeysCommand_SetLocalWritesProjectFolderStore(t *testing.T) {
 	}
 
 	out := buf.String()
-	require.Contains(t, out, "Scope: workspace")
+	require.Contains(t, out, "Scope: project folder")
 	require.Contains(t, out, filepath.Join(".sprout", "credentials", "api_keys.json"))
 
 	store, err := credentials.LoadFromDir(filepath.Join(projectFolder, ".sprout"))

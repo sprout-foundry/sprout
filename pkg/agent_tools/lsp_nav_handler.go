@@ -32,7 +32,7 @@ func lspNavDefinition(name, description string) ToolDefinition {
 		Description: description + " " + lspNavParams,
 		Required:    []string{"path", "line", "symbol"},
 		Parameters: []ParameterDef{
-			{Name: "path", Type: "string", Description: "The file, relative to the workspace or absolute.", Required: true},
+			{Name: "path", Type: "string", Description: "The file, relative to the project folder or absolute.", Required: true},
 			{Name: "line", Type: "integer", Description: "The 1-based line the symbol is on.", Required: true},
 			{Name: "symbol", Type: "string", Description: "The symbol's name as it appears on that line.", Required: true},
 			{Name: "column", Type: "integer", Description: "Optional 1-based column of the symbol, when it appears more than once on the line."},

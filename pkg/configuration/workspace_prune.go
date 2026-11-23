@@ -28,11 +28,11 @@ func PruneProjectFolderConfig(globalDir, projectFolderFile string, dryRun bool) 
 	result := ProjectFolderPruneResult{Path: projectFolderFile}
 	original, err := os.ReadFile(projectFolderFile)
 	if err != nil {
-		return result, fmt.Errorf("read workspace config: %w", err)
+		return result, fmt.Errorf("read project folder config: %w", err)
 	}
 	projectFolder := map[string]interface{}{}
 	if err := json.Unmarshal(original, &projectFolder); err != nil {
-		return result, fmt.Errorf("parse workspace config %q: %w", projectFolderFile, err)
+		return result, fmt.Errorf("parse project folder config %q: %w", projectFolderFile, err)
 	}
 
 	global, err := LoadConfigWithLayers(filepath.Join(globalDir, ConfigFileName), "", "", globalDir)
@@ -81,14 +81,14 @@ func PruneProjectFolderConfig(globalDir, projectFolderFile string, dryRun bool) 
 		return result, nil
 	}
 	if err := os.WriteFile(filepath.Clean(projectFolderFile+".bak"), original, 0600); err != nil { // #nosec G703 -- beside the project folder config the caller named
-		return result, fmt.Errorf("back up workspace config: %w", err)
+		return result, fmt.Errorf("back up project folder config: %w", err)
 	}
 	data, err := json.MarshalIndent(projectFolder, "", "  ")
 	if err != nil {
-		return result, fmt.Errorf("marshal workspace config: %w", err)
+		return result, fmt.Errorf("marshal project folder config: %w", err)
 	}
 	if err := os.WriteFile(projectFolderFile, data, 0600); err != nil {
-		return result, fmt.Errorf("write workspace config: %w", err)
+		return result, fmt.Errorf("write project folder config: %w", err)
 	}
 	return result, nil
 }
@@ -162,18 +162,18 @@ func dropPathsUnder(paths []string, key string) []string {
 // and returns the top-level settings whose merged value differs.
 func effectiveDifferences(globalFile, globalDir string, before, after map[string]interface{}) ([]string, error) {
 	load := func(ws map[string]interface{}) (map[string]interface{}, error) {
-		f, err := os.CreateTemp("", "sprout-workspace-*.json")
+		f, err := os.CreateTemp("", "sprout-project-folder-*.json")
 		if err != nil {
-			return nil, fmt.Errorf("stage workspace config: %w", err)
+			return nil, fmt.Errorf("stage project folder config: %w", err)
 		}
 		defer func() { _ = os.Remove(f.Name()) }()
 		data, _ := json.Marshal(ws)
 		if _, err := f.Write(data); err != nil {
 			_ = f.Close()
-			return nil, fmt.Errorf("stage workspace config: %w", err)
+			return nil, fmt.Errorf("stage project folder config: %w", err)
 		}
 		if err := f.Close(); err != nil {
-			return nil, fmt.Errorf("stage workspace config: %w", err)
+			return nil, fmt.Errorf("stage project folder config: %w", err)
 		}
 		// The staged layer lives in a temp file: no project folder, so
 		// no project persona I/O during a prune.

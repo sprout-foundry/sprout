@@ -120,7 +120,7 @@ func (ws *ReactWebServer) handleAPIAutomateRun(w http.ResponseWriter, r *http.Re
 		return
 	}
 	if !ws.acceptingWork() {
-		writeJSONErr(w, http.StatusServiceUnavailable, errCodeDevSpaceStopping, "The workspace is stopping and is not accepting new work")
+		writeJSONErr(w, http.StatusServiceUnavailable, errCodeDevSpaceStopping, "The project folder is stopping and is not accepting new work")
 		return
 	}
 

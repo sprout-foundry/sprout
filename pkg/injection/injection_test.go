@@ -106,14 +106,14 @@ func TestComputeSignals_StructuralSignals(t *testing.T) {
 			wantSignal: SignalRecursiveDelete,
 		},
 		{
-			name:       "write outside the workspace holds",
+			name:       "write outside the project folder holds",
 			in:         SignalInput{Command: "echo x > /etc/hosts", ProjectFolder: "/home/u/proj"},
 			wantAction: Hold,
 			wantVeto:   true,
 			wantSignal: SignalWriteOutsideProjectFolder,
 		},
 		{
-			name:         "write outside the workspace is not signalled without a root",
+			name:         "write outside the project folder is not signalled without a root",
 			in:           SignalInput{Command: "echo x > /etc/hosts"},
 			wantAction:   Pass,
 			wantNoSignal: SignalWriteOutsideProjectFolder,

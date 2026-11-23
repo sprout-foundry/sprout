@@ -247,11 +247,11 @@ func (ws *ReactWebServer) handleAPIProjectFolderSet(w http.ResponseWriter, r *ht
 			if isHomeProjectFolder(canonicalPath) && !hasHomeProjectFolderConsent() {
 				if req.ConsentHome {
 					if err := recordHomeProjectFolderConsent(); err != nil {
-						ws.log().Warn("failed to record home-workspace consent", slog.Any("err", err))
+						ws.log().Warn("failed to record home-project-folder consent", slog.Any("err", err))
 					}
 				} else {
 					writeJSON(w, http.StatusForbidden, map[string]interface{}{
-						"error": "Selecting the home directory as workspace requires explicit consent. The agent will have access to all files under your home directory.",
+						"error": "Selecting the home directory as project folder requires explicit consent. The agent will have access to all files under your home directory.",
 						"code":  "home_workspace_requires_consent",
 					})
 					return
@@ -263,7 +263,7 @@ func (ws *ReactWebServer) handleAPIProjectFolderSet(w http.ResponseWriter, r *ht
 	// Reject project folder changes only for the window that currently owns an active run.
 	if ws.hasActiveQueryForClient(clientID) {
 		writeJSON(w, http.StatusConflict, map[string]interface{}{
-			"error":          "cannot change workspace while an agent query is active. Wait for the query to complete before switching.",
+			"error":          "cannot change project folder while an agent query is active. Wait for the query to complete before switching.",
 			"code":           "query_in_progress",
 			"active_queries": 1,
 		})
@@ -275,7 +275,7 @@ func (ws *ReactWebServer) handleAPIProjectFolderSet(w http.ResponseWriter, r *ht
 
 	projectFolder, err := ws.setClientProjectFolder(clientID, req.Path)
 	if err != nil {
-		writeJSONErr(w, http.StatusBadRequest, "workspace_update_failed", fmt.Sprintf("Failed to set workspace: %v", err))
+		writeJSONErr(w, http.StatusBadRequest, "workspace_update_failed", fmt.Sprintf("Failed to set project folder: %v", err))
 		return
 	}
 
@@ -290,7 +290,7 @@ func (ws *ReactWebServer) handleAPIProjectFolderSet(w http.ResponseWriter, r *ht
 
 	response := map[string]interface{}{
 		"daemon_root":    ws.GetDaemonRoot(),
-		"message":        "Workspace updated",
+		"message":        "Project folder updated",
 		"workspace_root": projectFolder,
 	}
 	clientCtx := ws.projectFolderViewForRequest(r)

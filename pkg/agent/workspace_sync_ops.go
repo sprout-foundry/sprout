@@ -46,7 +46,7 @@ func resolveProjectFolderPath(projectFolder, relPath string) (string, error) {
 
 	absRoot, err := filepath.Abs(projectFolder)
 	if err != nil {
-		return "", agenterrors.Wrap(err, "resolve workspace root")
+		return "", agenterrors.Wrap(err, "resolve project folder")
 	}
 
 	// Resolve symlinks in project folder for consistent path resolution and
@@ -87,7 +87,7 @@ func resolveProjectFolderPath(projectFolder, relPath string) (string, error) {
 	// Verify the resolved path is within the project folder
 	rel, err := filepath.Rel(resolvedRoot, resolved)
 	if err != nil || strings.HasPrefix(rel, "..") {
-		return "", agenterrors.NewValidation(fmt.Sprintf("path traversal attempted: %q is outside workspace root %q", resolved, resolvedRoot), nil)
+		return "", agenterrors.NewValidation(fmt.Sprintf("path traversal attempted: %q is outside project folder %q", resolved, resolvedRoot), nil)
 	}
 
 	return resolved, nil

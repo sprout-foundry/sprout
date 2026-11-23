@@ -28,7 +28,7 @@ func TestNormalizeRemoteProjectFolderPathSSH(t *testing.T) {
 		t.Run(tt.input, func(t *testing.T) {
 			got := normalizeRemoteProjectFolderPath(tt.input)
 			if got != tt.want {
-				t.Errorf("normalizeRemoteWorkspacePath(%q) = %q, want %q", tt.input, got, tt.want)
+				t.Errorf("normalizeRemoteProjectFolderPath(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}

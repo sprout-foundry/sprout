@@ -89,7 +89,7 @@ func ResolveToolRisk(a RiskAgent, toolName string, args map[string]interface{}) 
 							Level:       configuration.RiskLevelCritical,
 							IsHardBlock: true,
 							Sources:     []RiskSource{RiskSourceProjectFolderPolicy},
-							Reason:      "workspace security policy denies this command",
+							Reason:      "project folder security policy denies this command",
 						},
 					)
 				case configuration.PolicyPrompt:
@@ -98,7 +98,7 @@ func ResolveToolRisk(a RiskAgent, toolName string, args map[string]interface{}) 
 							RiskAssessment{
 								Level:   configuration.RiskLevelMedium,
 								Sources: []RiskSource{RiskSourceProjectFolderPolicy},
-								Reason:  "workspace security policy requires prompt for this command",
+								Reason:  "project folder security policy requires prompt for this command",
 							},
 						)
 					}
@@ -141,7 +141,7 @@ func ResolveToolRisk(a RiskAgent, toolName string, args map[string]interface{}) 
 							RiskAssessment{
 								Level:   configuration.RiskLevelMedium,
 								Sources: []RiskSource{RiskSourceFSTier},
-								Reason:  fmt.Sprintf("path %s is outside the workspace (external tier)", pathRaw),
+								Reason:  fmt.Sprintf("path %s is outside the project folder (external tier)", pathRaw),
 							},
 						)
 					}

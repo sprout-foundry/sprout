@@ -66,7 +66,7 @@ func waitForWebHealth(port int, timeout time.Duration) error {
 	if lastErr == nil {
 		lastErr = fmt.Errorf("timed out waiting for remote sprout backend")
 	}
-	return fmt.Errorf("failed to connect to SSH workspace: %w", lastErr)
+	return fmt.Errorf("failed to connect to SSH project folder: %w", lastErr)
 }
 
 func isRetryableSSHHealthError(err error) bool {

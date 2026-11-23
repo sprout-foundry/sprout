@@ -1539,7 +1539,7 @@ func TestRedirectGoLogToProjectFolder_Coverage(t *testing.T) {
 
 	restore, err := redirectGoLogToProjectFolder()
 	if err != nil {
-		t.Fatalf("redirectGoLogToWorkspace() error: %v", err)
+		t.Fatalf("redirectGoLogToProjectFolder() error: %v", err)
 	}
 	defer func() {
 		restore()

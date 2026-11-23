@@ -124,7 +124,7 @@ func TestAPIPreviewSourceRejectsOutsideProjectFolder(t *testing.T) {
 
 	code, body := callPreviewSource(t, ws, outside)
 	if code != http.StatusForbidden {
-		t.Errorf("status = %d, want 403 for a path outside the workspace (body %v)", code, body)
+		t.Errorf("status = %d, want 403 for a path outside the project folder (body %v)", code, body)
 	}
 	if body["url"] != nil {
 		t.Errorf("url = %v, want none for a rejected path", body["url"])

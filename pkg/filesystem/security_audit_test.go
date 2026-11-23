@@ -73,7 +73,7 @@ func TestSafeResolvePathWithBypass_AuditLoggerAllowed(t *testing.T) {
 
 func TestSafeResolvePathWithBypass_AuditLoggerDenied(t *testing.T) {
 	// Create a test project folder
-	projectFolder, _ := os.MkdirTemp("", "fs-audit-workspace-*")
+	projectFolder, _ := os.MkdirTemp("", "fs-audit-project-folder-*")
 	defer os.RemoveAll(projectFolder)
 
 	// Create a simple audit logger wrapper that captures entries
@@ -97,7 +97,7 @@ func TestSafeResolvePathWithBypass_AuditLoggerDenied(t *testing.T) {
 	// Try to resolve path outside project folder (should be denied)
 	_, err := SafeResolvePathWithBypass(ctx, outside)
 	if err == nil {
-		t.Fatal("expected error for path outside workspace")
+		t.Fatal("expected error for path outside project folder")
 	}
 
 	if len(entries) != 1 {
@@ -174,7 +174,7 @@ func TestSafeResolvePathWithBypass_NilLoggerNoPanic(t *testing.T) {
 	// Should not panic
 	_, err := SafeResolvePathWithBypass(ctx, "/etc/passwd")
 	if err == nil {
-		t.Error("expected error for path outside workspace")
+		t.Error("expected error for path outside project folder")
 	}
 }
 
@@ -219,7 +219,7 @@ func TestSafeResolvePathForWriteWithBypass_AuditLoggerAllowed(t *testing.T) {
 
 func TestSafeResolvePathForWriteWithBypass_AuditLoggerDenied(t *testing.T) {
 	// Create a test project folder
-	projectFolder, _ := os.MkdirTemp("", "fs-audit-workspace-*")
+	projectFolder, _ := os.MkdirTemp("", "fs-audit-project-folder-*")
 	defer os.RemoveAll(projectFolder)
 
 	// Create a simple audit logger wrapper that captures entries
@@ -234,7 +234,7 @@ func TestSafeResolvePathForWriteWithBypass_AuditLoggerDenied(t *testing.T) {
 	// Try to resolve write path outside project folder (should be denied)
 	_, err := SafeResolvePathForWriteWithBypass(ctx, "/etc/passwd")
 	if err == nil {
-		t.Fatal("expected error for write path outside workspace")
+		t.Fatal("expected error for write path outside project folder")
 	}
 
 	if len(entries) != 1 {
@@ -319,7 +319,7 @@ func TestSafeResolvePathForWriteWithBypass_NilLoggerNoPanic(t *testing.T) {
 	// Should not panic
 	_, err := SafeResolvePathForWriteWithBypass(ctx, "/etc/passwd")
 	if err == nil {
-		t.Error("expected error for write path outside workspace")
+		t.Error("expected error for write path outside project folder")
 	}
 }
 

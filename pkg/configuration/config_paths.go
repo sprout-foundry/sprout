@@ -125,12 +125,12 @@ credentials/
 instances.json
 instances.json.lock
 .config_api_keys_migrated
-# Per-workspace state directories
+# Per-project-folder state directories
 changes/
 revisions/
 runlogs/
 bg-processes/
-# Task worktrees (/task): checked out inside the workspace, so they must
+# Task worktrees (/task): checked out inside the project folder, so they must
 # never read as untracked files here.
 tasks/
 `
@@ -152,7 +152,7 @@ func EnsureProjectFolderConfigDir(projectFolder string) error {
 		return nil
 	}
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("create workspace config directory: %w", err)
+		return fmt.Errorf("create project folder config directory: %w", err)
 	}
 	gitignorePath := filepath.Join(dir, ".gitignore")
 	// Refresh a .gitignore sprout generated earlier (it's marked do-not-edit)

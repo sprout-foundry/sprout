@@ -160,7 +160,7 @@ func TestLog_EntryFormat(t *testing.T) {
 		RiskLevel:     "SAFE",
 		Category:      "read-only",
 		Action:        "allowed",
-		Reasoning:     "Read-only shell command in workspace",
+		Reasoning:     "Read-only shell command in project folder",
 		Source:        "classifier",
 		SessionID:     "session-abc-123",
 		ProjectFolder: "/home/user/project",
@@ -209,7 +209,7 @@ func TestLog_EntryFormat(t *testing.T) {
 		t.Errorf("SessionID = %q, want %q", parsed.SessionID, entry.SessionID)
 	}
 	if parsed.ProjectFolder != entry.ProjectFolder {
-		t.Errorf("Workspace = %q, want %q", parsed.ProjectFolder, entry.ProjectFolder)
+		t.Errorf("Project folder = %q, want %q", parsed.ProjectFolder, entry.ProjectFolder)
 	}
 
 	// Verify timestamp is a valid RFC3339 format by parsing the raw JSON.
@@ -569,7 +569,7 @@ func TestAuditLogger_LogJSON(t *testing.T) {
 		RiskLevel: "high",
 		Category:  "fs_gate",
 		Action:    "denied",
-		Reasoning: "path outside workspace",
+		Reasoning: "path outside project folder",
 		Source:    "unified-gate",
 	}
 	data, err := json.Marshal(entry)

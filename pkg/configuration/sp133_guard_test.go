@@ -72,7 +72,7 @@ func TestNoLegacyHomeDotSprout(t *testing.T) {
 					strings.Contains(line, `".sprout"`) &&
 					(strings.Contains(line, "home") || strings.Contains(line, "HOME") || strings.Contains(line, "homeDir")) {
 					// Allow project-folder-level paths (relative ".sprout" under cwd/workspace)
-					if strings.Contains(line, `cwd`) || strings.Contains(line, `workspace`) || strings.Contains(line, `rootDir`) || strings.Contains(line, `projectRoot`) || strings.Contains(line, `gitRoot`) || strings.Contains(line, `baseDir`) {
+					if strings.Contains(line, `cwd`) || strings.Contains(line, `projectFolder`) || strings.Contains(line, `rootDir`) || strings.Contains(line, `projectRoot`) || strings.Contains(line, `gitRoot`) || strings.Contains(line, `baseDir`) {
 						continue
 					}
 					t.Errorf("%s:%d: user-level filepath.Join(home..., \".sprout\") — use envutil.StateDir()/CacheDir()/ConfigDir() instead: %s",
@@ -95,9 +95,9 @@ func TestNoLegacyHomeDotSprout(t *testing.T) {
 	misrouted := map[string]string{
 		"sessions":  "envutil.StateDir()",
 		"logs":      "envutil.StateDir()",
-		"changes":   "the workspace root",
-		"revisions": "the workspace root",
-		"runlogs":   "the workspace root",
+		"changes":   "the project folder",
+		"revisions": "the project folder",
+		"runlogs":   "the project folder",
 	}
 	checkConfigRootMisrouting := func(dir string) {
 		root := filepath.Join(repoRoot, dir)

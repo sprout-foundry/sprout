@@ -224,14 +224,14 @@ func (ws *ReactWebServer) runChatQuery(
 		runningChatName := busy.Name
 		busy.mu.RUnlock()
 		ws.mutex.Unlock()
-		ws.log().Info("workspace busy, rejecting cross-chat query",
+		ws.log().Info("project folder busy, rejecting cross-chat query",
 			slog.String("chat_id", chatID),
 			slog.String("running_chat_id", runningChatID),
 		)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusConflict)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"error":             fmt.Sprintf("Another chat (%s) is working in this workspace", runningChatName),
+			"error":             fmt.Sprintf("Another chat (%s) is working in this project folder", runningChatName),
 			"code":              "workspace_busy",
 			"running_chat_id":   runningChatID,
 			"running_chat_name": runningChatName,

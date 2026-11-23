@@ -23,7 +23,7 @@ func (ws *ReactWebServer) handleAPIFileIndex(w http.ResponseWriter, r *http.Requ
 
 	projectFolder := ws.getProjectFolderForRequest(r)
 	if projectFolder == "" {
-		writeJSONErr(w, http.StatusBadRequest, "workspace_not_selected", "No workspace selected")
+		writeJSONErr(w, http.StatusBadRequest, "workspace_not_selected", "No project folder selected")
 		return
 	}
 	// Same home-project-folder hardening as /api/browse and /api/files (SP-130):
@@ -31,7 +31,7 @@ func (ws *ReactWebServer) handleAPIFileIndex(w http.ResponseWriter, r *http.Requ
 	// exists to prevent.
 	if isHomeProjectFolder(projectFolder) && !hasHomeProjectFolderConsent() {
 		writeJSONErr(w, http.StatusForbidden, "workspace_not_selected",
-			"Workspace is the home directory and no consent was granted; select a workspace first")
+			"Project folder is the home directory and no consent was granted; select a project folder first")
 		return
 	}
 

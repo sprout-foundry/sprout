@@ -46,14 +46,14 @@ func (k *KeysCommand) Usage() string {
 		"",
 		"By default a key is stored wherever this process's config root points:",
 		"inside a git repo that is <repo>/.sprout, so the key is scoped to that",
-		"workspace. Pass --global to store it at the user level instead, or",
-		"--local to force the workspace store. The two flags are mutually",
+		"project folder. Pass --global to store it at the user level instead, or",
+		"--local to force the project folder store. The two flags are mutually",
 		"exclusive.",
 		"",
 		"Note: reads resolve through a single config root with no fallback, so",
 		"a --global key is used only where the config root resolves to the",
 		"user-level store (i.e. outside a git repo). Inside a repo the",
-		"workspace store is what gets read. An explicit --global/--local write",
+		"project folder store is what gets read. An explicit --global/--local write",
 		"also writes the file store directly; if the OS keyring is active it",
 		"still takes precedence on read, and the command will say so.",
 		"",
@@ -450,7 +450,7 @@ func requireProjectFolderLayer(root string) (string, error) {
 	if dir := configuration.ProjectFolderConfigDir(root); dir != "" {
 		return dir, nil
 	}
-	return "", fmt.Errorf("cannot use --local: %s has no workspace config layer (the home directory is not a workspace)", root)
+	return "", fmt.Errorf("cannot use --local: %s has no project folder config layer (the home directory is not a project folder)", root)
 }
 
 func scopeLabel(scope keyScope) string {
@@ -458,7 +458,7 @@ func scopeLabel(scope keyScope) string {
 	case keyScopeGlobal:
 		return "user-level (used outside a git repo; a repo reads its own .sprout)"
 	case keyScopeLocal:
-		return "workspace (.sprout in this repo)"
+		return "project folder (.sprout in this repo)"
 	default:
 		return resolvedScopeLabel()
 	}
@@ -482,7 +482,7 @@ func resolvedScopeLabel() string {
 		return "user-level"
 	}
 	if strings.HasSuffix(filepath.Clean(active), string(filepath.Separator)+".sprout") {
-		return "workspace (this repo's .sprout)"
+		return "project folder (this repo's .sprout)"
 	}
 	return fmt.Sprintf("custom (%s)", active)
 }

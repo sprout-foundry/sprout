@@ -26,8 +26,8 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		OperationID: "workspaceGet",
 		Method:      http.MethodGet,
 		Path:        "/api/workspace",
-		Summary:     "Report the client's active workspace.",
-		Description: "Reports the requesting client's active workspace root, whether it is a recognized project directory, and recent-workspace metadata.",
+		Summary:     "Report the client's active project folder.",
+		Description: "Reports the requesting client's active project folder, whether it is a recognized project directory, and recent-project-folder metadata.",
 		Tags:        []string{"workspace/instances"},
 	}, ws.projectFolderGetHumaHandler)
 
@@ -35,8 +35,8 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		OperationID: "workspaceSet",
 		Method:      http.MethodPost,
 		Path:        "/api/workspace",
-		Summary:     "Set the client's active workspace.",
-		Description: "Sets the requesting client's active workspace root to the `path` in the body. The path must resolve within the daemon root.",
+		Summary:     "Set the client's active project folder.",
+		Description: "Sets the requesting client's active project folder to the `path` in the body. The path must resolve within the daemon root.",
 		Tags:        []string{"workspace/instances"},
 	}, ws.projectFolderSetHumaHandler)
 
@@ -45,7 +45,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodGet,
 		Path:        "/api/workspace/browse",
 		Summary:     "Browse directories under the daemon root.",
-		Description: "Lists the directories under the daemon root (the parent of the active workspace) so the client can pick a new workspace. Defaults to the daemon root when `path` is omitted.",
+		Description: "Lists the directories under the daemon root (the parent of the active project folder) so the client can pick a new project folder. Defaults to the daemon root when `path` is omitted.",
 		Tags:        []string{"workspace/instances"},
 	}, ws.projectFolderBrowseHumaHandler)
 
@@ -53,8 +53,8 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		OperationID: "workspaceSymbols",
 		Method:      http.MethodGet,
 		Path:        "/api/workspace/symbols",
-		Summary:     "List workspace symbols.",
-		Description: "Returns the workspace's indexed symbols, optionally filtered by `query`. Falls back to building the index on a cache miss.",
+		Summary:     "List project folder symbols.",
+		Description: "Returns the project folder's indexed symbols, optionally filtered by `query`. Falls back to building the index on a cache miss.",
 		Tags:        []string{"workspace/instances"},
 	}, ws.workspaceSymbolsHumaHandler)
 
@@ -63,7 +63,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodGet,
 		Path:        "/api/workspace/projects",
 		Summary:     "List known projects.",
-		Description: "Lists the recent projects known to the client (the workspace picker) with their last-used ordering.",
+		Description: "Lists the recent projects known to the client (the project folder picker) with their last-used ordering.",
 		Tags:        []string{"workspace/instances"},
 	}, ws.projectFolderProjectsHumaHandler)
 
@@ -71,8 +71,8 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		OperationID: "workspaceSync",
 		Method:      http.MethodPost,
 		Path:        "/api/workspace/sync",
-		Summary:     "Synchronize the workspace tree.",
-		Description: "Applies the pending file-sync operations for the workspace (the SP-046 workspace-sync surface).",
+		Summary:     "Synchronize the project folder tree.",
+		Description: "Applies the pending file-sync operations for the project folder (the SP-046 workspace-sync surface).",
 		Tags:        []string{"workspace/instances"},
 	}, ws.projectFolderSyncHumaHandler)
 
@@ -80,8 +80,8 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		OperationID: "workspaceTakeover",
 		Method:      http.MethodPost,
 		Path:        "/api/workspace/takeover",
-		Summary:     "Take over a workspace from another device.",
-		Description: "Marks the requesting client as the active owner of the workspace, superseding the previous owner.",
+		Summary:     "Take over a project folder from another device.",
+		Description: "Marks the requesting client as the active owner of the project folder, superseding the previous owner.",
 		Tags:        []string{"workspace/instances"},
 	}, ws.projectFolderTakeoverHumaHandler)
 
@@ -135,7 +135,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodPost,
 		Path:        "/api/instances/ssh-browse",
 		Summary:     "Browse the remote host's directories over SSH.",
-		Description: "Lists the directories on the remote host over the SSH session so the client can pick a remote workspace.",
+		Description: "Lists the directories on the remote host over the SSH session so the client can pick a remote project folder.",
 		Tags:        []string{"workspace/instances"},
 	}, ws.sshBrowseHumaHandler)
 

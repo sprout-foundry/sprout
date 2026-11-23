@@ -134,7 +134,7 @@ func prepareSubagentLaunch(ctx context.Context, a *Agent, args map[string]interf
 	// --- Resolve project folder ---
 	absProjectFolderDir, err := filepath.Abs(a.currentProjectFolder())
 	if err != nil {
-		return nil, agenterrors.NewConfig("failed to resolve absolute workspace path", err)
+		return nil, agenterrors.NewConfig("failed to resolve absolute project folder path", err)
 	}
 
 	// --- Validate file paths ---

@@ -22,12 +22,12 @@ func (h *searchHandler) Name() string { return "search" }
 func (h *searchHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "search",
-		Description: "Find code in the workspace with a regex search, one result per matching file. " +
+		Description: "Find code in the project folder with a regex search, one result per matching file. " +
 			"Use a regex for exact matches ('func NewServer', 'SPROUT_[A-Z_]+'). A plain-language query of three or more words is reduced to its distinctive word stems and matched as alternatives.",
 		Required: []string{"query"},
 		Parameters: []ParameterDef{
 			{Name: "query", Type: "string", Description: "A regex pattern, or a plain-language description whose distinctive words are matched.", Required: true},
-			{Name: "directory", Type: "string", Description: "Directory to search (default: workspace root)"},
+			{Name: "directory", Type: "string", Description: "Directory to search (default: project folder)"},
 			{Name: "file_glob", Type: "string", Description: "Restrict matching to files matching this glob (e.g. '*.go')"},
 			{Name: "case_sensitive", Type: "boolean", Description: "Case-sensitive matching (default: false)"},
 			{Name: "max_results", Type: "integer", Description: "Maximum files to return (default: 20)"},
@@ -76,8 +76,8 @@ func (h *searchHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 			if ctx2, approved := promptForOffProjectFolderPath(ctx, env, "search", directory, resolvedPath, "read"); approved {
 				ctx = ctx2
 			} else {
-				return ToolResult{Output: fmt.Sprintf("read blocked: off-workspace access to %s was not approved", directory), IsError: true},
-					fmt.Errorf("read blocked: off-workspace access to %s was not approved", directory)
+				return ToolResult{Output: fmt.Sprintf("read blocked: off-project-folder access to %s was not approved", directory), IsError: true},
+					fmt.Errorf("read blocked: off-project-folder access to %s was not approved", directory)
 			}
 		}
 	}

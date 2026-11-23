@@ -65,7 +65,7 @@ func TestHandleAPIFileIndex(t *testing.T) {
 		for _, f := range body.Files {
 			paths[f.Path] = true
 			if filepath.IsAbs(f.Path) {
-				t.Errorf("path %q must be workspace-relative", f.Path)
+				t.Errorf("path %q must be project-folder-relative", f.Path)
 			}
 		}
 		if !paths["main.go"] || !paths["src/app.ts"] {

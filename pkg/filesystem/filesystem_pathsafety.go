@@ -46,7 +46,7 @@ func SafeResolveAbs(ctx context.Context, filePath string) (string, error) {
 	}
 	base, err := filepath.Abs(projectFolder)
 	if err != nil {
-		return "", fmt.Errorf("failed to get absolute path for workspace root: %w", err)
+		return "", fmt.Errorf("failed to get absolute path for project folder: %w", err)
 	}
 	abs := filepath.Clean(filePath)
 	if !filepath.IsAbs(abs) {
@@ -116,7 +116,7 @@ func SafeResolvePathWithBypass(ctx context.Context, filePath string) (string, er
 
 	cwdAbs, err := filepath.Abs(projectFolder)
 	if err != nil {
-		return "", fmt.Errorf("failed to get absolute path for workspace root: %w", err)
+		return "", fmt.Errorf("failed to get absolute path for project folder: %w", err)
 	}
 
 	// Resolve relative paths against the explicit project folder instead of the
@@ -167,12 +167,12 @@ func SafeResolvePathWithBypass(ctx context.Context, filePath string) (string, er
 			return resolvedAbs, nil
 		}
 		// Return custom error that can be caught for user confirmation (SP-127 Phase 2.6: audit denied)
-		logFsGateDecision(ctx, "filesystem_read", cleanPath, "denied", "high", "path outside workspace root and not in session allowlist")
+		logFsGateDecision(ctx, "filesystem_read", cleanPath, "denied", "high", "path outside project folder and not in session allowlist")
 		return "", fmt.Errorf("%w: attempt to access file outside working directory: %s (resolves to: %s)", ErrOutsideWorkingDirectory, cleanPath, resolvedAbs)
 	}
 
 	// Allowed: path is within project folder (SP-127 Phase 2.6: audit)
-	logFsGateDecision(ctx, "filesystem_read", cleanPath, "allowed", "low", "path is within workspace")
+	logFsGateDecision(ctx, "filesystem_read", cleanPath, "allowed", "low", "path is within project folder")
 	return resolvedAbs, nil
 }
 
@@ -347,7 +347,7 @@ func SafeResolvePathForWriteWithBypass(ctx context.Context, filePath string) (st
 
 	cwdAbs, err := filepath.Abs(projectFolder)
 	if err != nil {
-		return "", fmt.Errorf("failed to get absolute path for workspace root: %w", err)
+		return "", fmt.Errorf("failed to get absolute path for project folder: %w", err)
 	}
 
 	absPath := cleanPath
@@ -420,7 +420,7 @@ func SafeResolvePathForWriteWithBypass(ctx context.Context, filePath string) (st
 			return absPath, nil
 		} else {
 			// Return custom error that can be caught for user confirmation (SP-127 Phase 2.6: audit denied)
-			logFsGateDecision(ctx, "filesystem_write", cleanPath, "denied", "high", "write path outside workspace root and not in session allowlist")
+			logFsGateDecision(ctx, "filesystem_write", cleanPath, "denied", "high", "write path outside project folder and not in session allowlist")
 			return "", fmt.Errorf("%w: attempt to write file outside working directory: %s (parent resolves to: %s)", ErrWriteOutsideWorkingDirectory, cleanPath, resolvedParent)
 		}
 	}
@@ -463,6 +463,6 @@ func SafeResolvePathForWriteWithBypass(ctx context.Context, filePath string) (st
 	}
 
 	// Allowed: write path is within project folder (SP-127 Phase 2.6: audit)
-	logFsGateDecision(ctx, "filesystem_write", cleanPath, "allowed", "low", "write path is within workspace")
+	logFsGateDecision(ctx, "filesystem_write", cleanPath, "allowed", "low", "write path is within project folder")
 	return absPath, nil
 }

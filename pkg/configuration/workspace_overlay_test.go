@@ -48,7 +48,7 @@ func TestProjectFolderSave_WritesOnlyWhatChanged(t *testing.T) {
 	saved := readJSONFile(t, filepath.Join(ws, ProjectFolderConfigFileName))
 	delete(saved, "version")
 	if len(saved) != 2 || saved["last_used_provider"] != "deepinfra" || saved["provider_models"] == nil {
-		t.Fatalf("workspace file = %v, want only its own provider_models plus the changed last_used_provider", saved)
+		t.Fatalf("project folder file = %v, want only its own provider_models plus the changed last_used_provider", saved)
 	}
 }
 
@@ -68,7 +68,7 @@ func TestProjectFolderSave_NestedChangeOverridesGlobal(t *testing.T) {
 	saved := readJSONFile(t, filepath.Join(ws, ProjectFolderConfigFileName))
 	mcpSaved, _ := saved["mcp"].(map[string]interface{})
 	if mcpSaved["enabled"] != false || mcpSaved["timeout"] != nil {
-		t.Fatalf("mcp in workspace = %v, want only enabled=false", mcpSaved)
+		t.Fatalf("mcp in project folder = %v, want only enabled=false", mcpSaved)
 	}
 
 	reloaded, err := NewManagerWithLayers(global, ws)
@@ -76,7 +76,7 @@ func TestProjectFolderSave_NestedChangeOverridesGlobal(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got := reloaded.GetConfig().MCP; got.Enabled {
-		t.Fatalf("reloaded mcp = %+v, want disabled in this workspace", got)
+		t.Fatalf("reloaded mcp = %+v, want disabled in this project folder", got)
 	}
 }
 
@@ -100,7 +100,7 @@ func TestProjectFolderSave_LaterGlobalChangeStillApplies(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !reloaded.GetConfig().MCP.Enabled {
-		t.Fatal("enabling MCP globally didn't reach a workspace that had saved an unrelated setting")
+		t.Fatal("enabling MCP globally didn't reach a project folder that had saved an unrelated setting")
 	}
 }
 

@@ -56,7 +56,7 @@ Examples:
   sprout config get wakeup.enabled
   sprout config get mcp.enabled
 
-Use --show-origin to print which layer (global, global-local, workspace,
+Use --show-origin to print which layer (global, global-local, project folder,
 workspace-local, session) supplied the value and the file path.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {

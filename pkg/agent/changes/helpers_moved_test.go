@@ -65,7 +65,7 @@ func TestResolveAbsPath_UsesProjectFolder(t *testing.T) {
 	resolved := ct.resolveAbsPath("nested/file.go")
 	expected := filepath.Join(ws, "nested", "file.go")
 	if resolved != expected {
-		t.Errorf("expected resolution against workspace root %q, got %q", expected, resolved)
+		t.Errorf("expected resolution against project folder %q, got %q", expected, resolved)
 	}
 }
 

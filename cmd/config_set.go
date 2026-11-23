@@ -18,7 +18,7 @@ var configSetCmd = &cobra.Command{
 	Use:   "set <key> <value>",
 	Short: "Set a configuration value",
 	Long: `Set a configuration value by key. Writes the layer the agent reads:
-the workspace config inside a git repository, the global config elsewhere
+the project folder config inside a git repository, the global config elsewhere
 (or always, with --global).
 
 Examples:

@@ -126,7 +126,7 @@ func TestExternalPathFixturesAreOutsideProjectFolder(t *testing.T) {
 	ws := t.TempDir()
 	ext := t.TempDir()
 	if isWithinProjectFolder(filepath.Clean(ext), filepath.Clean(ws)) {
-		t.Fatalf("test precondition broken: %q reported as inside workspace %q", ext, ws)
+		t.Fatalf("test precondition broken: %q reported as inside project folder %q", ext, ws)
 	}
 	_ = fmt.Sprintf("noop: %s %s", ws, ext) // keep fmt import if other tests get trimmed
 }

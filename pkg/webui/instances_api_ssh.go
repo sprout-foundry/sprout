@@ -92,7 +92,7 @@ func (ws *ReactWebServer) handleAPISSHOpen(w http.ResponseWriter, r *http.Reques
 	})
 
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{
-		"message":     "ssh workspace launch started",
+		"message":     "ssh project folder launch started",
 		"session_key": sessionKey,
 	})
 }

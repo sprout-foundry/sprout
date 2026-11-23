@@ -266,7 +266,7 @@ func TestCreateTaskWorktree_LeavesProjectFolderStatusClean(t *testing.T) {
 		t.Fatalf("git status: %v", err)
 	}
 	if strings.TrimSpace(out) != "" {
-		t.Errorf("workspace is dirty after creating a task worktree:\n%s", out)
+		t.Errorf("project folder is dirty after creating a task worktree:\n%s", out)
 	}
 }
 
@@ -276,7 +276,7 @@ func TestCreateTaskWorktree_LeavesProjectFolderStatusClean(t *testing.T) {
 func TestEnsureTaskGitignore_LeavesGeneratedFileAlone(t *testing.T) {
 	repo := t.TempDir()
 	if err := configuration.EnsureProjectFolderConfigDir(repo); err != nil {
-		t.Fatalf("EnsureWorkspaceConfigDir: %v", err)
+		t.Fatalf("EnsureProjectFolderConfigDir: %v", err)
 	}
 	path := filepath.Join(repo, ".sprout", ".gitignore")
 	before, err := os.ReadFile(path)

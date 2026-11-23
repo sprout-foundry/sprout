@@ -218,7 +218,7 @@ func (p *previewOrigin) handler() http.Handler {
 			return
 		}
 		if !isWithinProjectFolder(canonical, root) {
-			http.Error(w, "path outside workspace", http.StatusForbidden)
+			http.Error(w, "path outside project folder", http.StatusForbidden)
 			return
 		}
 

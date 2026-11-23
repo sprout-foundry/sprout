@@ -199,7 +199,7 @@ func TestRunnerServesDevSpaceLifecycle(t *testing.T) {
 		return plat.statuses["ws-1"] == "stopped"
 	})
 	if _, bound := host.lookup("ws-1"); bound {
-		t.Error("a stopped workspace must be unbound from the host server")
+		t.Error("a stopped project folder must be unbound from the host server")
 	}
 
 	plat.push(DevSpaceTask{DevSpaceID: "ws-2", Action: "start", RepoURL: "https://github.com/o/r"})
@@ -277,7 +277,7 @@ func TestRunnerServesThePlatformThroughTheRelay(t *testing.T) {
 	res := plat.results[0]
 	plat.mu.Unlock()
 	if res.Status != "running" || res.ConnectionURL != "" {
-		t.Fatalf("a relayed workspace reports no URL; got %+v", res)
+		t.Fatalf("a relayed project folder reports no URL; got %+v", res)
 	}
 
 	call := func(bearer string) (int, string) {
@@ -408,7 +408,7 @@ func TestRunnerServesLocalDirectoryDevSpaces(t *testing.T) {
 	})
 	entries, err := os.ReadDir(local)
 	if err != nil || len(entries) != 0 {
-		t.Errorf("destroying a local workspace must not touch the user's directory (err: %v, entries: %d)", err, len(entries))
+		t.Errorf("destroying a local project folder must not touch the user's directory (err: %v, entries: %d)", err, len(entries))
 	}
 }
 
@@ -426,7 +426,7 @@ func TestHostLauncherRunsALocalDirectoryInPlace(t *testing.T) {
 		t.Fatal("the daemon cannot start from a nonexistent binary; expected an error")
 	}
 	if strings.Contains(err.Error(), "refusing to clone") {
-		t.Fatalf("a local-directory workspace must not be cloned: %v", err)
+		t.Fatalf("a local-directory project folder must not be cloned: %v", err)
 	}
 }
 

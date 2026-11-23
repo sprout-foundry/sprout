@@ -175,15 +175,15 @@ func TestHandleReviewChanges_RepoDirRejectsOutOfProjectFolderPath(t *testing.T) 
 		"repo_dir": outside,
 	})
 	if err == nil {
-		t.Fatalf("repo_dir %q outside the workspace must be refused", outside)
+		t.Fatalf("repo_dir %q outside the project folder must be refused", outside)
 	}
-	if !strings.Contains(err.Error(), "outside workspace root") {
+	if !strings.Contains(err.Error(), "outside project folder") {
 		t.Errorf("error should explain the containment failure, got: %v", err)
 	}
 
 	// The project folder itself is admitted by the same gate the handler uses.
 	if _, err := tools.ValidateRepoDir(ws, ws); err != nil {
-		t.Errorf("in-workspace repo_dir should be admitted, got: %v", err)
+		t.Errorf("in-project-folder repo_dir should be admitted, got: %v", err)
 	}
 }
 

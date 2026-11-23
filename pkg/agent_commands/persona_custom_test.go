@@ -128,7 +128,7 @@ func TestPersonaAccept_RecordsHash(t *testing.T) {
 	chatAgent := createTestAgentWithTempConfig(t)
 	projectFolder := chatAgent.GetProjectFolder()
 	if projectFolder == "" {
-		t.Fatal("test agent has no workspace root")
+		t.Fatal("test agent has no project folder")
 	}
 	projectFolderConfigDir := filepath.Join(projectFolder, configuration.ConfigDirName)
 	projectDir := configuration.ProjectPersonasDir(projectFolderConfigDir)

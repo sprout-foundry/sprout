@@ -75,7 +75,7 @@ func (ws *ReactWebServer) handleAPIProjectFolderSync(w http.ResponseWriter, r *h
 
 	var req syncRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		ws.log().Warn("invalid workspace sync request", slog.Any("err", err))
+		ws.log().Warn("invalid project folder sync request", slog.Any("err", err))
 		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
@@ -93,7 +93,7 @@ func (ws *ReactWebServer) handleAPIProjectFolderSync(w http.ResponseWriter, r *h
 	// Apply the browser operation to the sync state.
 	metadata, err := projectFolderSyncState.ApplyBrowserOp(req.Path, req.Content)
 	if err != nil {
-		ws.log().Warn("workspace sync conflict", slog.String("path", req.Path), slog.Any("err", err))
+		ws.log().Warn("project folder sync conflict", slog.String("path", req.Path), slog.Any("err", err))
 		// On conflict, suggest a .theirs path for the browser to surface.
 		theirsPath := req.Path + ".theirs"
 		writeJSON(w, http.StatusConflict, map[string]interface{}{
@@ -137,7 +137,7 @@ func (ws *ReactWebServer) handleAPIProjectFolderTakeover(w http.ResponseWriter, 
 
 	var req takeoverRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		ws.log().Warn("invalid workspace takeover request", slog.Any("err", err))
+		ws.log().Warn("invalid project folder takeover request", slog.Any("err", err))
 		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}

@@ -119,7 +119,7 @@ func initFunc(this js.Value, args []js.Value) interface{} {
 			}
 			if ws := cfg.Get("workspace"); ws.Type() == js.TypeString {
 				if err := setProjectFolder(ws.String()); err != nil {
-					return "init: workspace: " + err.Error()
+					return "init: project folder: " + err.Error()
 				}
 			}
 		}

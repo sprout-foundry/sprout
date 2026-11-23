@@ -58,7 +58,7 @@ func TestHandleRecoverFile_RefusesOutOfProjectFolderWrite(t *testing.T) {
 		t.Fatalf("output not JSON: %v\n%s", jsonErr, out)
 	}
 	if res.Recovered {
-		t.Errorf("expected recovered=false for out-of-workspace path; got %s", out)
+		t.Errorf("expected recovered=false for out-of-project-folder path; got %s", out)
 	}
 
 	// The external file must be UNTOUCHED.
@@ -105,7 +105,7 @@ func TestHandleRecoverFile_RefusesOutOfProjectFolderDelete(t *testing.T) {
 	}
 	_ = json.Unmarshal([]byte(out), &res)
 	if res.Recovered {
-		t.Errorf("expected recovered=false for out-of-workspace create-delete; got %s", out)
+		t.Errorf("expected recovered=false for out-of-project-folder create-delete; got %s", out)
 	}
 
 	// The external file must still exist.
@@ -144,12 +144,12 @@ func TestHandleRecoverFile_InProjectFolderStillWorks(t *testing.T) {
 	}
 	_ = json.Unmarshal([]byte(out), &res)
 	if !res.Recovered {
-		t.Fatalf("in-workspace recovery should succeed; got %s", out)
+		t.Fatalf("in-project-folder recovery should succeed; got %s", out)
 	}
 
 	got, _ := os.ReadFile(inFile)
 	if string(got) != "port = 8080\n" {
-		t.Errorf("in-workspace file should be restored; got %q", got)
+		t.Errorf("in-project-folder file should be restored; got %q", got)
 	}
 }
 
@@ -257,11 +257,11 @@ func TestHandleRevertMyChanges_SkipsOutOfProjectFolder(t *testing.T) {
 
 	// In-project-folder file should be restored.
 	if res.Restored != 1 {
-		t.Errorf("expected 1 restored (in-workspace only), got %d: %s", res.Restored, out)
+		t.Errorf("expected 1 restored (in-project-folder only), got %d: %s", res.Restored, out)
 	}
 	got, _ := os.ReadFile(inFile)
 	if string(got) != "BEFORE" {
-		t.Errorf("in-workspace file should be reverted to BEFORE; got %q", got)
+		t.Errorf("in-project-folder file should be reverted to BEFORE; got %q", got)
 	}
 
 	// External file must be untouched.
@@ -273,11 +273,11 @@ func TestHandleRevertMyChanges_SkipsOutOfProjectFolder(t *testing.T) {
 	// The external entry should appear as a skipped entry, not a silent success.
 	foundSkipped := false
 	for _, e := range res.Entries {
-		if e.Path == externalFile && !e.OK && strings.Contains(e.Message, "outside the workspace") {
+		if e.Path == externalFile && !e.OK && strings.Contains(e.Message, "outside the project folder") {
 			foundSkipped = true
 		}
 	}
 	if !foundSkipped {
-		t.Errorf("expected an entry reporting the external path as skipped/outside-workspace; got %+v", res.Entries)
+		t.Errorf("expected an entry reporting the external path as skipped/outside-project-folder; got %+v", res.Entries)
 	}
 }

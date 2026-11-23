@@ -54,7 +54,7 @@ func TestHostServerProxiesOnlyWithTheDevSpaceSecret(t *testing.T) {
 		}
 	}
 	if code, _ := hostCall(t, h, "/daemon/ws-2/api/txn/run", "s3cret", ""); code != http.StatusNotFound {
-		t.Errorf("unknown workspace: got %d, want 404", code)
+		t.Errorf("unknown project folder: got %d, want 404", code)
 	}
 	if code, _ := hostCall(t, h, "/daemon/ws-1", "s3cret", ""); code != http.StatusNotFound {
 		t.Errorf("no daemon path: got %d, want 404", code)

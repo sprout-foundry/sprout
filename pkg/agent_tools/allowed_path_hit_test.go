@@ -109,7 +109,7 @@ func TestPrecheckFileAccess_NoAllowedPathHitAudit_WhenProjectFolderPath(t *testi
 
 	for _, entry := range capturing.entries {
 		if entry["action"] == string(AuditActionAllowedPathHit) {
-			t.Errorf("workspace path should not emit AllowedPathHit; got entry: %+v", entry)
+			t.Errorf("project folder path should not emit AllowedPathHit; got entry: %+v", entry)
 		}
 	}
 }

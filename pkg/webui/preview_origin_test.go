@@ -129,7 +129,7 @@ func TestPreviewOriginRejectsPathTraversal(t *testing.T) {
 		t.Errorf("status = 200 for a traversal path; body = %q", body)
 	}
 	if strings.Contains(body, "secret") {
-		t.Errorf("served content outside the workspace: %q", body)
+		t.Errorf("served content outside the project folder: %q", body)
 	}
 }
 

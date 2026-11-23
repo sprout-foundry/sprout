@@ -857,7 +857,7 @@ func TestHandleColdHydrateRequest_EstimateSeconds(t *testing.T) {
 		wantEstimateMax int64
 		fileName        string
 	}{
-		{"empty workspace", 0, 0, 0, ""},
+		{"empty project folder", 0, 0, 0, ""},
 		{"small content ~1KB", 1024, 1, 1, "small.txt"},
 		{"medium ~1MB", 1024 * 1024, 1, 1, "medium.txt"},
 		{"~2MB", 2 * 1024 * 1024, 1, 1, "big.txt"},
@@ -885,7 +885,7 @@ func TestHandleColdHydrateRequest_EstimateSeconds(t *testing.T) {
 			// For empty project folder, estimate should be 0
 			if tt.totalBytes == 0 {
 				if manifest.EstimateSeconds != 0 {
-					t.Errorf("estimate_seconds = %d, want 0 for empty workspace", manifest.EstimateSeconds)
+					t.Errorf("estimate_seconds = %d, want 0 for empty project folder", manifest.EstimateSeconds)
 				}
 				return
 			}

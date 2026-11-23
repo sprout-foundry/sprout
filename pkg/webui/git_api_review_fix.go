@@ -213,13 +213,13 @@ func (ws *ReactWebServer) runFixReviewJob(job *gitFixReviewJob, prompt, provider
 	projectFolder = strings.TrimSpace(projectFolder)
 
 	if projectFolder == "" {
-		job.setError("No workspace root resolved; cannot run fix review in daemon mode. " +
-			"Ensure the browser has set a workspace before triggering fix review.")
+		job.setError("No project folder resolved; cannot run fix review in daemon mode. " +
+			"Ensure the browser has set a project folder before triggering fix review.")
 		return
 	}
 
 	err := ws.withAgentProjectFolder(projectFolder, func() error {
-		job.appendLog(fmt.Sprintf("Changed CWD to workspace: %s", projectFolder))
+		job.appendLog(fmt.Sprintf("Changed CWD to project folder: %s", projectFolder))
 
 		reviewAgent, agentErr := agent.NewAgentWithModel("")
 		if agentErr != nil {
@@ -261,7 +261,7 @@ func (ws *ReactWebServer) runFixReviewJob(job *gitFixReviewJob, prompt, provider
 	// If withAgentProjectFolder itself failed (e.g. CWD change error) and we haven't
 	// already recorded a more specific error via job.setError, record it now.
 	if err != nil && job.Status == "running" {
-		job.setError(fmt.Sprintf("Workspace setup failed: %v", err))
+		job.setError(fmt.Sprintf("Project folder setup failed: %v", err))
 	}
 }
 

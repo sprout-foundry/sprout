@@ -47,7 +47,7 @@ func TestHandleAPIProjectFolderSetUpdatesProjectFolder(t *testing.T) {
 	}
 
 	if got := server.GetProjectFolder(); got != resolvedNext {
-		t.Fatalf("expected workspace root %q, got %q", resolvedNext, got)
+		t.Fatalf("expected project folder %q, got %q", resolvedNext, got)
 	}
 
 	if server.terminalManager == nil {
@@ -90,7 +90,7 @@ func TestHandleAPIProjectFolderGetReturnsCurrentRoot(t *testing.T) {
 	}
 
 	if response.ProjectFolder != filepath.Clean(root) {
-		t.Fatalf("expected workspace root %q, got %q", root, response.ProjectFolder)
+		t.Fatalf("expected project folder %q, got %q", root, response.ProjectFolder)
 	}
 }
 
@@ -165,6 +165,6 @@ func TestHandleAPIProjectFolderSetRejectsDuringActiveQuery(t *testing.T) {
 	}
 	// Project folder should NOT have changed
 	if got := server.GetProjectFolder(); got != root {
-		t.Fatalf("workspace root should not have changed, got %q", got)
+		t.Fatalf("project folder should not have changed, got %q", got)
 	}
 }

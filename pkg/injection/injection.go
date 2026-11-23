@@ -207,7 +207,7 @@ func ComputeSignals(in SignalInput) Signals {
 		}
 		if writesOutsideProjectFolder(cmd, in.ProjectFolder) {
 			add(SignalWriteOutsideProjectFolder, holdThreshold,
-				"the command writes outside the workspace")
+				"the command writes outside the project folder")
 		}
 	}
 

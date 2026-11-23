@@ -41,6 +41,6 @@ func TestHostCredentialDirsFollowAMovedConfigRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	if out, err := cmd.CombinedOutput(); err == nil {
-		t.Fatalf("a native workspace read the runner's credential file: %q", out)
+		t.Fatalf("a native project folder read the runner's credential file: %q", out)
 	}
 }

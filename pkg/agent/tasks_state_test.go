@@ -140,7 +140,7 @@ func TestTaskRegistry_SaveIsPerProjectFolder(t *testing.T) {
 
 	got := processTasks.snapshot()
 	if len(got) != 1 || got[0].ID != "bg-task-a" {
-		t.Errorf("workspace A loaded %+v, want only its own task", got)
+		t.Errorf("project folder A loaded %+v, want only its own task", got)
 	}
 }
 
@@ -191,12 +191,12 @@ func TestProjectFolderKey_DistinguishesSimilarPaths(t *testing.T) {
 
 func TestProjectFolderKey_Stable(t *testing.T) {
 	if projectFolderKey("/a/b") != projectFolderKey("/a/b/") {
-		t.Error("the same workspace must produce the same key regardless of a trailing separator")
+		t.Error("the same project folder must produce the same key regardless of a trailing separator")
 	}
 	first := projectFolderKey("/a/b")
 	for i := 0; i < 5; i++ {
 		if got := projectFolderKey("/a/b"); got != first {
-			t.Fatalf("workspaceKey is not deterministic: %q then %q", first, got)
+			t.Fatalf("projectFolderKey is not deterministic: %q then %q", first, got)
 		}
 	}
 }
@@ -221,7 +221,7 @@ func TestTaskRegistry_LoadScopesRecordsToRequestedProjectFolder(t *testing.T) {
 	// The record was written under another project folder's file, so this
 	// project folder has nothing — and saving must not delete anything it owns.
 	if got := len(processTasks.snapshot()); got != 0 {
-		t.Errorf("loaded %d records from another workspace's file, want 0", got)
+		t.Errorf("loaded %d records from another project folder's file, want 0", got)
 	}
 }
 

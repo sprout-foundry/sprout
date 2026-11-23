@@ -99,10 +99,10 @@ func TestSessionPoolReusesHealthyAdapterPerProjectFolder(t *testing.T) {
 	}
 
 	if factoryCalls != 2 {
-		t.Fatalf("expected factory to be called once per workspace, got %d", factoryCalls)
+		t.Fatalf("expected factory to be called once per project folder, got %d", factoryCalls)
 	}
 	if created[0].runCount != 2 {
-		t.Fatalf("expected first workspace adapter to be reused, got runCount=%d", created[0].runCount)
+		t.Fatalf("expected first project folder adapter to be reused, got runCount=%d", created[0].runCount)
 	}
 }
 

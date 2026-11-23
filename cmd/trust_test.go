@@ -250,10 +250,10 @@ func TestTrustProjectFolderStripsSproutDir(t *testing.T) {
 	autoDetectedProjectFolderDir = "/tmp/sprout-trust-fixture/repo/.sprout"
 	root, err := trustProjectFolder()
 	if err != nil {
-		t.Fatalf("trustWorkspaceRoot: %v", err)
+		t.Fatalf("trustProjectFolder: %v", err)
 	}
 	if root != "/tmp/sprout-trust-fixture/repo" {
-		t.Errorf("trustWorkspaceRoot() = %q, want the repo root %q", root, "/tmp/sprout-trust-fixture/repo")
+		t.Errorf("trustProjectFolder() = %q, want the repo root %q", root, "/tmp/sprout-trust-fixture/repo")
 	}
 }
 
@@ -267,13 +267,13 @@ func TestTrustProjectFolderFallsBackToCwd(t *testing.T) {
 
 	root, err := trustProjectFolder()
 	if err != nil {
-		t.Fatalf("trustWorkspaceRoot: %v", err)
+		t.Fatalf("trustProjectFolder: %v", err)
 	}
 	if root == "" {
-		t.Fatal("trustWorkspaceRoot() returned an empty root")
+		t.Fatal("trustProjectFolder() returned an empty root")
 	}
 	if !filepath.IsAbs(root) {
-		t.Errorf("trustWorkspaceRoot() = %q, want an absolute path", root)
+		t.Errorf("trustProjectFolder() = %q, want an absolute path", root)
 	}
 }
 

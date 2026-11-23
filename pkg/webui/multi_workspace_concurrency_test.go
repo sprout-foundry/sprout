@@ -91,7 +91,7 @@ func TestMultiProjectFolderConcurrentSessions(t *testing.T) {
 	for _, s := range sessions {
 		projectFolderCount[s.projectFolder]++
 	}
-	require.Len(t, projectFolderCount, 3, "test must cover 3 distinct workspaces")
+	require.Len(t, projectFolderCount, 3, "test must cover 3 distinct project folders")
 
 	startRSS := processRSSKB(t)
 
@@ -124,13 +124,13 @@ func TestMultiProjectFolderConcurrentSessions(t *testing.T) {
 		ctx := ws.clientContexts[s.clientID]
 		require.NotNil(t, ctx, "client context for %s must exist", s.clientID)
 		require.Equal(t, s.projectFolder, ctx.ProjectFolder,
-			"client %s must be bound to its own workspace %s, got %s",
+			"client %s must be bound to its own project folder %s, got %s",
 			s.clientID, s.projectFolder, ctx.ProjectFolder)
 		distinctRoots[ctx.ProjectFolder] = true
 	}
 	ws.mutex.RUnlock()
 	require.Len(t, distinctRoots, 3,
-		"client contexts must map to exactly 3 distinct workspace roots, got %v", distinctRoots)
+		"client contexts must map to exactly 3 distinct project folders, got %v", distinctRoots)
 
 	// 3. Daemon RSS stays bounded across the concurrent run.
 	endRSS := processRSSKB(t)
@@ -178,10 +178,10 @@ func runConcurrentSession(t *testing.T, ws *ReactWebServer, s session) error {
 			// Set project folder — returns the resolved path.
 			resolved, err := ws.setClientProjectFolder(s.clientID, s.projectFolder)
 			if err != nil {
-				return fmt.Errorf("set workspace root: %w", err)
+				return fmt.Errorf("set project folder: %w", err)
 			}
 			if resolved != s.projectFolder {
-				return fmt.Errorf("workspace root mismatch: got %q want %q", resolved, s.projectFolder)
+				return fmt.Errorf("project folder mismatch: got %q want %q", resolved, s.projectFolder)
 			}
 
 			// Exercise agent-creation plumbing. Without a configured provider

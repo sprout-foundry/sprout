@@ -112,10 +112,10 @@ func TestSetClientProjectFolder_ClearsCurrentQuery(t *testing.T) {
 	projectFolderA := filepath.Join(daemonRoot, "workspace-a")
 	projectFolderB := filepath.Join(daemonRoot, "workspace-b")
 	if err := os.MkdirAll(projectFolderA, 0o755); err != nil {
-		t.Fatalf("mkdir workspace-a: %v", err)
+		t.Fatalf("mkdir project-folder-a: %v", err)
 	}
 	if err := os.MkdirAll(projectFolderB, 0o755); err != nil {
-		t.Fatalf("mkdir workspace-b: %v", err)
+		t.Fatalf("mkdir project-folder-b: %v", err)
 	}
 
 	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
@@ -129,7 +129,7 @@ func TestSetClientProjectFolder_ClearsCurrentQuery(t *testing.T) {
 
 	// Set initial project folder
 	if _, err := server.setClientProjectFolder(clientID, projectFolderA); err != nil {
-		t.Fatalf("set workspaceA: %v", err)
+		t.Fatalf("set projectFolderA: %v", err)
 	}
 
 	// Simulate an active query with text
@@ -140,7 +140,7 @@ func TestSetClientProjectFolder_ClearsCurrentQuery(t *testing.T) {
 
 	// Switch project folder — should clear CurrentQuery and ActiveQuery
 	if _, err := server.setClientProjectFolder(clientID, projectFolderB); err != nil {
-		t.Fatalf("set workspaceB: %v", err)
+		t.Fatalf("set projectFolderB: %v", err)
 	}
 
 	server.mutex.Lock()
@@ -148,10 +148,10 @@ func TestSetClientProjectFolder_ClearsCurrentQuery(t *testing.T) {
 	server.mutex.Unlock()
 
 	if ctx.CurrentQuery != "" {
-		t.Fatalf("expected CurrentQuery to be cleared after workspace switch, got %q", ctx.CurrentQuery)
+		t.Fatalf("expected CurrentQuery to be cleared after project folder switch, got %q", ctx.CurrentQuery)
 	}
 	if ctx.ActiveQuery {
-		t.Fatal("expected ActiveQuery to be cleared after workspace switch")
+		t.Fatal("expected ActiveQuery to be cleared after project folder switch")
 	}
 }
 

@@ -394,7 +394,7 @@ func TestHandleAPIGitWorktreeCheckoutSiblingAccepted(t *testing.T) {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 	if resp["workspace"] != worktreePath {
-		t.Errorf("expected workspace %q in response, got %v", worktreePath, resp["workspace"])
+		t.Errorf("expected project folder %q in response, got %v", worktreePath, resp["workspace"])
 	}
 }
 
@@ -419,7 +419,7 @@ func TestHandleAPIGitWorktreeCheckoutNonDefaultClientKeepsServerRoot(t *testing.
 	ws.mutex.RLock()
 	defer ws.mutex.RUnlock()
 	if ws.projectFolder != mainPath {
-		t.Errorf("ws.workspaceRoot = %q, want unchanged %q", ws.projectFolder, mainPath)
+		t.Errorf("ws.projectFolder = %q, want unchanged %q", ws.projectFolder, mainPath)
 	}
 	ctx := ws.clientContexts["non-default-client"]
 	if ctx == nil {
@@ -429,7 +429,7 @@ func TestHandleAPIGitWorktreeCheckoutNonDefaultClientKeepsServerRoot(t *testing.
 		t.Errorf("ctx roots = (%q, %q), want both %q", ctx.ProjectFolder, ctx.ProjectRoot, worktreePath)
 	}
 	if got := ws.clientProjectFolders["non-default-client"]; got != worktreePath {
-		t.Errorf("remembered workspace = %q, want %q", got, worktreePath)
+		t.Errorf("remembered project folder = %q, want %q", got, worktreePath)
 	}
 }
 
@@ -447,7 +447,7 @@ func TestHandleAPIGitWorktreeCheckoutDefaultClientMovesServerRoot(t *testing.T) 
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 	if got := ws.GetProjectFolder(); got != worktreePath {
-		t.Errorf("ws.workspaceRoot = %q, want %q", got, worktreePath)
+		t.Errorf("ws.projectFolder = %q, want %q", got, worktreePath)
 	}
 }
 
@@ -489,7 +489,7 @@ func TestHandleAPIGitWorktreeCheckoutUpdatesChatSessionWorktreePath(t *testing.T
 	}
 	// Chat B (WorktreePath == mainPath) → updated to worktreePath.
 	if got := chatB.getWorktreePath(); got != worktreePath {
-		t.Errorf("chat-b WorktreePath = %q, want %q (matching previous workspace should follow checkout)", got, worktreePath)
+		t.Errorf("chat-b WorktreePath = %q, want %q (matching previous project folder should follow checkout)", got, worktreePath)
 	}
 }
 

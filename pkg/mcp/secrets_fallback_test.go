@@ -63,7 +63,7 @@ func TestGetMCPHeaderCredential_AmbientWins(t *testing.T) {
 	require.NoError(t, credentials.SetToActiveBackend(foundryAuthKey, "Bearer ambient"))
 
 	ws := t.TempDir()
-	writeStoreDir(t, ws, foundryAuthKey, "Bearer workspace")
+	writeStoreDir(t, ws, foundryAuthKey, "Bearer project folder")
 	SetProjectFolderCredentialDir(ws)
 
 	value, source := getMCPHeaderCredential(foundryAuthKey)
@@ -105,7 +105,7 @@ func TestBuildRequestHeaders_ResolvesProjectFolderFallback(t *testing.T) {
 	headers, err := buildRequestHeaders("sprout-foundry", config)
 	require.NoError(t, err)
 	assert.Equal(t, "Bearer foundry-token", headers["Authorization"],
-		"the platform Authorization header must be populated from the workspace store")
+		"the platform Authorization header must be populated from the project folder store")
 }
 
 // The env-var credential path (stdio servers) gets the same fallback: a
@@ -129,5 +129,5 @@ func TestBuildFullEnvForServer_ProjectFolderFallback(t *testing.T) {
 	env, err := BuildFullEnvForServer("gh", config)
 	require.NoError(t, err)
 	assert.Equal(t, "ghp_ws", env["GITHUB_TOKEN"],
-		"the env credential must resolve from the workspace store")
+		"the env credential must resolve from the project folder store")
 }

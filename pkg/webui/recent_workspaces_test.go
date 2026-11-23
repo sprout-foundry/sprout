@@ -68,7 +68,7 @@ func TestRecordProjectFolder_AddNew(t *testing.T) {
 
 	result := GetRecentProjectFolders()
 	if len(result) != 1 {
-		t.Fatalf("expected 1 workspace, got %d", len(result))
+		t.Fatalf("expected 1 project folder, got %d", len(result))
 	}
 	ws := result[0]
 	if ws.Path != dir {
@@ -93,7 +93,7 @@ func TestRecordProjectFolder_UpdateExisting(t *testing.T) {
 
 	result := GetRecentProjectFolders()
 	if len(result) != 1 {
-		t.Fatalf("expected 1 workspace, got %d", len(result))
+		t.Fatalf("expected 1 project folder, got %d", len(result))
 	}
 	ws := result[0]
 	if ws.SessionCount != 2 {
@@ -116,7 +116,7 @@ func TestRecordProjectFolder_MaxEntries(t *testing.T) {
 
 	result := GetRecentProjectFolders()
 	if len(result) != maxRecentProjectFolders {
-		t.Fatalf("expected %d workspaces, got %d", maxRecentProjectFolders, len(result))
+		t.Fatalf("expected %d project folders, got %d", maxRecentProjectFolders, len(result))
 	}
 
 	// The oldest (first) entry should have been dropped.

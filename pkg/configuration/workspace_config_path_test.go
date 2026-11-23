@@ -40,7 +40,7 @@ func TestProjectFolderConfigResolution(t *testing.T) {
 		assert.Equal(t, filepath.Join(root, ".sprout", "workspace.json"), ProjectFolderConfigWritePath(root))
 	})
 
-	t.Run("empty workspace root yields empty paths", func(t *testing.T) {
+	t.Run("empty project folder yields empty paths", func(t *testing.T) {
 		assert.Equal(t, "", GetProjectFolderConfigPath(""))
 		assert.Equal(t, "", ProjectFolderConfigWritePath(""))
 		assert.Equal(t, "", ProjectFolderConfigDir(""))
@@ -59,7 +59,7 @@ func TestProjectFolderConfigNeverFallsBackToGlobalAtHome(t *testing.T) {
 	writeFile(t, filepath.Join(home, ".sprout", "config.json"), `{"skip_prompt":true}`)
 
 	assert.Equal(t, "", GetProjectFolderConfigPath(home),
-		"home must not resolve its workspace layer to the user-level config.json")
+		"home must not resolve its project folder layer to the user-level config.json")
 	assert.False(t, IsProjectFolderConfigPresent(home))
 }
 
@@ -73,7 +73,7 @@ func TestProjectFolderConfigFallbackAppliesBelowHome(t *testing.T) {
 	writeFile(t, legacy, `{}`)
 
 	assert.Equal(t, legacy, GetProjectFolderConfigPath(project),
-		"a subdirectory of home is an ordinary workspace and keeps its legacy config")
+		"a subdirectory of home is an ordinary project folder and keeps its legacy config")
 }
 
 // The layered manager must persist to workspace.json, never back into the
@@ -97,10 +97,10 @@ func TestLayeredManagerWritesProjectFolderFile(t *testing.T) {
 	require.NoError(t, mgr.SaveConfig())
 
 	_, err = os.Stat(filepath.Join(projectFolderDir, ProjectFolderConfigFileName))
-	assert.NoError(t, err, "workspace layer should be saved as workspace.json")
+	assert.NoError(t, err, "project folder layer should be saved as workspace.json")
 
 	_, err = os.Stat(filepath.Join(projectFolderDir, ConfigFileName))
-	assert.True(t, os.IsNotExist(err), "must not create a legacy config.json in the workspace")
+	assert.True(t, os.IsNotExist(err), "must not create a legacy config.json in the project folder")
 
 	globalAfter, err := os.ReadFile(globalCfg)
 	require.NoError(t, err)
@@ -118,16 +118,16 @@ func TestHomeHasNoProjectFolderLayer(t *testing.T) {
 	t.Setenv("HOME", home)
 
 	if got := ProjectFolderConfigDir(home); got != "" {
-		t.Errorf("WorkspaceConfigDir($HOME) = %q, want \"\"", got)
+		t.Errorf("ProjectFolderConfigDir($HOME) = %q, want \"\"", got)
 	}
 	if got := ProjectFolderConfigWritePath(home); got != "" {
-		t.Errorf("WorkspaceConfigWritePath($HOME) = %q, want \"\"", got)
+		t.Errorf("ProjectFolderConfigWritePath($HOME) = %q, want \"\"", got)
 	}
 	if got := GetProjectFolderConfigPath(home); got != "" {
-		t.Errorf("GetWorkspaceConfigPath($HOME) = %q, want \"\"", got)
+		t.Errorf("GetProjectFolderConfigPath($HOME) = %q, want \"\"", got)
 	}
 	if IsProjectFolderConfigPresent(home) {
-		t.Error("IsWorkspaceConfigPresent($HOME) = true, want false")
+		t.Error("IsProjectFolderConfigPresent($HOME) = true, want false")
 	}
 }
 
@@ -143,7 +143,7 @@ func TestHomeIgnoresPreexistingProjectFolderFile(t *testing.T) {
 		t.Errorf("a machine-written workspace.json at $HOME must be ignored, got %q", got)
 	}
 	if IsProjectFolderConfigPresent(home) {
-		t.Error("IsWorkspaceConfigPresent($HOME) = true despite no workspace layer")
+		t.Error("IsProjectFolderConfigPresent($HOME) = true despite no project folder layer")
 	}
 }
 

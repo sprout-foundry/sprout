@@ -774,7 +774,7 @@ func TestLoadCustomProviders_FallsBackToGlobalHomeDir(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, got, "ai-worker",
 		"LoadCustomProviders must surface providers from the global home dir "+
-			"even when SPROUT_CONFIG points to a workspace dir")
+			"even when SPROUT_CONFIG points to a project folder dir")
 	assert.Equal(t, "qwen3.6-27b", got["ai-worker"].ModelName)
 }
 

@@ -282,7 +282,7 @@ func (ws *ReactWebServer) rejectWhileStopping(w http.ResponseWriter, clientID, c
 	if ws.acceptingWork() {
 		return false
 	}
-	const msg = "The workspace is stopping and is not accepting new work"
+	const msg = "The project folder is stopping and is not accepting new work"
 	ws.publishClientEventWithChat(clientID, chatID, "error", map[string]interface{}{
 		"message":  msg,
 		"code":     errCodeDevSpaceStopping,

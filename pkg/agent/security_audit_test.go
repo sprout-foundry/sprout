@@ -120,7 +120,7 @@ func TestLogSecurityDecision_ApprovedEntry(t *testing.T) {
 	assessment := RiskAssessment{
 		Level:   configuration.RiskLevelMedium,
 		Sources: []RiskSource{RiskSourceFSTier},
-		Reason:  "path outside workspace",
+		Reason:  "path outside project folder",
 	}
 
 	a.logSecurityDecision("write_file", map[string]interface{}{"path": "/external"}, assessment, "approved")
@@ -425,7 +425,7 @@ func TestAuditLogger_RealLoggerCatchesFilesystemEntry(t *testing.T) {
 	// Trigger a denied write path resolution.
 	_, err = filesystem.SafeResolvePathForWriteWithBypass(ctx, "/etc/passwd")
 	if err == nil {
-		t.Fatal("expected error for write path outside workspace")
+		t.Fatal("expected error for write path outside project folder")
 	}
 
 	logger.Close()

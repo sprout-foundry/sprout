@@ -29,7 +29,7 @@ func (fd *FileDiscovery) BuildProjectFolderStructure() *ProjectFolderInfo {
 	// Check cache before doing any work
 	if cached := fd.getCachedProjectFolder(absRoot); cached != nil {
 		if fd.logger != nil {
-			fd.logger.Logf("Workspace structure served from cache: %d files", len(cached.AllFiles))
+			fd.logger.Logf("Project folder structure served from cache: %d files", len(cached.AllFiles))
 		}
 		return cached
 	}
@@ -55,7 +55,7 @@ func (fd *FileDiscovery) BuildProjectFolderStructure() *ProjectFolderInfo {
 		select {
 		case <-done:
 			if fd.logger != nil {
-				fd.logger.Logf("BuildWorkspaceStructure timed out after %v (walked %d files)", time.Since(startTime), fileCount)
+				fd.logger.Logf("BuildProjectFolderStructure timed out after %v (walked %d files)", time.Since(startTime), fileCount)
 			}
 			return context.DeadlineExceeded
 		default:
@@ -83,7 +83,7 @@ func (fd *FileDiscovery) BuildProjectFolderStructure() *ProjectFolderInfo {
 
 			// For large project folders, log progress periodically
 			if fileCount%ProgressEmitInterval == 0 && fd.logger != nil {
-				fd.logger.Logf("BuildWorkspaceStructure progress: %d files so far...", fileCount)
+				fd.logger.Logf("BuildProjectFolderStructure progress: %d files so far...", fileCount)
 			}
 		}
 
@@ -95,7 +95,7 @@ func (fd *FileDiscovery) BuildProjectFolderStructure() *ProjectFolderInfo {
 	// If timeout occurred, still return what we have but note the error
 	if err == context.DeadlineExceeded {
 		if fd.logger != nil {
-			fd.logger.Logf("BuildWorkspaceStructure hit hard timeout after %v: %d files collected",
+			fd.logger.Logf("BuildProjectFolderStructure hit hard timeout after %v: %d files collected",
 				duration, fileCount)
 		}
 	}
@@ -104,7 +104,7 @@ func (fd *FileDiscovery) BuildProjectFolderStructure() *ProjectFolderInfo {
 	projectType := fd.detectProjectType(allFiles)
 
 	if fd.logger != nil {
-		fd.logger.Logf("Workspace analysis completed in %v: %d files, %d directories%s",
+		fd.logger.Logf("Project folder analysis completed in %v: %d files, %d directories%s",
 			duration, len(allFiles), len(filesByDir),
 			map[bool]string{true: " (timed out)"}[err == context.DeadlineExceeded],
 		)

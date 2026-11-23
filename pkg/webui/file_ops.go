@@ -61,7 +61,7 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 
 	if !isWithinProjectFolder(canonicalPath, projectFolder) && !ws.allowExternalAccessForRequest(r, canonicalPath) {
 		writeJSON(w, http.StatusForbidden, map[string]interface{}{
-			"error": "Path outside workspace",
+			"error": "Path outside project folder",
 			"code":  "path_outside_workspace",
 		})
 		return
@@ -156,7 +156,7 @@ func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Req
 
 	if !isWithinProjectFolder(canonicalPath, projectFolder) && !ws.allowExternalAccessForRequest(r, canonicalPath) {
 		writeJSON(w, http.StatusForbidden, map[string]interface{}{
-			"error": "Path outside workspace",
+			"error": "Path outside project folder",
 			"code":  "path_outside_workspace",
 		})
 		return
@@ -230,7 +230,7 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 	if (oldExternal && !ws.allowExternalAccessForRequest(r, oldCanonicalPath)) ||
 		(newExternal && !ws.allowExternalAccessForRequest(r, newCanonicalPath)) {
 		writeJSON(w, http.StatusForbidden, map[string]interface{}{
-			"error": "Path outside workspace",
+			"error": "Path outside project folder",
 			"code":  "path_outside_workspace",
 		})
 		return
@@ -288,7 +288,7 @@ func (ws *ReactWebServer) handleAPIGetPrettierConfig(w http.ResponseWriter, r *h
 	projectFolder := ws.getProjectFolderForRequest(r)
 	if projectFolder == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
-			"error": "No workspace configured",
+			"error": "No project folder configured",
 			"code":  "no_workspace",
 		})
 		return

@@ -64,10 +64,10 @@ func TestInitializeHistoryPaths_GlobalScope(t *testing.T) {
 	// Verify paths remain project-scoped regardless of HistoryScope
 	currentChanges, currentRevisions := getPathsForTesting()
 	if currentChanges != projectChangesDir {
-		t.Errorf("Expected changesDir to be %s (always workspace-local), got %s", projectChangesDir, currentChanges)
+		t.Errorf("Expected changesDir to be %s (always project-folder-local), got %s", projectChangesDir, currentChanges)
 	}
 	if currentRevisions != projectRevisionsDir {
-		t.Errorf("Expected revisionsDir to be %s (always workspace-local), got %s", projectRevisionsDir, currentRevisions)
+		t.Errorf("Expected revisionsDir to be %s (always project-folder-local), got %s", projectRevisionsDir, currentRevisions)
 	}
 }
 

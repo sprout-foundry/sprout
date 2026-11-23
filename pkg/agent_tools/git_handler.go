@@ -27,7 +27,7 @@ func (h *gitHandler) Definition() ToolDefinition {
 		Parameters: []ParameterDef{
 			{Name: "operation", Type: "string", Required: true, Description: "Git operation: commit, push, pull, fetch, add, rm, mv, reset, rebase, merge, checkout, branch_delete, tag, clean, stash, am, apply, cherry_pick, revert, restore"},
 			{Name: "args", Type: "string", Description: "Args to pass to the git command"},
-			{Name: "repo_dir", Type: "string", Description: "Directory to run git operations in: a subdirectory of the workspace, or a git worktree of the workspace repository even when checked out outside the workspace root (worktrees of the same repo share one .git dir and are allowed). Defaults to workspace root if omitted."},
+			{Name: "repo_dir", Type: "string", Description: "Directory to run git operations in: a subdirectory of the project folder, or a git worktree of the project folder repository even when checked out outside the project folder (worktrees of the same repo share one .git dir and are allowed). Defaults to project folder if omitted."},
 		},
 	}
 }
@@ -294,13 +294,13 @@ func (h *gitHandler) Interactive() bool      { return false }
 // still refused.
 func ValidateRepoDir(repoDir, projectFolder string) (string, error) {
 	if projectFolder == "" {
-		return "", agenterrors.NewConfig("workspace root is not set", nil)
+		return "", agenterrors.NewConfig("project folder is not set", nil)
 	}
 
 	// Resolve project folder to absolute path.
 	absProjectFolder, err := filepath.Abs(projectFolder)
 	if err != nil {
-		return "", agenterrors.NewAgent("git", "resolve workspace root", err)
+		return "", agenterrors.NewAgent("git", "resolve project folder", err)
 	}
 
 	// Resolve repoDir: if relative, join to project folder; if absolute, use as-is.
@@ -322,7 +322,7 @@ func ValidateRepoDir(repoDir, projectFolder string) (string, error) {
 	// a linked worktree of the project folder's own repository.
 	if !pathWithin(absRepoDir, absProjectFolder) {
 		if !sameCommonGitDir(absRepoDir, absProjectFolder) {
-			return "", agenterrors.NewPermission(fmt.Sprintf("repo_dir %q resolves outside workspace root %q (and is not a git worktree of the workspace repository)", repoDir, projectFolder), nil)
+			return "", agenterrors.NewPermission(fmt.Sprintf("repo_dir %q resolves outside project folder %q (and is not a git worktree of the project folder repository)", repoDir, projectFolder), nil)
 		}
 	}
 

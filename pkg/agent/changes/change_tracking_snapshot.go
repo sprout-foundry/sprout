@@ -350,7 +350,7 @@ func (ct *ChangeTracker) walkProjectFolder(workDir string, old map[string]*shell
 		// fallback behavior is graceful — coverage is partial, not
 		// broken). Common trigger: agent rooted in a huge directory
 		// like ~ where the project folder contains millions of files.
-		ct.logf("shell snapshot: walk truncated at %d files / %v (workspace too large for full coverage — run sprout in a smaller subdirectory or expand shellSnapshotSkipDirs)",
+		ct.logf("shell snapshot: walk truncated at %d files / %v (project folder too large for full coverage — run sprout in a smaller subdirectory or expand shellSnapshotSkipDirs)",
 			len(snap), shellSnapshotMaxDuration)
 	}
 

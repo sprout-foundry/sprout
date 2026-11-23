@@ -135,7 +135,7 @@ func TestLayeredManagerSeesInlineGlobalProvider(t *testing.T) {
 		t.Fatalf("provider = %q, want llm-bridge", clientType)
 	}
 	if model != "workspace-model" {
-		t.Fatalf("model = %q, want the workspace layer's provider_models value", model)
+		t.Fatalf("model = %q, want the project folder layer's provider_models value", model)
 	}
 }
 

@@ -127,7 +127,7 @@ func recordHomeProjectFolderConsent() error {
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		return err
 	}
-	webuiLogger.Info("home-workspace consent recorded",
+	webuiLogger.Info("home-project-folder consent recorded",
 		slog.String("consent_path", path))
 	return nil
 }

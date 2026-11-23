@@ -33,7 +33,7 @@ func (e *sshLaunchError) Error() string {
 	}
 	message := strings.TrimSpace(e.Message)
 	if message == "" {
-		message = "failed to open SSH workspace"
+		message = "failed to open SSH project folder"
 	}
 	if step := strings.TrimSpace(e.Step); step != "" {
 		return fmt.Sprintf("%s (%s)", message, step)

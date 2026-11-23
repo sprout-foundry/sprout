@@ -30,7 +30,7 @@ func TestGetRecentProjectFoldersFiltersMissingPaths(t *testing.T) {
 	got := GetRecentProjectFolders()
 	for _, w := range got {
 		if w.Path == gone {
-			t.Errorf("a workspace that no longer exists should not be offered: %s", gone)
+			t.Errorf("a project folder that no longer exists should not be offered: %s", gone)
 		}
 	}
 	found := false
@@ -40,7 +40,7 @@ func TestGetRecentProjectFoldersFiltersMissingPaths(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("an existing workspace must still be listed; got %v", got)
+		t.Errorf("an existing project folder must still be listed; got %v", got)
 	}
 }
 

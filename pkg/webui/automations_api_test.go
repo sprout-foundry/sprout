@@ -39,7 +39,7 @@ func newAutomateTestServer(t *testing.T) (*ReactWebServer, string) {
 	ws.projectFolder = daemonRoot
 
 	if _, err := ws.setClientProjectFolder("test-client", daemonRoot); err != nil {
-		t.Fatalf("setClientWorkspaceRoot: %v", err)
+		t.Fatalf("setClientProjectFolder: %v", err)
 	}
 
 	return ws, daemonRoot

@@ -1582,12 +1582,12 @@ func TestDeduplicateAndFilter_ExcludesFilesOutsideProjectFolder(t *testing.T) {
 
 	// Should only include files inside project folder
 	if len(result) != 1 {
-		t.Errorf("expected 1 file (only inside workspace), got %d", len(result))
+		t.Errorf("expected 1 file (only inside project folder), got %d", len(result))
 	}
 
 	for _, f := range result {
 		if !strings.HasPrefix(f, root) {
-			t.Errorf("file outside workspace included: %s", f)
+			t.Errorf("file outside project folder included: %s", f)
 		}
 	}
 }

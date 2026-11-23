@@ -326,7 +326,7 @@ func (ws *ReactWebServer) handleAPIOnboardingSkip(w http.ResponseWriter, r *http
 	//     → session-only dismissal, persist nothing.
 	projectFolder := ws.getProjectFolderForRequest(r)
 	if configuration.ProjectFolderConfigDir(projectFolder) == "" {
-		ws.log().Info("onboarding skipped without a workspace scope — editor mode not persisted",
+		ws.log().Info("onboarding skipped without a project folder scope — editor mode not persisted",
 			slog.String("client_id", clientID),
 		)
 		_ = ws.syncAgentStateForClient(clientID)

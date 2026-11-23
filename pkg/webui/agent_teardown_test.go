@@ -40,7 +40,7 @@ func TestSetClientProjectFolderShutsDownOutgoingAgent(t *testing.T) {
 
 	const clientID = "teardown-window"
 	if _, err := ws.setClientProjectFolder(clientID, first); err != nil {
-		t.Fatalf("set first workspace: %v", err)
+		t.Fatalf("set first project folder: %v", err)
 	}
 
 	outgoing, err := ws.getClientAgent(clientID)
@@ -48,11 +48,11 @@ func TestSetClientProjectFolderShutsDownOutgoingAgent(t *testing.T) {
 		t.Skipf("agent creation unavailable in this environment: %v", err)
 	}
 	if outgoing == nil {
-		t.Fatal("expected an agent for the first workspace")
+		t.Fatal("expected an agent for the first project folder")
 	}
 
 	if _, err := ws.setClientProjectFolder(clientID, second); err != nil {
-		t.Fatalf("set second workspace: %v", err)
+		t.Fatalf("set second project folder: %v", err)
 	}
 	ws.waitForAgentTeardown()
 
@@ -64,7 +64,7 @@ func TestSetClientProjectFolderShutsDownOutgoingAgent(t *testing.T) {
 	clientCtx := ws.clientContexts[clientID]
 	ws.mutex.RUnlock()
 	if clientCtx == nil {
-		t.Fatal("client context disappeared after workspace switch")
+		t.Fatal("client context disappeared after project folder switch")
 	}
 	if clientCtx.Agent == outgoing {
 		t.Error("client context still references the outgoing agent")

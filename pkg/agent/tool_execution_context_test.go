@@ -29,7 +29,7 @@ func TestWithToolExecutionMetadata_ContainsProjectFolder(t *testing.T) {
 	projectFolder := filesystem.ProjectFolderFromContext(ctx)
 
 	if projectFolder != "/home/user/project" {
-		t.Errorf("expected workspace root '/home/user/project'; got %q", projectFolder)
+		t.Errorf("expected project folder '/home/user/project'; got %q", projectFolder)
 	}
 }
 

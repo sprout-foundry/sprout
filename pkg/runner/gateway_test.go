@@ -123,7 +123,7 @@ func TestDevSpaceEnvWiresTheGateway(t *testing.T) {
 		PlatformAPIURL: "https://gw.example.com",
 	})
 	if env[GatewayKeyEnvVar] != "gw-key-1" {
-		t.Errorf("%s = %q, want the workspace-scoped gateway key", GatewayKeyEnvVar, env[GatewayKeyEnvVar])
+		t.Errorf("%s = %q, want the project-folder-scoped gateway key", GatewayKeyEnvVar, env[GatewayKeyEnvVar])
 	}
 	if env["SPROUT_PROVIDER"] != "gateway" {
 		t.Errorf("SPROUT_PROVIDER = %q, want gateway", env["SPROUT_PROVIDER"])
@@ -182,7 +182,7 @@ func TestGatewayProviderFileNotInGlobalConfig(t *testing.T) {
 		t.Errorf("an unrelated config dir must stay untouched (stat err: %v)", err)
 	}
 	if !strings.HasPrefix(filepath.Join(ws, "providers"), ws) {
-		t.Error("provider path must stay inside the workspace config dir")
+		t.Error("provider path must stay inside the project folder config dir")
 	}
 }
 

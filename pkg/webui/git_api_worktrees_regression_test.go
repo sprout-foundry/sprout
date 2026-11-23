@@ -135,7 +135,7 @@ func TestGitWorktreeCreate_SimpleRelativeInsideProjectFolder(t *testing.T) {
 		want = wantResolved
 	}
 	if resp.Path != want {
-		t.Fatalf("worktree path = %q, want %q (workspace-anchored, not daemon CWD)", resp.Path, want)
+		t.Fatalf("worktree path = %q, want %q (project-folder-anchored, not daemon CWD)", resp.Path, want)
 	}
 }
 

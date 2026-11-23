@@ -410,7 +410,7 @@ func writeLegacyMCPConfig(t *testing.T, servers map[string]mcp.MCPServerConfig) 
 		AutoStart: true,
 	}
 	if err := mcp.SaveMCPConfigForProjectFolder(&cfg, ws); err != nil {
-		t.Fatalf("SaveMCPConfigForWorkspace: %v", err)
+		t.Fatalf("SaveMCPConfigForProjectFolder: %v", err)
 	}
 	if path := mcp.MCPConfigSourcePath(ws); path == "" {
 		t.Fatalf("no mcp_config.json source path under %s", ws)
@@ -593,7 +593,7 @@ func TestRefreshRuntimeConfig_PicksUpServerWrittenToLegacyFileAfterStart(t *test
 		AutoStart: true,
 	}
 	if err := mcp.SaveMCPConfigForProjectFolder(&legacy, ws); err != nil {
-		t.Fatalf("SaveMCPConfigForWorkspace: %v", err)
+		t.Fatalf("SaveMCPConfigForProjectFolder: %v", err)
 	}
 
 	realManager := mcp.NewMCPManager(nil)
@@ -654,7 +654,7 @@ func TestMaybeRefreshMCPFromDisk(t *testing.T) {
 		AutoStart: true,
 	}
 	if err := mcp.SaveMCPConfigForProjectFolder(&legacy, ws); err != nil {
-		t.Fatalf("SaveMCPConfigForWorkspace: %v", err)
+		t.Fatalf("SaveMCPConfigForProjectFolder: %v", err)
 	}
 
 	// The next turn picks it up.

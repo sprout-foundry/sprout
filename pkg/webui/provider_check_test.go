@@ -49,7 +49,7 @@ func TestIsProviderAvailable(t *testing.T) {
 		}
 	})
 
-	t.Run("global editor does not gate workspace with real provider", func(t *testing.T) {
+	t.Run("global editor does not gate project folder with real provider", func(t *testing.T) {
 		// Global says "editor"; project folder has its own provider. The chat
 		// gate must honor the project folder layer — agents resolve providers
 		// through the layered (global+project folder) config, so a global
@@ -76,14 +76,14 @@ func TestIsProviderAvailable(t *testing.T) {
 		}
 
 		if !isProviderAvailableInProjectFolder(projectFolder) {
-			t.Error("expected true when workspace layer configures a real provider")
+			t.Error("expected true when project folder layer configures a real provider")
 		}
 		if isProviderAvailableInProjectFolder("") {
 			t.Error("expected false for global-only check when global says editor")
 		}
 	})
 
-	t.Run("workspace editor gates that workspace only", func(t *testing.T) {
+	t.Run("project folder editor gates that project folder only", func(t *testing.T) {
 		globalDir := t.TempDir()
 		cfgData, _ := json.Marshal(map[string]interface{}{
 			"last_used_provider": "openrouter",
@@ -106,7 +106,7 @@ func TestIsProviderAvailable(t *testing.T) {
 		}
 
 		if isProviderAvailableInProjectFolder(projectFolder) {
-			t.Error("expected false when workspace layer says editor")
+			t.Error("expected false when project folder layer says editor")
 		}
 		if !isProviderAvailableInProjectFolder("") {
 			t.Error("expected true for global check when global has a real provider")

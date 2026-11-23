@@ -327,6 +327,6 @@ func TestRevert_AfterGitCheckoutDiscardsAgentWork(t *testing.T) {
 		t.Errorf("files already back at their original state should not fail the revert: %v\n%.500s", err, out)
 	}
 	if left := gitChanged(t, dir); len(left) != 0 {
-		t.Errorf("workspace not at its pre-session state: %v", left)
+		t.Errorf("project folder not at its pre-session state: %v", left)
 	}
 }

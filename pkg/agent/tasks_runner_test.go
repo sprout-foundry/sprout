@@ -139,7 +139,7 @@ func TestMergeTask_RefusesDirtyProjectFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := a.MergeTask(context.Background(), "bg-task-dirty"); err == nil {
-		t.Fatal("expected an error merging into a dirty workspace")
+		t.Fatal("expected an error merging into a dirty project folder")
 	}
 }
 
@@ -168,7 +168,7 @@ func TestMergeTask_MergesBranchAndRemovesWorktree(t *testing.T) {
 		t.Errorf("merge message = %q, want the branch name", msg)
 	}
 	if _, err := os.Stat(filepath.Join(repo, "feature.txt")); err != nil {
-		t.Errorf("merged file missing from the workspace: %v", err)
+		t.Errorf("merged file missing from the project folder: %v", err)
 	}
 	if _, err := os.Stat(wt.Path); !os.IsNotExist(err) {
 		t.Errorf("worktree still exists after merge: %v", err)
@@ -224,7 +224,7 @@ func TestMergeTask_ConflictLeavesProjectFolderUntouched(t *testing.T) {
 		t.Fatal(err)
 	}
 	if string(data) != "primary side\n" {
-		t.Errorf("workspace file = %q, want the primary's content untouched", string(data))
+		t.Errorf("project folder file = %q, want the primary's content untouched", string(data))
 	}
 	if _, err := os.Stat(filepath.Join(repo, ".git", "MERGE_HEAD")); !os.IsNotExist(err) {
 		t.Errorf("a merge is still in progress after a conflict: %v", err)
@@ -283,7 +283,7 @@ func TestNewTaskAgent_IsIsolatedFromPrimaryTurnState(t *testing.T) {
 	}
 
 	if got := taskAgent.GetProjectFolder(); got != wt.Path {
-		t.Errorf("workspace root = %q, want the worktree %q", got, wt.Path)
+		t.Errorf("project folder = %q, want the worktree %q", got, wt.Path)
 	}
 	if got := taskAgent.GetRole(); got != taskRole {
 		t.Errorf("role = %q, want %q", got, taskRole)
@@ -342,7 +342,7 @@ func TestTaskRegistry_ReserveIsPerProjectFolder(t *testing.T) {
 	processTasks.add(&taskRecord{ID: "bg-task-a", Status: "running", ProjectFolder: "/ws/a", Started: time.Now()})
 
 	if _, reserveErr := processTasks.reserve("/ws/b", 1); reserveErr != nil {
-		t.Errorf("a task in another workspace should not consume this workspace's slot: %v", reserveErr)
+		t.Errorf("a task in another project folder should not consume this project folder's slot: %v", reserveErr)
 	}
 }
 

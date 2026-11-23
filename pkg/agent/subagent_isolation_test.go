@@ -109,7 +109,7 @@ func TestCreateIsolatedProjectFolder_SeedsUncommittedState(t *testing.T) {
 
 	ws, err := createIsolatedProjectFolder(context.Background(), dir, "t1")
 	if err != nil {
-		t.Fatalf("createIsolatedWorkspace: %v", err)
+		t.Fatalf("createIsolatedProjectFolder: %v", err)
 	}
 	defer ws.remove(context.Background())
 
@@ -144,7 +144,7 @@ func TestRunIsolatedSubagent_AppliesChangesBack(t *testing.T) {
 	}
 	got, _ := os.ReadFile(filepath.Join(dir, "main.go"))
 	if !strings.Contains(string(got), "from subagent") {
-		t.Fatalf("change not applied to the workspace:\n%s\n%s", got, result.Output)
+		t.Fatalf("change not applied to the project folder:\n%s\n%s", got, result.Output)
 	}
 	if !strings.HasPrefix(result.Output, "[isolated run] Changes applied") {
 		t.Errorf("outcome not reported: %q", result.Output)
@@ -154,7 +154,7 @@ func TestRunIsolatedSubagent_AppliesChangesBack(t *testing.T) {
 	}
 	for _, c := range result.FileChanges {
 		if c.FilePath != filepath.Join(dir, "main.go") {
-			t.Errorf("tracked change not remapped to the workspace in its own path form: %s (want %s)", c.FilePath, filepath.Join(dir, "main.go"))
+			t.Errorf("tracked change not remapped to the project folder in its own path form: %s (want %s)", c.FilePath, filepath.Join(dir, "main.go"))
 		}
 	}
 	if left := worktreesLeft(t, home); len(left) != 0 {
@@ -194,7 +194,7 @@ func TestRunIsolatedSubagent_ConflictLeavesProjectFolderUntouched(t *testing.T) 
 	result := <-done
 	got, _ := os.ReadFile(filepath.Join(dir, "main.go"))
 	if !strings.Contains(string(got), "primary") || strings.Contains(string(got), "subagent") {
-		t.Fatalf("conflicting patch modified the workspace:\n%s\n--- result.Output:\n%s", got, result.Output)
+		t.Fatalf("conflicting patch modified the project folder:\n%s\n--- result.Output:\n%s", got, result.Output)
 	}
 	if !strings.Contains(result.Output, "no longer apply cleanly") || len(result.FileChanges) != 0 {
 		t.Errorf("conflict not reported: %q", result.Output)

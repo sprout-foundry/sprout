@@ -173,7 +173,7 @@ func TestResolveVisionOutputDirectory(t *testing.T) {
 // ============================================================================
 
 func TestResolveVisionOutputDirectoryWithRoot(t *testing.T) {
-	t.Run("with workspace root", func(t *testing.T) {
+	t.Run("with project folder", func(t *testing.T) {
 		t.Setenv("SPROUT_RESOURCE_DIRECTORY", "")
 
 		dir := t.TempDir()
@@ -185,7 +185,7 @@ func TestResolveVisionOutputDirectoryWithRoot(t *testing.T) {
 		}
 	})
 
-	t.Run("with custom env and workspace root", func(t *testing.T) {
+	t.Run("with custom env and project folder", func(t *testing.T) {
 		t.Setenv("SPROUT_RESOURCE_DIRECTORY", "")
 		t.Setenv("SPROUT_RESOURCE_DIRECTORY", "my_outputs")
 
@@ -198,7 +198,7 @@ func TestResolveVisionOutputDirectoryWithRoot(t *testing.T) {
 		}
 	})
 
-	t.Run("empty workspace root falls back to cwd", func(t *testing.T) {
+	t.Run("empty project folder falls back to cwd", func(t *testing.T) {
 		t.Setenv("SPROUT_RESOURCE_DIRECTORY", "")
 
 		got := resolveVisionOutputDirectoryWithRoot("")

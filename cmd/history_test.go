@@ -568,7 +568,7 @@ func TestRunHistoryClear_NonExistentProjectFolder(t *testing.T) {
 
 	// Non-existent project folder is handled gracefully (no .sprout dirs exist)
 	if err := runHistoryClear(); err != nil {
-		t.Fatalf("runHistoryClear() should not error on non-existent workspace: %v", err)
+		t.Fatalf("runHistoryClear() should not error on non-existent project folder: %v", err)
 	}
 }
 
@@ -735,7 +735,7 @@ func TestHistoryClearCmd_FlagsRegistered(t *testing.T) {
 	if flag == nil {
 		t.Fatal("expected --dir flag to be registered")
 	}
-	if flag.Usage != "Workspace directory to clear history from (default: current directory)" {
+	if flag.Usage != "Project folder directory to clear history from (default: current directory)" {
 		t.Errorf("unexpected --dir usage: %s", flag.Usage)
 	}
 	if ws := historyClearCmd.Flags().Lookup("workspace"); ws == nil || ws.Annotations[deprecationAnnotation] == nil {

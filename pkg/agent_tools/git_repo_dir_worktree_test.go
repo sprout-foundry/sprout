@@ -54,7 +54,7 @@ func TestValidateRepoDir_WorktreeOfProjectFolderRepoAllowed(t *testing.T) {
 
 	got, err := ValidateRepoDir(wt, ws)
 	if err != nil {
-		t.Fatalf("linked worktree of the workspace repo must be admitted, got: %v", err)
+		t.Fatalf("linked worktree of the project folder repo must be admitted, got: %v", err)
 	}
 	if got != wt {
 		t.Errorf("resolved %q, want %q", got, wt)
@@ -70,7 +70,7 @@ func TestValidateRepoDir_RelativeWithinProjectFolder(t *testing.T) {
 
 	got, err := ValidateRepoDir("pkg/mod", ws)
 	if err != nil {
-		t.Fatalf("relative in-workspace path refused: %v", err)
+		t.Fatalf("relative in-project-folder path refused: %v", err)
 	}
 	if got != sub {
 		t.Errorf("resolved %q, want %q", got, sub)

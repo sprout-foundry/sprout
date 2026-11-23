@@ -231,7 +231,7 @@ func CreatePullRequest(ctx context.Context, repoDir string, req PullRequestReque
 
 	// --- Both failed. A host gh cannot serve needs the platform ---
 	if host, ok := originHost(ctx, repoDir); ok && host != "github.com" {
-		msg := fmt.Sprintf("opening a pull request on %s is supported from a Sprout Foundry workspace; push %q and open the request on %s", host, head, host)
+		msg := fmt.Sprintf("opening a pull request on %s is supported from a Sprout Foundry project folder; push %q and open the request on %s", host, head, host)
 		if platformErr != nil {
 			msg += fmt.Sprintf(" (platform error: %s)", platformErr)
 		}

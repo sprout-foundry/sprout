@@ -47,7 +47,7 @@ func GetProjectFolderCredentialDir() string {
 
 // getMCPHeaderCredential looks up a credential key, first in the process's
 // active backend and then in the registered project folder store. It returns the
-// value and where it came from ("stored" or "project folder"); both are empty
+// value and where it came from ("stored" or "workspace"); both are empty
 // when neither scope holds the key.
 func getMCPHeaderCredential(key string) (string, string) {
 	value, source, err := credentials.GetFromActiveBackend(key)
@@ -60,7 +60,7 @@ func getMCPHeaderCredential(key string) (string, string) {
 	}
 	store, loadErr := credentials.LoadStoreFromDir(dir)
 	if loadErr != nil {
-		log.Printf("[mcp] workspace credential store %s unreadable: %v", dir, loadErr)
+		log.Printf("[mcp] project folder credential store %s unreadable: %v", dir, loadErr)
 		return "", ""
 	}
 	if v, ok := store[key]; ok && v != "" {

@@ -32,7 +32,7 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 	// real project folder is selected there is nothing legitimate to browse.
 	if isHomeProjectFolder(projectFolder) && !hasHomeProjectFolderConsent() {
 		writeJSONErr(w, http.StatusForbidden, "workspace_not_selected",
-			"Workspace is the home directory and no consent was granted; select a workspace first")
+			"Project folder is the home directory and no consent was granted; select a project folder first")
 		return
 	}
 	// Get directory from query parameter
@@ -46,7 +46,7 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if !isWithinProjectFolder(canonicalDir, projectFolder) {
-		writeJSONErr(w, http.StatusForbidden, "directory_outside_workspace", "Directory outside workspace")
+		writeJSONErr(w, http.StatusForbidden, "directory_outside_workspace", "Directory outside project folder")
 		return
 	}
 

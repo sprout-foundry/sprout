@@ -171,7 +171,7 @@ func TestAgentStructFields(t *testing.T) {
 // for testing cd-target validation.
 func newTestAgentWithSecurity(projectFolder string) *Agent {
 	if projectFolder == "" {
-		projectFolder, _ = os.MkdirTemp("", "test-workspace-*")
+		projectFolder, _ = os.MkdirTemp("", "test-project-folder-*")
 	}
 	return &Agent{
 		projectFolder: projectFolder,
@@ -201,7 +201,7 @@ func TestIsCdTargetAllowed_ProjectFolder(t *testing.T) {
 		target   string
 		expected bool
 	}{
-		{"workspace root", absFixture("/workspace"), true},
+		{"project folder", absFixture("/workspace"), true},
 		{"subdirectory", absFixture("/workspace/sub/dir"), true},
 		{"another subdirectory", absFixture("/workspace/a/b/c"), true},
 	}
@@ -230,7 +230,7 @@ func TestIsCdTargetAllowed_AllowedPath(t *testing.T) {
 		{"allowed path root", absFixture("/tmp/workspace"), true},
 		{"allowed path subdirectory", absFixture("/tmp/workspace/sub"), true},
 		{"allowed path deep subdirectory", absFixture("/tmp/workspace/a/b/c"), true},
-		{"workspace not allowed path", absFixture("/other/path"), false},
+		{"project folder not allowed path", absFixture("/other/path"), false},
 	}
 
 	for _, tt := range tests {
@@ -315,7 +315,7 @@ func TestListAllowedCdTargets(t *testing.T) {
 
 	// First should be project folder.
 	if normalizePath(targets[0]) != normalizePath(absFixture("/workspace")) {
-		t.Errorf("first target should be workspace root, got %q", targets[0])
+		t.Errorf("first target should be project folder, got %q", targets[0])
 	}
 
 	// Rest should be sorted.
@@ -338,7 +338,7 @@ func TestListAllowedCdTargets(t *testing.T) {
 
 func TestUpdateShellCwd_AllowedTarget(t *testing.T) {
 	// Create a temp project folder.
-	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	projectFolder, _ := os.MkdirTemp("", "test-project-folder-*")
 	defer os.RemoveAll(projectFolder)
 
 	a := newTestAgentWithSecurity(projectFolder)
@@ -359,7 +359,7 @@ func TestUpdateShellCwd_AllowedTarget(t *testing.T) {
 
 func TestUpdateShellCwd_AllowedPath(t *testing.T) {
 	// Create a temp project folder.
-	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	projectFolder, _ := os.MkdirTemp("", "test-project-folder-*")
 	defer os.RemoveAll(projectFolder)
 
 	// Create a temp allowed folder.
@@ -382,7 +382,7 @@ func TestUpdateShellCwd_AllowedPath(t *testing.T) {
 
 func TestUpdateShellCwd_RejectedTarget(t *testing.T) {
 	// Create a temp project folder.
-	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	projectFolder, _ := os.MkdirTemp("", "test-project-folder-*")
 	defer os.RemoveAll(projectFolder)
 
 	a := newTestAgentWithSecurity(projectFolder)
@@ -401,7 +401,7 @@ func TestUpdateShellCwd_RejectedTarget(t *testing.T) {
 
 func TestUpdateShellCwd_CdDash(t *testing.T) {
 	// Create a temp project folder.
-	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	projectFolder, _ := os.MkdirTemp("", "test-project-folder-*")
 	defer os.RemoveAll(projectFolder)
 
 	// Create a temp rejected folder.
@@ -436,7 +436,7 @@ func TestUpdateShellCwd_CdDash(t *testing.T) {
 
 func TestUpdateShellCwd_CdDashRejectsPrevious(t *testing.T) {
 	// Create a temp project folder.
-	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	projectFolder, _ := os.MkdirTemp("", "test-project-folder-*")
 	defer os.RemoveAll(projectFolder)
 
 	// Create a temp rejected folder.
@@ -469,7 +469,7 @@ func TestUpdateShellCwd_CdDashRejectsPrevious(t *testing.T) {
 }
 
 func TestUpdateShellCwd_NonCdCommand(t *testing.T) {
-	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	projectFolder, _ := os.MkdirTemp("", "test-project-folder-*")
 	defer os.RemoveAll(projectFolder)
 
 	a := newTestAgentWithSecurity(projectFolder)
@@ -489,7 +489,7 @@ func TestUpdateShellCwd_NonCdCommand(t *testing.T) {
 }
 
 func TestUpdateShellCwd_CompoundCommand(t *testing.T) {
-	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	projectFolder, _ := os.MkdirTemp("", "test-project-folder-*")
 	defer os.RemoveAll(projectFolder)
 
 	subdir := filepath.Join(projectFolder, "sub")
@@ -509,7 +509,7 @@ func TestUpdateShellCwd_CompoundCommand(t *testing.T) {
 }
 
 func TestUpdateShellCwd_CompoundCommandRejected(t *testing.T) {
-	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	projectFolder, _ := os.MkdirTemp("", "test-project-folder-*")
 	defer os.RemoveAll(projectFolder)
 
 	a := newTestAgentWithSecurity(projectFolder)
@@ -526,7 +526,7 @@ func TestUpdateShellCwd_CompoundCommandRejected(t *testing.T) {
 }
 
 func TestUpdateShellCwd_Subshell(t *testing.T) {
-	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	projectFolder, _ := os.MkdirTemp("", "test-project-folder-*")
 	defer os.RemoveAll(projectFolder)
 
 	subdir := filepath.Join(projectFolder, "sub")
@@ -546,7 +546,7 @@ func TestUpdateShellCwd_Subshell(t *testing.T) {
 }
 
 func TestUpdateShellCwd_BareCd(t *testing.T) {
-	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	projectFolder, _ := os.MkdirTemp("", "test-project-folder-*")
 	defer os.RemoveAll(projectFolder)
 
 	// Set HOME to the project folder.
@@ -566,7 +566,7 @@ func TestUpdateShellCwd_BareCd(t *testing.T) {
 }
 
 func TestUpdateShellCwd_CdDotdot(t *testing.T) {
-	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	projectFolder, _ := os.MkdirTemp("", "test-project-folder-*")
 	defer os.RemoveAll(projectFolder)
 
 	subdir := filepath.Join(projectFolder, "sub")
@@ -657,7 +657,7 @@ func TestCaptureStderr_PanicRestoresStderr(t *testing.T) {
 }
 
 func TestUpdateShellCwd_RejectionMessage(t *testing.T) {
-	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	projectFolder, _ := os.MkdirTemp("", "test-project-folder-*")
 	defer os.RemoveAll(projectFolder)
 
 	a := newTestAgentWithSecurity(projectFolder)
@@ -674,7 +674,7 @@ func TestUpdateShellCwd_RejectionMessage(t *testing.T) {
 	if !strings.Contains(msg, "/etc") {
 		t.Errorf("expected rejection message to contain '/etc', got: %s", msg)
 	}
-	if !strings.Contains(msg, "workspace") {
+	if !strings.Contains(msg, "project folder") {
 		t.Errorf("expected rejection message to list allowed paths, got: %s", msg)
 	}
 	if !strings.Contains(msg, "permission model") {
@@ -689,7 +689,7 @@ func TestUpdateShellCwd_RejectionMessage(t *testing.T) {
 }
 
 func TestUpdateShellCwd_RejectionMessage_CdPrevious(t *testing.T) {
-	projectFolder, _ := os.MkdirTemp("", "test-workspace-*")
+	projectFolder, _ := os.MkdirTemp("", "test-project-folder-*")
 	defer os.RemoveAll(projectFolder)
 
 	a := newTestAgentWithSecurity(projectFolder)

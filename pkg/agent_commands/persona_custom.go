@@ -140,7 +140,7 @@ func (p *PersonaCommand) personaAccept(id string, chatAgent *agent.Agent) error 
 
 	projectFolder := chatAgent.GetProjectFolder()
 	if strings.TrimSpace(projectFolder) == "" {
-		return fmt.Errorf("/persona accept: no workspace root; project personas are unavailable here")
+		return fmt.Errorf("/persona accept: no project folder; project personas are unavailable here")
 	}
 	if err := configManager.UpdateConfig(func(cfg *configuration.Config) error {
 		cfg.AcceptProjectPersona(projectFolder, issue.ID, hash)

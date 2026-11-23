@@ -265,7 +265,7 @@ func TestHandleAPIProjectFolderGet_HomeProjectFolderWithConsent(t *testing.T) {
 
 	// Record consent up front.
 	if err := recordHomeProjectFolderConsent(); err != nil {
-		t.Fatalf("recordHomeWorkspaceConsent: %v", err)
+		t.Fatalf("recordHomeProjectFolderConsent: %v", err)
 	}
 
 	// Populate the client context project folder directly (consent is already
@@ -378,7 +378,7 @@ func TestHandleAPIProjectFolderSet_ConsentRecordedEvenWhenQueryActive(t *testing
 	ws.handleAPIProjectFolderSet(rec, req)
 
 	if rec.Code != http.StatusConflict {
-		t.Fatalf("expected 409 from the workspace-switch branch, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 409 from the project-folder-switch branch, got %d: %s", rec.Code, rec.Body.String())
 	}
 
 	// The consent must nevertheless have been persisted — this is what lets

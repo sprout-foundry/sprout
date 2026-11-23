@@ -81,7 +81,7 @@ func TestHandleAPIDiagnostics_PathOutsideProjectFolder(t *testing.T) {
 	ws.handleAPIDiagnostics(rec, req)
 
 	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for path outside workspace, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 403 for path outside project folder, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

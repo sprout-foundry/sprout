@@ -42,10 +42,10 @@ func TestTrackFileWrite_InProjectFolder(t *testing.T) {
 
 	change := changes[0]
 	if change.OriginalCode == RedactedContentMarker {
-		t.Errorf("in-workspace file should NOT be redacted, got OriginalCode = %q", change.OriginalCode)
+		t.Errorf("in-project-folder file should NOT be redacted, got OriginalCode = %q", change.OriginalCode)
 	}
 	if change.NewCode == RedactedContentMarker {
-		t.Errorf("in-workspace file should NOT be redacted, got NewCode = %q", change.NewCode)
+		t.Errorf("in-project-folder file should NOT be redacted, got NewCode = %q", change.NewCode)
 	}
 	if change.OriginalCode != "package main\n" {
 		t.Errorf("OriginalCode = %q, want %q", change.OriginalCode, "package main\n")
@@ -82,10 +82,10 @@ func TestTrackFileWrite_OutOfProjectFolder(t *testing.T) {
 
 	change := changes[0]
 	if change.OriginalCode != RedactedContentMarker {
-		t.Errorf("out-of-workspace file should be redacted, got OriginalCode = %q", change.OriginalCode)
+		t.Errorf("out-of-project-folder file should be redacted, got OriginalCode = %q", change.OriginalCode)
 	}
 	if change.NewCode != RedactedContentMarker {
-		t.Errorf("out-of-workspace file should be redacted, got NewCode = %q", change.NewCode)
+		t.Errorf("out-of-project-folder file should be redacted, got NewCode = %q", change.NewCode)
 	}
 }
 
@@ -142,10 +142,10 @@ func TestTrackFileWrite_NewFileOutOfProjectFolder(t *testing.T) {
 
 	change := changes[0]
 	if change.OriginalCode != RedactedContentMarker {
-		t.Errorf("out-of-workspace new file should be redacted, got OriginalCode = %q", change.OriginalCode)
+		t.Errorf("out-of-project-folder new file should be redacted, got OriginalCode = %q", change.OriginalCode)
 	}
 	if change.NewCode != RedactedContentMarker {
-		t.Errorf("out-of-workspace new file should be redacted, got NewCode = %q", change.NewCode)
+		t.Errorf("out-of-project-folder new file should be redacted, got NewCode = %q", change.NewCode)
 	}
 }
 
@@ -176,10 +176,10 @@ func TestTrackFileWrite_EmptyProjectFolder(t *testing.T) {
 
 	change := changes[0]
 	if change.OriginalCode == RedactedContentMarker {
-		t.Errorf("empty workspace should NOT redact, got OriginalCode = %q", change.OriginalCode)
+		t.Errorf("empty project folder should NOT redact, got OriginalCode = %q", change.OriginalCode)
 	}
 	if change.NewCode == RedactedContentMarker {
-		t.Errorf("empty workspace should NOT redact, got NewCode = %q", change.NewCode)
+		t.Errorf("empty project folder should NOT redact, got NewCode = %q", change.NewCode)
 	}
 }
 
@@ -218,10 +218,10 @@ func TestTrackFileWrite_RelativePathInProjectFolder(t *testing.T) {
 
 	change := changes[0]
 	if change.OriginalCode == RedactedContentMarker {
-		t.Errorf("relative path resolving inside workspace should NOT be redacted, got OriginalCode = %q", change.OriginalCode)
+		t.Errorf("relative path resolving inside project folder should NOT be redacted, got OriginalCode = %q", change.OriginalCode)
 	}
 	if change.NewCode == RedactedContentMarker {
-		t.Errorf("relative path resolving inside workspace should NOT be redacted, got NewCode = %q", change.NewCode)
+		t.Errorf("relative path resolving inside project folder should NOT be redacted, got NewCode = %q", change.NewCode)
 	}
 }
 
@@ -304,10 +304,10 @@ func TestTrackFileEdit_OutOfProjectFolder(t *testing.T) {
 
 	change := changes[0]
 	if change.OriginalCode != RedactedContentMarker {
-		t.Errorf("out-of-workspace edit should be redacted, got OriginalCode = %q", change.OriginalCode)
+		t.Errorf("out-of-project-folder edit should be redacted, got OriginalCode = %q", change.OriginalCode)
 	}
 	if change.NewCode != RedactedContentMarker {
-		t.Errorf("out-of-workspace edit should be redacted, got NewCode = %q", change.NewCode)
+		t.Errorf("out-of-project-folder edit should be redacted, got NewCode = %q", change.NewCode)
 	}
 }
 
@@ -331,10 +331,10 @@ func TestTrackFileEdit_EmptyProjectFolder(t *testing.T) {
 
 	change := changes[0]
 	if change.OriginalCode == RedactedContentMarker {
-		t.Errorf("empty workspace should NOT redact, got OriginalCode = %q", change.OriginalCode)
+		t.Errorf("empty project folder should NOT redact, got OriginalCode = %q", change.OriginalCode)
 	}
 	if change.NewCode == RedactedContentMarker {
-		t.Errorf("empty workspace should NOT redact, got NewCode = %q", change.NewCode)
+		t.Errorf("empty project folder should NOT redact, got NewCode = %q", change.NewCode)
 	}
 }
 
@@ -367,7 +367,7 @@ func TestIsOutsideProjectFolder_NilAgent(t *testing.T) {
 	// Should not panic and should return false (don't redact)
 	result := ct.IsOutsideProjectFolder("/tmp/file.txt")
 	if result {
-		t.Errorf("nil agent should not redact, got isOutsideWorkspace = true")
+		t.Errorf("nil agent should not redact, got isOutsideProjectFolder = true")
 	}
 }
 
@@ -382,7 +382,7 @@ func TestIsOutsideProjectFolder_NestedPathInProjectFolder(t *testing.T) {
 	nestedPath := filepath.Join(ws, "a", "b", "c", "d", "file.go")
 	result := ct.IsOutsideProjectFolder(nestedPath)
 	if result {
-		t.Errorf("nested path inside workspace should not be redacted")
+		t.Errorf("nested path inside project folder should not be redacted")
 	}
 }
 
@@ -413,7 +413,7 @@ func TestIsOutsideProjectFolder_ProjectFolderIsParentOfFile(t *testing.T) {
 	filePath := filepath.Join(ws, "file.go")
 	result := ct.IsOutsideProjectFolder(filePath)
 	if result {
-		t.Errorf("file in workspace root should not be redacted")
+		t.Errorf("file in project folder should not be redacted")
 	}
 }
 

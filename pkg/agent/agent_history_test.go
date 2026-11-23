@@ -384,7 +384,7 @@ func TestGetHistory(t *testing.T) {
 func TestHistoryPathKey(t *testing.T) {
 	t.Parallel()
 
-	t.Run("uses workspace root as key", func(t *testing.T) {
+	t.Run("uses project folder as key", func(t *testing.T) {
 		a := newMinimalTestAgent(t)
 		root := filepath.Join(t.TempDir(), "project")
 		a.SetProjectFolder(root)

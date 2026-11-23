@@ -23,7 +23,7 @@ func setupProxyChatTestServer(t *testing.T) *ReactWebServer {
 	daemonRoot := t.TempDir()
 	projectFolder := filepath.Join(daemonRoot, "workspace")
 	if err := os.MkdirAll(projectFolder, 0o755); err != nil {
-		t.Fatalf("mkdir workspace: %v", err)
+		t.Fatalf("mkdir project folder: %v", err)
 	}
 
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")

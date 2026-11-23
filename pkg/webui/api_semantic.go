@@ -216,7 +216,7 @@ func (ws *ReactWebServer) handleAPISemantic(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if !isWithinProjectFolder(canonical, projectFolder) {
-		writeJSONErr(w, http.StatusForbidden, "path_outside_workspace", "Path is outside workspace")
+		writeJSONErr(w, http.StatusForbidden, "path_outside_workspace", "Path is outside project folder")
 		return
 	}
 

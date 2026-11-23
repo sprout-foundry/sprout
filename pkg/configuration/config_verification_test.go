@@ -284,7 +284,7 @@ func TestLoadConfigWithLayers_Verification(t *testing.T) {
 	writeFile(t, globalPath, `{"version":"2.1","verification":{"enabled":true}}`)
 	writeFile(t, projectFolderPath, `{"reasoning_effort":"high"}`)
 	cfg = load()
-	assert.True(t, cfg.VerificationEnabled(), "a global enable must persist through a silent workspace")
+	assert.True(t, cfg.VerificationEnabled(), "a global enable must persist through a silent project folder")
 	assert.Equal(t, DefaultVerificationRepairAttempts, cfg.VerificationRepairAttempts())
 
 	// Per-project enable: the global never names the key, the project folder
@@ -292,14 +292,14 @@ func TestLoadConfigWithLayers_Verification(t *testing.T) {
 	require.NoError(t, os.Remove(globalPath))
 	writeFile(t, projectFolderPath, `{"verification":{"enabled":true,"repair_attempts":2}}`)
 	cfg = load()
-	assert.True(t, cfg.VerificationEnabled(), "a workspace enable must turn verification on for the project")
+	assert.True(t, cfg.VerificationEnabled(), "a project folder enable must turn verification on for the project")
 	assert.Equal(t, 2, cfg.VerificationRepairAttempts(), "the project limit must win")
 
 	// The narrower layer disables a broader enable with an explicit false.
 	writeFile(t, globalPath, `{"version":"2.1","verification":{"enabled":true}}`)
 	writeFile(t, projectFolderPath, `{"verification":{"enabled":false}}`)
 	cfg = load()
-	assert.False(t, cfg.VerificationEnabled(), "an explicit workspace disable must beat the global enable")
+	assert.False(t, cfg.VerificationEnabled(), "an explicit project folder disable must beat the global enable")
 
 	// The repair limit stacks across layers: a narrower explicit limit
 	// wins, and a silent narrower layer keeps the broader limit.
@@ -315,12 +315,12 @@ func TestLoadConfigWithLayers_Verification(t *testing.T) {
 	writeFile(t, globalPath, `{"version":"2.1","verification":{"enabled":true,"repair_attempts":5,"total_repair_rounds":12}}`)
 	writeFile(t, projectFolderPath, `{"verification":{"total_repair_rounds":8}}`)
 	cfg = load()
-	assert.Equal(t, 8, cfg.VerificationRepairTotalRounds(), "the narrower (workspace) total must win")
+	assert.Equal(t, 8, cfg.VerificationRepairTotalRounds(), "the narrower (project folder) total must win")
 	assert.Equal(t, 5, cfg.VerificationRepairAttempts(), "the global limit must survive the total-only override")
 
 	writeFile(t, projectFolderPath, `{"reasoning_effort":"high"}`)
 	cfg = load()
-	assert.Equal(t, 12, cfg.VerificationRepairTotalRounds(), "a silent workspace must keep the global total")
+	assert.Equal(t, 12, cfg.VerificationRepairTotalRounds(), "a silent project folder must keep the global total")
 	assert.Equal(t, 5, cfg.VerificationRepairAttempts())
 
 	// No layer naming the total: it falls back to the derived default
@@ -337,7 +337,7 @@ func TestLoadConfigWithLayers_Verification(t *testing.T) {
 
 	writeFile(t, globalPath, `{"version":"2.1","verification":{"enabled":true,"repair_attempts":5}}`)
 	cfg = load()
-	assert.Equal(t, 5, cfg.VerificationRepairAttempts(), "a silent workspace must keep the global limit")
+	assert.Equal(t, 5, cfg.VerificationRepairAttempts(), "a silent project folder must keep the global limit")
 }
 
 // TestVerificationAccessors pins the accessors' default and configured

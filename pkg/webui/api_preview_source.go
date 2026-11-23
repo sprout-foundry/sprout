@@ -43,7 +43,7 @@ func (ws *ReactWebServer) handleAPIPreviewSource(w http.ResponseWriter, r *http.
 		return
 	}
 	if !isWithinProjectFolder(canonical, projectFolder) {
-		writeJSONErr(w, http.StatusForbidden, "path_outside_workspace", "Path is outside the workspace")
+		writeJSONErr(w, http.StatusForbidden, "path_outside_workspace", "Path is outside the project folder")
 		return
 	}
 
@@ -81,10 +81,10 @@ func (ws *ReactWebServer) handleAPIPreviewSource(w http.ResponseWriter, r *http.
 func projectFolderRelativePath(canonical, root string) (string, error) {
 	rel, err := filepath.Rel(root, canonical)
 	if err != nil {
-		return "", fmt.Errorf("resolving path within workspace: %w", err)
+		return "", fmt.Errorf("resolving path within project folder: %w", err)
 	}
 	if strings.HasPrefix(rel, "..") {
-		return "", fmt.Errorf("path is outside the workspace")
+		return "", fmt.Errorf("path is outside the project folder")
 	}
 	return rel, nil
 }

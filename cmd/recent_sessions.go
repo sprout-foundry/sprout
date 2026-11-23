@@ -104,7 +104,7 @@ func maybeOfferSessionResume(chatAgent *agent.Agent) string {
 
 	// Skip the interactive prompt when stdin isn't a TTY (e.g. `sprout < script`).
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
-		console.GlyphInfo.Fprintf(os.Stderr, "Recent sessions in this workspace:")
+		console.GlyphInfo.Fprintf(os.Stderr, "Recent sessions in this project folder:")
 		for i, s := range recent {
 			label := s.Name
 			if label == "" {
@@ -142,7 +142,7 @@ func maybeOfferSessionResume(chatAgent *agent.Agent) string {
 		})
 	}
 	picker := console.NewSelectList(console.SelectListOptions{
-		Title:           "Recent sessions in this workspace",
+		Title:           "Recent sessions in this project folder",
 		Items:           items,
 		PageSize:        maxRecentSessionsShown,
 		DismissOnAnyKey: true,

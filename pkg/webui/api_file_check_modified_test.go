@@ -141,7 +141,7 @@ func TestHandleAPIFileCheckModified(t *testing.T) {
 		}
 	})
 
-	t.Run("POST with path outside workspace is skipped", func(t *testing.T) {
+	t.Run("POST with path outside project folder is skipped", func(t *testing.T) {
 		dir := t.TempDir()
 		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 		if err != nil {
@@ -173,7 +173,7 @@ func TestHandleAPIFileCheckModified(t *testing.T) {
 		}
 
 		if len(resp.Modified) != 0 {
-			t.Errorf("expected 0 modified entries for out-of-workspace file, got %d", len(resp.Modified))
+			t.Errorf("expected 0 modified entries for out-of-project-folder file, got %d", len(resp.Modified))
 		}
 	})
 }

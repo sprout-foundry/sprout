@@ -77,49 +77,49 @@ func TestIsPathInProjectFolder(t *testing.T) {
 		expected      bool
 	}{
 		{
-			name:          "file in workspace",
+			name:          "file in project folder",
 			path:          "/home/user/project/pkg/file.go",
 			projectFolder: projectFolderDir,
 			expected:      true,
 		},
 		{
-			name:          "file directly in workspace",
+			name:          "file directly in project folder",
 			path:          "/home/user/project/file.go",
 			projectFolder: projectFolderDir,
 			expected:      true,
 		},
 		{
-			name:          "deep nested file in workspace",
+			name:          "deep nested file in project folder",
 			path:          "/home/user/project/pkg/sub1/sub2/file.go",
 			projectFolder: projectFolderDir,
 			expected:      true,
 		},
 		{
-			name:          "file outside workspace (different project)",
+			name:          "file outside project folder (different project)",
 			path:          "/home/user/other-project/file.go",
 			projectFolder: projectFolderDir,
 			expected:      false,
 		},
 		{
-			name:          "file outside workspace (different user)",
+			name:          "file outside project folder (different user)",
 			path:          "/home/other-user/project/file.go",
 			projectFolder: projectFolderDir,
 			expected:      false,
 		},
 		{
-			name:          "file outside workspace (system path)",
+			name:          "file outside project folder (system path)",
 			path:          "/usr/local/bin/file",
 			projectFolder: projectFolderDir,
 			expected:      false,
 		},
 		{
-			name:          "workspace directory itself",
+			name:          "project folder itself",
 			path:          "/home/user/project",
 			projectFolder: projectFolderDir,
 			expected:      true,
 		},
 		{
-			name:          "file in subdirectory of workspace with same prefix",
+			name:          "file in subdirectory of project folder with same prefix",
 			path:          "/home/user/project-2/file.go",
 			projectFolder: projectFolderDir,
 			expected:      false,
@@ -130,7 +130,7 @@ func TestIsPathInProjectFolder(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := isPathInProjectFolder(filepath.FromSlash(tt.path), filepath.FromSlash(tt.projectFolder))
 			if result != tt.expected {
-				t.Errorf("isPathInWorkspace(%q, %q) = %v, want %v", tt.path, tt.projectFolder, result, tt.expected)
+				t.Errorf("isPathInProjectFolder(%q, %q) = %v, want %v", tt.path, tt.projectFolder, result, tt.expected)
 			}
 		})
 	}
@@ -159,7 +159,7 @@ func TestIsPathInTmp(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:     "file in workspace",
+			name:     "file in project folder",
 			path:     "/home/user/project/file.go",
 			expected: false,
 		},
@@ -276,7 +276,7 @@ func TestIsPathInProjectFolder_VolumeRootAndOSTemp(t *testing.T) {
 	root := filepath.VolumeName(os.TempDir()) + string(filepath.Separator)
 	inside := filepath.Join(os.TempDir(), "sprout", "file.go")
 	if !isPathInProjectFolder(inside, root) {
-		t.Errorf("isPathInWorkspace(%q, %q) = false, want true", inside, root)
+		t.Errorf("isPathInProjectFolder(%q, %q) = false, want true", inside, root)
 	}
 	if !isPathInTmp(inside) {
 		t.Errorf("isPathInTmp(%q) = false, want true", inside)

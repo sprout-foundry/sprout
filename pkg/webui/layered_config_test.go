@@ -264,7 +264,7 @@ func TestHandlePutProjectFolderSettings_ReachesLiveConfigManager(t *testing.T) {
 	// Prime the merged config with a known value via a project-folder-layer write.
 	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", `{"reasoning_effort": "low"}`)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("initial workspace PUT failed: %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("initial project folder PUT failed: %d: %s", rec.Code, rec.Body.String())
 	}
 
 	cm := ws.resolveConfigManagerQuietly(makeClientRequest(clientID))
@@ -278,7 +278,7 @@ func TestHandlePutProjectFolderSettings_ReachesLiveConfigManager(t *testing.T) {
 	// Change the same key through a second layer write.
 	rec = makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", `{"reasoning_effort": "high"}`)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("second workspace PUT failed: %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("second project folder PUT failed: %d: %s", rec.Code, rec.Body.String())
 	}
 
 	// The merged in-memory config must reflect the new value immediately —
@@ -366,11 +366,11 @@ func TestHandlePutProjectFolderSettings(t *testing.T) {
 	projectFolderConfigPath := filepath.Join(projectFolder, ".sprout", configuration.ProjectFolderConfigFileName)
 	data, err := os.ReadFile(projectFolderConfigPath)
 	if err != nil {
-		t.Fatalf("workspace config file should exist: %v", err)
+		t.Fatalf("project folder config file should exist: %v", err)
 	}
 
 	if !strings.Contains(string(data), `"low"`) {
-		t.Errorf("workspace config should contain reasoning_effort=low, got: %s", string(data))
+		t.Errorf("project folder config should contain reasoning_effort=low, got: %s", string(data))
 	}
 }
 
@@ -467,7 +467,7 @@ func TestHandlePutProjectFolderSettings_CopyFromGlobal(t *testing.T) {
 	// Step 3: PUT global data to project folder (simulates "updateSettings(globalData, 'project folder')")
 	rec = makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", rec.Body.String())
 	if rec.Code != http.StatusOK {
-		t.Fatalf("workspace PUT failed: %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("project folder PUT failed: %d: %s", rec.Code, rec.Body.String())
 	}
 
 	// Step 4: GET project folder settings and verify data was preserved
@@ -476,14 +476,14 @@ func TestHandlePutProjectFolderSettings_CopyFromGlobal(t *testing.T) {
 	rec = httptest.NewRecorder()
 	ws.handleAPISettings(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("workspace GET failed: %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("project folder GET failed: %d: %s", rec.Code, rec.Body.String())
 	}
 
 	body := rec.Body.String()
 	// Verify key fields were preserved
 	for _, expected := range []string{`"reasoning_effort":"high"`, `"history_scope":"global"`, `"version":"2.0"`, `"last_used_provider":"openai"`} {
 		if !strings.Contains(body, expected) {
-			t.Errorf("workspace config missing %s, got: %s", expected, body)
+			t.Errorf("project folder config missing %s, got: %s", expected, body)
 		}
 	}
 }
@@ -526,12 +526,12 @@ func TestHandlePutProjectFolderSettings_ProviderModel(t *testing.T) {
 	projectFolderConfigPath := filepath.Join(projectFolder, ".sprout", configuration.ProjectFolderConfigFileName)
 	data, err := os.ReadFile(projectFolderConfigPath)
 	if err != nil {
-		t.Fatalf("workspace config file should exist: %v", err)
+		t.Fatalf("project folder config file should exist: %v", err)
 	}
 
 	var cfg configuration.Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		t.Fatalf("failed to parse workspace config: %v", err)
+		t.Fatalf("failed to parse project folder config: %v", err)
 	}
 
 	if cfg.LastUsedProvider != "openai" {
@@ -632,12 +632,12 @@ func TestHandlePutProjectFolderSettings_ProviderOnly(t *testing.T) {
 	projectFolderConfigPath := filepath.Join(projectFolder, ".sprout", configuration.ProjectFolderConfigFileName)
 	data, err := os.ReadFile(projectFolderConfigPath)
 	if err != nil {
-		t.Fatalf("workspace config file should exist: %v", err)
+		t.Fatalf("project folder config file should exist: %v", err)
 	}
 
 	var cfg configuration.Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		t.Fatalf("failed to parse workspace config: %v", err)
+		t.Fatalf("failed to parse project folder config: %v", err)
 	}
 
 	if cfg.LastUsedProvider != "anthropic" {
@@ -692,12 +692,12 @@ func TestHandlePutProjectFolderSettings_ModelWithoutProvider(t *testing.T) {
 	// Verify project folder config file now has provider_models updated
 	data, err := os.ReadFile(projectFolderConfigPath)
 	if err != nil {
-		t.Fatalf("workspace config file should exist: %v", err)
+		t.Fatalf("project folder config file should exist: %v", err)
 	}
 
 	var cfg configuration.Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		t.Fatalf("failed to parse workspace config: %v", err)
+		t.Fatalf("failed to parse project folder config: %v", err)
 	}
 
 	if cfg.ProviderModels == nil || cfg.ProviderModels["openai"] != "gpt-4o" {

@@ -11,7 +11,7 @@ import (
 func TestProjectFolderGitignoreKeepsMachineFilesOut(t *testing.T) {
 	root := t.TempDir()
 	if err := EnsureProjectFolderConfigDir(root); err != nil {
-		t.Fatalf("EnsureWorkspaceConfigDir: %v", err)
+		t.Fatalf("EnsureProjectFolderConfigDir: %v", err)
 	}
 	got, err := os.ReadFile(filepath.Join(root, ConfigDirName, ".gitignore"))
 	if err != nil {

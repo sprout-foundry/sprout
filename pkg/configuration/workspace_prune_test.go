@@ -48,7 +48,7 @@ func TestPruneProjectFolderConfig(t *testing.T) {
 	saved := readJSONFile(t, wsFile)
 	mcp, _ := saved["mcp"].(map[string]interface{})
 	if mcp["enabled"] != false || saved["provider_models"] == nil || saved["future_setting"] != "kept" || saved["version"] == nil {
-		t.Fatalf("pruned file = %v, want the workspace's own settings kept", saved)
+		t.Fatalf("pruned file = %v, want the project folder's own settings kept", saved)
 	}
 	if backup, _ := os.ReadFile(wsFile + ".bak"); string(backup) != bloated {
 		t.Fatal("original not kept as .bak")

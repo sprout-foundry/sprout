@@ -220,7 +220,7 @@ func TestPrepareStop_CancelsRunsLeftAtDeadline(t *testing.T) {
 		t.Fatalf("result %+v, interrupt calls %d; want 1 interrupted, 1 cancelled, 2 calls", res, calls)
 	}
 	if res.Checkpointed {
-		t.Fatal("non-repo workspace reported a checkpoint")
+		t.Fatal("non-repo project folder reported a checkpoint")
 	}
 }
 

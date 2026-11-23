@@ -32,7 +32,7 @@ type imgRun struct {
 func imgDir(t *testing.T) string {
 	t.Helper()
 	if runtime.GOOS == "windows" {
-		t.Skip("the workspace image entrypoint is POSIX sh")
+		t.Skip("the project folder image entrypoint is POSIX sh")
 	}
 	for _, tool := range []string{"sh", "git"} {
 		if _, err := exec.LookPath(tool); err != nil {
@@ -186,7 +186,7 @@ func TestDevSpaceImageRefusesToCloneOverUnknownContent(t *testing.T) {
 	imgMust(t, os.WriteFile(filepath.Join(root, "keep.txt"), []byte("keep\n"), 0o644))
 	r := runEntrypoint(t, root, cloneEnv(imgSourceRepo(t)))
 	if r.err == nil {
-		t.Fatalf("entrypoint must refuse a non-empty workspace\n%s", r.out)
+		t.Fatalf("entrypoint must refuse a non-empty project folder\n%s", r.out)
 	}
 	if !strings.Contains(r.out, "refusing to clone") || !strings.Contains(r.out, "keep.txt") {
 		t.Errorf("error should name the refusal and the entry:\n%s", r.out)
@@ -198,7 +198,7 @@ func TestDevSpaceImageRefusesToCloneOverUnknownContent(t *testing.T) {
 		t.Errorf("keep.txt must survive: %q, %v", data, err)
 	}
 	if _, err := os.Stat(filepath.Join(root, ".git")); err == nil {
-		t.Error("nothing may be cloned into a refused workspace")
+		t.Error("nothing may be cloned into a refused project folder")
 	}
 }
 

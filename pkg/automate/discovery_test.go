@@ -849,7 +849,7 @@ func TestSummarize_RoundTripsThroughJSONShape(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDirIn(t *testing.T) {
-	t.Run("empty workspace falls back to cwd-based Dir", func(t *testing.T) {
+	t.Run("empty project folder falls back to cwd-based Dir", func(t *testing.T) {
 		got := DirIn("")
 		want := Dir()
 		if got != want {
@@ -857,7 +857,7 @@ func TestDirIn(t *testing.T) {
 		}
 	})
 
-	t.Run("whitespace-only workspace falls back to cwd-based Dir", func(t *testing.T) {
+	t.Run("whitespace-only project folder falls back to cwd-based Dir", func(t *testing.T) {
 		got := DirIn("   ")
 		want := Dir()
 		if got != want {
@@ -865,7 +865,7 @@ func TestDirIn(t *testing.T) {
 		}
 	})
 
-	t.Run("explicit workspace joins automate dir", func(t *testing.T) {
+	t.Run("explicit project folder joins automate dir", func(t *testing.T) {
 		got := DirIn("/tmp/foo")
 		want := filepath.Join("/tmp/foo", "automate")
 		if got != want {
@@ -956,7 +956,7 @@ func TestSummarize_InitialAllowedPaths_SurfacesPaths(t *testing.T) {
 		"initial": {
 			"prompt": "do the thing",
 			"allowed_paths": [
-				{"path": `+fixtureJSONPath("/tmp/work")+`, "mode": "read_write", "reason": "Temp workspace"}
+				{"path": `+fixtureJSONPath("/tmp/work")+`, "mode": "read_write", "reason": "Temp project folder"}
 			]
 		}
 	}`)
@@ -977,8 +977,8 @@ func TestSummarize_InitialAllowedPaths_SurfacesPaths(t *testing.T) {
 	if s.Initial.AllowedPaths[0].Mode != "read_write" {
 		t.Errorf("initial allowed_paths[0].Mode: got %q, want read_write", s.Initial.AllowedPaths[0].Mode)
 	}
-	if s.Initial.AllowedPaths[0].Reason != "Temp workspace" {
-		t.Errorf("initial allowed_paths[0].Reason: got %q, want 'Temp workspace'", s.Initial.AllowedPaths[0].Reason)
+	if s.Initial.AllowedPaths[0].Reason != "Temp project folder" {
+		t.Errorf("initial allowed_paths[0].Reason: got %q, want 'Temp project folder'", s.Initial.AllowedPaths[0].Reason)
 	}
 }
 

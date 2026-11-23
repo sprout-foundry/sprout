@@ -177,7 +177,7 @@ func TestWrapSecurityCaution_TierAwareHardBlock(t *testing.T) {
 
 func TestWrapSecurityCaution_TierAwareConfirmation(t *testing.T) {
 	a := &Agent{state: NewAgentStateManager(false)}
-	err := agenterrors.NewSecurityError("security confirmation required: write outside workspace", nil)
+	err := agenterrors.NewSecurityError("security confirmation required: write outside project folder", nil)
 	wrapped := wrapSecurityCaution(a, err)
 
 	if !contains(wrapped.Error(), "interactive user approval") {

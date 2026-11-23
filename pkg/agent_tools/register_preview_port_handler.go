@@ -24,7 +24,7 @@ func (h *registerPreviewPortHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "register_preview_port",
 		Description: "Register a port for browser preview access. Call this when you start a web server, " +
-			"dev server, or any HTTP service inside the workspace. Returns a preview URL the user can open. " +
+			"dev server, or any HTTP service inside the project folder. Returns a preview URL the user can open. " +
 			"Only call this AFTER the server is running and listening on a port.",
 		Required: []string{"port"},
 		Parameters: []ParameterDef{

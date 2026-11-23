@@ -114,7 +114,7 @@ func (a *Agent) updateShellCwd(cmd string) {
 
 	// Gate: validate the resolved target against the allowlist.
 	if !a.IsCdTargetAllowed(resolved) {
-		a.writeCdRejectionMessage(resolved, "is not in the workspace or the workflow's declared allowed_paths")
+		a.writeCdRejectionMessage(resolved, "is not in the project folder or the workflow's declared allowed_paths")
 		return
 	}
 
@@ -144,8 +144,8 @@ func (a *Agent) writeCdRejectionMessage(target, reason string) {
 	}
 
 	message := "cd refused: " + target + " " + reason + ".\n" +
-		"The shell working directory is constrained by the workspace permission model: cd may only move into the workspace root or a folder allowed for this session.\n" +
-		"To resolve: keep the working directory inside the workspace, choose \"Allow folder this session\" at an approval prompt, or declare the folder in the workflow's allowed_paths (.sprout/security-policy.json).\n" +
+		"The shell working directory is constrained by the project folder permission model: cd may only move into the project folder or a folder allowed for this session.\n" +
+		"To resolve: keep the working directory inside the project folder, choose \"Allow folder this session\" at an approval prompt, or declare the folder in the workflow's allowed_paths (.sprout/security-policy.json).\n" +
 		"Currently allowed: " + allowedList + ".\n"
 
 	// Write to debug log.

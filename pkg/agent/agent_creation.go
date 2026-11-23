@@ -692,7 +692,7 @@ func (a *Agent) maybeAutoActivateCoordinatorPersona() {
 		return
 	}
 	// Surface the activation so users can see why behavior changed.
-	console.GlyphInfo.Fprintf(os.Stderr, "Activated coordinator persona because workspace is $HOME (disable with 'disable_coordinator_auto_activate' in config)")
+	console.GlyphInfo.Fprintf(os.Stderr, "Activated coordinator persona because project folder is $HOME (disable with 'disable_coordinator_auto_activate' in config)")
 }
 
 // isInteractiveTerminal returns true if stdin is a TTY, indicating the

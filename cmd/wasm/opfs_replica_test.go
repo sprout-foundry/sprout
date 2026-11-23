@@ -549,7 +549,7 @@ func TestGetOPFSFileFunc_Exists(t *testing.T) {
 	}
 	meta, ok := resMap["metadata"].(agent.ProjectFolderFileMetadata)
 	if !ok {
-		t.Fatal("metadata should be WorkspaceFileMetadata")
+		t.Fatal("metadata should be ProjectFolderFileMetadata")
 	}
 	if meta.BrowserSeq != 5 {
 		t.Errorf("metadata.BrowserSeq = %d, want 5", meta.BrowserSeq)

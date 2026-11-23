@@ -74,8 +74,8 @@ func approveExternalProjectFolder(a *Agent, outsidePaths, absFilePaths []string)
 		// CRITICAL: When running as a subagent, we CANNOT prompt for user confirmation
 		// because stdin is /dev/null. Instead, we must reject the request.
 		if a.IsSubagent() {
-			a.Logger().Debug("Subagent encountered external workspace request, cannot prompt for approval (running as subagent)\n")
-			return "", agenterrors.NewPermission(fmt.Sprintf("file paths outside workspace require user approval: %v (cannot prompt from subagent context)", outsidePaths), nil)
+			a.Logger().Debug("Subagent encountered external project folder request, cannot prompt for approval (running as subagent)\n")
+			return "", agenterrors.NewPermission(fmt.Sprintf("file paths outside project folder require user approval: %v (cannot prompt from subagent context)", outsidePaths), nil)
 		}
 
 		// Build approval prompt
@@ -90,26 +90,26 @@ func approveExternalProjectFolder(a *Agent, outsidePaths, absFilePaths []string)
 		if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && !a.IsSubagent() && !a.IsWorkflowRun() && a.HasActiveWebUIClients() {
 			// WEBUI: request approval via event bus for the browser dialog
 			extras := map[string]string{
-				"risk_type": "Subagent External Workspace",
+				"risk_type": "Subagent External Project folder",
 				"target":    outsidePathsStr,
 			}
 			if !mgr.RequestToolApproval(a.GetEventBus(), a.GetEventClientID(), a.GetEventUserID(), "run_subagent", "CAUTION", prompt, extras) {
-				a.Logger().Debug("User rejected subagent access to external workspace\n")
-				return "", agenterrors.NewPermission(fmt.Sprintf("file paths outside workspace rejected by user: %v", outsidePaths), nil)
+				a.Logger().Debug("User rejected subagent access to external project folder\n")
+				return "", agenterrors.NewPermission(fmt.Sprintf("file paths outside project folder rejected by user: %v", outsidePaths), nil)
 			}
-			a.Logger().Debug("User approved subagent access to external workspace via webui\n")
+			a.Logger().Debug("User approved subagent access to external project folder via webui\n")
 		} else if canPrompt {
 			// CLI: prompt user interactively via terminal stdin
-			cliPrompt := "[WARN] Subagent External Workspace\n\n" + prompt + "\n\nAllow? (yes/no): "
+			cliPrompt := "[WARN] Subagent External Project folder\n\n" + prompt + "\n\nAllow? (yes/no): "
 			if !logger.AskForConfirmation(cliPrompt, false, false) {
-				a.Logger().Debug("User rejected subagent access to external workspace\n")
-				return "", agenterrors.NewPermission(fmt.Sprintf("file paths outside workspace rejected by user: %v", outsidePaths), nil)
+				a.Logger().Debug("User rejected subagent access to external project folder\n")
+				return "", agenterrors.NewPermission(fmt.Sprintf("file paths outside project folder rejected by user: %v", outsidePaths), nil)
 			}
-			a.Logger().Debug("User approved subagent access to external workspace via CLI\n")
+			a.Logger().Debug("User approved subagent access to external project folder via CLI\n")
 		} else {
 			// No prompting available (non-interactive): reject
-			a.Logger().Debug("Cannot prompt for subagent external workspace approval (non-interactive)\n")
-			return "", agenterrors.NewPermission(fmt.Sprintf("file paths outside workspace require approval but prompting is not available: %v", outsidePaths), nil)
+			a.Logger().Debug("Cannot prompt for subagent external project folder approval (non-interactive)\n")
+			return "", agenterrors.NewPermission(fmt.Sprintf("file paths outside project folder require approval but prompting is not available: %v", outsidePaths), nil)
 		}
 
 		// Mark each outside path's parent as session-allowed so
@@ -120,12 +120,12 @@ func approveExternalProjectFolder(a *Agent, outsidePaths, absFilePaths []string)
 			a.AddSessionAllowedFolder(filepath.Dir(p))
 		}
 	} else {
-		a.Logger().Debug("Auto-approving subagent external workspace (unsafe mode or session bypass)\n")
+		a.Logger().Debug("Auto-approving subagent external project folder (unsafe mode or session bypass)\n")
 	}
 
 	// Compute common parent directory of all files as the new project folder
 	subagentProjectFolder := commonParent(absFilePaths)
-	a.Logger().Debug("Computed subagent workspace root: %s (from %d file paths)\n", subagentProjectFolder, len(absFilePaths))
+	a.Logger().Debug("Computed subagent project folder: %s (from %d file paths)\n", subagentProjectFolder, len(absFilePaths))
 	return subagentProjectFolder, nil
 }
 
@@ -142,6 +142,6 @@ func overrideProjectFolder(projectFolder, workingDir string, absFilePaths []stri
 		}
 	}
 	projectFolder = workingDir
-	a.Logger().Debug("Overriding subagent workspace root with working_dir: %s\n", projectFolder)
+	a.Logger().Debug("Overriding subagent project folder with working_dir: %s\n", projectFolder)
 	return projectFolder
 }

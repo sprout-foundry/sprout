@@ -1790,7 +1790,7 @@ func TestWriteFileNoProjectFolderPatchOnFailure(t *testing.T) {
 func TestProjectFolderPatchRegisteredInOutboundTypes(t *testing.T) {
 	// Verify the event type constant has the expected string value
 	assert.Equal(t, "workspace_patch", events.EventTypeProjectFolderPatch,
-		"EventTypeWorkspacePatch should equal the literal used in the outbound registry")
+		"EventTypeProjectFolderPatch should equal the literal used in the outbound registry")
 
 	// The outbound registry (pkg/webui/websocket_outbound_registry.go) includes
 	// events.EventTypeProjectFolderPatch in allowedOutboundMessageTypes at init time.

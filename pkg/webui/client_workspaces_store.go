@@ -154,7 +154,7 @@ func (ws *ReactWebServer) saveClientProjectFoldersLocked() {
 	}
 	dir := filepath.Dir(ws.clientProjectFoldersPath)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		ws.log().Debug("create client workspaces dir failed", slog.Any("err", err))
+		ws.log().Debug("create client project folders dir failed", slog.Any("err", err))
 		return
 	}
 	tmp, err := os.CreateTemp(dir, clientProjectFoldersFileName+".*.tmp")

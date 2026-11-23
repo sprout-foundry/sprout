@@ -29,7 +29,7 @@ func TestSelectList_ClearRenderedNoDeadlockWithFooter(t *testing.T) {
 	t.Cleanup(func() { RegisterGlobalStatusFooter(nil) })
 
 	s := NewSelectList(SelectListOptions{
-		Title:  "Recent sessions in this workspace",
+		Title:  "Recent sessions in this project folder",
 		Items:  []SelectItem{{Label: "one", Value: "1"}},
 		Footer: "↑↓ select · enter resume",
 	})

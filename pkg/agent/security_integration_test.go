@@ -57,7 +57,7 @@ func TestSecurityGateIntegration_EndToEnd(t *testing.T) {
 	// Project folder path: Gate 1 auto-approves
 	wsFile := filepath.Join(projectFolder, "main.go")
 	if !a.staticGateAutoApprove(secResult, wsFile, "", "write") {
-		t.Errorf("staticGateAutoApprove: workspace path should auto-approve")
+		t.Errorf("staticGateAutoApprove: project folder path should auto-approve")
 	}
 
 	// Allowlisted read_write: Gate 1 auto-approves
@@ -83,7 +83,7 @@ func TestSecurityGateIntegration_EndToEnd(t *testing.T) {
 	// Project folder path: precheck returns allow
 	_, decision := tools.PrecheckFileAccess(ctx, a, "write_file", wsFile)
 	if decision != "allow" {
-		t.Errorf("PrecheckFileAccess: workspace path = %q, want 'allow'", decision)
+		t.Errorf("PrecheckFileAccess: project folder path = %q, want 'allow'", decision)
 	}
 
 	// Allowlisted read_write: precheck returns allow
@@ -119,10 +119,10 @@ func TestSecurityGateIntegration_EndToEnd(t *testing.T) {
 		"content": "hello",
 	})
 	if err != nil {
-		t.Errorf("write_file on workspace path: err = %v, want nil", err)
+		t.Errorf("write_file on project folder path: err = %v, want nil", err)
 	}
 	if res.IsError {
-		t.Errorf("write_file on workspace path: IsError = true, want false")
+		t.Errorf("write_file on project folder path: IsError = true, want false")
 	}
 
 	// Allowlisted read_only: handler returns typed denial

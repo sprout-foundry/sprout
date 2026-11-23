@@ -187,7 +187,7 @@ func (ws *ReactWebServer) handlePutSessionSettings(w http.ResponseWriter, r *htt
 func (ws *ReactWebServer) handlePutProjectFolderSettings(w http.ResponseWriter, r *http.Request) {
 	projectFolder := ws.getProjectFolderForRequest(r)
 	if projectFolder == "" {
-		writeJSONError(w, http.StatusBadRequest, "No workspace configured")
+		writeJSONError(w, http.StatusBadRequest, "No project folder configured")
 		return
 	}
 	// Write path, not the read path: a legacy config.json is read but never
@@ -201,7 +201,7 @@ func (ws *ReactWebServer) handlePutProjectFolderSettings(w http.ResponseWriter, 
 	writePath := configuration.ProjectFolderConfigWritePath(projectFolder)
 	if writePath == "" {
 		writeJSONError(w, http.StatusBadRequest,
-			"This workspace has no per-workspace settings layer (the home directory uses global settings). Save to global settings instead.")
+			"This project folder has no per-project-folder settings layer (the home directory uses global settings). Save to global settings instead.")
 		return
 	}
 	ws.putConfigToFile(w, r, writePath)

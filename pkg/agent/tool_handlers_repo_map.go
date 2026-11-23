@@ -58,11 +58,11 @@ func handleRepoMap(ctx context.Context, a *Agent, args map[string]interface{}) (
 	}
 	absProjectFolder, err := filepath.Abs(projectFolder)
 	if err != nil {
-		return "", agenterrors.NewTool("repo_map", "resolve workspace root", err)
+		return "", agenterrors.NewTool("repo_map", "resolve project folder", err)
 	}
 	// Allow exact match or a proper subdirectory (with separator).
 	if absRoot != absProjectFolder && !strings.HasPrefix(absRoot, absProjectFolder+string(filepath.Separator)) {
-		return "", agenterrors.NewValidation(fmt.Sprintf("directory %q is outside workspace root", rootDir), nil)
+		return "", agenterrors.NewValidation(fmt.Sprintf("directory %q is outside project folder", rootDir), nil)
 	}
 
 	a.Logger().Debug("Generating repo map for directory: %s\n", rootDir)

@@ -31,8 +31,8 @@ func registerSyncTxnHumaOperations(api huma.API, ws *ReactWebServer) {
 		OperationID: "txnPush",
 		Method:      http.MethodPost,
 		Path:        "/api/txn/push",
-		Summary:     "Apply a push delta manifest to the workspace.",
-		Description: "Applies the browser→container delta manifest in the body to the request's workspace. A partial apply is still reported (200) with the per-file outcomes so the platform can reason about it.",
+		Summary:     "Apply a push delta manifest to the project folder.",
+		Description: "Applies the browser→container delta manifest in the body to the request's project folder. A partial apply is still reported (200) with the per-file outcomes so the platform can reason about it.",
 		Tags:        []string{"sync/txn"},
 	}, ws.txnPushHumaHandler)
 
@@ -40,8 +40,8 @@ func registerSyncTxnHumaOperations(api huma.API, ws *ReactWebServer) {
 		OperationID: "txnRun",
 		Method:      http.MethodPost,
 		Path:        "/api/txn/run",
-		Summary:     "Execute a command in the workspace.",
-		Description: "Executes the command in the body in the request's workspace, in its own process group and bounded by its own timeout so a client hang-up cannot strand it.",
+		Summary:     "Execute a command in the project folder.",
+		Description: "Executes the command in the body in the request's project folder, in its own process group and bounded by its own timeout so a client hang-up cannot strand it.",
 		Tags:        []string{"sync/txn"},
 	}, ws.txnRunHumaHandler)
 
@@ -49,8 +49,8 @@ func registerSyncTxnHumaOperations(api huma.API, ws *ReactWebServer) {
 		OperationID: "txnStatus",
 		Method:      http.MethodGet,
 		Path:        "/api/txn/status",
-		Summary:     "Report the workspace's working-tree preflight.",
-		Description: "Returns the read-only working-tree preflight for the request's workspace. This is the read-only half of the transaction surface: it is reachable unauthenticated (GET/HEAD pass through the auth middleware) and never mutates.",
+		Summary:     "Report the project folder's working-tree preflight.",
+		Description: "Returns the read-only working-tree preflight for the request's project folder. This is the read-only half of the transaction surface: it is reachable unauthenticated (GET/HEAD pass through the auth middleware) and never mutates.",
 		Tags:        []string{"sync/txn"},
 	}, ws.txnStatusHumaHandler)
 
@@ -59,7 +59,7 @@ func registerSyncTxnHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodPost,
 		Path:        "/api/txn/pull",
 		Summary:     "Build the pull delta manifest.",
-		Description: "Builds the container→browser delta manifest for the request's workspace (a read of the tree that is detached from request cancellation so a client hang-up cannot tear the encoding down).",
+		Description: "Builds the container→browser delta manifest for the request's project folder (a read of the tree that is detached from request cancellation so a client hang-up cannot tear the encoding down).",
 		Tags:        []string{"sync/txn"},
 	}, ws.txnPullHumaHandler)
 
@@ -67,8 +67,8 @@ func registerSyncTxnHumaOperations(api huma.API, ws *ReactWebServer) {
 		OperationID: "syncStatus",
 		Method:      http.MethodGet,
 		Path:        "/api/sync",
-		Summary:     "Report the workspace git reconciliation status.",
-		Description: "Returns the workspace git reconciliation report (the same JSON `sprout sync` prints). GET/HEAD are status-only and never pull: the pull query parameter is deliberately ignored on read requests because they pass through the auth middleware unauthenticated.",
+		Summary:     "Report the project folder git reconciliation status.",
+		Description: "Returns the project folder git reconciliation report (the same JSON `sprout sync` prints). GET/HEAD are status-only and never pull: the pull query parameter is deliberately ignored on read requests because they pass through the auth middleware unauthenticated.",
 		Tags:        []string{"sync/txn"},
 	}, ws.syncStatusHumaHandler)
 
@@ -76,8 +76,8 @@ func registerSyncTxnHumaOperations(api huma.API, ws *ReactWebServer) {
 		OperationID: "syncPull",
 		Method:      http.MethodPost,
 		Path:        "/api/sync",
-		Summary:     "Pull and reconcile the workspace git state.",
-		Description: "Returns the workspace git reconciliation report and, by default, pulls (POST is the only method that may pull). `pull=0` degrades the call to status-only. The pull runs detached from request cancellation so a client hang-up cannot strand git.",
+		Summary:     "Pull and reconcile the project folder git state.",
+		Description: "Returns the project folder git reconciliation report and, by default, pulls (POST is the only method that may pull). `pull=0` degrades the call to status-only. The pull runs detached from request cancellation so a client hang-up cannot strand git.",
 		Tags:        []string{"sync/txn"},
 	}, ws.syncPullHumaHandler)
 
@@ -86,7 +86,7 @@ func registerSyncTxnHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodPost,
 		Path:        "/api/sync/op",
 		Summary:     "Apply a single file-sync operation.",
-		Description: "Applies a single file-sync operation (the body's `op`) to the workspace, updating the agent's tracked file metadata. Conflicts are reported with 409.",
+		Description: "Applies a single file-sync operation (the body's `op`) to the project folder, updating the agent's tracked file metadata. Conflicts are reported with 409.",
 		Tags:        []string{"sync/txn"},
 	}, ws.syncOpHumaHandler)
 
@@ -95,7 +95,7 @@ func registerSyncTxnHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodPost,
 		Path:        "/api/sync/batch",
 		Summary:     "Apply a batch of file-sync operations.",
-		Description: "Applies a batch of file-sync operations (the body's `ops`) to the workspace and returns the per-operation results.",
+		Description: "Applies a batch of file-sync operations (the body's `ops`) to the project folder and returns the per-operation results.",
 		Tags:        []string{"sync/txn"},
 	}, ws.syncBatchHumaHandler)
 
@@ -104,7 +104,7 @@ func registerSyncTxnHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodGet,
 		Path:        "/api/sync/status",
 		Summary:     "Report the agent's file-sync state.",
-		Description: "Returns the current file-sync state (the agent's tracked files) for the client's workspace.",
+		Description: "Returns the current file-sync state (the agent's tracked files) for the client's project folder.",
 		Tags:        []string{"sync/txn"},
 	}, ws.syncAgentStatusHumaHandler)
 
@@ -112,7 +112,7 @@ func registerSyncTxnHumaOperations(api huma.API, ws *ReactWebServer) {
 		OperationID: "lifecycleActivity",
 		Method:      http.MethodGet,
 		Path:        "/api/lifecycle/activity",
-		Summary:     "Report whether the workspace is busy and when it was last used.",
+		Summary:     "Report whether the project folder is busy and when it was last used.",
 		Description: "Returns busy (any in-flight query, running automation or background task, or a prepare-stop checkpoint in progress), the busy reasons, the active query count, the last user and agent activity timestamps (RFC 3339 UTC, null when none since start) and whether the daemon still accepts work. Read-only; authenticated like GET /api/sync.",
 		Tags:        []string{"sync/txn"},
 	}, ws.lifecycleActivityHumaHandler)
@@ -121,7 +121,7 @@ func registerSyncTxnHumaOperations(api huma.API, ws *ReactWebServer) {
 		OperationID: "lifecyclePrepareStop",
 		Method:      http.MethodPost,
 		Path:        "/api/lifecycle/prepare-stop",
-		Summary:     "Drain the workspace before it stops.",
+		Summary:     "Drain the project folder before it stops.",
 		Description: "Bounded by deadline_seconds (default 60): stops accepting new work, interrupts in-flight runs (cancelling any left at the deadline), persists chat sessions, checkpoints uncommitted work to refs/sprout/wip/<unix-ts> and refs/sprout/wip/latest without touching HEAD, the index or the working tree, and syncs the filesystem. Idempotent: later calls return the first call's result.",
 		Tags:        []string{"sync/txn"},
 	}, ws.lifecyclePrepareStopHumaHandler)
@@ -130,7 +130,7 @@ func registerSyncTxnHumaOperations(api huma.API, ws *ReactWebServer) {
 		OperationID: "lifecycleNotice",
 		Method:      http.MethodPost,
 		Path:        "/api/lifecycle/notice",
-		Summary:     "Warn connected clients that the workspace will stop.",
+		Summary:     "Warn connected clients that the project folder will stop.",
 		Description: "Relays a workspace_stopping event ({reason, at, deadline_seconds}) to every connected client so the UI can warn before a timer-driven stop. Does not change daemon state.",
 		Tags:        []string{"sync/txn"},
 	}, ws.lifecycleNoticeHumaHandler)

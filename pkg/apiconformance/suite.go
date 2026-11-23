@@ -20,7 +20,7 @@ const defaultTimeout = 10 * time.Second
 // from writing to a real project folder: mutating checks are only ever run against a
 // project folder the caller declared disposable.
 var errMutatingRequiresDisposable = errors.New(
-	"apiconformance: RunMutating requires an explicitly disposable workspace; set one with WithDisposableWorkspace")
+	"apiconformance: RunMutating requires an explicitly disposable project folder; set one with WithDisposableProjectFolder")
 
 // Option configures a Suite. Options are applied in order by New.
 type Option func(*Suite)

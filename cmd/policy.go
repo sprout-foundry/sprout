@@ -20,7 +20,7 @@ var policyCmd = &cobra.Command{
 	Use:   "policy",
 	Short: "Manage shell permission policy",
 	Long: `Manage the shell permission policy: list, add, remove, import, export,
-and trust workspace overlay configurations.
+and trust project folder overlay configurations.
 
 The policy system controls which shell commands require agent approval.
 Patterns define safe (auto-approved) and dangerous (gated) command prefixes.`,
@@ -33,7 +33,7 @@ Patterns define safe (auto-approved) and dangerous (gated) command prefixes.`,
 var policyListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "Show the effective shell policy",
-	Long:  `Display a summary of the current shell policy configuration, including user-defined patterns and the workspace overlay mode.`,
+	Long:  `Display a summary of the current shell policy configuration, including user-defined patterns and the project folder overlay mode.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		config, err := configuration.Load()
 		if err != nil {
@@ -72,7 +72,7 @@ var policyListCmd = &cobra.Command{
 		if mode == "" {
 			mode = "tighten_only"
 		}
-		fmt.Printf("Workspace Overlay Mode: %s\n", mode)
+		fmt.Printf("Project folder Overlay Mode: %s\n", mode)
 		return nil
 	},
 }

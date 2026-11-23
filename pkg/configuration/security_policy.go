@@ -374,7 +374,7 @@ func CombinedSecurityAssessment(
 		if pathRaw, ok := args["path"].(string); ok && pathRaw != "" {
 			assessment.PathAllowed = policy.IsPathAllowed(pathRaw)
 			if !assessment.PathAllowed {
-				msg := "path denied by workspace security policy"
+				msg := "path denied by project folder security policy"
 				if assessment.OverrideAction != "" {
 					assessment.OverrideAction += "; " + msg
 				} else {

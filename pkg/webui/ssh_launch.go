@@ -41,7 +41,7 @@ func runSSHLoggedCommand(logger *sshLaunchLogger, step, summary string, cmd *exe
 	}
 	if err != nil {
 		logger.Logf("%s error: %v", step, err)
-		return out, newSSHLaunchFailure(step, "SSH workspace setup failed", output, logger)
+		return out, newSSHLaunchFailure(step, "SSH project folder setup failed", output, logger)
 	}
 	logger.Logf("%s completed", step)
 	return out, nil

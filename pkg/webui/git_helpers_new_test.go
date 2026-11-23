@@ -106,12 +106,12 @@ func TestMakeGitRelativePath(t *testing.T) {
 			want: "foo.go",
 		},
 		{
-			name: "absolute in workspace",
+			name: "absolute in project folder",
 			path: osAbs("/workspace/src/foo.go"), projectFolder: osAbs("/workspace"),
 			want: "src/foo.go",
 		},
 		{
-			name: "absolute outside workspace",
+			name: "absolute outside project folder",
 			path: osAbs("/other/foo.go"), projectFolder: osAbs("/workspace"),
 			want: osAbs("/other/foo.go"),
 		},

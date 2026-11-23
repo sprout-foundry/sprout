@@ -48,7 +48,7 @@ func (m *launchdManager) Diagnose() error {
 		// selection rather than silently inheriting home, so a stale plist
 		// means the browser root is wrong, not just the project folder.
 		if !strings.Contains(string(plistContent), "SPROUT_DAEMON_ROOT") {
-			console.GlyphWarning.Fprintln(os.Stdout, "  STALE plist: missing SPROUT_DAEMON_ROOT — workspace browser may start in the wrong directory.")
+			console.GlyphWarning.Fprintln(os.Stdout, "  STALE plist: missing SPROUT_DAEMON_ROOT — project folder browser may start in the wrong directory.")
 			fmt.Println("      Reinstall to regenerate: sprout service uninstall && sprout service install")
 		}
 		diagnoseInlinedSecrets(os.Stdout, plistContent)

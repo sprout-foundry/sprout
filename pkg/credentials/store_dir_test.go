@@ -66,7 +66,7 @@ func TestLoadStoreFromDir_EncryptedWithDirKey(t *testing.T) {
 	isolateToDir(t, globalDir)
 	ambient, _, err := GetFromActiveBackend("mcp/foundry/header/Authorization")
 	require.NoError(t, err)
-	assert.Empty(t, ambient, "the ambient scope must not see the workspace store")
+	assert.Empty(t, ambient, "the ambient scope must not see the project folder store")
 
 	store, err := LoadStoreFromDir(wsDir)
 	require.NoError(t, err)

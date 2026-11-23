@@ -197,7 +197,7 @@ func TestSetProjectFolder(t *testing.T) {
 
 	agent.SetProjectFolder("/tmp/myproject")
 	if got := agent.GetProjectFolder(); got != "/tmp/myproject" {
-		t.Errorf("GetWorkspaceRoot = %q, want %q", got, "/tmp/myproject")
+		t.Errorf("GetProjectFolder = %q, want %q", got, "/tmp/myproject")
 	}
 }
 

@@ -94,7 +94,7 @@ func TestDottedWriteDoesNotClobberSiblings(t *testing.T) {
 		t.Errorf("AuditLogDir = %q, want /tmp/audit", got.AuditLogDir)
 	}
 	if len(got.ProjectFolderAllowlist) != 2 {
-		t.Errorf("WorkspaceAllowlist = %v, want 2 entries", got.ProjectFolderAllowlist)
+		t.Errorf("ProjectFolderAllowlist = %v, want 2 entries", got.ProjectFolderAllowlist)
 	}
 }
 

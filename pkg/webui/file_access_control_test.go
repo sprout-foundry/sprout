@@ -13,7 +13,7 @@ func TestIsWithinProjectFolder_SamePath(t *testing.T) {
 	root := "/home/user/project"
 
 	if !isWithinProjectFolder(root, root) {
-		t.Error("expected same path to be within workspace")
+		t.Error("expected same path to be within project folder")
 	}
 }
 
@@ -21,10 +21,10 @@ func TestIsWithinProjectFolder_ChildPath(t *testing.T) {
 	root := "/home/user/project"
 
 	if !isWithinProjectFolder("/home/user/project/src/main.go", root) {
-		t.Error("expected child path to be within workspace")
+		t.Error("expected child path to be within project folder")
 	}
 	if !isWithinProjectFolder("/home/user/project/a/b/c/deep.txt", root) {
-		t.Error("expected deep child path to be within workspace")
+		t.Error("expected deep child path to be within project folder")
 	}
 }
 
@@ -32,13 +32,13 @@ func TestIsWithinProjectFolder_OutsideProjectFolder(t *testing.T) {
 	root := "/home/user/project"
 
 	if isWithinProjectFolder("/home/user/other", root) {
-		t.Error("expected sibling directory to be outside workspace")
+		t.Error("expected sibling directory to be outside project folder")
 	}
 	if isWithinProjectFolder("/tmp/evil", root) {
-		t.Error("expected /tmp path to be outside workspace")
+		t.Error("expected /tmp path to be outside project folder")
 	}
 	if isWithinProjectFolder("/etc/passwd", root) {
-		t.Error("expected /etc/passwd to be outside workspace")
+		t.Error("expected /etc/passwd to be outside project folder")
 	}
 }
 
@@ -47,10 +47,10 @@ func TestIsWithinProjectFolder_PathTraversal(t *testing.T) {
 
 	// Path with ".." prefix
 	if isWithinProjectFolder("/home/user/project/../other", root) {
-		t.Error("expected path with '..' to be outside workspace")
+		t.Error("expected path with '..' to be outside project folder")
 	}
 	if isWithinProjectFolder("/home/user/project/src/../../other", root) {
-		t.Error("expected path with '..' traversal to be outside workspace")
+		t.Error("expected path with '..' traversal to be outside project folder")
 	}
 }
 
@@ -63,19 +63,19 @@ func TestIsWithinProjectFolder_RealPaths(t *testing.T) {
 	inside := filepath.Join(projectFolder, "src", "file.go")
 	os.MkdirAll(filepath.Dir(inside), 0755)
 	if !isWithinProjectFolder(inside, projectFolder) {
-		t.Error("expected real child path to be within workspace")
+		t.Error("expected real child path to be within project folder")
 	}
 
 	// Same as project folder
 	if !isWithinProjectFolder(projectFolder, projectFolder) {
-		t.Error("expected workspace root to be within itself")
+		t.Error("expected project folder to be within itself")
 	}
 
 	// Outside project folder
 	outside := filepath.Join(tmpDir, "other")
 	os.MkdirAll(outside, 0755)
 	if isWithinProjectFolder(outside, projectFolder) {
-		t.Error("expected sibling directory to be outside workspace")
+		t.Error("expected sibling directory to be outside project folder")
 	}
 }
 

@@ -101,7 +101,7 @@ func TestReadFileHandlerPromptFlow(t *testing.T) {
 	args := map[string]interface{}{"path": outside}
 	res, err := h.Execute(context.Background(), env, args)
 	if err != nil || res.IsError {
-		t.Fatalf("approved off-workspace read failed: err=%v output=%.120s", err, res.Output)
+		t.Fatalf("approved off-project-folder read failed: err=%v output=%.120s", err, res.Output)
 	}
 	if approved.called != 1 {
 		t.Fatalf("expected prompter called once, got %d", approved.called)
@@ -118,10 +118,10 @@ func TestReadFileHandlerPromptFlow(t *testing.T) {
 	}
 	res2, err2 := h.Execute(context.Background(), env2, args)
 	if err2 == nil && !res2.IsError {
-		t.Fatal("denied off-workspace read must error")
+		t.Fatal("denied off-project-folder read must error")
 	}
 	if !strings.Contains(err2.Error(), "outside working directory") && !strings.Contains(res2.Output, "outside working directory") {
-		t.Fatalf("expected off-workspace error, got err=%v out=%.120s", err2, res2.Output)
+		t.Fatalf("expected off-project-folder error, got err=%v out=%.120s", err2, res2.Output)
 	}
 
 	env3 := ToolEnv{
@@ -130,7 +130,7 @@ func TestReadFileHandlerPromptFlow(t *testing.T) {
 	}
 	res3, err3 := h.Execute(context.Background(), env3, args)
 	if err3 == nil && !res3.IsError {
-		t.Fatal("nil-prompter off-workspace read must keep raw error behavior")
+		t.Fatal("nil-prompter off-project-folder read must keep raw error behavior")
 	}
 }
 
@@ -147,7 +147,7 @@ func TestWriteFileHandlerPromptFlow(t *testing.T) {
 	args := map[string]interface{}{"path": target, "content": "written-by-test"}
 	res, err := h.Execute(context.Background(), env, args)
 	if err != nil || res.IsError {
-		t.Fatalf("approved off-workspace write failed: err=%v out=%.120s", err, res.Output)
+		t.Fatalf("approved off-project-folder write failed: err=%v out=%.120s", err, res.Output)
 	}
 	if approved.lastMode != "write" {
 		t.Fatalf("expected write mode, got %s", approved.lastMode)

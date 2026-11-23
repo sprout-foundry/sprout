@@ -175,7 +175,7 @@ func TestHandleGetProvenanceSettings_TopLevelKey_FromProjectFolder(t *testing.T)
 
 	// Top-level key should be from project folder
 	assert.Equal(t, "workspace", sources["reasoning_effort"],
-		"top-level key reasoning_effort should come from workspace")
+		"top-level key reasoning_effort should come from project folder")
 }
 
 func TestHandleGetProvenanceSettings_NestedKey_FromProjectFolder(t *testing.T) {
@@ -211,9 +211,9 @@ func TestHandleGetProvenanceSettings_NestedKey_FromProjectFolder(t *testing.T) {
 
 	// Nested keys should be from project folder
 	assert.Equal(t, "workspace", sources["api_timeouts.connection_timeout_sec"],
-		"nested key api_timeouts.connection_timeout_sec should come from workspace")
+		"nested key api_timeouts.connection_timeout_sec should come from project folder")
 	assert.Equal(t, "workspace", sources["api_timeouts.chunk_timeout_sec"],
-		"nested key api_timeouts.chunk_timeout_sec should come from workspace")
+		"nested key api_timeouts.chunk_timeout_sec should come from project folder")
 }
 
 func TestHandleGetProvenanceSettings_SessionOverridesOverrideEverything(t *testing.T) {
@@ -248,7 +248,7 @@ func TestHandleGetProvenanceSettings_SessionOverridesOverrideEverything(t *testi
 
 	// Session override should win over project folder
 	assert.Equal(t, "session", sources["reasoning_effort"],
-		"session override for reasoning_effort should override workspace")
+		"session override for reasoning_effort should override project folder")
 }
 
 func TestHandleGetProvenanceSettings_NestedSessionOverride(t *testing.T) {
@@ -297,7 +297,7 @@ func TestHandleGetProvenanceSettings_NestedSessionOverride(t *testing.T) {
 
 	// Nested session override should work
 	assert.Equal(t, "session", sources["api_timeouts.connection_timeout_sec"],
-		"nested session override should override workspace")
+		"nested session override should override project folder")
 }
 
 func TestHandleGetProvenanceSettings_NoProjectFolder_HasGlobal(t *testing.T) {
@@ -412,7 +412,7 @@ func TestHandleGetProvenanceSettings_AllThreeLayers(t *testing.T) {
 		"session override should have highest priority")
 	// Project folder override should apply for api_timeouts (not overridden by session)
 	assert.Equal(t, "workspace", sources["api_timeouts.connection_timeout_sec"],
-		"workspace override should apply when session doesn't override")
+		"project folder override should apply when session doesn't override")
 }
 
 func TestHandleGetProvenanceSettings_NilSessionOverrides(t *testing.T) {
@@ -469,5 +469,5 @@ func TestHandleGetProvenanceSettings_ProjectFolderMatchesGlobal(t *testing.T) {
 	require.True(t, ok, "sources should be present")
 
 	assert.Equal(t, "global", sources["reasoning_effort"],
-		"identical workspace value should not claim workspace provenance")
+		"identical project folder value should not claim project folder provenance")
 }

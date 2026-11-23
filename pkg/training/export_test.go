@@ -835,7 +835,7 @@ func TestExportSessions_WithAllAndMinFilters(t *testing.T) {
 
 	workingDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workingDir, 0o755); err != nil {
-		t.Fatalf("mkdir workspace: %v", err)
+		t.Fatalf("mkdir project folder: %v", err)
 	}
 
 	qualifying := sampleConversationState("qualifying")
@@ -862,7 +862,7 @@ func TestExportSessions_WithAllAndMinFilters(t *testing.T) {
 
 	for _, state := range []agent.ConversationState{qualifying, filteredByActions, filteredByTurns} {
 		if err := os.MkdirAll(state.WorkingDirectory, 0o755); err != nil {
-			t.Fatalf("mkdir state workspace: %v", err)
+			t.Fatalf("mkdir state project folder: %v", err)
 		}
 		if err := agent.WriteTestSessionFile(stateDir, state.SessionID, state.WorkingDirectory, &state); err != nil {
 			t.Fatalf("WriteTestSessionFile(%s): %v", state.SessionID, err)
@@ -1297,7 +1297,7 @@ func TestExportSessions_StructuredToolsEndToEnd(t *testing.T) {
 
 	workingDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workingDir, 0o755); err != nil {
-		t.Fatalf("mkdir workspace: %v", err)
+		t.Fatalf("mkdir project folder: %v", err)
 	}
 
 	state := sampleConversationState("struct-test")

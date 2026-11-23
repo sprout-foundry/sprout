@@ -117,7 +117,7 @@ func TestDevSpaceDirRejectsPathTricks(t *testing.T) {
 	t.Setenv("SPROUT_STATE_DIR", t.TempDir())
 	for _, bad := range []string{"", "..", "../x", "a/b", `a\b`, ".hidden", strings.Repeat("a", 200)} {
 		if _, err := devSpaceDir(bad); err == nil {
-			t.Errorf("workspaceDir(%q) must be rejected", bad)
+			t.Errorf("projectFolderDir(%q) must be rejected", bad)
 		}
 	}
 	if _, err := devSpaceDir("6f1c2a3e-1b2c-4d5e-8f90-123456789abc"); err != nil {

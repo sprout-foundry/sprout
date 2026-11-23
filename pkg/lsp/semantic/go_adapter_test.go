@@ -3006,7 +3006,7 @@ func TestSessionPoolConcurrentAccess(t *testing.T) {
 	}
 
 	if created != 3 {
-		t.Errorf("expected 3 adapters (one per workspace), got %d", created)
+		t.Errorf("expected 3 adapters (one per project folder), got %d", created)
 	}
 }
 

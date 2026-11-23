@@ -23,19 +23,19 @@ func TestClassifyPathAccess(t *testing.T) {
 		want PathTier
 	}{
 		{
-			name: "inside workspace",
+			name: "inside project folder",
 			path: "/home/alan/proj/src/main.go",
 			cwd:  projectFolder,
 			want: PathTierProjectFolder,
 		},
 		{
-			name: "workspace root itself",
+			name: "project folder itself",
 			path: projectFolder,
 			cwd:  projectFolder,
 			want: PathTierProjectFolder,
 		},
 		{
-			name: "system /etc always sensitive (CWD in workspace)",
+			name: "system /etc always sensitive (CWD in project folder)",
 			path: "/etc/passwd",
 			cwd:  projectFolder,
 			want: PathTierSensitive,
@@ -151,7 +151,7 @@ func TestClassifyPathAccess_NormalizationStripsTrailingSlash(t *testing.T) {
 	}
 	got := ClassifyPathAccess("/home/alan/proj/", "/home/alan/proj/", "/home/alan", "/home/alan/proj/")
 	if got != PathTierProjectFolder {
-		t.Errorf("trailing slashes broke workspace detection: got %v", got)
+		t.Errorf("trailing slashes broke project folder detection: got %v", got)
 	}
 }
 
@@ -171,6 +171,6 @@ func TestClassifyPathAccess_Windows(t *testing.T) {
 	}
 	// Project folder.
 	if got := ClassifyPathAccess(filepath.Join(projectFolder, "main.go"), projectFolder, home, projectFolder); got != PathTierProjectFolder {
-		t.Errorf("path inside workspace should be Workspace, got %v", got)
+		t.Errorf("path inside project folder should be Project folder, got %v", got)
 	}
 }

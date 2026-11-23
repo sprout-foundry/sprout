@@ -24,7 +24,7 @@ func resolveParallelTaskPersonas(ctx context.Context, a *Agent, tasks []Subagent
 	}
 	projectFolder, err := filepath.Abs(a.currentProjectFolder())
 	if err != nil {
-		return agenterrors.NewConfig("failed to resolve absolute workspace path", err)
+		return agenterrors.NewConfig("failed to resolve absolute project folder path", err)
 	}
 
 	var reviewContext *string

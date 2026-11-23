@@ -31,7 +31,7 @@ func newTestWebServer(t *testing.T) (*ReactWebServer, *TerminalManager) {
 	// Project folder must be within daemonRoot to pass the security check in setClientProjectFolder.
 	projectFolderDir := daemonRoot // daemonRoot itself is always allowed
 	if _, err := ws.setClientProjectFolder("test-client", projectFolderDir); err != nil {
-		t.Fatalf("setClientWorkspaceRoot: %v", err)
+		t.Fatalf("setClientProjectFolder: %v", err)
 	}
 
 	// After setClientProjectFolder, the client context has its own TerminalManager.

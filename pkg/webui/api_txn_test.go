@@ -242,7 +242,7 @@ func TestHandleAPITxnPush_PartialIsStill200(t *testing.T) {
 		t.Fatalf("skipped = %+v", result.Skipped)
 	}
 	if _, err := os.Stat(filepath.Join(filepath.Dir(dir), "escape.txt")); err == nil {
-		t.Fatal("the traversal escaped the workspace root")
+		t.Fatal("the traversal escaped the project folder")
 	}
 }
 
@@ -339,7 +339,7 @@ func TestHandleAPITxnRun_AbsoluteWorkdirIs400(t *testing.T) {
 	rec := postTxnJSON(t, ws, "/api/txn/run",
 		`{"command": "pwd", "timeout_seconds": 5, "workdir": "/etc"}`)
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400 — a run workdir is confined to the workspace", rec.Code)
+		t.Fatalf("status = %d, want 400 — a run workdir is confined to the project folder", rec.Code)
 	}
 }
 

@@ -144,7 +144,7 @@ func Draw(ctx context.Context, stream StreamText, req Request, publish func(even
 			direction = Directions[rand.IntN(len(Directions))]
 		}
 		d.steer += "\n\nFor this one, lean toward a " + direction + " look, where it suits the idea."
-		if comps := kit.CompositionIDs(); len(comps) > 0 {
+		if comps := nudgeCompositions(); len(comps) > 0 {
 			d.steer += " Consider a `" + comps[rand.IntN(len(comps))] + "` first screen if the kit you choose offers it."
 		}
 		d.steer += " Name only a kit, palette, composition and font from the lists.\n"
@@ -320,4 +320,17 @@ func steerRequest(avoid []kit.Choice, fresh bool, current string) string {
 		return out + ".\n"
 	}
 	return out + " — unless the idea plainly needs one of them.\n"
+}
+
+// nudgeCompositions are the compositions a draw may be nudged toward: all but
+// the art panel, which only ever comes from the drawing choosing it, so a
+// nudge never pulls a first screen away from the business's own content.
+func nudgeCompositions() []string {
+	var out []string
+	for _, id := range kit.CompositionIDs() {
+		if id != "art" {
+			out = append(out, id)
+		}
+	}
+	return out
 }

@@ -55,7 +55,8 @@
       "zai-org/GLM-5.2-Fast",
       "zai-org/GLM-5.3",
       "tencent/Hy4",
-      "Qwen/Qwen3.5-27B-TEE"
+      "Qwen/Qwen3.5-27B-TEE",
+      "Qwen/Qwen4-Max"
     ],
     "default_context_limit": 262144,
     "default_model": "deepseek-ai/DeepSeek-V3.2-TEE",
@@ -284,13 +285,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.03,
+        "cached_input_cost": 0.02,
         "context_length": 1048576,
         "description": "DeepSeek V4.1 Flash 1017 is DeepSeek's fast multimodal model with vision input, thinking mode, and a 1M context window on Chutes public compute",
         "id": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
-        "input_cost": 0.3,
+        "input_cost": 0.195,
         "name": "DeepSeek V4.1 Flash 1017",
-        "output_cost": 1.2,
+        "output_cost": 0.78,
         "tags": [
           "vision",
           "tools",
@@ -327,13 +328,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.245,
+        "cached_input_cost": 0.16,
         "context_length": 1048576,
         "description": "GLM-5.3 is Z.AI's flagship open-weights coding and agentic reasoning model with a 1M context window on Chutes public compute",
         "id": "zai-org/GLM-5.3",
-        "input_cost": 1.225,
+        "input_cost": 0.8,
         "name": "GLM-5.3",
-        "output_cost": 3.85,
+        "output_cost": 2.5,
         "tags": [
           "coding",
           "tools",
@@ -361,6 +362,20 @@
         "input_cost": 0.2,
         "name": "Qwen3.5 27B (TEE)",
         "output_cost": 1.75,
+        "tags": [
+          "vision",
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.075,
+        "context_length": 1000000,
+        "description": "Qwen4 Max is Qwen's flagship 1M-context mixture-of-experts model with text, image, and video input on Chutes public compute",
+        "id": "Qwen/Qwen4-Max",
+        "input_cost": 1.5,
+        "name": "Qwen4 Max",
+        "output_cost": 4.5,
         "tags": [
           "vision",
           "tools",

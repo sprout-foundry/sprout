@@ -8482,6 +8482,77 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.15,
+        "context_length": 1048576,
+        "description": "Gemini 4 Neon is a fast, mid-priced model in the Gemini 4 family from Google, built for coding and agentic work. It is suited for repository and terminal coding, web builds, multi-turn tool use and multimodal STEM problems, and is positioned as a step up from Gemini 4 Hydrogen that targets Gemini 4 Carbon quality at higher speed and lower cost. It supports long decode of up to 1M output tokens through continuation, and controls thinking depth with low, medium, high and xhigh reasoning effort.",
+        "id": "google/gemini-4-neon",
+        "input_cost": 3,
+        "name": "Google: Gemini 4 Neon",
+        "output_cost": 15,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.075,
+        "context_length": 1048576,
+        "description": "Gemini 4 Neon is a fast, mid-priced model in the Gemini 4 family from Google, built for coding and agentic work. It is suited for repository and terminal coding, web builds, multi-turn tool use and multimodal STEM problems, and is positioned as a step up from Gemini 4 Hydrogen that targets Gemini 4 Carbon quality at higher speed and lower cost. It supports long decode of up to 1M output tokens through continuation, and controls thinking depth with low, medium, high and xhigh reasoning effort.",
+        "id": "google/gemini-4-neon:batch",
+        "input_cost": 1.5,
+        "name": "Google: Gemini 4 Neon (batch)",
+        "output_cost": 7.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 128000,
+        "description": "Pixtral Large 2502 is the February 2025 version of Mistral AI's large multimodal model, following [Pixtral Large 2411](https://openrouter.ai/mistralai/pixtral-large-2411). It accepts text and image input, including documents, charts, and natural images, and returns text. It has a 128,000-token context window.",
+        "id": "mistralai/pixtral-large-2502",
+        "input_cost": 2,
+        "name": "Mistral: Pixtral Large 2502",
+        "output_cost": 6,
+        "tags": [
+          "vision"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0375,
+        "context_length": 262144,
+        "description": "DaisyRose 27B is an open-weight multimodal reasoning model from RadixArk, trained from [Qwen3.8 27B](https://openrouter.ai/qwen/qwen3.8-27b) using reinforcement learning only on long-horizon agent tasks, with no supervised fine-tuning or distillation.",
+        "id": "radixark/daisyrose-27b",
+        "input_cost": 0.15,
+        "name": "RadixArk: DaisyRose 27B",
+        "output_cost": 1.875,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.015,
+        "context_length": 1048576,
+        "description": "Inkling 2 Mini is an open-weight multimodal looped transformer from Thinking Machines Lab, with 3.4B active parameters out of 26.4B total (MoE).",
+        "id": "thinkingmachines/inkling-2-mini",
+        "input_cost": 0.075,
+        "name": "Thinking Machines: Inkling 2 Mini",
+        "output_cost": 0.3,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

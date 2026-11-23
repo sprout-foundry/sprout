@@ -471,6 +471,20 @@
           "vision",
           "reasoning"
         ]
+      },
+      {
+        "cached_input_cost": 0.042,
+        "context_length": 1048576,
+        "description": "Hy4 - Tencent's flagship open-weight MoE model (770B total, 49B active) with 1M context, image understanding and a built-in draft model for faster decoding",
+        "id": "hy4",
+        "input_cost": 0.834,
+        "name": "Hy4",
+        "output_cost": 2.501,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning"
+        ]
       }
     ]
   },

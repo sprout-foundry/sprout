@@ -8540,13 +8540,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.02,
+        "cached_input_cost": 0.015,
         "context_length": 1048576,
         "description": "Inkling 2 Mini is an open-weight multimodal looped transformer from Thinking Machines Lab, with 3.4B active parameters out of 26.4B total (MoE).",
         "id": "thinkingmachines/inkling-2-mini",
-        "input_cost": 0.1,
+        "input_cost": 0.075,
         "name": "Thinking Machines: Inkling 2 Mini",
-        "output_cost": 0.4,
+        "output_cost": 0.3,
         "tags": [
           "tools",
           "vision",

@@ -169,7 +169,7 @@
         "description": "Qwen3-235B-A22B-Instruct-2507 is the updated version of the Qwen3-235B-A22B non-thinking mode, featuring Significant improvements in general capabilities, including instruction following, logical reasoning, text comprehension, mathematics, science, coding and tool usage.  ",
         "id": "Qwen/Qwen3-235B-A22B-Instruct-2507",
         "input_cost": 0.09,
-        "name": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+        "name": "Qwen3 235B A22B Instruct 2507",
         "output_cost": 0.55,
         "tags": [
           "tools",
@@ -208,7 +208,7 @@
         "description": "Qwen3-Coder-480B-A35B-Instruct is the Qwen3's most agentic code model, featuring Significant Performance on Agentic Coding, Agentic Browser-Use and other foundational coding tasks, achieving results comparable to Claude Sonnet.",
         "id": "Qwen/Qwen3-Coder-480B-A35B-Instruct-Turbo",
         "input_cost": 0.3,
-        "name": "Qwen/Qwen3-Coder-480B-A35B-Instruct-Turbo",
+        "name": "Qwen3 Coder 480B A35B Instruct Turbo",
         "output_cost": 1,
         "tags": [
           "tools",
@@ -479,7 +479,7 @@
         "description": "The DeepSeek R1 model has undergone a minor version upgrade, with the current version being DeepSeek-R1-0528.",
         "id": "deepseek-ai/DeepSeek-R1-0528",
         "input_cost": 0.5,
-        "name": "deepseek-ai/DeepSeek-R1-0528",
+        "name": "DeepSeek R1 0528",
         "output_cost": 2.15,
         "tags": [
           "tools",
@@ -492,7 +492,7 @@
         "description": "DeepSeek-V3, a strong Mixture-of-Experts (MoE) language model with 671B total parameters with 37B activated for each token. To achieve efficient inference and cost-effective training, DeepSeek-V3 adopts Multi-head Latent Attention (MLA) and DeepSeekMoE architectures, which were thoroughly validated in DeepSeek-V2. ",
         "id": "deepseek-ai/DeepSeek-V3",
         "input_cost": 0.32,
-        "name": "deepseek-ai/DeepSeek-V3",
+        "name": "DeepSeek V3",
         "output_cost": 0.89,
         "tags": [
           "tools",
@@ -720,7 +720,7 @@
         "description": "Ultra speed version of gemma-4-31B-it",
         "id": "google/gemma-4-31B-it-Ultra",
         "input_cost": 0.27,
-        "name": "google/gemma-4-31B-it-Ultra",
+        "name": "Gemma 4 31B IT Ultra",
         "output_cost": 0.76,
         "tags": [
           "tools",
@@ -747,7 +747,7 @@
         "description": "Llama 3.3-70B Turbo is a highly optimized version of the Llama 3.3-70B model, utilizing FP8 quantization to deliver significantly faster inference speeds with a minor trade-off in accuracy. The model is designed to be helpful, safe, and flexible, with a focus on responsible deployment and mitigating potential risks such as bias, toxicity, and misinformation. It achieves state-of-the-art performance on various benchmarks, including conversational tasks, language translation, and text generation.",
         "id": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
         "input_cost": 0.1,
-        "name": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        "name": "Llama 3.3 70B Instruct Turbo",
         "output_cost": 0.32,
         "tags": [
           "tools",
@@ -759,7 +759,7 @@
         "description": "The Llama 4 collection of models are natively multimodal AI models that enable text and multimodal experiences. These models leverage a mixture-of-experts architecture to offer industry-leading performance in text and image understanding. Llama 4 Scout, a 17 billion parameter model with 16 experts",
         "id": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
         "input_cost": 0.1,
-        "name": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+        "name": "Llama 4 Scout 17B 16E Instruct",
         "output_cost": 0.3,
         "tags": [
           "tools",
@@ -1405,7 +1405,7 @@
         "description": "DaisyRose-27B is RadixArk's multimodal reasoning model, trained from Qwen3.8-27B with reinforcement learning only on long-horizon agent tasks. It improves on the base model in agentic coding, reasoning and instruction following, with thinking that can be enabled or disabled, image understanding and a 256K-token context.",
         "id": "RadixArk/DaisyRose-27B",
         "input_cost": 0.2,
-        "name": "RadixArk/DaisyRose-27B",
+        "name": "DaisyRose 27B",
         "output_cost": 2.5,
         "tags": [
           "tools",

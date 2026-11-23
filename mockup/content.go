@@ -86,13 +86,18 @@ type frame struct {
 	// fields recorded inside it (lists.go reads both).
 	children            []*frame
 	fieldsAt, fieldsEnd int
+	// heading is the heading above the element where it opens: a list's name.
+	heading string
 }
 
 // Keyed gives every element with text of its own a key and returns the page
 // with its keys and the page's content. Keys already on the page are kept;
 // saved's fields marked as the person's replace the page's text for their
-// keys. The page is otherwise left as written.
+// keys. A picture spot a redraw renamed gets its old key back, so the
+// person's picture stays in it (keepPictureKeys). The page is otherwise left
+// as written.
 func Keyed(doc string, saved *Content) (string, Content) {
+	doc = keepPictureKeys(doc, saved)
 	mine := map[string]Field{}
 	if saved != nil {
 		for _, f := range saved.Fields {
@@ -237,7 +242,7 @@ func Keyed(doc string, saved *Content) (string, Content) {
 				}
 			}
 			f := &frame{tag: tag, tagPiece: len(pieces), token: tok, key: attr(tok, keyAttr), label: attr(tok, labelAttr),
-				screen: attr(tok, "data-screen"), skip: skippedElements[tag] || tag == "textarea", fieldsAt: len(fields)}
+				screen: attr(tok, "data-screen"), skip: skippedElements[tag] || tag == "textarea", fieldsAt: len(fields), heading: heading}
 			if len(stack) > 0 {
 				stack[len(stack)-1].children = append(stack[len(stack)-1].children, f)
 			}
@@ -258,7 +263,7 @@ func Keyed(doc string, saved *Content) (string, Content) {
 				closeFrame(f, j)
 				f.fieldsEnd = len(fields)
 				if !skipping() {
-					if l, ok := markList(f, fields, heading, inNavigation(stack[:j]), listIDs); ok {
+					if l, ok := markList(f, fields, f.heading, inNavigation(stack[:j]), listIDs); ok {
 						lists = append(lists, l)
 						pieces[f.tagPiece] = renderTag(f.token, false)
 					}
@@ -279,6 +284,7 @@ func Keyed(doc string, saved *Content) (string, Content) {
 			pieces = append(pieces, raw)
 		}
 	}
+	renameRepeatedLists(lists, fields)
 	return strings.Join(pieces, ""), Content{Version: ContentVersion, Fields: orderByPage(fields), Lists: lists, Pictures: pictures}
 }
 

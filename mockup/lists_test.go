@@ -112,3 +112,31 @@ func keyOf(t *testing.T, c Content, text string) string {
 	t.Fatalf("no field %q", text)
 	return ""
 }
+
+// A list takes the heading above it, not one inside its items; a table's
+// header row and a pair of single lines are not lists; and a second list
+// under the same heading is named after its items.
+func TestKeyed_ListNoise(t *testing.T) {
+	page := `<!doctype html><html><body><section data-screen="home">
+<h2>Pick your favourite</h2>
+<div class="grid">
+  <div class="card"><h3>Lemon</h3><p>Sharp and light.</p></div>
+  <div class="card"><h3>Chocolate</h3><p>Dark and rich.</p></div>
+  <div class="card"><h3>Orange</h3><p>Gluten free.</p></div>
+</div>
+<h2>Three steps</h2>
+<ol><li>Choose a cake.</li><li>Pick a day.</li><li>Collect it.</li></ol>
+<div class="grid"><div class="card"><h3>Give 48 hours</h3><p>Order ahead.</p></div><div class="card"><h3>Front door</h3><p>Collect at home.</p></div></div>
+<table><thead><tr><th>Ordered</th><th>Cake</th><th>Customer</th></tr></thead></table>
+<div class="row"><p>Hosted by neighbours</p><p>14 Willow Street</p></div>
+</section></body></html>`
+	_, c := Keyed(page, nil)
+	var names []string
+	for _, l := range c.Lists {
+		names = append(names, l.Name)
+	}
+	want := "Pick your favourite|Three steps|Give 48 hours, Front door"
+	if strings.Join(names, "|") != want {
+		t.Fatalf("lists = %q, want %q", names, want)
+	}
+}

@@ -303,8 +303,12 @@ jobs:
       # and pull-requests: read for the GitHub-API diff path. The action's
       # diff has no base on schedule/dispatch events, which would fall back
       # to whole-tree linting against the backlog; on those events diff
-      # since the latest release tag instead via make lint-go-new.
-      if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+      # since the latest release tag instead via make lint-go-new. The same
+      # applies to huge push commits (a squash merge of a 300+ file PR): the
+      # action fetches the diff through the GitHub API, which caps patches
+      # at 300 files (HTTP 406) and silently falls back to whole-tree
+      # linting — so push events use the release-tag diff too.
+      if: github.event_name == 'pull_request'
       uses: golangci/golangci-lint-action@v9
       with:
         # v2.13.2: prebuilt binaries must be built with a Go version >= the
@@ -314,7 +318,7 @@ jobs:
         only-new-issues: true
 
     - name: Lint Go (new code only, since latest release)
-      if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      if: github.event_name != 'pull_request'
       run: |
         rev=$(git describe --tags --match='v*' --abbrev=0)
         make lint-go-new NEW_FROM_REV="$rev"
@@ -489,17 +493,18 @@ jobs:
     - name: Lint Go (new code only)
       # Same new-code gate as the `test` job — see the note there. The
       # action's only-new-issues diff has no base on schedule/dispatch
-      # events, which would fall back to whole-tree linting against the
-      # historical backlog; on those events diff since the latest release
+      # events, and caps API-fetched patches at 300 files (huge squash
+      # pushes 406 and fall back to whole-tree linting against the
+      # historical backlog); those events diff since the latest release
       # tag instead via make lint-go-new.
-      if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+      if: github.event_name == 'pull_request'
       uses: golangci/golangci-lint-action@v9
       with:
         version: v2.13.2
         only-new-issues: true
 
     - name: Lint Go (new code only, since latest release)
-      if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      if: github.event_name != 'pull_request'
       run: |
         rev=$(git describe --tags --match='v*' --abbrev=0)
         make lint-go-new NEW_FROM_REV="$rev"

@@ -242,7 +242,7 @@ test.describe("Escalation — Run in cloud container (ETH-2)", () => {
       page.getByRole("button", { name: "Run as cloud task" }),
     ).toBeVisible({ timeout: 5_000 });
     await expect(
-      page.getByRole("button", { name: "Start Full Workspace" }),
+      page.getByRole("button", { name: "Start a Dev Space" }),
     ).toBeVisible({ timeout: 5_000 });
 
     await txnButton.click();
@@ -368,7 +368,7 @@ test.describe("Escalation — Run in cloud container (ETH-2)", () => {
 
     // Mode B is still the way out when the txn lane is busy.
     await expect(
-      page.getByRole("button", { name: "Start Full Workspace" }),
+      page.getByRole("button", { name: "Start a Dev Space" }),
     ).toBeVisible({ timeout: 5_000 });
 
     await page.unroute(LIST_ROUTE);

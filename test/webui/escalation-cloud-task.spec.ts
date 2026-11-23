@@ -141,7 +141,7 @@ test.describe('Escalation — Run as cloud task (CLOUD-2)', () => {
     await expect(cloudTaskButton).toBeVisible({ timeout: 10_000 });
 
     // The Mode B escape hatch stays available alongside Mode A.
-    await expect(page.getByRole('button', { name: 'Start Full Workspace' })).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole('button', { name: 'Start a Dev Space' })).toBeVisible({ timeout: 5_000 });
 
     await cloudTaskButton.click();
 
@@ -211,7 +211,7 @@ test.describe('Escalation — Run as cloud task (CLOUD-2)', () => {
     await expect(page.getByTestId(TESTIDS['escalation-toast-cloud-task-link'])).toHaveCount(0);
 
     // Mode B is still the way out when Mode A is exhausted.
-    await expect(page.getByRole('button', { name: 'Start Full Workspace' })).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole('button', { name: 'Start a Dev Space' })).toBeVisible({ timeout: 5_000 });
 
     await page.unroute(SUBMIT_ROUTE);
   });

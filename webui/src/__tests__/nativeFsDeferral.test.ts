@@ -33,9 +33,9 @@ function makeBridge(capabilities: Record<string, boolean>, excluded: Array<Recor
       manifestPresent: excluded.length > 0,
       servable: true,
     }),
-    readProjectFolderFile: async () => ({ ok: true, path: 'x', content: '' }),
-    writeProjectFolderFile: async () => ({ ok: true, path: 'x' }),
-    listProjectFolder: async () => ({ ok: true, files: [] }),
+    readWorkspaceFile: async () => ({ ok: true, path: 'x', content: '' }),
+    writeWorkspaceFile: async () => ({ ok: true, path: 'x' }),
+    listWorkspace: async () => ({ ok: true, files: [] }),
   };
 }
 

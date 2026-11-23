@@ -39,7 +39,7 @@ interface ProjectFolderGateModalProps {
   onConsentHome: () => void;
 }
 
-/** Friendly copy for the bridge createProjectFolder error codes. */
+/** Friendly copy for the bridge createWorkspace error codes. */
 const CREATE_ERROR_COPY: Record<string, string> = {
   invalidName: 'That name can’t be used for a folder. Try letters, numbers, spaces, and dashes.',
   alreadyExists: 'A folder with that name already exists. Pick a different name.',

@@ -163,8 +163,8 @@ export function useSSHData({
       }, 1000);
       void pollLaunchStatus();
       try {
-        if (desktopBridge?.openSshProjectFolder) {
-          await desktopBridge.openSshProjectFolder({
+        if (desktopBridge?.openSshWorkspace) {
+          await desktopBridge.openSshWorkspace({
             hostAlias,
             remoteProjectFolderPath: targetRemotePath,
             forceNewWindow: true,

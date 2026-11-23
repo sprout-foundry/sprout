@@ -253,7 +253,7 @@ describe('bridge structural detection', () => {
 
   it('detectSproutStudioTerminal returns null when window.SproutStudio lacks getCapabilities', () => {
     (globalThis as unknown as { window?: unknown }).window = {
-      SproutStudio: { readProjectFolderFile: async () => ({}) },
+      SproutStudio: { readWorkspaceFile: async () => ({}) },
     };
     try {
       expect(detectSproutStudioTerminal()).toBeNull();

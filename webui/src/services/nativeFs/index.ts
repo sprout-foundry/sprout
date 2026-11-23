@@ -15,8 +15,8 @@
  *
  * Exports:
  *   - a narrow structural type + detector for the `window.SproutStudio`
- *     bridge subset the webui uses (getCapabilities / readProjectFolderFile /
- *     writeProjectFolderFile / listProjectFolder),
+ *     bridge subset the webui uses (getCapabilities / readWorkspaceFile /
+ *     writeWorkspaceFile / listWorkspace),
  *   - a PURE gate-decision function (`resolveNativeFsGate`) plus a cached
  *     async resolver (`nativeFsGate`),
  *   - PURE path normalization (webui path → workspace-relative),
@@ -67,16 +67,14 @@ export interface WorkspaceFileEntry {
  */
 export type SproutStudioFsBridge = {
   getCapabilities(): Promise<SproutStudioCapabilities>;
-  readProjectFolderFile(
+  readWorkspaceFile(
     path: string,
   ): Promise<{ ok: true; path: string; content?: string; contentBase64?: string } | { ok: false; error: string }>;
-  writeProjectFolderFile(
+  writeWorkspaceFile(
     path: string,
     payload: string | { content?: string; contentBase64?: string },
   ): Promise<{ ok: true; path: string } | { ok: false; error: string }>;
-  listProjectFolder(
-    maxDepth?: number,
-  ): Promise<{ ok: true; files: WorkspaceFileEntry[] } | { ok: false; error: string }>;
+  listWorkspace(maxDepth?: number): Promise<{ ok: true; files: WorkspaceFileEntry[] } | { ok: false; error: string }>;
 };
 
 /**
@@ -86,9 +84,9 @@ export type SproutStudioFsBridge = {
  */
 export type SproutStudioWorkspaceBridge = {
   /** Presents the system folder picker; persists the chosen root. */
-  pickProjectFolder(): Promise<{ ok: true; rootName: string } | { ok: false; error: string }>;
+  pickWorkspace(): Promise<{ ok: true; rootName: string } | { ok: false; error: string }>;
   /** Creates a fresh project folder and makes it the project folder. */
-  createProjectFolder(
+  createWorkspace(
     name: string,
   ): Promise<{ ok: true; rootName: string } | { ok: false; error: 'invalidName' | 'alreadyExists' | string }>;
 };
@@ -106,7 +104,7 @@ export type NativeProjectFolderResult = { ok: true; rootName: string } | { ok: f
 export function hasSproutStudioWorkspaceBridge(obj: unknown): obj is SproutStudioWorkspaceBridge {
   if (!obj || typeof obj !== 'object') return false;
   const c = obj as Record<string, unknown>;
-  return typeof c.pickProjectFolder === 'function' && typeof c.createProjectFolder === 'function';
+  return typeof c.pickWorkspace === 'function' && typeof c.createWorkspace === 'function';
 }
 
 // ── Structural detector ───────────────────────────────────────────────────────
@@ -121,9 +119,9 @@ export function hasSproutStudioFsBridge(obj: unknown): obj is SproutStudioFsBrid
   const c = obj as Record<string, unknown>;
   return (
     typeof c.getCapabilities === 'function' &&
-    typeof c.readProjectFolderFile === 'function' &&
-    typeof c.writeProjectFolderFile === 'function' &&
-    typeof c.listProjectFolder === 'function'
+    typeof c.readWorkspaceFile === 'function' &&
+    typeof c.writeWorkspaceFile === 'function' &&
+    typeof c.listWorkspace === 'function'
   );
 }
 
@@ -369,7 +367,7 @@ export function readProjectFolderResponse(result: unknown): Response {
   });
 }
 
-// ── listProjectFolder → file-tree mapping (pure) ─────────────────────────────────
+// ── listWorkspace → file-tree mapping (pure) ─────────────────────────────────
 //
 // The `files` channel's `listWorkspace(maxDepth)` lists the project folder ROOT
 // only (no sub-directory arg) and returns `{path, size, isDir}` per entry
@@ -510,7 +508,7 @@ export async function nativeReadProjectFolderFile(path: string): Promise<Respons
   }
   let result: unknown;
   try {
-    result = await bridge.readProjectFolderFile(path);
+    result = await bridge.readWorkspaceFile(path);
   } catch {
     // The bridge helpers are "never-reject"; a hard throw means the transport
     // itself is broken. Surface as ioFailed (500) rather than crashing.
@@ -530,7 +528,7 @@ export async function nativeWriteProjectFolderFile(path: string, content: string
   }
   let result: unknown;
   try {
-    result = await bridge.writeProjectFolderFile(path, content);
+    result = await bridge.writeWorkspaceFile(path, content);
   } catch {
     return errorJsonResponse('ioFailed', 500);
   }
@@ -566,7 +564,7 @@ export async function pickProjectFolderNative(): Promise<NativeProjectFolderResu
     return { ok: false, error: 'ioFailed' };
   }
   try {
-    return projectFolderResult(await workspaceBridge.pickProjectFolder());
+    return projectFolderResult(await workspaceBridge.pickWorkspace());
   } catch {
     return { ok: false, error: 'ioFailed' };
   }
@@ -588,7 +586,7 @@ export async function createProjectFolderNative(name: string): Promise<NativePro
     return { ok: false, error: 'invalidName' };
   }
   try {
-    return projectFolderResult(await workspaceBridge.createProjectFolder(trimmed));
+    return projectFolderResult(await workspaceBridge.createWorkspace(trimmed));
   } catch {
     return { ok: false, error: 'ioFailed' };
   }

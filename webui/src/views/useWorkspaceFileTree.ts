@@ -113,7 +113,7 @@ export async function fetchWorkspaceFiles(
     if (gate.active) {
       const bridge = detectSproutStudio();
       if (bridge) {
-        const result = await bridge.listProjectFolder(projectFolderListDepth(path));
+        const result = await bridge.listWorkspace(projectFolderListDepth(path));
         return mapProjectFolderListing(result, path);
       }
     }

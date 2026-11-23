@@ -405,7 +405,7 @@ describe('writeCapabilityManifest', () => {
   // ── Studio workspace-gate capability keys ────────────────────────────
   // The fs-portion dist declares the project folder gate flags so a studio shell
   // reading the manifest can truthfully report them (the native
-  // pickProjectFolder / createProjectFolder ops ship with the fs exclusion).
+  // pickWorkspace / createWorkspace ops ship with the fs exclusion).
 
   it('declares the workspace gate capabilities for --native-fs', () => {
     const m = mod.buildCapabilityManifest(mod.parseArgs(['--native-fs']));

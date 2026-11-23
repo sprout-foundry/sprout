@@ -35,6 +35,8 @@ const (
 	listIDAttr = "data-list-id"
 	// maxListColumns bounds the parts of an item read as a list's columns.
 	maxListColumns = 8
+	// minOneColumnItems is the fewest items a list of single lines has.
+	minOneColumnItems = 3
 )
 
 var listIDRe = regexp.MustCompile(`data-list-id="(l\d+)"`)
@@ -138,6 +140,10 @@ func looksLikeList(children, items []*frame, fields []Field) bool {
 	if parts > maxListColumns {
 		return false
 	}
+	// Two lines of one part each are a pair, not a list.
+	if parts == 1 && len(items) < minOneColumnItems {
+		return false
+	}
 	actions := 0
 	for _, it := range items {
 		if sig(it) != sig(items[0]) || it.fieldsEnd-it.fieldsAt != parts {
@@ -156,7 +162,8 @@ func looksLikeList(children, items []*frame, fields []Field) bool {
 // page section or a layout container.
 func listItemTag(c *frame) bool {
 	switch c.tag {
-	case "section", "header", "footer", "main", "body", "html", "nav", "form":
+	// A row's cells are its columns, never items of a list.
+	case "section", "header", "footer", "main", "body", "html", "nav", "form", "td", "th":
 		return false
 	}
 	if attr(c.token, "data-screen") != "" {
@@ -309,4 +316,32 @@ func ListMove(doc string, current Content, id string, from, to int) (string, Con
 	b.WriteString(doc[spans[len(spans)-1][1]:])
 	page, content := Keyed(b.String(), &current)
 	return page, content, nil
+}
+
+// renameRepeatedLists names a list whose heading an earlier list already took
+// after its own items ("Give 48 hours, Front door collection"), so two lists
+// under one heading are told apart. A list the page named keeps its name.
+func renameRepeatedLists(lists []List, fields []Field) {
+	seen := map[string]bool{}
+	for i := range lists {
+		l := &lists[i]
+		if !seen[l.Name] {
+			seen[l.Name] = true
+			continue
+		}
+		var names []string
+		for _, f := range fields {
+			if f.List == l.ID && f.Col == 0 {
+				names = append(names, strings.TrimSpace(f.Text))
+			}
+		}
+		name := strings.Join(names, ", ")
+		if r := []rune(name); len(r) > 48 {
+			name = strings.TrimRight(string(r[:47]), " ,") + "…"
+		}
+		if name != "" && !seen[name] {
+			l.Name = name
+			seen[name] = true
+		}
+	}
 }

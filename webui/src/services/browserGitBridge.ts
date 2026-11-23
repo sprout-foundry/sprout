@@ -22,7 +22,7 @@ export function browserGitBridgeFor(shell: WasmShell, author?: BrowserGitAuthor)
       for (const f of files) {
         const err = shell.writeFile(f.path, f.content);
         if (err) {
-          console.warn(`[browserGit] could not write ${f.path} to the workspace: ${err}`);
+          console.warn(`[browserGit] could not write ${f.path} to the project folder: ${err}`);
           continue;
         }
         trackFileWrite(f.path);

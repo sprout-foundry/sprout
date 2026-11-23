@@ -2,7 +2,7 @@
  * WorkspaceCwdBar.test.tsx — the Files project folder row (cwd select + add-repo).
  *
  * Covers the contract that keeps the row non-duplicative and honest:
- *  - one option per cloned repo, plus "Workspace root" ('' value)
+ *  - one option per cloned repo, plus "Project folder" ('' value)
  *  - NO duplicate chip: the select is the single surface showing the cwd
  *  - a cwd inside a repo (terminal `cd`) appears as a dynamic
  *    "owner/name › sub/path" option instead of the select lying "root"
@@ -88,7 +88,7 @@ describe('WorkspaceCwdBar (render)', () => {
     expect(select).not.toBeNull();
     expect(select.value).toBe('');
     expect(select.options).toHaveLength(1);
-    expect(select.options[0].textContent).toBe('Workspace root');
+    expect(select.options[0].textContent).toBe('Project folder');
     // The deduplication guarantee: no companion chip repeating the value.
     expect(container.querySelector('[data-testid="workspace-cwd-chip"]')).toBeNull();
   });
@@ -115,7 +115,7 @@ describe('WorkspaceCwdBar (render)', () => {
     const select = container.querySelector<HTMLSelectElement>('[data-testid="workspace-cwd-select"]')!;
     expect(select.value).toBe('repos/octo/sprout/src');
     const labels = Array.from(select.options).map((o) => o.textContent);
-    expect(labels).toEqual(['Workspace root', 'octo/sprout', 'octo/sprout › src']);
+    expect(labels).toEqual(['Project folder', 'octo/sprout', 'octo/sprout › src']);
   });
 
   it('renders the add-repo button only when a trigger is provided', () => {

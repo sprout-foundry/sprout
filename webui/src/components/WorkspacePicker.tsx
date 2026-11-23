@@ -142,7 +142,7 @@ function ProjectFolderPicker({
     setSwitchError(null);
     // onSelect is allowed to be synchronous; only treat rejections as errors.
     Promise.resolve(onSelect(path)).catch((err: unknown) => {
-      setSwitchError(toUserErrorMessage(err, 'Could not switch to that workspace.'));
+      setSwitchError(toUserErrorMessage(err, 'Could not switch to that project folder.'));
       // Release the lock so the user can retry or pick a different project.
       // The success path never lands here — the page reloads instead.
       setSwitchingPath(null);
@@ -157,7 +157,7 @@ function ProjectFolderPicker({
           <FolderOpen size={24} />
         </div>
         <div>
-          <h2 className="workspace-picker-title">No project workspace detected</h2>
+          <h2 className="workspace-picker-title">No project folder detected</h2>
           <p className="workspace-picker-subtitle">
             Current: <span className="workspace-picker-path">{displayProjectFolder}</span>
           </p>

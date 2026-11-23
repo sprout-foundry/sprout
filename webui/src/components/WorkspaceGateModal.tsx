@@ -85,7 +85,7 @@ function ProjectFolderGateModal({
         // Only the failure path matters, and it is captured below.
         Promise.resolve(action()).catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err);
-          setError(message || 'Failed to update workspace');
+          setError(message || 'Failed to update the project folder');
           setPending(null);
         });
       } catch (err) {
@@ -138,7 +138,7 @@ function ProjectFolderGateModal({
               <AlertTriangle size={28} />
             </div>
             <div>
-              <h2 className="workspace-gate-title">Choose a workspace</h2>
+              <h2 className="workspace-gate-title">Choose a project folder</h2>
               <p className="workspace-gate-subtitle">Pick where this project lives — or create a new project folder.</p>
             </div>
           </div>
@@ -341,7 +341,7 @@ function ProjectFolderGateModal({
             <AlertTriangle size={28} />
           </div>
           <div>
-            <h2 className="workspace-gate-title">Select a workspace</h2>
+            <h2 className="workspace-gate-title">Select a project folder</h2>
             <p className="workspace-gate-subtitle">
               Sprout is running in your home directory, which gives the agent access to all your files. Select a project
               folder to limit its scope.

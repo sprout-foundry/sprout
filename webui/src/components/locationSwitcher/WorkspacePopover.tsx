@@ -171,7 +171,7 @@ export const ProjectFolderPopover: React.FC<ProjectFolderPopoverProps> = ({
             }}
             placeholder={daemonRoot ? `Path within ${daemonRoot}` : 'Open path...'}
             disabled={!isConnected || switchingState.isSwitching}
-            title="Type a workspace path and press Enter"
+            title="Type a project folder path and press Enter"
             autoComplete="off"
             spellCheck={false}
           />
@@ -180,7 +180,7 @@ export const ProjectFolderPopover: React.FC<ProjectFolderPopoverProps> = ({
             className="location-switcher-path-input-refresh"
             onClick={handleInputSubmit}
             disabled={!isConnected || switchingState.isSwitching || !normalizePath(inputValue)}
-            title="Switch workspace"
+            title="Switch project folder"
           >
             {switchingState.isSwitching ? <Loader2 size={12} className="spin" /> : <FolderOpen size={12} />}
           </button>
@@ -188,8 +188,8 @@ export const ProjectFolderPopover: React.FC<ProjectFolderPopoverProps> = ({
 
         <div className="location-switcher-subtitle">
           {remoteContext
-            ? 'Press Enter to switch remote paths. Arrow keys select a suggestion or recent remote workspace.'
-            : 'Press Enter to switch. Arrow keys select a suggestion or recent workspace.'}
+            ? 'Press Enter to switch remote paths. Arrow keys select a suggestion or recent remote project folder.'
+            : 'Press Enter to switch. Arrow keys select a suggestion or recent project folder.'}
         </div>
 
         <ProjectFolderSuggestionList
@@ -245,7 +245,7 @@ export const ProjectFolderPopover: React.FC<ProjectFolderPopoverProps> = ({
           className="location-switcher-footer-refresh"
           onClick={handleRefresh}
           disabled={isLoading || !isConnected}
-          title="Refresh workspace data"
+          title="Refresh project folder data"
         >
           <RefreshCw size={14} className={isLoading ? 'spin' : ''} />
           Refresh

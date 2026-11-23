@@ -299,7 +299,7 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
                 </span>
                 <div className="repo-import-text">
                   <strong>{importRepoName} ready</strong>
-                  <span>Files loaded into browser workspace</span>
+                  <span>Files loaded into the browser</span>
                 </div>
               </>
             )}

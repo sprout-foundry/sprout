@@ -70,7 +70,7 @@ export function deriveEscalationPrompt(trigger: EscalationTriggerEvent): string 
 /** Plain-language context for each escalation trigger, for the platform agent. */
 const ESCALATION_REASON_CONTEXT: Record<string, string> = {
   git_push_failed: 'Pushing from the browser failed; commit and push the current changes.',
-  vfs_quota_exceeded: 'The browser workspace ran out of storage.',
+  vfs_quota_exceeded: 'The browser ran out of storage for this project.',
   command_timeout: 'A command timed out in the browser shell.',
   command_unavailable_in_browser: "The browser shell couldn't run a command this work needs.",
   build_command_detected: 'The next step needs a full build environment.',
@@ -322,14 +322,14 @@ export function EscalationListener() {
         if (result.kind === 'unavailable') {
           setDevSpaceError("This deployment doesn't offer dev spaces.");
         } else if (result.kind === 'error') {
-          setDevSpaceError(`Couldn't start the workspace: ${result.message}`);
+          setDevSpaceError(`Couldn't start the dev space: ${result.message}`);
         } else if (result.kind === 'status') {
-          setDevSpaceError(`Workspace is ${result.status}; try again shortly.`);
+          setDevSpaceError(`The dev space is ${result.status}; try again shortly.`);
         }
       })
       .catch((err: unknown) => {
         if (!mountedRef.current) return;
-        setDevSpaceError(`Couldn't start the workspace: ${err instanceof Error ? err.message : String(err)}`);
+        setDevSpaceError(`Couldn't start the dev space: ${err instanceof Error ? err.message : String(err)}`);
       })
       .finally(() => {
         if (mountedRef.current) setStartingDevSpace(false);

@@ -237,7 +237,7 @@ describe('workspace_stopping', () => {
     emit('workspace_stopping', { reason: 'idle', at: '2026-10-12T15:00:00Z', deadline_seconds: 600 });
     expect(notify).toHaveBeenCalledWith(
       'warning',
-      'Workspace stopping',
+      'Dev space stopping',
       expect.stringContaining('in 10 minutes'),
       15000,
     );

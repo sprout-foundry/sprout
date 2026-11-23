@@ -207,7 +207,7 @@ describe('WorkspaceGateModal', () => {
   it('renders the title and warning subtitle', () => {
     renderModal();
     const text = container!.textContent ?? '';
-    expect(text).toMatch(/select a workspace/i);
+    expect(text).toMatch(/select a project folder/i);
     expect(text).toContain('home directory');
   });
 
@@ -343,7 +343,7 @@ describe('WorkspaceGateModal', () => {
     modeState.studio = true;
     renderModal();
     expect(container!.querySelector('[data-testid="workspace-gate-modal"]')).not.toBeNull();
-    expect(container!.textContent).toMatch(/choose a workspace/i);
+    expect(container!.textContent).toMatch(/choose a project folder/i);
     expect(container!.textContent).toMatch(/pick where this project lives/i);
     expect(container!.querySelector('[data-testid="workspace-gate-pick-btn"]')).not.toBeNull();
     expect(container!.querySelector('[data-testid="workspace-gate-new-btn"]')).not.toBeNull();

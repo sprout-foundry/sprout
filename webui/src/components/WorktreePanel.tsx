@@ -88,7 +88,7 @@ function CreateWorktreeDialog({ isOpen, onClose, onCreate }: CreateWorktreeDialo
               placeholder="/path/to/feature-branch-worktree"
               required
             />
-            <small>Relative to workspace root, e.g., ../feature-auth-worktree</small>
+            <small>Relative to the project folder, e.g., ../feature-auth-worktree</small>
           </div>
 
           <div className="worktree-form-group">
@@ -150,7 +150,7 @@ export default function WorktreePanel({ onClose: _onClose }: WorktreePanelProps)
 
   const handleCheckout = async (path: string) => {
     const confirmed = await showThemedConfirm(
-      `Switch the workspace to this worktree?\n\nPath: ${path}\n\nThis changes the working directory, closes terminals, and rebinds chats to the new workspace.`,
+      `Switch the project folder to this worktree?\n\nPath: ${path}\n\nThis changes the working directory, closes terminals, and rebinds chats to the new workspace.`,
       { title: 'Switch worktree?', confirmLabel: 'Switch', cancelLabel: 'Cancel' },
     );
     if (!confirmed) {

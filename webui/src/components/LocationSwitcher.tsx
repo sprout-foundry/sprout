@@ -116,7 +116,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         disabled={!isConnected || (ws.isLoading && !isOpen)}
-        title={ws.workspaceRoot || 'No workspace'}
+        title={ws.workspaceRoot || 'No project folder'}
       >
         <FolderOpen size={14} className="location-switcher-trigger-icon" />
         {sug.showText && <span className="location-switcher-trigger-text">{triggerProjectFolderName}</span>}

@@ -306,7 +306,7 @@ export function NativeTerminalConsole(): React.ReactElement {
         term.writeln('Pipes (|), sequences (;) and chains (&&) supported. All paths');
         term.writeln(
           cwd === ''
-            ? 'resolve from the workspace root. Ctrl-C cancels input.'
+            ? 'resolve from the project folder. Ctrl-C cancels input.'
             : `resolve from ${cwd}. Ctrl-C cancels input.`,
         );
         prompt();

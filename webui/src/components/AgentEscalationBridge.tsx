@@ -208,7 +208,7 @@ export function AgentEscalationBridge({ repoURL, container }: AgentEscalationBri
               ) : null}
               <div className="security-approval-reasoning">
                 {onRunner
-                  ? `The agent wants to run a command the in-browser shell can't. Your files are copied to a workspace on ${hostDisplayName(host)}, the command runs there, and any changes come back here. Runs on your own runner don't use workspace time from your plan.`
+                  ? `The agent wants to run a command the in-browser shell can't. Your files are copied to a dev space on ${hostDisplayName(host)}, the command runs there, and any changes come back here. Runs on your own runner don't use dev space time from your plan.`
                   : "The agent wants to run a command the in-browser shell can't. Your files are copied to your cloud dev space, the command runs there, and any changes come back here. This uses workspace time from your plan."}
               </div>
               {choice.runners.length > 0 ? (

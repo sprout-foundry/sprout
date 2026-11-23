@@ -179,8 +179,8 @@ function ChatHistorySwitcherInner({ chatId, onRestoreSession, iconOnly = false }
         // export" with no idea why. Say what's empty and where it looks.
         setExportNotice(
           (resp.sessions ?? []).length === 0
-            ? 'No saved conversations in this workspace yet.'
-            : 'All saved conversations in this workspace are empty — nothing to export.',
+            ? 'No saved conversations in this project folder yet.'
+            : 'All saved conversations in this project folder are empty — nothing to export.',
         );
         return;
       }
@@ -274,7 +274,7 @@ function ChatHistorySwitcherInner({ chatId, onRestoreSession, iconOnly = false }
               </div>
             ) : rows.length === 0 ? (
               <div className="chs-empty">
-                {query ? 'No matching conversations' : 'No saved conversations in this workspace yet'}
+                {query ? 'No matching conversations' : 'No saved conversations in this project folder yet'}
               </div>
             ) : (
               rows.map((r) => (
@@ -313,7 +313,7 @@ function ChatHistorySwitcherInner({ chatId, onRestoreSession, iconOnly = false }
                 className="chs-footer-btn"
                 onClick={() => void handleExportAll()}
                 disabled={exporting}
-                title="Download every saved conversation in this workspace as Markdown"
+                title="Download every saved conversation in this project folder as Markdown"
                 data-testid="chs-export-all"
               >
                 {exporting ? <Loader2 size={12} className="chs-spinner" /> : <Download size={12} />}

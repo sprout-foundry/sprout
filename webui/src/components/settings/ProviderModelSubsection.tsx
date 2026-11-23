@@ -117,7 +117,12 @@ export default function ProviderModelSubsection({
             >
               <option value="">
                 Default (inherit from{' '}
-                {scope === 'session' ? 'workspace or global' : scope === 'workspace' ? 'global' : 'provider default'})
+                {scope === 'session'
+                  ? 'project folder or global'
+                  : scope === 'workspace'
+                    ? 'global'
+                    : 'provider default'}
+                )
               </option>
               {providers.map((p) => (
                 <option key={p.id} value={p.id}>

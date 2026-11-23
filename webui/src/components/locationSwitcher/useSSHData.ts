@@ -172,7 +172,7 @@ export function useSSHData({
         } else {
           const response = await apiService.current.openSSHProjectFolder(hostAlias, targetRemotePath);
           const targetUrl = response.proxy_url || response.url;
-          if (!targetUrl) throw new Error('SSH workspace did not return a local URL');
+          if (!targetUrl) throw new Error('The SSH project folder did not return a local URL');
           setSwitchingState((prev) => ({ ...prev, status: `Waiting for proxy\u2026` }));
           const healthUrl = targetUrl.endsWith('/') ? `${targetUrl}health` : `${targetUrl}/health`;
           const deadline = Date.now() + 12_000;
@@ -189,7 +189,7 @@ export function useSSHData({
           window.location.assign(targetUrl);
         }
         setSshSessions(await apiService.current.getSSHSessions().catch(() => []));
-        setSwitchingState({ isSwitching: false, error: null, status: `SSH workspace ready: ${hostAlias}` });
+        setSwitchingState({ isSwitching: false, error: null, status: `SSH project folder ready: ${hostAlias}` });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to open SSH host';
         if (error instanceof SSHProjectFolderOpenError) {

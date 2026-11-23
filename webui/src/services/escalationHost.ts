@@ -91,7 +91,7 @@ export function defaultRunHost(repoURL: string | undefined, runners: Runner[], a
 /** Display name for a host: the runner's name, or "Cloud". */
 export function hostDisplayName(host: EscalationHost): string {
   if (host.kind === 'runner') return host.name || 'your runner';
-  return host.kind === 'cloud' ? 'Cloud' : 'your workspace';
+  return host.kind === 'cloud' ? 'Cloud' : 'your project folder';
 }
 
 /** Map the UI choice onto the platform's /workspace/txn host selector. */

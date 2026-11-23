@@ -102,19 +102,19 @@ export async function getProjectFolder(fetchFn: typeof fetch): Promise<ProjectFo
   const data = parseProjectFolderPayload(text);
 
   if (!response.ok) {
-    const errMsg = String(data.error ?? data.message ?? 'Failed to fetch workspace');
+    const errMsg = String(data.error ?? data.message ?? 'Failed to fetch the project folder');
     throw new Error(errMsg);
   }
 
   if (isHTMLResponseBody(text)) {
-    throw new Error('Workspace API returned HTML response');
+    throw new Error('Project folder API returned an HTML response');
   }
 
   if (data && typeof data === 'object' && 'workspace_root' in data && 'daemon_root' in data) {
     return toProjectFolderResponse(data);
   }
 
-  throw new Error('Workspace API returned malformed response');
+  throw new Error('Project folder API returned a malformed response');
 }
 
 export async function setProjectFolder(
@@ -141,7 +141,7 @@ export async function setProjectFolder(
   })();
 
   if (!response.ok) {
-    const err = new Error(String(data.error ?? data.message ?? 'Failed to update workspace'));
+    const err = new Error(String(data.error ?? data.message ?? 'Failed to update the project folder'));
     // Attach a structured code so callers can distinguish the home-consent
     // flow (backend rejects with code: "home_workspace_requires_consent")
     // from a generic failure. SP-130.
@@ -152,7 +152,7 @@ export async function setProjectFolder(
   const isHTML =
     text.trim().toLowerCase().startsWith('<!doctype html') || text.trim().toLowerCase().startsWith('<html');
   if (isHTML) {
-    throw new Error('Workspace API returned HTML response');
+    throw new Error('Project folder API returned an HTML response');
   }
 
   if (data && typeof data === 'object' && 'workspace_root' in data && 'daemon_root' in data) {
@@ -161,7 +161,7 @@ export async function setProjectFolder(
 
   // Remote/proxy setups may respond with non-JSON success body
   const projectFolder = await getProjectFolder(fetchFn);
-  return { ...projectFolder, message: String(data.message ?? 'Workspace updated') };
+  return { ...projectFolder, message: String(data.message ?? 'Project folder updated') };
 }
 
 /** A directory entry returned by the project folder browser. */

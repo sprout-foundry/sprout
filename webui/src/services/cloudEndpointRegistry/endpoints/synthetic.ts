@@ -49,7 +49,7 @@ export const syntheticEndpoints: CloudEndpoint[] = [
     methods: ['POST'],
     category: 'synthetic',
     syntheticResponse: { error: 'SSH not available in cloud mode' },
-    description: 'Open SSH workspace (not available in cloud mode)',
+    description: 'Open an SSH project folder (not available in cloud mode)',
   },
   {
     path: '/api/instances/ssh-sessions',
@@ -110,7 +110,7 @@ export const syntheticEndpoints: CloudEndpoint[] = [
     // In cloud mode, project folder selection is not needed — the WASM shell owns the
     // virtual filesystem root, so needs_workspace_selection is effectively false.
     syntheticResponse: { message: 'ok', workspace_root: '/workspace', daemon_root: '/workspace' },
-    description: 'Workspace info (cloud mode: WASM shell owns workspace, virtual FS root)',
+    description: 'Project folder info (cloud mode: the WASM shell owns the project folder, virtual FS root)',
   },
 
   // ── Endpoints not available in browser mode ─────────────────────

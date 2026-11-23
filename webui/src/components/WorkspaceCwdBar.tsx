@@ -45,7 +45,7 @@ interface CwdOption {
 }
 
 /**
- * Selector options: 'Workspace root' (the empty value, rendered by the
+ * Selector options: 'Project folder' (the empty value, rendered by the
  * caller) sits above one entry per cloned repo. When the cwd is not a repo
  * root — a folder inside one, or any other workspace-relative path — a
  * dynamic option for it is appended so the current location stays visible
@@ -92,10 +92,10 @@ export default function ProjectFolderCwdBar({
             data-testid="workspace-cwd-select"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            title={cwd === '' ? 'Workspace root' : cwd}
+            title={cwd === '' ? 'Project folder' : cwd}
             aria-label="Working directory"
           >
-            <option value="">Workspace root</option>
+            <option value="">Project folder</option>
             {options.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -115,8 +115,8 @@ export default function ProjectFolderCwdBar({
           data-testid="workspace-add-repo-btn"
           onClick={onAddRepo}
           disabled={addRepoDisabled}
-          aria-label="Add workspace from repository"
-          title="Add workspace from repository"
+          aria-label="Add a project folder from a repository"
+          title="Add a project folder from a repository"
         >
           <Plus size={13} aria-hidden="true" />
           {/* Alone on the row, a bare "+" reads as a stray control. */}

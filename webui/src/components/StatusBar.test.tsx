@@ -443,7 +443,7 @@ describe('StatusBar', () => {
       const indicator = container.querySelector('.statusbar-item-workspace');
       expect(indicator).toBeTruthy();
       expect(indicator?.textContent).toContain('myproject');
-      expect(indicator?.getAttribute('aria-label')).toContain('Workspace:');
+      expect(indicator?.getAttribute('aria-label')).toContain('Project folder:');
     });
 
     // An embedding host's project folder is a container path such as

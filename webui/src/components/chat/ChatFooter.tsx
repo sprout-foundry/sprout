@@ -93,8 +93,8 @@ export function ChatFooter({
         </span>
         <span className="workspace-busy-text">
           {onSendAnyway
-            ? `Another chat (${projectFolderBusy.runningChatName}) is working in this workspace — send anyway queues after it.`
-            : `Another chat (${projectFolderBusy.runningChatName}) is working in this workspace — your message is queued and sends when it finishes.`}
+            ? `Another chat (${projectFolderBusy.runningChatName}) is working in this project folder — send anyway queues after it.`
+            : `Another chat (${projectFolderBusy.runningChatName}) is working in this project folder — your message is queued and sends when it finishes.`}
         </span>
         {onSendAnyway && pendingDraft?.trim() ? (
           <button

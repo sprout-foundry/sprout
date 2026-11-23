@@ -154,14 +154,14 @@ function StatusBar({
               ? `Project: ${hostProjectName}`
               : !projectFolderSwitching
                 ? `Repository: ${projectFolderLabel}`
-                : `Workspace: ${projectFolderPath}`
+                : `Project folder: ${projectFolderPath}`
           }
           aria-label={
             hostProjectName
               ? `Project: ${hostProjectName}`
               : !projectFolderSwitching
                 ? `Repository: ${projectFolderName}`
-                : `Workspace: ${projectFolderName}`
+                : `Project folder: ${projectFolderName}`
           }
           data-testid="status-bar-workspace"
           onKeyDown={(e) => {

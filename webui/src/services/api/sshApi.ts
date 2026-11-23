@@ -61,7 +61,7 @@ export async function openSSHProjectFolder(
       log_path?: string;
     };
     throw new SSHProjectFolderOpenError({
-      error: errData.error || errData.message || 'Failed to start SSH workspace launch',
+      error: errData.error || errData.message || 'Failed to start the SSH project folder',
       step: errData.step,
       details: errData.details,
       log_path: errData.log_path,
@@ -97,7 +97,7 @@ export async function openSSHProjectFolder(
     // Success — proxy_url and proxy_base are populated by the server.
     if (!status.proxy_url) {
       throw new SSHProjectFolderOpenError({
-        error: 'SSH workspace launch completed but no proxy URL was returned.',
+        error: 'The SSH project folder started but returned no proxy URL.',
         step: status.step,
       });
     }
@@ -112,7 +112,7 @@ export async function openSSHProjectFolder(
   }
 
   throw new SSHProjectFolderOpenError({
-    error: 'SSH workspace launch timed out. Check SSH connectivity and ~/.config/sprout/workspace.log for details.',
+    error: 'The SSH project folder timed out. Check SSH connectivity and ~/.config/sprout/workspace.log for details.',
     step: 'launch-timeout',
     details: `Launch did not complete within ${Math.round(SSH_POLL_TIMEOUT_MS / 60_000)} minutes.`,
   });

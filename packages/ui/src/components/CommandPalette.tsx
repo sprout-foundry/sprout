@@ -714,7 +714,7 @@ function CommandPalette({
           {isLoading && (
             <span
               className="command-palette-loading-badge"
-              title="Indexing workspace files…"
+              title="Indexing project files…"
               aria-label="Loading"
             >
               <Loader2 size={12} className="command-palette-spin" />
@@ -771,7 +771,7 @@ function CommandPalette({
                 {searchMode === 'symbols'
                   ? 'Open a file in the editor to browse its symbols'
                   : searchMode === 'files'
-                    ? 'Type to search workspace files'
+                    ? 'Type to search project files'
                     : (
                         <>
                           Type to find files · <kbd>&gt;</kbd> commands · <kbd>@</kbd> symbols

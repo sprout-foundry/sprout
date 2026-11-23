@@ -105,7 +105,7 @@ const SyncStatusBanner: React.FC = () => {
           <>
             <span className="sync-status-banner-branch">{report?.branch || 'git'}</span>
             <span className="sync-status-banner-detail">
-              Workspace not in sync — {parts.join(', ')}
+              Project folder not in sync — {parts.join(', ')}
               {report?.last_commit.sha ? ` · last commit ${report.last_commit.sha.slice(0, 7)}` : ''}
             </span>
           </>

@@ -89,17 +89,17 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
           "This deployment doesn't offer dev spaces. You can keep working in the browser.",
         );
       } else if (result.kind === 'error') {
-        notificationBus.notify('error', 'Failed to start workspace', result.message, undefined, {
+        notificationBus.notify('error', 'Failed to start the dev space', result.message, undefined, {
           label: 'Retry',
           onClick: retry,
         });
       } else if (result.kind === 'status') {
-        notificationBus.notify('info', 'Workspace status', result.status);
+        notificationBus.notify('info', 'Dev space status', result.status);
       }
     } catch (e) {
       notificationBus.notify(
         'error',
-        'Error starting workspace',
+        'Error starting the dev space',
         e instanceof Error ? e.message : String(e),
         undefined,
         { label: 'Retry', onClick: retry },

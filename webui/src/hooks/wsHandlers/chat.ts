@@ -325,8 +325,8 @@ export const handleDevSpaceStopping = (ctx: EventHandlerContext): void => {
     seconds >= 120 ? `in ${Math.round(seconds / 60)} minutes` : seconds > 0 ? `in ${seconds} seconds` : 'shortly';
   notificationBus.notify(
     'warning',
-    'Workspace stopping',
-    `This workspace will stop ${when}. Uncommitted work is checkpointed; start it again to continue.`,
+    'Dev space stopping',
+    `This dev space will stop ${when}. Uncommitted work is checkpointed; start it again to continue.`,
     15000,
   );
   setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));

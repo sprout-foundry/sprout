@@ -902,7 +902,7 @@ function handleWasmSearchReplace(shell: WasmShell, bodyStr?: string): Response {
   const targets: Array<{ file: string; path: string }> = [];
   for (const file of files) {
     const path = projectFolderFilePath(root, file);
-    if (!path) return jsonError(`File outside workspace: ${file}`, 400);
+    if (!path) return jsonError(`File outside the project folder: ${file}`, 400);
     targets.push({ file, path });
   }
 

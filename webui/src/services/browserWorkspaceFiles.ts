@@ -85,7 +85,7 @@ function resolveActiveShell(): WasmShell {
   }
   const shell = (getAdapter() as CloudAdapter | null)?.getWasmShell?.() ?? null;
   if (!shell) {
-    throw new BrowserFilesUnavailableError('the in-browser workspace has no reachable shell yet');
+    throw new BrowserFilesUnavailableError('the in-browser project has no reachable shell yet');
   }
   return shell;
 }
@@ -128,7 +128,7 @@ export async function readBrowserWorkspaceFile(path: string): Promise<Uint8Array
   }
   const normalizedRoot = root.endsWith('/') ? root : root + '/';
   if (abs !== root && !abs.startsWith(normalizedRoot)) {
-    throw new Error(`the in-browser file API will not read outside the workspace: ${path}`);
+    throw new Error(`the in-browser file API will not read outside the project folder: ${path}`);
   }
 
   const bytesResult = typeof shell.readFileBytes === 'function' ? shell.readFileBytes(abs) : undefined;

@@ -328,9 +328,9 @@ export function useSettingsMutation(params: MutationHookParams) {
       await api.updateSettings(projectFolderData, 'workspace');
       const data = await api.getSettingsLayer('workspace');
       setLayerData(data);
-      addNotification('success', 'Settings', 'Workspace config created from global settings', 3000);
+      addNotification('success', 'Settings', 'Project folder config created from global settings', 3000);
     } catch (err) {
-      addNotification('error', 'Settings', 'Failed to create workspace config', 5000);
+      addNotification('error', 'Settings', 'Failed to create the project folder config', 5000);
     } finally {
       setCreatingProjectFolderConfig(false);
     }

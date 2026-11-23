@@ -214,7 +214,7 @@ export function useProjectFolderData({ isConnected }: UseProjectFolderDataProps)
     async (targetPath: string) => {
       const normalizedTarget = normalizePath(targetPath);
       if (!normalizedTarget || normalizedTarget === projectFolder) return;
-      setSwitchingState({ isSwitching: true, error: null, status: 'Switching workspace\u2026' });
+      setSwitchingState({ isSwitching: true, error: null, status: 'Switching project folder\u2026' });
       try {
         try {
           const sessionCount = await apiService.current.getTerminalSessionCount();

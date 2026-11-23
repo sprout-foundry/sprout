@@ -18,7 +18,7 @@ export const getPathDisplayName = (path: string): string => {
   const normalized = normalizePath(path);
   const segments = normalized.split('/').filter(Boolean);
   if (segments.length <= 2) {
-    return segments.join('/') || normalized || 'No workspace';
+    return segments.join('/') || normalized || 'No project folder';
   }
   return segments.slice(-2).join('/');
 };

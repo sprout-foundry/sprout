@@ -188,7 +188,7 @@ Never leave the page — a self-host backend does not need to implement these. L
 | `/api/delete` | DELETE, POST | File deletion (WASM handles locally) |
 | `/api/design/status` | GET | Design tree health and drift (WASM designStatus) |
 | `/api/file` | GET, POST | Read/write file content (WASM handles locally) |
-| `/api/file-index` | GET | Whole-workspace quick-open index (WASM bulk walk) |
+| `/api/file-index` | GET | Whole-project quick-open index (WASM bulk walk) |
 | `/api/file/check-modified` | GET, POST | Check if file modified (WASM handles locally) |
 | `/api/file/consent` | POST | File consent (no security prompts in cloud mode) |
 | `/api/files` | GET | File listing (WASM handles locally) |
@@ -202,7 +202,7 @@ Never leave the page — a self-host backend does not need to implement these. L
 | `/api/terminal/history` | GET, POST | Terminal history (WASM terminal) |
 | `/api/terminal/sessions` | GET | Terminal sessions (WASM terminal manages) |
 | `/api/terminal/shells` | GET | Available shells (WASM terminal) |
-| `/api/workspace/browse` | GET | Workspace directory browsing (WASM filesystem) |
+| `/api/workspace/browse` | GET | Project folder browsing (WASM filesystem) |
 
 ### Endpoints answered with synthetic safe-defaults
 
@@ -225,7 +225,7 @@ The adapter answers these itself with safe defaults; a backend may ignore them.
 | `/api/instances/ssh-close` | POST | Close SSH session |
 | `/api/instances/ssh-hosts` | GET | List SSH hosts (not available in cloud mode) |
 | `/api/instances/ssh-launch-status` | GET | SSH launch status |
-| `/api/instances/ssh-open` | POST | Open SSH workspace (not available in cloud mode) |
+| `/api/instances/ssh-open` | POST | Open an SSH project folder (not available in cloud mode) |
 | `/api/instances/ssh-sessions` | GET | List SSH sessions (not available in cloud mode) |
 | `/api/lsp/status` | GET | LSP server status (none in browser mode) |
 | `/api/lsp/ws` | GET | LSP WebSocket bridge (not available in browser mode) |
@@ -241,7 +241,7 @@ The adapter answers these itself with safe defaults; a backend may ignore them.
 | `/api/settings/subagent-types` | GET | Subagent type configs (not available in browser mode) |
 | `/api/settings/subagent-types//…` | GET | Subagent type read-only (not available in browser mode) |
 | `/api/support-bundle` | GET | Support bundle (not available in cloud mode) |
-| `/api/workspace` | GET, POST | Workspace info (cloud mode: WASM shell owns workspace, virtual FS root) |
+| `/api/workspace` | GET, POST | Project folder info (cloud mode: the WASM shell owns the project folder, virtual FS root) |
 | `/api/workspace/symbols` | GET | Workspace symbols via LSP (not available in browser mode) |
 
 ### No-op endpoints

@@ -213,7 +213,7 @@ func sessionPreviewFromMessages(messages []api.Message, maxRunes int) string {
 		if msg.Role != "user" {
 			continue
 		}
-		content := strings.TrimSpace(StripUserMessageTimestamp(msg.Content))
+		content := strings.TrimSpace(StripUserMessageEnvelope(msg.Content))
 		if content == "" {
 			continue
 		}

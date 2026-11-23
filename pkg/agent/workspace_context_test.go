@@ -10,16 +10,6 @@ import (
 
 func TestWithWorkspaceContext(t *testing.T) {
 	ag := newTestAgent(t)
-	if got := ag.withWorkspaceContext("fix the bug"); got != "fix the bug" {
-		t.Fatalf("default placement changed the query: %q", got)
-	}
-
-	if err := ag.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
-		cfg.WorkspaceContextPlacement = "user"
-		return nil
-	}); err != nil {
-		t.Fatalf("configure: %v", err)
-	}
 	first := ag.withWorkspaceContext("fix the bug")
 	if !strings.HasPrefix(first, "<workspace-context>\n") || !strings.HasSuffix(first, "</workspace-context>\n\nfix the bug") {
 		t.Fatalf("first message lacks the workspace block:\n%s", first)
@@ -37,32 +27,63 @@ func TestWithWorkspaceContext(t *testing.T) {
 	}
 }
 
-func TestSystemPromptWithoutWorkspaceContext(t *testing.T) {
+// A prompt that replaced the embedded one never carried the workspace context, so its
+// conversations get no block either.
+func TestWithWorkspaceContextReplacedPrompt(t *testing.T) {
+	ag := newTestAgent(t)
+	if err := ag.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.SystemPromptText = "You are a custom agent."
+		return nil
+	}); err != nil {
+		t.Fatalf("configure: %v", err)
+	}
+	if got := ag.withWorkspaceContext("fix the bug"); got != "fix the bug" {
+		t.Fatalf("system_prompt_text override got the block: %q", got)
+	}
+
+	persona := newTestAgent(t)
+	persona.personaReplacedPrompt = true
+	if got := persona.withWorkspaceContext("fix the bug"); got != "fix the bug" {
+		t.Fatalf("a persona's own prompt got the block: %q", got)
+	}
+	persona.ClearActivePersona()
+	if got := persona.withWorkspaceContext("fix the bug"); !strings.HasPrefix(got, "<workspace-context>") {
+		t.Fatalf("clearing the persona did not restore the block: %q", got)
+	}
+}
+
+func TestSystemPromptOmitsWorkspaceContext(t *testing.T) {
 	setupMemoryDirForTest(t)
-	profile, err := configuration.ResolveContextProfile(&configuration.Config{
-		ContextMode:               configuration.ContextModeFull,
-		WorkspaceContextPlacement: "user",
-	}, 200_000, false)
-	if err != nil {
-		t.Fatalf("ResolveContextProfile: %v", err)
-	}
-	if !profile.WorkspaceContextInUserMessage {
-		t.Fatal("placement \"user\" did not reach the profile")
-	}
 	root := t.TempDir()
-	moved, err := GetEmbeddedSystemPromptForProfile(profile, "", 200_000, root)
-	if err != nil {
-		t.Fatalf("prompt: %v", err)
+	builders := map[string]func() (string, error){
+		"embedded": GetEmbeddedSystemPrompt,
+		"full": func() (string, error) {
+			return GetEmbeddedSystemPromptForProfile(configuration.ContextProfile{Mode: configuration.ContextModeFull}, "", 200_000, root)
+		},
+		"lite": func() (string, error) {
+			return GetEmbeddedSystemPromptForProfile(configuration.ContextProfile{Mode: configuration.ContextModeLowContext}, "", 32_000, root)
+		},
 	}
-	if strings.Contains(moved, "## Current Working Directory") || strings.Contains(moved, root) {
-		t.Fatalf("system prompt still carries the working directory")
+	for name, build := range builders {
+		prompt, err := build()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if strings.Contains(prompt, "## Current Working Directory") || strings.Contains(prompt, root) {
+			t.Errorf("%s: system prompt carries the working directory", name)
+		}
 	}
-	profile.WorkspaceContextInUserMessage = false
-	kept, err := GetEmbeddedSystemPromptForProfile(profile, "", 200_000, root)
-	if err != nil {
-		t.Fatalf("prompt: %v", err)
+}
+
+func TestStripUserMessageEnvelope(t *testing.T) {
+	stamped := InjectUserMessageTimestamp("<workspace-context>\n## Current Working Directory\n\n`/w`\n</workspace-context>\n\nhola, arregla el error")
+	if got := StripUserMessageEnvelope(stamped); got != "hola, arregla el error" {
+		t.Fatalf("StripUserMessageEnvelope = %q", got)
 	}
-	if !strings.Contains(kept, "## Current Working Directory") || !strings.HasPrefix(kept, moved[:len(moved)/2]) {
-		t.Fatalf("default placement changed the system prompt")
+	if got := StripUserMessageTimestamp(stamped); !strings.HasPrefix(got, "<workspace-context>") {
+		t.Fatalf("StripUserMessageTimestamp dropped the block persisted state keeps: %q", got)
+	}
+	if got := StripUserMessageEnvelope(InjectUserMessageTimestamp("plain")); got != "plain" {
+		t.Fatalf("a message without a block = %q", got)
 	}
 }

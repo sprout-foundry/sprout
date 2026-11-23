@@ -56,22 +56,11 @@ func GetEmbeddedSystemPrompt() (string, error) {
 	}
 	promptContent = filesystem.LocalizeScratchDir(promptContent)
 
-	// Context files (AGENTS.md, etc.) - placed before volatile content to preserve prompt-prefix cache.
-	contextFiles, err := LoadContextFiles()
-	if err == nil && contextFiles != "" {
-		promptContent = promptContent + contextFiles
-	}
-
-	// Memories - also placed before the volatile tail.
-	memories := LoadMemoriesForPrompt()
-	if memories != "" {
+	// The project context file and the working directory go in the conversation's first user
+	// message (workspace_context.go), so the system prompt is the same in every directory.
+	if memories := LoadMemoriesForPrompt(); memories != "" {
 		promptContent = promptContent + memories
 	}
-
-	// Cwd at the tail to preserve prompt-prefix cache eligibility. Timestamp lives in the user message.
-	cwdString := buildCurrentWorkingDirectorySection("")
-
-	promptContent = promptContent + cwdString
 
 	return promptContent, nil
 }
@@ -89,10 +78,9 @@ func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, pro
 	}
 	promptContent = filesystem.LocalizeScratchDir(promptContent)
 
+	// The project context file and the working directory go in the conversation's first user
+	// message (workspace_context.go), so the system prompt is the same in every directory.
 	contextFiles, err := LoadContextFiles()
-	if profile.WorkspaceContextInUserMessage {
-		contextFiles = "" // the first user message carries it (workspace_context.go)
-	}
 	if err == nil && contextFiles != "" {
 		// AGENTS.md is always injected. In LCM, warn if the file is large.
 		if profile.Mode == configuration.ContextModeLowContext {
@@ -113,17 +101,11 @@ func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, pro
 					tokens, pct, windowLabel)
 			}
 		}
-		promptContent = promptContent + contextFiles
 	}
 
 	memories := LoadMemoriesForPromptMode(profile.MemoryPrompt, profile.MemoryPromptMaxBytes)
 	if memories != "" {
 		promptContent = promptContent + memories
-	}
-
-	// Cwd at the tail to preserve prompt-prefix cache. Timestamp lives in the user message.
-	if !profile.WorkspaceContextInUserMessage {
-		promptContent = promptContent + buildCurrentWorkingDirectorySection(workspaceRoot)
 	}
 
 	return promptContent, nil

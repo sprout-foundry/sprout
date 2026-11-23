@@ -36,8 +36,6 @@ type ContextProfile struct {
 	// From Config.MemoryPrompt / MemoryPromptMaxBytes (see memory_prompt.go in pkg/agent).
 	MemoryPrompt         string `json:"-"`
 	MemoryPromptMaxBytes int    `json:"-"`
-	// WorkspaceContextInUserMessage: Config.WorkspaceContextPlacement == "user".
-	WorkspaceContextInUserMessage bool `json:"-"`
 }
 
 // fullContextProfile is the baked full-context preset (all defaults).
@@ -107,7 +105,6 @@ func ResolveContextProfile(cfg *Config, modelContextWindow int, onDevice bool) (
 		p.SystemPromptCore = strings.TrimSpace(cfg.SystemPromptCore)
 		p.MemoryPrompt = strings.TrimSpace(cfg.MemoryPrompt)
 		p.MemoryPromptMaxBytes = cfg.MemoryPromptMaxBytes
-		p.WorkspaceContextInUserMessage = strings.EqualFold(strings.TrimSpace(cfg.WorkspaceContextPlacement), "user")
 	}
 	return p, err
 }

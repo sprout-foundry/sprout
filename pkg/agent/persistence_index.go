@@ -227,7 +227,7 @@ func (s *ConversationState) DisplayMessages() []api.Message {
 		if msg.Role != "user" {
 			continue
 		}
-		content := StripUserMessageTimestamp(msg.Content)
+		content := StripUserMessageEnvelope(msg.Content)
 		if display, ok := s.QueryDisplays[content]; ok {
 			content = display
 		}

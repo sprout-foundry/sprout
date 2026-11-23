@@ -289,7 +289,7 @@ func (a *Agent) resolveTurnLanguageGuard(currentQuery string) {
 		configured = langguard.ParseLanguage(cfg.Language)
 	}
 	recent := a.recentUserMessages(a.state.GetMessages())
-	if q := StripUserMessageTimestamp(currentQuery); strings.TrimSpace(q) != "" {
+	if q := StripUserMessageEnvelope(currentQuery); strings.TrimSpace(q) != "" {
 		// The current query is the most recent user signal; it is not in
 		// state yet (it enters during the seed loop), so add it explicitly.
 		recent = append(recent, q)

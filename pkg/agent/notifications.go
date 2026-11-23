@@ -331,7 +331,7 @@ func (a *Agent) queryDisplaysFor(messages []api.Message) map[string]string {
 		if msg.Role != "user" {
 			continue
 		}
-		key := StripUserMessageTimestamp(msg.Content)
+		key := StripUserMessageEnvelope(msg.Content)
 		if display, ok := a.queryDisplays[key]; ok {
 			out[key] = display
 		}

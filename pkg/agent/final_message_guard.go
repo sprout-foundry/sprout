@@ -297,7 +297,7 @@ func (a *Agent) recentUserMessages(messages []api.Message) []string {
 		if messages[i].Role != "user" {
 			continue
 		}
-		text := StripUserMessageTimestamp(messages[i].Content)
+		text := StripUserMessageEnvelope(messages[i].Content)
 		if strings.TrimSpace(text) == "" {
 			continue
 		}
@@ -351,7 +351,7 @@ func (a *Agent) regenerateInUserLanguageCore(ctx context.Context, lastUserMessag
 		name, name, name,
 	)
 	req := []api.Message{
-		{Role: "user", Content: StripUserMessageTimestamp(lastUserMessage)},
+		{Role: "user", Content: StripUserMessageEnvelope(lastUserMessage)},
 		{Role: "assistant", Content: mismatched},
 		{Role: "user", Content: instruction},
 	}

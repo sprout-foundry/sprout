@@ -173,8 +173,8 @@ func TestSeedToolRoster_ProviderToolCallsLimitRegistry(t *testing.T) {
 	}
 }
 
-// A core prompt replaces the embedded instructions but keeps the project
-// context the prompt is composed with.
+// A core prompt replaces the embedded instructions; the workspace context
+// still leaves the system prompt for the first user message.
 func TestSystemPromptCoreKeepsProjectContext(t *testing.T) {
 	dir := t.TempDir()
 	profile := configuration.ContextProfile{Mode: configuration.ContextModeFull, SystemPromptCore: "CORE-PROMPT"}
@@ -185,8 +185,8 @@ func TestSystemPromptCoreKeepsProjectContext(t *testing.T) {
 	if !strings.HasPrefix(got, "CORE-PROMPT") {
 		t.Fatalf("prompt does not start with the core: %.80q", got)
 	}
-	if !strings.Contains(got, "## Current Working Directory") || !strings.Contains(got, dir) {
-		t.Fatalf("working directory section missing: %.300q", got)
+	if strings.Contains(got, "## Current Working Directory") || strings.Contains(got, dir) {
+		t.Fatalf("working directory in the system prompt: %.300q", got)
 	}
 	if strings.Contains(got, "Software Engineering Agent") {
 		t.Fatal("the embedded core prompt was kept")

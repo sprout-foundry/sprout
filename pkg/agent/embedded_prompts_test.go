@@ -1,8 +1,6 @@
 package agent
 
 import (
-	"fmt"
-	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -222,52 +220,6 @@ func TestDesignerPromptIsIndexed(t *testing.T) {
 	}
 }
 
-// TestSystemPromptContainsCwd verifies every system-prompt builder injects a
-// "Current Working Directory" section with the real cwd. Fallback to "." is
-// allowed but should never appear if os.Getwd succeeds.
-func TestSystemPromptContainsCwd(t *testing.T) {
-	realCwd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("test pre-condition: os.Getwd failed: %v", err)
-	}
-
-	builders := []struct {
-		name string
-		fn   func() (string, error)
-	}{
-		{"GetEmbeddedSystemPrompt", GetEmbeddedSystemPrompt},
-		{"GetEmbeddedSystemPromptWithProvider", func() (string, error) {
-			return GetEmbeddedSystemPromptWithProvider("zai")
-		}},
-		{"GetEmbeddedSystemPromptForProfile/full", func() (string, error) {
-			return GetEmbeddedSystemPromptForProfile(configuration.ContextProfile{
-				Mode: configuration.ContextModeFull,
-			}, "zai", 200000, "")
-		}},
-		{"GetEmbeddedSystemPromptForProfile/lite", func() (string, error) {
-			return GetEmbeddedSystemPromptForProfile(configuration.ContextProfile{
-				Mode: configuration.ContextModeLowContext,
-			}, "zai", 32000, "")
-		}},
-	}
-
-	for _, tc := range builders {
-		t.Run(tc.name, func(t *testing.T) {
-			prompt, err := tc.fn()
-			if err != nil {
-				t.Fatalf("expected no error, got: %v", err)
-			}
-			if !strings.Contains(prompt, "## Current Working Directory") {
-				t.Error("prompt should contain '## Current Working Directory' section header")
-			}
-			expected := fmt.Sprintf("`%s`", realCwd)
-			if !strings.Contains(prompt, expected) {
-				t.Errorf("prompt should contain the actual cwd %q", expected)
-			}
-		})
-	}
-}
-
 // TestSystemPromptCwdOrdering verifies cwd is positioned AFTER all static
 // content (system prompt body, context files, memories). The order matters
 // for prompt-prefix cache eligibility: cwd is volatile per-call content
@@ -288,11 +240,6 @@ func TestSystemPromptCwdOrdering(t *testing.T) {
 	second, err := GetEmbeddedSystemPrompt()
 	if err != nil {
 		t.Fatalf("expected no error on second call, got: %v", err)
-	}
-
-	cwdIdx := strings.Index(first, "## Current Working Directory")
-	if cwdIdx == -1 {
-		t.Fatal("prompt missing '## Current Working Directory'")
 	}
 
 	// Cache eligibility: two consecutive calls must produce byte-identical

@@ -75,8 +75,10 @@ func TestCrossTurnTimestampStability(t *testing.T) {
 			break
 		}
 	}
-	if !strings.HasPrefix(user1, "<current-time>") || !strings.Contains(user1, "</current-time>\n\nfirst question") {
-		t.Fatalf("turn 1 request user message = %q, want a <current-time> envelope around \"first question\"", user1)
+	// The conversation's first message also carries the workspace block (workspace_context.go).
+	if !strings.HasPrefix(user1, "<current-time>") || !strings.Contains(user1, "</current-time>\n\n<workspace-context>") ||
+		StripUserMessageEnvelope(user1) != "first question" {
+		t.Fatalf("turn 1 request user message = %q, want a <current-time> envelope and the workspace block around \"first question\"", user1)
 	}
 
 	// The turn-2 request must replay user1 byte-identically (still its own

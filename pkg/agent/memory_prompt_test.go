@@ -5,6 +5,27 @@ import (
 	"testing"
 )
 
+func TestNormalizeMemoryPromptMode(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+		ok   bool
+	}{
+		{"", "full", true},
+		{"full", "full", true},
+		{"INDEX", "index", true},
+		{"  off  ", "off", true},
+		{"ful", "full", false},
+		{"body", "full", false},
+	}
+	for _, tc := range cases {
+		got, ok := normalizeMemoryPromptMode(tc.in)
+		if got != tc.want || ok != tc.ok {
+			t.Errorf("normalizeMemoryPromptMode(%q) = (%q, %v), want (%q, %v)", tc.in, got, ok, tc.want, tc.ok)
+		}
+	}
+}
+
 func TestLoadMemoriesForPromptMode(t *testing.T) {
 	setupMemoryDirForTest(t)
 	if err := SaveMemory("alpha", "# Alpha\n\nPrefer table-driven tests.\nSecond line of the body."); err != nil {

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"log"
 	"strings"
 )
 
@@ -14,11 +15,32 @@ const (
 
 const memoryIndexSummaryChars = 120
 
+// normalizeMemoryPromptMode resolves a config memory_prompt value to one of the
+// MemoryPrompt* constants. "" is the full default. ok is false for a value that
+// names no mode; the caller then runs full and warns, so a typo never silently
+// changes what the prompt carries.
+func normalizeMemoryPromptMode(mode string) (normalized string, ok bool) {
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	if mode == "" {
+		return MemoryPromptFull, true
+	}
+	switch mode {
+	case MemoryPromptFull, MemoryPromptIndex, MemoryPromptOff:
+		return mode, true
+	default:
+		return MemoryPromptFull, false
+	}
+}
+
 // LoadMemoriesForPromptMode formats the memories for the system prompt in the given mode.
 // maxBytes <= 0 uses maxMemoryPromptBytes. Every request carries the result, so the index
 // mode keeps a large memory store from costing thousands of tokens a request.
 func LoadMemoriesForPromptMode(mode string, maxBytes int) string {
-	mode = strings.ToLower(strings.TrimSpace(mode))
+	normalized, ok := normalizeMemoryPromptMode(mode)
+	if !ok {
+		log.Printf("[config] warning: unknown memory_prompt %q; using \"full\" (want \"full\", \"index\", or \"off\")", mode)
+	}
+	mode = normalized
 	if mode == MemoryPromptOff {
 		return ""
 	}

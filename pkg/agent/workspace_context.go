@@ -33,7 +33,7 @@ func (a *Agent) withWorkspaceContext(query string) string {
 		hasUserMessage(a.GetMessages()) {
 		return query
 	}
-	block := workspaceContextBlock(a.currentWorkspaceRoot())
+	block := workspaceContextBlock(a.currentProjectFolder())
 	if block == "" {
 		return query
 	}

@@ -173,3 +173,15 @@ func TestSteerRequestIsEmptyWithNothingToAvoid(t *testing.T) {
 		t.Errorf("steer = %q", s)
 	}
 }
+
+func TestNudgeCompositions_NeverTheArtPanel(t *testing.T) {
+	comps := nudgeCompositions()
+	if len(comps) == 0 {
+		t.Fatal("no compositions to nudge toward")
+	}
+	for _, c := range comps {
+		if c == "art" {
+			t.Fatal("the art panel is a nudge")
+		}
+	}
+}

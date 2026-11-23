@@ -1,4 +1,4 @@
-charter-version: mockup-edit/v4
+charter-version: mockup-edit/v5
 
 # Mockup edit charter
 
@@ -18,7 +18,8 @@ the text that replaces it
   character, and must appear in it only once: include a little surrounding
   text when a line alone could match more than once.
 - Keep every `data-c`, `data-c-ph` and `data-label` attribute exactly as it
-  is: they tie the page's text to the person's own. New text needs none of
+  is, and every `data-img`, `data-img-id`, `data-list` and `data-list-id`:
+  they tie the page's text, pictures and lists to the person's own. New text needs none of
   them, except a `data-label` on a new real-world fact (a date, a place, a
   price, a name).
 - Keep each FIND short: just the lines that change, plus enough to be

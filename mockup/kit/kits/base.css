@@ -68,6 +68,9 @@ p{margin:0 0 1em}
 /* Media placeholders (no photos are loaded: colour, shape and an icon stand in) */
 .media{position:relative;aspect-ratio:var(--ratio,4/3);display:grid;place-items:center;color:var(--primary);background:radial-gradient(120% 90% at 20% 10%,color-mix(in srgb,var(--accent) 35%,var(--soft)) 0%,transparent 55%),radial-gradient(120% 120% at 90% 100%,color-mix(in srgb,var(--primary) 30%,var(--soft)) 0%,var(--soft) 70%)}
 .media .i{width:3.2rem;height:3.2rem;opacity:.85}
+/* A picture slot holding the person's picture (set by whoever shows the page) */
+.has-img{background:var(--img) center/cover no-repeat}
+.has-img>:not(.float-card):not(.media-caption){visibility:hidden}
 .media-wide{--ratio:16/9}.media-square{--ratio:1}.media-tall{--ratio:3/4}
 .media-caption{position:absolute;left:1rem;bottom:1rem;background:color-mix(in srgb,var(--surface) 90%,transparent);color:var(--text);padding:.35rem .7rem;border-radius:var(--radius-sm);font-size:.82rem}
 /* Icons (from the sprite: <svg class="i"><use href="#i-name"/></svg>) */

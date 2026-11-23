@@ -1,4 +1,4 @@
-charter-version: mockup-charter/v9
+charter-version: mockup-charter/v10
 
 # Mockup charter
 
@@ -66,7 +66,14 @@ It is added to your document for you, so do not copy any of it.
     numbers), `menu-item` (a name, a `<span class="leader">`, a `price`:
     for menus and price lists), `logo-row` (a row of names: press,
     partners, customers), `table`, `footer`.
-  - Imagery: no photos can be loaded. The best picture is the business's
+  - Pictures: no photos can be loaded, but the person can add their own.
+    Mark each picture a real business would show (the cakes, the stall, the
+    teacher, the room) as a slot: `data-img` with a short key and a
+    `data-label` saying what the photo should show, on a `media` panel whose
+    icon stands in until a photo is added:
+    `<div class="media media-wide" data-img="loaves" data-label="Photo of this week's loaves">`.
+    The nav's `logo` is always the slot `logo`. At most six slots a page.
+  - Imagery: the best picture is still the business's
     own content laid out well (the timetable, the menu, the cakes and their
     prices, the app's screen). Where an image is still wanted, use an art
     panel: a `<div class="media">` holding an icon that is exactly the
@@ -76,8 +83,8 @@ It is added to your document for you, so do not copy any of it.
     `media-rounded` or `media-blob` its shape. Wrap it in `overlap` with a
     `float-card` to lay one small real or plainly placeholder fact over it
     (the next opening, a starting price); a panel with a `float-card` has
-    no `media-caption`. Keep art panels modest: one per page at most, never
-    the whole width of a first screen.
+    no `media-caption`. Keep art panels without a picture slot modest: one
+    per page at most, never the whole width of a first screen.
   - More sections: `timetable` (rows of `day`, a line, `time`), `facts` (a
     strip of short facts, each a `strong` and a `span`), `area-list` (a
     `<ul>` of places), `compare` (two panels: before and after, or two
@@ -141,6 +148,11 @@ that is striking at a glance, then calm, well-ordered sections.
   ("4.9", "128 happy customers"): the business has none to show yet. A
   quote, if any, is one short line in the customer's plain words, with
   `data-label="Customer quote"` so the person replaces it with a real one.
+- Mark each set of repeated items (a menu, a price list, timetable rows, a
+  row of cards, a guest list's options) with `data-list` naming what they
+  are, on the element holding them, each item one child of it:
+  `<div class="stack" data-list="This week's bakes">`. The person edits
+  them as a list: adds, removes and reorders items.
 - Give each real-world fact a `data-label` saying what it is, on the
   element holding it: `<p data-label="Event date">Saturday, June 14</p>`.
   Facts are names, dates, times, places, addresses, prices, contact details,
@@ -169,4 +181,6 @@ hero straight away.
 You are given the current mockup and the change the person asked for.
 Write the whole updated document, keeping everything they did not ask to
 change. Keep every `data-c`, `data-c-ph` and `data-label` attribute on the
-text it is on: they tie the page's text to what the person set.
+text it is on, and every `data-img`, `data-img-id`, `data-list` and
+`data-list-id` on its element: they tie the page to the person's own words,
+pictures and lists.

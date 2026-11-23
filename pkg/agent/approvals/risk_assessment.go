@@ -14,16 +14,16 @@ import (
 type RiskSource string
 
 const (
-	RiskSourceClassifier        RiskSource = "classifier"
-	RiskSourcePersonaCascade    RiskSource = "persona-cascade"
-	RiskSourceCriticalOp        RiskSource = "critical-op"
-	RiskSourceGitHistoryRewrite RiskSource = "git-history-rewrite"
-	RiskSourceGitRebase         RiskSource = "git-rebase"
-	RiskSourceGitWrite          RiskSource = "git-write"
-	RiskSourceFSTier            RiskSource = "fs-tier"
-	RiskSourceWorkspacePolicy   RiskSource = "workspace-policy"
-	RiskSourceHandler           RiskSource = "handler"
-	RiskSourcePasswordPrompter  RiskSource = "password-prompter"
+	RiskSourceClassifier          RiskSource = "classifier"
+	RiskSourcePersonaCascade      RiskSource = "persona-cascade"
+	RiskSourceCriticalOp          RiskSource = "critical-op"
+	RiskSourceGitHistoryRewrite   RiskSource = "git-history-rewrite"
+	RiskSourceGitRebase           RiskSource = "git-rebase"
+	RiskSourceGitWrite            RiskSource = "git-write"
+	RiskSourceFSTier              RiskSource = "fs-tier"
+	RiskSourceProjectFolderPolicy RiskSource = "workspace-policy"
+	RiskSourceHandler             RiskSource = "handler"
+	RiskSourcePasswordPrompter    RiskSource = "password-prompter"
 )
 
 // RiskAssessment is the canonical, single-vocabulary verdict for a tool call.

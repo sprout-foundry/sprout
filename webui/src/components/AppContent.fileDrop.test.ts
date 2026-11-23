@@ -273,7 +273,7 @@ describe('Binary file detection (AppContent.handleFilesDropped)', () => {
     /**
      * Simulates the core logic of handleFilesDropped from AppContent.tsx
      * (without React hooks, DOM, or external services).
-     * Returns the files that would be opened as workspace buffers.
+     * Returns the files that would be opened as project folder buffers.
      */
     function simulateDrop(fileNames: string[]): string[] {
       const openedFiles: string[] = [];

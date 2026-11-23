@@ -59,15 +59,15 @@ func convertHandlerToSeedToolConfig(h tools.ToolHandler, agent *Agent) core.Tool
 	seed.Handler = func(ctx context.Context, args map[string]interface{}) (string, error) {
 		logToolExecution(agent, name)
 
-		// Inject workspace root, effective cwd, and session folders into context so
+		// Inject project folder, effective cwd, and session folders into context so
 		// filesystem path resolution (SafeResolvePathWithBypass) resolves relative
-		// paths against the agent's workspace root, effective cwd, and session-
+		// paths against the agent's project folder, effective cwd, and session-
 		// allowlisted folders instead of the process-global cwd.
 		if agent != nil {
-			workspaceRoot := agent.GetWorkspaceRoot()
+			projectFolder := agent.GetProjectFolder()
 			effectiveCwd := agent.effectiveCwd()
 			sessionFolders := agent.SnapshotSessionAllowedFolders()
-			ctx = withToolExecutionMetadata(ctx, "", name, workspaceRoot, effectiveCwd, sessionFolders, agent.GetAuditLogger())
+			ctx = withToolExecutionMetadata(ctx, "", name, projectFolder, effectiveCwd, sessionFolders, agent.GetAuditLogger())
 			// Wire TerminalManager (WebUI) or BackgroundProcessManager (CLI)
 			// into the context so shell_command handlers can run background
 			// commands. Mirrors pkg/agent/shell.go's executeShellCommandBackground.
@@ -117,12 +117,12 @@ func convertHandlerToSeedToolConfig(h tools.ToolHandler, agent *Agent) core.Tool
 	seed.HandlerWithImages = func(ctx context.Context, args map[string]interface{}) ([]core.ImageData, string, error) {
 		logToolExecution(agent, name)
 
-		// Inject workspace root, effective cwd, and session folders into context.
+		// Inject project folder, effective cwd, and session folders into context.
 		if agent != nil {
-			workspaceRoot := agent.GetWorkspaceRoot()
+			projectFolder := agent.GetProjectFolder()
 			effectiveCwd := agent.effectiveCwd()
 			sessionFolders := agent.SnapshotSessionAllowedFolders()
-			ctx = withToolExecutionMetadata(ctx, "", name, workspaceRoot, effectiveCwd, sessionFolders, agent.GetAuditLogger())
+			ctx = withToolExecutionMetadata(ctx, "", name, projectFolder, effectiveCwd, sessionFolders, agent.GetAuditLogger())
 			injectShellManagersIntoContext(agent, &ctx)
 		}
 
@@ -191,7 +191,7 @@ func buildToolEnvFromAgent(agent *Agent) tools.ToolEnv {
 	}
 
 	env.EventBus = agent.GetEventBus()
-	env.WorkspaceRoot = agent.effectiveCwd()
+	env.ProjectFolder = agent.effectiveCwd()
 	// Gate on verbose mode — mirrors the gate in tool_security.go:ExecuteTool.
 	// In default/compact mode, raw tool output is suppressed so the user
 	// doesn't see read_file contents or full shell stdout dumped to terminal.
@@ -229,7 +229,7 @@ func buildToolEnvFromAgent(agent *Agent) tools.ToolEnv {
 	// Wire Gate 1's path-tier classifier into ToolEnv so handlers can
 	// consult it up-front (same wiring as ExecuteTool's env construction).
 	env.FileAccessClassifier = agent
-	// Interactive off-workspace approval: handlers consult this for
+	// Interactive off-project-folder approval: handlers consult this for
 	// "prompt" verdicts (WebUI dialog via handleFileSecurityError when a
 	// browser client is connected, CLI prompt otherwise).
 	env.FileAccessPrompter = agent
@@ -255,7 +255,7 @@ func buildToolEnvFromAgent(agent *Agent) tools.ToolEnv {
 	// Propagate --unsafe-shell so the shell handler's own gate honors it
 	// (scoped to shell_command; never widens Gate1AutoApproved).
 	env.UnsafeShellMode = agent.GetUnsafeShellMode()
-	// Off-workspace file access is handled entirely through
+	// Off-project-folder file access is handled entirely through
 	// PrecheckFileAccess which consults Gate 1's path-tier classifier.
 	// Handlers consult it up-front and return typed errors for Deny,
 	// bypass for Allow, or fall through for Prompt.

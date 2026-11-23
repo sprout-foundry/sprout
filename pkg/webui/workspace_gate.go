@@ -40,7 +40,7 @@ func resolveHomeDir() string {
 	return ""
 }
 
-// isHomeWorkspace reports whether the workspace root resolves (after symlink
+// isHomeProjectFolder reports whether the project folder resolves (after symlink
 // evaluation) to the user's home directory. Symlink-safe: both sides are
 // passed through filepath.EvalSymlinks before the comparison so that, e.g.,
 // /var/folders vs /private/var/folders do not cause a false negative on macOS.
@@ -48,11 +48,11 @@ func resolveHomeDir() string {
 // Only an EXACT home match counts — a subdirectory of home (e.g. ~/dev) is a
 // legitimate, scoped project root and must not be gated. Returns false if
 // either path is empty or cannot be evaluated.
-func isHomeWorkspace(workspaceRoot string) bool {
-	if workspaceRoot == "" {
+func isHomeProjectFolder(projectFolder string) bool {
+	if projectFolder == "" {
 		return false
 	}
-	resolvedRoot, err := filepath.EvalSymlinks(workspaceRoot)
+	resolvedRoot, err := filepath.EvalSymlinks(projectFolder)
 	if err != nil {
 		return false
 	}
@@ -67,15 +67,15 @@ func isHomeWorkspace(workspaceRoot string) bool {
 	return resolvedRoot == resolvedHome
 }
 
-// homeWorkspaceConsentFile is the on-disk JSON shape for home-as-workspace
+// homeProjectFolderConsentFile is the on-disk JSON shape for home-as-project-folder
 // consent, stored at ~/.sprout/workspace_consent.json.
-type homeWorkspaceConsentFile struct {
-	HomeWorkspace struct {
+type homeProjectFolderConsentFile struct {
+	HomeProjectFolder struct {
 		ConsentedAt time.Time `json:"consented_at"`
-	} `json:"home_workspace"`
+	} `json:"home_project_folder"`
 }
 
-// homeConsentPath returns the path to the home-workspace consent file
+// homeConsentPath returns the path to the home-project-folder consent file
 // in the state directory. Returns "" if the state directory cannot be
 // resolved, in which case consent functions degrade to "no consent".
 func homeConsentPath() string {
@@ -86,11 +86,11 @@ func homeConsentPath() string {
 	return filepath.Join(stateDir, "workspace_consent.json")
 }
 
-// hasHomeWorkspaceConsent reports whether the user has previously granted
-// explicit consent to run with the home directory as the workspace. Returns
+// hasHomeProjectFolderConsent reports whether the user has previously granted
+// explicit consent to run with the home directory as the project folder. Returns
 // false on any error (missing file, parse error, unresolvable home) — the gate
 // fails closed.
-func hasHomeWorkspaceConsent() bool {
+func hasHomeProjectFolderConsent() bool {
 	path := homeConsentPath()
 	if path == "" {
 		return false
@@ -99,18 +99,18 @@ func hasHomeWorkspaceConsent() bool {
 	if err != nil {
 		return false
 	}
-	var consent homeWorkspaceConsentFile
+	var consent homeProjectFolderConsentFile
 	if err := json.Unmarshal(data, &consent); err != nil {
 		return false
 	}
-	return !consent.HomeWorkspace.ConsentedAt.IsZero()
+	return !consent.HomeProjectFolder.ConsentedAt.IsZero()
 }
 
-// recordHomeWorkspaceConsent persists the user's explicit consent to use the
-// home directory as the workspace. The parent directory is created (0700) and
+// recordHomeProjectFolderConsent persists the user's explicit consent to use the
+// home directory as the project folder. The parent directory is created (0700) and
 // the file written with 0600. Errors are returned to the caller (the API
 // handler logs but does not fail the request on error).
-func recordHomeWorkspaceConsent() error {
+func recordHomeProjectFolderConsent() error {
 	path := homeConsentPath()
 	if path == "" {
 		return os.ErrNotExist
@@ -118,8 +118,8 @@ func recordHomeWorkspaceConsent() error {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
-	var consent homeWorkspaceConsentFile
-	consent.HomeWorkspace.ConsentedAt = time.Now()
+	var consent homeProjectFolderConsentFile
+	consent.HomeProjectFolder.ConsentedAt = time.Now()
 	data, err := json.MarshalIndent(consent, "", "  ")
 	if err != nil {
 		return err
@@ -127,7 +127,7 @@ func recordHomeWorkspaceConsent() error {
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		return err
 	}
-	webuiLogger.Info("home-workspace consent recorded",
+	webuiLogger.Info("home-project-folder consent recorded",
 		slog.String("consent_path", path))
 	return nil
 }

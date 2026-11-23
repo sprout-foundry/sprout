@@ -431,7 +431,7 @@ export interface GitCloneOptions {
 
 export async function gitClone(url: string, opts?: GitCloneOptions) {
   const fs = getFs().promises;
-  // The previous repository's files leave the workspace with it, so two
+  // The previous repository's files leave the project folder with it, so two
   // repositories never mix in one tree.
   const previousFiles = await workTreePaths();
   if (previousFiles.length > 0) await bridge()?.deleteVfsFiles?.(previousFiles);
@@ -483,7 +483,7 @@ export async function gitPush(remote = 'origin', branch?: string) {
   if (!remotes.some((r) => r.remote === remote)) {
     if (await snapshotSource()) {
       throw new Error(
-        'This workspace was imported without git history, so it has no remote to push to. Run the push from a cloud workspace instead.',
+        'This project was imported without git history, so it has no remote to push to. Run the push from a cloud dev space instead.',
       );
     }
     throw new Error(

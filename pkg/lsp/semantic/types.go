@@ -20,7 +20,7 @@ type Capabilities struct {
 
 // ToolInput is the normalized request shape sent to language adapters.
 type ToolInput struct {
-	WorkspaceRoot string    `json:"workspaceRoot"`
+	ProjectFolder string    `json:"workspaceRoot"`
 	FilePath      string    `json:"filePath"`
 	Content       string    `json:"content"`
 	Method        string    `json:"method"`

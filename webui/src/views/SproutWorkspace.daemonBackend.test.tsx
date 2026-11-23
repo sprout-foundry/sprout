@@ -111,7 +111,7 @@ beforeEach(() => {
     const url = String(input);
     // The workspace-root probe expects its own envelope; every other call in
     // this file is a chat-session read, which the transcript shape answers.
-    const body = url.includes('/api/workspace') ? { workspace_root: '', daemon_root: '' } : TRANSCRIPT;
+    const body = url.includes('/api/project-folder') ? { project_folder: '', daemon_root: '' } : TRANSCRIPT;
     return {
       ok: true,
       status: 200,

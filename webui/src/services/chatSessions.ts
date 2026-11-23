@@ -84,13 +84,13 @@ export interface ChatSessionsApi {
     branch: string;
     base_ref?: string;
     name?: string;
-    auto_switch_workspace?: boolean;
+    auto_switch_project_folder?: boolean;
   }) => Promise<{
     message: string;
     chat_session: ChatSessionSwitchResponse['chat_session'];
     worktree_path: string;
     branch: string;
-    workspace_root: string;
+    project_folder: string;
   }>;
 }
 
@@ -299,7 +299,7 @@ export async function createChatSessionInWorktree(
     branch: string;
     base_ref?: string;
     name?: string;
-    auto_switch_workspace?: boolean;
+    auto_switch_project_folder?: boolean;
   },
   fetchFn: typeof fetch = clientFetch,
 ): Promise<{
@@ -307,7 +307,7 @@ export async function createChatSessionInWorktree(
   chat_session: ChatSessionSwitchResponse['chat_session'];
   worktree_path: string;
   branch: string;
-  workspace_root: string;
+  project_folder: string;
 }> {
   const res = await fetchFn('/api/chat-sessions/create-in-worktree', {
     method: 'POST',

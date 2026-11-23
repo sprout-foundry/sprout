@@ -67,7 +67,7 @@ func TestStashTheirsContent_Overwrite(t *testing.T) {
 
 func TestStashFileMetadata_RoundTrip(t *testing.T) {
 	path := "/metadata.txt"
-	md := agent.WorkspaceFileMetadata{
+	md := agent.ProjectFolderFileMetadata{
 		BrowserSeq:        42,
 		ContainerSeq:      10,
 		LastSyncedBrowser: 38,
@@ -89,7 +89,7 @@ func TestStashFileMetadata_RoundTrip(t *testing.T) {
 
 func TestStashFileMetadata_WithUnsyncedEdits(t *testing.T) {
 	path := "/unsynced.txt"
-	md := agent.WorkspaceFileMetadata{
+	md := agent.ProjectFolderFileMetadata{
 		BrowserSeq:        10,
 		ContainerSeq:      3,
 		LastSyncedBrowser: 5,

@@ -28,27 +28,27 @@ var isValidFilenamePattern = regexp.MustCompile(`^[A-Za-z0-9._-]+\.json$`)
 // Dir returns the default automate directory path (cwd + "/automate").
 //
 // CAUTION: in daemon mode (SPROUT_SERVICE=1), os.Getwd() returns the daemon
-// root, not the active workspace. Tool handlers in the agent must use DirIn
-// with the workspace root from the active Agent (a.GetWorkspaceRoot()) or
-// context (pkg/filesystem.WorkspaceRootFromContext), not Dir(). See
-// SP-119 for the workspace-aware flow.
+// root, not the active project folder. Tool handlers in the agent must use DirIn
+// with the project folder from the active Agent (a.GetProjectFolder()) or
+// context (pkg/filesystem.ProjectFolderFromContext), not Dir(). See
+// SP-119 for the project-folder-aware flow.
 func Dir() string {
 	cwd, _ := os.Getwd()
 	return filepath.Join(cwd, "automate")
 }
 
-// DirIn returns the automate directory inside the given workspace directory.
-// Returns the CWD-based Dir() when workspaceDir is empty (or whitespace-only),
-// preserving CLI behavior where the user's shell CWD IS the workspace root.
+// DirIn returns the automate directory inside the given project folder.
+// Returns the CWD-based Dir() when projectFolderDir is empty (or whitespace-only),
+// preserving CLI behavior where the user's shell CWD IS the project folder.
 //
-// This is the workspace-aware counterpart to Dir(). Use DirIn from any code
-// that knows the active workspace (e.g., agent tools running inside a daemon
-// where os.Getwd() returns the daemon root, not the user's workspace).
-func DirIn(workspaceDir string) string {
-	if strings.TrimSpace(workspaceDir) == "" {
+// This is the project-folder-aware counterpart to Dir(). Use DirIn from any code
+// that knows the active project folder (e.g., agent tools running inside a daemon
+// where os.Getwd() returns the daemon root, not the user's project folder).
+func DirIn(projectFolderDir string) string {
+	if strings.TrimSpace(projectFolderDir) == "" {
 		return Dir()
 	}
-	return filepath.Join(workspaceDir, "automate")
+	return filepath.Join(projectFolderDir, "automate")
 }
 
 // IsValidFilename checks if a filename is safe for use as a workflow filename.

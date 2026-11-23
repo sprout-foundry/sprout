@@ -17,18 +17,18 @@ import (
 // large repositories.
 const isolationGitBudget = 2 * time.Minute
 
-// isolatedWorkspace is a git worktree seeded with the primary workspace's
+// isolatedProjectFolder is a git worktree seeded with the primary project folder's
 // uncommitted state, where a file-modifying subagent can run without its
 // edits colliding with the primary's. Its changes come back as a patch
 // against the seeded baseline.
-type isolatedWorkspace struct {
+type isolatedProjectFolder struct {
 	repoRoot string // primary repository top level, as git reports it (symlinks resolved)
-	// displayRoot is repoRoot in the form the primary workspace path uses
+	// displayRoot is repoRoot in the form the primary project folder path uses
 	// (e.g. macOS /var/... rather than /private/var/...), so remapped change
 	// paths match the primary tracker's own entries for the same files.
 	displayRoot string
 	path        string // worktree top level
-	subdir      string // workspace root relative to repoRoot ("" at top level)
+	subdir      string // project folder relative to repoRoot ("" at top level)
 	baseline    string // commit in the worktree holding the seeded state
 	patchPath   string // where an unapplied patch is kept
 }
@@ -56,13 +56,13 @@ func isolatedWorktreesDir() (string, error) {
 	return filepath.Join(state, "worktrees"), nil
 }
 
-// createIsolatedWorkspace creates a worktree of the repository containing
-// workspaceRoot, at HEAD plus the current uncommitted changes and untracked
+// createIsolatedProjectFolder creates a worktree of the repository containing
+// projectFolder, at HEAD plus the current uncommitted changes and untracked
 // files, and commits that state as the baseline.
-func createIsolatedWorkspace(ctx context.Context, workspaceRoot, id string) (*isolatedWorkspace, error) {
-	repoRoot := reviewRepoRoot(ctx, workspaceRoot)
+func createIsolatedProjectFolder(ctx context.Context, projectFolder, id string) (*isolatedProjectFolder, error) {
+	repoRoot := reviewRepoRoot(ctx, projectFolder)
 	if repoRoot == "" {
-		return nil, fmt.Errorf("isolation needs a git repository; %s is not in one", workspaceRoot)
+		return nil, fmt.Errorf("isolation needs a git repository; %s is not in one", projectFolder)
 	}
 	if _, err := runGitIn(ctx, repoRoot, "rev-parse", "--verify", "--quiet", "HEAD"); err != nil {
 		return nil, fmt.Errorf("isolation needs at least one commit in %s", repoRoot)
@@ -75,25 +75,25 @@ func createIsolatedWorkspace(ctx context.Context, workspaceRoot, id string) (*is
 		return nil, err
 	}
 	name := fmt.Sprintf("%s-%s-%d", filepath.Base(repoRoot), id, time.Now().Unix())
-	ws := &isolatedWorkspace{
+	ws := &isolatedProjectFolder{
 		repoRoot:  repoRoot,
 		path:      filepath.Join(base, name),
 		patchPath: filepath.Join(base, name+".patch"),
 	}
 	// Compare in resolved form (git resolves symlinks), but keep the
-	// workspace's own form for paths recorded in change history.
+	// project folder's own form for paths recorded in change history.
 	ws.displayRoot = repoRoot
-	realWorkspace := workspaceRoot
-	if r, err := filepath.EvalSymlinks(workspaceRoot); err == nil {
-		realWorkspace = r
+	realProjectFolder := projectFolder
+	if r, err := filepath.EvalSymlinks(projectFolder); err == nil {
+		realProjectFolder = r
 	}
-	if rel, err := filepath.Rel(repoRoot, realWorkspace); err == nil && !strings.HasPrefix(rel, "..") {
+	if rel, err := filepath.Rel(repoRoot, realProjectFolder); err == nil && !strings.HasPrefix(rel, "..") {
 		if rel != "." {
 			ws.subdir = rel
 		}
-		ws.displayRoot = filepath.Clean(strings.TrimSuffix(filepath.Clean(workspaceRoot), string(filepath.Separator)+rel))
+		ws.displayRoot = filepath.Clean(strings.TrimSuffix(filepath.Clean(projectFolder), string(filepath.Separator)+rel))
 		if rel == "." {
-			ws.displayRoot = filepath.Clean(workspaceRoot)
+			ws.displayRoot = filepath.Clean(projectFolder)
 		}
 	}
 
@@ -109,7 +109,7 @@ func createIsolatedWorkspace(ctx context.Context, workspaceRoot, id string) (*is
 
 // seed copies the primary's uncommitted state into the worktree and commits
 // it as the baseline the subagent's changes are measured against.
-func (w *isolatedWorkspace) seed(ctx context.Context) error {
+func (w *isolatedProjectFolder) seed(ctx context.Context) error {
 	diff, err := runGitIn(ctx, w.repoRoot, "diff", "--binary", "HEAD")
 	if err != nil {
 		return err
@@ -139,14 +139,14 @@ func (w *isolatedWorkspace) seed(ctx context.Context) error {
 }
 
 // dir is the directory the subagent works in: the worktree counterpart of
-// the primary's workspace root.
-func (w *isolatedWorkspace) dir() string {
+// the primary's project folder.
+func (w *isolatedProjectFolder) dir() string {
 	return filepath.Join(w.path, w.subdir)
 }
 
 // collectPatch returns the subagent's changes relative to the baseline,
 // including new and deleted files.
-func (w *isolatedWorkspace) collectPatch(ctx context.Context) (string, error) {
+func (w *isolatedProjectFolder) collectPatch(ctx context.Context) (string, error) {
 	if _, err := runGitIn(ctx, w.path, "add", "-A"); err != nil {
 		return "", err
 	}
@@ -155,7 +155,7 @@ func (w *isolatedWorkspace) collectPatch(ctx context.Context) (string, error) {
 
 // applyPatch applies patch in dir, checking first so a patch that doesn't
 // apply cleanly leaves dir untouched.
-func (w *isolatedWorkspace) applyPatch(ctx context.Context, dir, patch string, keepOnFailure bool) error {
+func (w *isolatedProjectFolder) applyPatch(ctx context.Context, dir, patch string, keepOnFailure bool) error {
 	f, err := os.CreateTemp("", "sprout-isolation-*.patch")
 	if err != nil {
 		return err
@@ -178,7 +178,7 @@ func (w *isolatedWorkspace) applyPatch(ctx context.Context, dir, patch string, k
 	return err
 }
 
-func (w *isolatedWorkspace) remove(ctx context.Context) {
+func (w *isolatedProjectFolder) remove(ctx context.Context) {
 	if _, err := runGitIn(ctx, w.repoRoot, "worktree", "remove", "--force", w.path); err != nil {
 		_ = os.RemoveAll(w.path)
 		_, _ = runGitIn(ctx, w.repoRoot, "worktree", "prune")
@@ -187,7 +187,7 @@ func (w *isolatedWorkspace) remove(ctx context.Context) {
 
 // remapChanges rewrites tracked change paths from the worktree to the
 // primary repository, so the primary's change history names its own files.
-func (w *isolatedWorkspace) remapChanges(changes []TrackedFileChange) []TrackedFileChange {
+func (w *isolatedProjectFolder) remapChanges(changes []TrackedFileChange) []TrackedFileChange {
 	roots := []string{w.path}
 	if real, err := filepath.EvalSymlinks(w.path); err == nil && real != w.path {
 		roots = append(roots, real)
@@ -242,27 +242,27 @@ func copyFile(src, dst string) error {
 }
 
 // isolationPreamble tells an isolated subagent where it is working, so paths
-// to the primary workspace in its task aren't edited directly.
-func isolationPreamble(w *isolatedWorkspace, originalRoot string) string {
-	return fmt.Sprintf("# Isolated Workspace\n\nYou are working in an isolated copy of the repository at `%s` (it already includes the current uncommitted changes). "+
+// to the primary project folder in its task aren't edited directly.
+func isolationPreamble(w *isolatedProjectFolder, originalRoot string) string {
+	return fmt.Sprintf("# Isolated Project folder\n\nYou are working in an isolated copy of the repository at `%s` (it already includes the current uncommitted changes). "+
 		"Paths under `%s` in this task refer to the same files in your copy — read and edit them under `%s`, never under `%s`. "+
-		"Your changes are applied back to the original workspace when you finish.\n\n---\n\n",
+		"Your changes are applied back to the original project folder when you finish.\n\n---\n\n",
 		w.dir(), originalRoot, w.dir(), originalRoot)
 }
 
 // runIsolatedSubagent runs spec in an isolated worktree and brings its
 // changes back. On a clean finish the patch is applied to the primary
-// workspace; if it no longer applies (the primary changed the same lines
+// project folder; if it no longer applies (the primary changed the same lines
 // meanwhile), or the run failed or was cancelled, the primary is left
 // untouched and the outcome is reported in the result.
 func runIsolatedSubagent(ctx context.Context, a *Agent, spec *subagentLaunchSpec, taskID string, quiet bool) *SubagentResult {
-	originalRoot := spec.subagentWorkspaceRoot
+	originalRoot := spec.subagentProjectFolder
 	if originalRoot == "" {
-		originalRoot = a.currentWorkspaceRoot()
+		originalRoot = a.currentProjectFolder()
 	}
-	ws, err := createIsolatedWorkspace(ctx, originalRoot, taskID)
+	ws, err := createIsolatedProjectFolder(ctx, originalRoot, taskID)
 	if err != nil {
-		return &SubagentResult{ID: taskID, Error: fmt.Errorf("create isolated workspace: %w", err)}
+		return &SubagentResult{ID: taskID, Error: fmt.Errorf("create isolated project folder: %w", err)}
 	}
 
 	result := a.GetSubagentRunner().runTask(ctx, taskID, isolationPreamble(ws, originalRoot)+spec.enhancedPrompt, SubagentOptions{
@@ -288,9 +288,9 @@ func runIsolatedSubagent(ctx context.Context, a *Agent, spec *subagentLaunchSpec
 
 // finishIsolatedRun brings an isolated run's changes back and returns a note
 // describing the outcome. Changes are applied only when the run finished
-// cleanly and the patch still applies; otherwise the primary workspace is
+// cleanly and the patch still applies; otherwise the primary project folder is
 // left untouched and the work is kept for manual review.
-func finishIsolatedRun(ctx context.Context, ws *isolatedWorkspace, result *SubagentResult) string {
+func finishIsolatedRun(ctx context.Context, ws *isolatedProjectFolder, result *SubagentResult) string {
 	patch, patchErr := ws.collectPatch(ctx)
 	switch {
 	case result.Cancelled:
@@ -310,11 +310,11 @@ func finishIsolatedRun(ctx context.Context, ws *isolatedWorkspace, result *Subag
 	}
 	if err := ws.applyPatch(ctx, ws.repoRoot, patch, true); err != nil {
 		result.FileChanges = nil
-		return fmt.Sprintf("The changes no longer apply cleanly to the workspace (it changed meanwhile): %v. "+
+		return fmt.Sprintf("The changes no longer apply cleanly to the project folder (it changed meanwhile): %v. "+
 			"Nothing was changed. The work is kept in %s; to merge it, run `git apply --3way %s` in %s and resolve any conflicts.",
 			err, ws.path, ws.patchPath, ws.repoRoot)
 	}
 	result.FileChanges = ws.remapChanges(result.FileChanges)
 	ws.remove(ctx)
-	return fmt.Sprintf("Changes applied to the workspace (%d tracked file change(s)).", len(result.FileChanges))
+	return fmt.Sprintf("Changes applied to the project folder (%d tracked file change(s)).", len(result.FileChanges))
 }

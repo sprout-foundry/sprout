@@ -29,7 +29,7 @@ func runTypeScriptTool(input ToolInput) (ToolResult, error) {
 
 	cmd := exec.Command("node", "-e", typeScriptNodeScript)
 	cmd.Stdin = bytes.NewReader(in)
-	cmd.Dir = input.WorkspaceRoot
+	cmd.Dir = input.ProjectFolder
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

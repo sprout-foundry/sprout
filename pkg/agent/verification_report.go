@@ -2,7 +2,7 @@
 // shared repair-loop stopping rule. Everything here is pure and
 // deterministic so the report the model sees, the per-check counter keys,
 // and the loop's termination decision are asserted byte-for-byte (and
-// termination-pattern-wise) in unit tests without a workspace or a shell.
+// termination-pattern-wise) in unit tests without a project folder or a shell.
 
 package agent
 

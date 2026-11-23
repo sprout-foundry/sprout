@@ -18,7 +18,7 @@ const taskRole = "task"
 // newTaskAgent builds a full agent to run one task inside its worktree.
 //
 // It is deliberately not a subagent: a task needs the primary's system
-// prompt (so it carries the workspace conventions and tool guidance), the
+// prompt (so it carries the project folder conventions and tool guidance), the
 // primary's iteration budget, and no depth limit — a task that could not
 // delegate would be worse than the primary it replaces. What it does not
 // share is the primary's conversation state, change tracker, or todo list.
@@ -69,7 +69,7 @@ func newTaskAgent(a *Agent, worktreePath, taskID string) (*Agent, error) {
 		interruptCtx:       interruptCtx,
 		interruptCancel:    interruptCancel,
 		parentInterruptCtx: interruptCtx,
-		workspaceRoot:      worktreePath,
+		projectFolder:      worktreePath,
 		state:              stateMgr,
 		output:             outputMgr,
 		security:           securityMgr,

@@ -136,7 +136,7 @@ func printBudgetLine(summary *automate.Summary) {
 // printAllowedPaths renders the "External paths this workflow will access"
 // section introduced by SP-128 Phase 2. Suppressed entirely when the
 // workflow declares no allowed_paths — workflows that stay inside the
-// workspace see no new noise. Layout:
+// project folder see no new noise. Layout:
 //
 //	External paths this workflow will access:
 //

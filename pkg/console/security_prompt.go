@@ -135,7 +135,7 @@ func askForSecurityApprovalWriter(w io.Writer, prompt, command string, analysis 
 }
 
 // askForFilesystemSecurityApproval is the matching SelectList-based picker
-// for out-of-workspace filesystem accesses.  Item set depends on tier —
+// for out-of-project-folder filesystem accesses.  Item set depends on tier —
 // Sensitive paths can't be session-allowlisted, so only "Allow once" / "Deny"
 // are offered.
 func askForFilesystemSecurityApproval(prompt, path, folder string, tier utils.FilesystemPromptTier) utils.ApprovalChoice {

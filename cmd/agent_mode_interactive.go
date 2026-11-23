@@ -26,7 +26,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// Route Go's log to .sprout/workspace.log instead so internal noise
 	// stops fighting the spinner; user-facing output still goes through
 	// fmt.Print which is properly synchronized by the indicator.
-	if restoreLog, err := redirectGoLogToWorkspace(); err == nil {
+	if restoreLog, err := redirectGoLogToProjectFolder(); err == nil {
 		defer restoreLog()
 	}
 
@@ -76,11 +76,11 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 		chatAgent.GetModel())
 
 	// SP-130: warn when the interactive session is running from the home
-	// directory. The agent's workspace root is home, so every path under ~
-	// is PathTierWorkspace (no approval prompts). This is the CLI analog of
-	// the webui home-workspace gate — a warning, not a hard block, since
+	// directory. The agent's project folder is home, so every path under ~
+	// is PathTierProjectFolder (no approval prompts). This is the CLI analog of
+	// the webui home-project-folder gate — a warning, not a hard block, since
 	// the user explicitly started sprout from ~.
-	if cwd := chatAgent.GetWorkspaceRoot(); cwd != "" {
+	if cwd := chatAgent.GetProjectFolder(); cwd != "" {
 		if home, err := os.UserHomeDir(); err == nil && home != "" {
 			if abs, err := filepath.Abs(cwd); err == nil {
 				if evaled, err := filepath.EvalSymlinks(abs); err == nil {
@@ -118,7 +118,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	}
 
 	// SP-048-5b: one-shot hint about Tab autocomplete + Ctrl-D, persisted
-	// per workspace in ~/.sprout/state.json so it never repeats.
+	// per project folder in ~/.sprout/state.json so it never repeats.
 	maybeShowFirstRunHint()
 
 	// Passive "new release available" check: background fetch on a 24h

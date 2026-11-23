@@ -12,18 +12,18 @@ import (
 // context. EventBus and UserID are skipped when empty.
 type agentSetupConfig struct {
 	EventBus      *events.EventBus
-	WorkspaceRoot string
+	ProjectFolder string
 	ClientID      string
 	ChatID        string
 	UserID        string
 }
 
 // setupWebUIAgent applies the standard configuration every webui agent needs:
-// EventBus, SlashCommands registry, WorkspaceRoot, event metadata for routing,
+// EventBus, SlashCommands registry, ProjectFolder, event metadata for routing,
 // and streaming support. This replaces the copy-pasted setter sequences in
 // chat_sessions.go and client_context.go.
 //
-// Call this immediately after agent.NewAgentWithLayersInWorkspace (or similar
+// Call this immediately after agent.NewAgentWithLayersInProjectFolder (or similar
 // agent constructors). The caller owns error handling for the constructor;
 // this function does not return an error because none of the setters can fail.
 func setupWebUIAgent(a *agent.Agent, cfg agentSetupConfig) {
@@ -31,7 +31,7 @@ func setupWebUIAgent(a *agent.Agent, cfg agentSetupConfig) {
 		a.SetEventBus(cfg.EventBus)
 	}
 	a.SetSlashCommands(agent_commands.NewCommandRegistry())
-	a.SetWorkspaceRoot(cfg.WorkspaceRoot)
+	a.SetProjectFolder(cfg.ProjectFolder)
 	applyWebUIAgentMetadata(a, cfg)
 	a.EnableStreaming(func(string) {})
 }
@@ -42,7 +42,7 @@ func setupWebUIAgent(a *agent.Agent, cfg agentSetupConfig) {
 // be re-applied to a live agent. If ws is nil, server-level wiring
 // (HasActiveWebUIClients, InjectWebUIManagers) is skipped.
 func rearmWebUIAgent(a *agent.Agent, ws *ReactWebServer, cfg agentSetupConfig) {
-	a.SetWorkspaceRoot(cfg.WorkspaceRoot)
+	a.SetProjectFolder(cfg.ProjectFolder)
 	applyWebUIAgentMetadata(a, cfg)
 	a.EnableStreaming(func(string) {})
 	if ws != nil {

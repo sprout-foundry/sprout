@@ -374,7 +374,7 @@ func TestWriteStructuredFileHandler_Execute_RelativePath(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, res.IsError)
 
-	// Verify file was created relative to workspace root
+	// Verify file was created relative to project folder
 	_, err = os.ReadFile(filepath.Join(dir, "relative.json"))
 	require.NoError(t, err)
 }

@@ -112,14 +112,14 @@ func createSparseFile(t *testing.T, path string, size int64) {
 // returns the collected messages from the client connection. This is
 // necessary because handleColdHydrateRequest writes synchronously to
 // the server-side connection, and the client must read concurrently.
-func runHydrateAndWait(t *testing.T, ws *ReactWebServer, pair *testingConnPair, workspaceRoot string) []map[string]interface{} {
+func runHydrateAndWait(t *testing.T, ws *ReactWebServer, pair *testingConnPair, projectFolder string) []map[string]interface{} {
 	t.Helper()
 	var messages []map[string]interface{}
 	// Run the handler in a goroutine and read from the client concurrently.
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		ws.handleColdHydrateRequest(pair.server, workspaceRoot)
+		ws.handleColdHydrateRequest(pair.server, projectFolder)
 	}()
 
 	clientConn := pair.client
@@ -283,7 +283,7 @@ func TestHandleColdHydrateRequest_BasicFlow(t *testing.T) {
 	pair := newTestingConnPair(t)
 	defer pair.server.Close()
 
-	// Create a temp workspace with 3 files
+	// Create a temp project folder with 3 files
 	dir := t.TempDir()
 	fileContents := map[string]string{
 		"hello.txt":    "hello world",
@@ -509,7 +509,7 @@ func TestHandleColdHydrateRequest_ExcludesLargeBinaries(t *testing.T) {
 	}
 }
 
-func TestHandleColdHydrateRequest_EmptyWorkspace(t *testing.T) {
+func TestHandleColdHydrateRequest_EmptyProjectFolder(t *testing.T) {
 	ws := &ReactWebServer{eventBus: events.NewEventBus()}
 	pair := newTestingConnPair(t)
 	defer pair.server.Close()
@@ -546,7 +546,7 @@ func TestHandleColdHydrateRequest_EmptyWorkspace(t *testing.T) {
 	}
 }
 
-func TestHandleColdHydrateRequest_NonExistentWorkspace(t *testing.T) {
+func TestHandleColdHydrateRequest_NonExistentProjectFolder(t *testing.T) {
 	ws := &ReactWebServer{eventBus: events.NewEventBus()}
 	pair := newTestingConnPair(t)
 	defer pair.server.Close()
@@ -572,7 +572,7 @@ func TestHandleColdHydrateRequest_NonExistentWorkspace(t *testing.T) {
 	}
 }
 
-func TestHandleColdHydrateRequest_EmptyWorkspaceRoot(t *testing.T) {
+func TestHandleColdHydrateRequest_NoProjectFolderPath(t *testing.T) {
 	ws := &ReactWebServer{eventBus: events.NewEventBus()}
 	pair := newTestingConnPair(t)
 	defer pair.server.Close()
@@ -596,7 +596,7 @@ func TestHandleColdHydrateRequest_EmptyWorkspaceRoot(t *testing.T) {
 	}
 }
 
-func TestHandleColdHydrateRequest_WorkspaceRootIsFile(t *testing.T) {
+func TestHandleColdHydrateRequest_ProjectFolderIsFile(t *testing.T) {
 	ws := &ReactWebServer{eventBus: events.NewEventBus()}
 	pair := newTestingConnPair(t)
 	defer pair.server.Close()
@@ -857,7 +857,7 @@ func TestHandleColdHydrateRequest_EstimateSeconds(t *testing.T) {
 		wantEstimateMax int64
 		fileName        string
 	}{
-		{"empty workspace", 0, 0, 0, ""},
+		{"empty project folder", 0, 0, 0, ""},
 		{"small content ~1KB", 1024, 1, 1, "small.txt"},
 		{"medium ~1MB", 1024 * 1024, 1, 1, "medium.txt"},
 		{"~2MB", 2 * 1024 * 1024, 1, 1, "big.txt"},
@@ -882,10 +882,10 @@ func TestHandleColdHydrateRequest_EstimateSeconds(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			// For empty workspace, estimate should be 0
+			// For empty project folder, estimate should be 0
 			if tt.totalBytes == 0 {
 				if manifest.EstimateSeconds != 0 {
-					t.Errorf("estimate_seconds = %d, want 0 for empty workspace", manifest.EstimateSeconds)
+					t.Errorf("estimate_seconds = %d, want 0 for empty project folder", manifest.EstimateSeconds)
 				}
 				return
 			}
@@ -1183,14 +1183,14 @@ func TestParseAndValidateMessage_HydrateRequest(t *testing.T) {
 func TestHandleWebSocketMessage_HydrateRequest(t *testing.T) {
 	ws := &ReactWebServer{
 		eventBus:      events.NewEventBus(),
-		workspaceRoot: t.TempDir(),
+		projectFolder: t.TempDir(),
 	}
 	_ = ws // used by the handler below
 	pair := newTestingConnPair(t)
 	defer pair.server.Close()
 
-	// Create a temp workspace with a file
-	dir := ws.workspaceRoot
+	// Create a temp project folder with a file
+	dir := ws.projectFolder
 	os.WriteFile(filepath.Join(dir, "test.txt"), []byte("hello"), 0644)
 
 	// Start a goroutine to read and dispatch messages on the server side
@@ -1255,19 +1255,19 @@ func TestHandleWebSocketMessage_HydrateRequest(t *testing.T) {
 
 // setupHydrateIntegrationServer creates a full httptest server serving
 // the WebSocket handler so we can test the complete message flow.
-func setupHydrateIntegrationServer(t *testing.T, workspaceRoot string) (*httptest.Server, *websocket.Conn, func()) {
+func setupHydrateIntegrationServer(t *testing.T, projectFolder string) (*httptest.Server, *websocket.Conn, func()) {
 	t.Helper()
 	bus := events.NewEventBus()
 	ws, err := NewReactWebServer(nil, bus, 0, "127.0.0.1", "", "")
 	if err != nil {
 		// Fall back to minimal server — NewReactWebServer may fail
 		// in some test environments (e.g., missing home dir). We assign
-		// workspaceRoot directly so the hydration handler reads from
+		// projectFolder directly so the hydration handler reads from
 		// the test temp dir, not the original cwd.
 		ws = &ReactWebServer{eventBus: events.NewEventBus()}
-		ws.workspaceRoot = workspaceRoot
+		ws.projectFolder = projectFolder
 	} else {
-		ws.workspaceRoot = workspaceRoot
+		ws.projectFolder = projectFolder
 	}
 
 	upgrader := websocket.Upgrader{
@@ -1474,12 +1474,12 @@ func TestHandleColdHydrateRequest_SymlinkSkipped(t *testing.T) {
 	// Create a regular file
 	os.WriteFile(filepath.Join(dir, "normal.txt"), []byte("hello"), 0644)
 
-	// Create a file outside the workspace that the symlink will target
+	// Create a file outside the project folder that the symlink will target
 	outsideDir := t.TempDir()
 	outsideFile := filepath.Join(outsideDir, "secret.txt")
 	os.WriteFile(outsideFile, []byte("secret data"), 0644)
 
-	// Create a symlink inside the workspace pointing outside
+	// Create a symlink inside the project folder pointing outside
 	symlinkPath := filepath.Join(dir, "link_to_secret.txt")
 	err := os.Symlink(outsideFile, symlinkPath)
 	if err != nil {

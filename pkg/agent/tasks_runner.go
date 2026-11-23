@@ -24,17 +24,17 @@ const maxRetainedTasks = 25
 // another goroutine, so all access goes through taskRegistry, which holds
 // the lock. The struct is never read directly.
 type taskRecord struct {
-	ID        string
-	Branch    string
-	Path      string // worktree top level
-	Base      string
-	Prompt    string
-	Started   time.Time
-	Finished  time.Time
-	Status    string // "running" | "completed" | "failed" | "cancelled" | "stopped" | "merged"
-	Commit    string // short SHA of the task's commit, when it made one
-	Summary   string // the agent's final output, for /tasks <id>
-	Workspace string
+	ID            string
+	Branch        string
+	Path          string // worktree top level
+	Base          string
+	Prompt        string
+	Started       time.Time
+	Finished      time.Time
+	Status        string // "running" | "completed" | "failed" | "cancelled" | "stopped" | "merged"
+	Commit        string // short SHA of the task's commit, when it made one
+	Summary       string // the agent's final output, for /tasks <id>
+	ProjectFolder string
 
 	worktree *taskWorktree
 
@@ -61,9 +61,9 @@ type taskRegistry struct {
 	// between claiming a concurrency slot and creating the worktree.
 	pending []*taskRecord
 
-	// saveMu guards saveLocks; saveLocks holds one mutex per workspace so
-	// concurrent saves of the same workspace serialize without blocking
-	// saves of other workspaces.
+	// saveMu guards saveLocks; saveLocks holds one mutex per project folder so
+	// concurrent saves of the same project folder serialize without blocking
+	// saves of other project folders.
 	saveMu    sync.Mutex
 	saveLocks map[string]*sync.Mutex
 }
@@ -115,11 +115,11 @@ func (r *taskRegistry) setTerminal(id, status, output, commit string) {
 	rec.Summary = output
 	rec.Commit = commit
 	rec.Finished = time.Now()
-	workspace := rec.Workspace
+	projectFolder := rec.ProjectFolder
 	r.mu.Unlock()
 
 	// Persist outside the lock: the write is I/O and must not block /tasks.
-	r.save(workspace)
+	r.save(projectFolder)
 }
 
 // markStopped closes a task record that a stop request ended. It is a no-op
@@ -134,37 +134,37 @@ func (r *taskRegistry) markStopped(id string) {
 	}
 	rec.Status = "stopped"
 	rec.Finished = time.Now()
-	workspace := rec.Workspace
+	projectFolder := rec.ProjectFolder
 	r.mu.Unlock()
-	r.save(workspace)
+	r.save(projectFolder)
 }
 
-// reserve atomically claims a concurrency slot for workspace and returns the
+// reserve atomically claims a concurrency slot for project folder and returns the
 // placeholder record that holds it. Counting alone is not enough: the slot
 // must exist in the registry before the LLM naming call and the worktree
 // creation, or two concurrent /task invocations both observe a free slot and
 // both proceed. The caller fills the placeholder in once the worktree
 // exists, or releases it with discard on any later error.
-func (r *taskRegistry) reserve(workspace string, limit int) (*taskRecord, error) {
+func (r *taskRegistry) reserve(projectFolder string, limit int) (*taskRecord, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	n := 0
 	for _, id := range r.order {
-		if rec := r.byID[id]; rec != nil && rec.Status == "running" && rec.Workspace == workspace {
+		if rec := r.byID[id]; rec != nil && rec.Status == "running" && rec.ProjectFolder == projectFolder {
 			n++
 		}
 	}
 	// A reserved-but-unadopted placeholder holds its slot too.
 	for _, p := range r.pending {
-		if p.Status == "running" && p.Workspace == workspace {
+		if p.Status == "running" && p.ProjectFolder == projectFolder {
 			n++
 		}
 	}
 	if n >= limit {
 		return nil, agenterrors.NewValidation(
-			fmt.Sprintf("%d tasks are already running for this workspace (limit %d); stop one with /tasks stop <id>", n, limit), nil)
+			fmt.Sprintf("%d tasks are already running for this project folder (limit %d); stop one with /tasks stop <id>", n, limit), nil)
 	}
-	rec := &taskRecord{Status: "running", Workspace: workspace, Started: time.Now()}
+	rec := &taskRecord{Status: "running", ProjectFolder: projectFolder, Started: time.Now()}
 	// The placeholder's slot in order is recorded on the record itself, so
 	// adopt fills exactly this position rather than searching for the first
 	// empty entry.
@@ -246,9 +246,9 @@ type StartTaskOptions struct {
 	// Description is the task text handed to the task agent.
 	Description string
 	// Base is the branch or commit to create the worktree from. Empty means
-	// the workspace's current branch.
+	// the project folder's current branch.
 	Base string
-	// MaxConcurrent bounds how many tasks may run at once for this workspace.
+	// MaxConcurrent bounds how many tasks may run at once for this project folder.
 	// Zero uses the default.
 	MaxConcurrent int
 	// Timeout bounds the task's wall clock. Zero uses the default.
@@ -270,13 +270,13 @@ func (a *Agent) StartTask(ctx context.Context, opts StartTaskOptions) (*TaskInfo
 	if description == "" {
 		return nil, agenterrors.NewValidation("usage: /task <description>", nil)
 	}
-	workspace := a.currentWorkspaceRoot()
+	projectFolder := a.currentProjectFolder()
 
 	maxConcurrent := opts.MaxConcurrent
 	if maxConcurrent <= 0 {
 		maxConcurrent = defaultTaskMaxConcurrent
 	}
-	reserved, err := processTasks.reserve(workspace, maxConcurrent)
+	reserved, err := processTasks.reserve(projectFolder, maxConcurrent)
 	if err != nil {
 		return nil, err
 	}
@@ -286,7 +286,7 @@ func (a *Agent) StartTask(ctx context.Context, opts StartTaskOptions) (*TaskInfo
 		processTasks.discard(reserved)
 		return nil, err
 	}
-	wt, err := createTaskWorktree(ctx, workspace, branch, opts.Base)
+	wt, err := createTaskWorktree(ctx, projectFolder, branch, opts.Base)
 	if err != nil {
 		processTasks.discard(reserved)
 		return nil, err
@@ -304,7 +304,7 @@ func (a *Agent) StartTask(ctx context.Context, opts StartTaskOptions) (*TaskInfo
 	rec.Prompt = description
 	rec.worktree = wt
 	processTasks.adopt(rec, t.ID)
-	processTasks.save(workspace)
+	processTasks.save(projectFolder)
 
 	timeout := opts.Timeout
 	if timeout <= 0 {
@@ -418,9 +418,9 @@ func (a *Agent) TaskDetail(id string) (TaskInfo, error) {
 	return TaskInfo{}, agenterrors.NewNotFound("task " + id)
 }
 
-// MergeTask merges a finished task's branch into the workspace's current
-// branch with --no-ff. A dirty workspace or a conflicting branch leaves the
-// workspace untouched.
+// MergeTask merges a finished task's branch into the project folder's current
+// branch with --no-ff. A dirty project folder or a conflicting branch leaves the
+// project folder untouched.
 func (a *Agent) MergeTask(ctx context.Context, id string) (string, error) {
 	a.loadTasksOnce()
 	id = strings.TrimSpace(id)
@@ -442,13 +442,13 @@ func (a *Agent) MergeTask(ctx context.Context, id string) (string, error) {
 	// interrupted-task message promises that work is still on disk.
 	restored := wt == nil && status == "interrupted"
 	if restored {
-		wt = &taskWorktree{RepoRoot: reviewRepoRoot(ctx, a.currentWorkspaceRoot()), Path: path, Branch: branch}
+		wt = &taskWorktree{RepoRoot: reviewRepoRoot(ctx, a.currentProjectFolder()), Path: path, Branch: branch}
 	}
 
-	workspace := a.currentWorkspaceRoot()
-	repoRoot := reviewRepoRoot(ctx, workspace)
+	projectFolder := a.currentProjectFolder()
+	repoRoot := reviewRepoRoot(ctx, projectFolder)
 	if repoRoot == "" {
-		return "", agenterrors.NewValidation(fmt.Sprintf("%s is not inside a git repository", workspace), nil)
+		return "", agenterrors.NewValidation(fmt.Sprintf("%s is not inside a git repository", projectFolder), nil)
 	}
 
 	// Refuse a dirty tree: a merge that lands on top of uncommitted work is
@@ -456,14 +456,14 @@ func (a *Agent) MergeTask(ctx context.Context, id string) (string, error) {
 	if dirty, err := runGitIn(ctx, repoRoot, "status", "--porcelain"); err != nil {
 		return "", err
 	} else if strings.TrimSpace(dirty) != "" {
-		return "", agenterrors.NewValidation("the workspace has uncommitted changes; commit or stash them before merging a task", nil)
+		return "", agenterrors.NewValidation("the project folder has uncommitted changes; commit or stash them before merging a task", nil)
 	}
 
 	// --no-commit first so a conflict aborts without leaving a half-merged
 	// tree behind.
 	if _, err := runGitIn(ctx, repoRoot, "merge", "--no-commit", "--no-ff", branch); err != nil {
 		_, _ = runGitIn(ctx, repoRoot, "merge", "--abort")
-		return "", fmt.Errorf("merge %s into the workspace: %w", branch, err)
+		return "", fmt.Errorf("merge %s into the project folder: %w", branch, err)
 	}
 	// The merge commit lands on the user's own branch, so the repo's hooks
 	// run: this is the one commit in the feature a human would have made.
@@ -473,13 +473,13 @@ func (a *Agent) MergeTask(ctx context.Context, id string) (string, error) {
 
 	if restored {
 		processTasks.setTerminal(id, "merged", "", "")
-		return fmt.Sprintf("Merged %s into the workspace. The worktree at %s was kept: it may hold work the task "+
+		return fmt.Sprintf("Merged %s into the project folder. The worktree at %s was kept: it may hold work the task "+
 			"never committed. Branch %s is kept — remove the worktree with `git worktree remove %s` once you have "+
 			"salvaged anything you need, or the branch stays checked out there.", branch, path, branch, path), nil
 	}
 
 	wt.remove(ctx)
 	processTasks.setTerminal(id, "merged", "", "")
-	return fmt.Sprintf("Merged %s into the workspace. The worktree at %s was removed; branch %s is kept.",
+	return fmt.Sprintf("Merged %s into the project folder. The worktree at %s was removed; branch %s is kept.",
 		branch, path, branch), nil
 }

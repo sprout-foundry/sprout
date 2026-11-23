@@ -134,7 +134,7 @@ func TestProcessQueryAsThreadsSourceToGuard(t *testing.T) {
 
 	a := &Agent{
 		configManager: configManager,
-		workspaceRoot: t.TempDir(),
+		projectFolder: t.TempDir(),
 	}
 
 	// A nil provider client makes prepareQueryRun fail after admission. The

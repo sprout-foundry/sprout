@@ -327,7 +327,7 @@ func TestSavePastedImage_JPEG(t *testing.T) {
 
 func TestSavePastedImage_WithBaseDir(t *testing.T) {
 	tmpDir := t.TempDir()
-	baseDir := filepath.Join(tmpDir, "my workspace")
+	baseDir := filepath.Join(tmpDir, "my project folder")
 
 	// Build a minimal PNG (header + IHDR + IEND)
 	pngData := []byte{

@@ -144,26 +144,26 @@ func (a *Agent) logSecurityDecision(tool string, args map[string]interface{}, as
 	}
 
 	sessionID := ""
-	workspace := ""
+	projectFolder := ""
 	if a.state != nil {
 		sessionID = a.state.GetSessionID()
 	}
-	if ws := strings.TrimSpace(a.GetWorkspaceRoot()); ws != "" {
-		workspace = ws
+	if ws := strings.TrimSpace(a.GetProjectFolder()); ws != "" {
+		projectFolder = ws
 	}
 
 	entry := tools.AuditEntry{
-		Timestamp: time.Now(),
-		Tool:      tool,
-		RiskLevel: string(assessment.Level),
-		Category:  category,
-		Action:    action,
-		Reasoning: sanitizeForAudit(assessment.Reason),
-		Source:    "unified-gate",
-		SessionID: sessionID,
-		Workspace: workspace,
-		PathTier:  pathTier,
-		FileMode:  assessment.FileMode,
+		Timestamp:     time.Now(),
+		Tool:          tool,
+		RiskLevel:     string(assessment.Level),
+		Category:      category,
+		Action:        action,
+		Reasoning:     sanitizeForAudit(assessment.Reason),
+		Source:        "unified-gate",
+		SessionID:     sessionID,
+		ProjectFolder: projectFolder,
+		PathTier:      pathTier,
+		FileMode:      assessment.FileMode,
 	}
 	data, err := json.Marshal(entry)
 	if err != nil {

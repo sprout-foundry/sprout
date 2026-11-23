@@ -565,7 +565,7 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
       const term = xtermRef.current;
       if (wasmActiveRef.current && term) {
         debugLog('[TerminalPane] Backend connected — switching to remote PTY');
-        term.writeln('\r\n\x1b[32m→ Connected to workspace\x1b[0m');
+        term.writeln('\r\n\x1b[32m→ Connected to the project folder\x1b[0m');
         term.writeln('  Switching to remote terminal.\r\n');
         wasmLineRef.current = '';
         wasmCursorRef.current = 0;

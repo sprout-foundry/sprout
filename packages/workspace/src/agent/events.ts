@@ -26,7 +26,7 @@ const DROPPED = new Set(['query_started', 'query_completed', 'input_required']);
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
 
 /** Workspace-relative form of a path the agent reported. */
-export function toWorkspacePath(path: string, root: string): string {
+export function toProjectFolderPath(path: string, root: string): string {
   const normalizedRoot = root.replace(/\/+$/, '') || '/';
   if (normalizedRoot !== '/' && path.startsWith(`${normalizedRoot}/`)) {
     return path.slice(normalizedRoot.length + 1);
@@ -84,7 +84,7 @@ function mapMockupEvent(
 ): MockupEvent {
   const event: MockupEvent = { type: 'mockup', phase, data };
   const path = str(data.path) ?? str(data.file_path);
-  if (path) event.path = toWorkspacePath(toAbsolutePath(path, ctx.workspaceRoot), ctx.workspaceRoot);
+  if (path) event.path = toProjectFolderPath(toAbsolutePath(path, ctx.workspaceRoot), ctx.workspaceRoot);
   if (phase === 'chunk') event.chunk = str(data.chunk) ?? str(data.html) ?? str(data.content) ?? '';
   if (phase === 'done') {
     const html = str(data.html) ?? str(data.content);
@@ -154,7 +154,7 @@ export function mapAgentEvent(raw: RawAgentEvent, ctx: EventMappingContext): Age
       const abs = toAbsolutePath(absolute, ctx.workspaceRoot);
       return {
         type: 'file_written',
-        path: toWorkspacePath(abs, ctx.workspaceRoot),
+        path: toProjectFolderPath(abs, ctx.workspaceRoot),
         action,
         content: action === 'deleted' ? null : ctx.readFile(abs),
       };
@@ -218,7 +218,7 @@ export class FileWriteTracker {
       const id = String(raw.data?.tool_call_id ?? '');
       if (!spec) return [];
       const args = parseArgs(raw.data?.arguments) ?? partialPathArgs(raw.data?.arguments);
-      const paths = spec.paths(args).map((p) => toWorkspacePath(toAbsolutePath(p, this.ctx.workspaceRoot), this.ctx.workspaceRoot));
+      const paths = spec.paths(args).map((p) => toProjectFolderPath(toAbsolutePath(p, this.ctx.workspaceRoot), this.ctx.workspaceRoot));
       if (paths.length) this.pending.set(id, { action: spec.action, paths });
       return [];
     }

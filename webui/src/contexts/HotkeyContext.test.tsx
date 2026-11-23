@@ -695,9 +695,9 @@ describe('sidebar toggle shortcut', () => {
     expect(onSidebarToggle).not.toHaveBeenCalled();
     expect(fromHost.defaultPrevented).toBe(false);
 
-    const fromWorkspace = press(inside);
+    const fromProjectFolder = press(inside);
     expect(onSidebarToggle).toHaveBeenCalledTimes(1);
-    expect(fromWorkspace.defaultPrevented).toBe(true);
+    expect(fromProjectFolder.defaultPrevented).toBe(true);
     outside.remove();
   });
 

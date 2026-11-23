@@ -2,7 +2,7 @@ import { Monitor, Server } from 'lucide-react';
 import React, { useEffect, useMemo } from 'react';
 import { useHost, useHostCapabilities } from '../host';
 import { getSSHProxyContext } from '../services/clientSession';
-import { refreshWorkspace, useWorkspaceState } from '../services/workspaceStore';
+import { refreshProjectFolder, useProjectFolderState } from '../services/workspaceStore';
 import { debugLog } from '../utils/log';
 
 interface WorkspaceBarProps {
@@ -18,34 +18,36 @@ interface BarState {
 }
 
 const WorkspaceBar: React.FC<WorkspaceBarProps> = ({ isConnected, isMobileMenuOpen = false, isMobile = false }) => {
-  const { workspaceSwitching } = useHostCapabilities();
+  const { workspaceSwitching: projectFolderSwitching } = useHostCapabilities();
   // A hosted build (bearer auth) runs on the host's machines, so "Local" would
   // be wrong; it names a host only when attached to a remote one.
   const hosted = useHost().transport.authMode === 'bearer';
-  const { workspace } = useWorkspaceState();
+  const { workspace: projectFolder } = useProjectFolderState();
 
   useEffect(() => {
     if (!isConnected) return;
-    refreshWorkspace().catch((err) => {
+    refreshProjectFolder().catch((err) => {
       debugLog('[WorkspaceBar] Failed to fetch workspace:', err);
     });
   }, [isConnected]);
 
-  // The last known workspace stays on screen while disconnected; the proxy
+  // The last known project folder stays on screen while disconnected; the proxy
   // base set by the local server when serving the SSH proxy page
   // (SPROUT_PROXY_BASE) is the fallback when the API has no ssh_context.
   const bar = useMemo<BarState>(() => {
     const proxyCtx = getSSHProxyContext();
-    const isRemote = Boolean(workspace?.ssh_context?.is_remote) || Boolean(proxyCtx);
+    const isRemote = Boolean(projectFolder?.ssh_context?.is_remote) || Boolean(proxyCtx);
     const hostAlias =
-      (workspace?.ssh_context?.is_remote ? workspace.ssh_context.host_alias : null) ?? proxyCtx?.hostAlias ?? null;
+      (projectFolder?.ssh_context?.is_remote ? projectFolder.ssh_context.host_alias : null) ??
+      proxyCtx?.hostAlias ??
+      null;
     return { hostAlias, isRemote };
-  }, [workspace]);
+  }, [projectFolder]);
 
   // Hide on mobile when the sidebar menu is covering the content
   if (isMobile && isMobileMenuOpen) return null;
   // The hosted editor has no host to name unless it is attached to a remote one.
-  if ((!workspaceSwitching || hosted) && !bar.isRemote) return null;
+  if ((!projectFolderSwitching || hosted) && !bar.isRemote) return null;
 
   return (
     <div className={`workspace-bar${bar.isRemote ? ' workspace-bar--remote' : ''}`}>

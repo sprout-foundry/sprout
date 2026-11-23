@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useHostCapabilities } from '../../host';
 import type { SSHBrowseEntry, SSHHostEntry, SSHSessionEntry } from '../../services/api';
-import { ApiService, SSHWorkspaceOpenError } from '../../services/api';
+import { ApiService, SSHProjectFolderOpenError } from '../../services/api';
 import { getSSHBrowseQuery } from './pathUtils';
-import type { WorkspaceDirectory, SwitchingState, SSHFailureState, RemoteWorkspaceContext } from './types';
+import type { ProjectFolderDirectory, SwitchingState, SSHFailureState, RemoteProjectFolderContext } from './types';
 import { MAX_SUGGESTIONS } from './types';
 
 export interface UseSSHDataProps {
   isAnyPanelOpen: boolean;
-  remoteContext: RemoteWorkspaceContext | null;
+  remoteContext: RemoteProjectFolderContext | null;
   setSshHomePaths: (updater: (c: Record<string, string>) => Record<string, string>) => void;
   setSwitchingState: React.Dispatch<React.SetStateAction<SwitchingState>>;
   setSshFailure: (s: SSHFailureState | null) => void;
@@ -22,7 +22,7 @@ export interface UseSSHDataResult {
   selectedSshBrowseHost: string;
   focusedSshSessionKey: string | null;
   sshSessionPathDrafts: Record<string, string>;
-  sshSessionSuggestions: Record<string, WorkspaceDirectory[]>;
+  sshSessionSuggestions: Record<string, ProjectFolderDirectory[]>;
   sshSessionSuggestionsLoading: Record<string, boolean>;
   sshSessionSuggestionsError: Record<string, string | null>;
   setSelectedSshBrowseHost: (h: string) => void;
@@ -48,7 +48,7 @@ export function useSSHData({
   const [selectedSshBrowseHost, setSelectedSshBrowseHost] = useState('');
   const [focusedSshSessionKey, setFocusedSshSessionKey] = useState<string | null>(null);
   const [sshSessionPathDrafts, setSshSessionPathDrafts] = useState<Record<string, string>>({});
-  const [sshSessionSuggestions, setSshSessionSuggestions] = useState<Record<string, WorkspaceDirectory[]>>({});
+  const [sshSessionSuggestions, setSshSessionSuggestions] = useState<Record<string, ProjectFolderDirectory[]>>({});
   const [sshSessionSuggestionsLoading, setSshSessionSuggestionsLoading] = useState<Record<string, boolean>>({});
   const [sshSessionSuggestionsError, setSshSessionSuggestionsError] = useState<Record<string, string | null>>({});
   const apiService = useRef(ApiService.getInstance());
@@ -91,7 +91,7 @@ export function useSSHData({
     if (!isAnyPanelOpen || remoteContext || !focusedSshSessionKey) return;
     const session = sshSessions.find((e) => e.key === focusedSshSessionKey);
     if (!session) return;
-    const draftValue = sshSessionPathDrafts[session.key] ?? session.remote_workspace_path ?? '';
+    const draftValue = sshSessionPathDrafts[session.key] ?? session.remote_project_folder_path ?? '';
     const { browsePath, prefix } = getSSHBrowseQuery(draftValue);
     let cancelled = false;
     (async () => {
@@ -104,7 +104,9 @@ export function useSSHData({
         const next = (data.files || [])
           .filter((f: SSHBrowseEntry) => f.type === 'directory')
           .map((f: SSHBrowseEntry) => ({ name: String(f.name), path: String(f.path) }))
-          .filter((e: WorkspaceDirectory) => (prefix ? e.name.toLowerCase().startsWith(prefix.toLowerCase()) : true))
+          .filter((e: ProjectFolderDirectory) =>
+            prefix ? e.name.toLowerCase().startsWith(prefix.toLowerCase()) : true,
+          )
           .slice(0, MAX_SUGGESTIONS);
         setSshSessionSuggestions((c) => ({ ...c, [session.key]: next }));
       } catch (error) {
@@ -132,7 +134,7 @@ export function useSSHData({
       const d = sshSessionPathDrafts[s.key];
       const t = typeof d === 'string' ? d.trim() : '';
       if (t) return t;
-      const sp = (s.remote_workspace_path || '').trim();
+      const sp = (s.remote_project_folder_path || '').trim();
       return sp || undefined;
     },
     [sshSessionPathDrafts],
@@ -164,13 +166,13 @@ export function useSSHData({
         if (desktopBridge?.openSshWorkspace) {
           await desktopBridge.openSshWorkspace({
             hostAlias,
-            remoteWorkspacePath: targetRemotePath,
+            remoteProjectFolderPath: targetRemotePath,
             forceNewWindow: true,
           });
         } else {
-          const response = await apiService.current.openSSHWorkspace(hostAlias, targetRemotePath);
+          const response = await apiService.current.openSSHProjectFolder(hostAlias, targetRemotePath);
           const targetUrl = response.proxy_url || response.url;
-          if (!targetUrl) throw new Error('SSH workspace did not return a local URL');
+          if (!targetUrl) throw new Error('The SSH project folder did not return a local URL');
           setSwitchingState((prev) => ({ ...prev, status: `Waiting for proxy\u2026` }));
           const healthUrl = targetUrl.endsWith('/') ? `${targetUrl}health` : `${targetUrl}/health`;
           const deadline = Date.now() + 12_000;
@@ -187,10 +189,10 @@ export function useSSHData({
           window.location.assign(targetUrl);
         }
         setSshSessions(await apiService.current.getSSHSessions().catch(() => []));
-        setSwitchingState({ isSwitching: false, error: null, status: `SSH workspace ready: ${hostAlias}` });
+        setSwitchingState({ isSwitching: false, error: null, status: `SSH project folder ready: ${hostAlias}` });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to open SSH host';
-        if (error instanceof SSHWorkspaceOpenError) {
+        if (error instanceof SSHProjectFolderOpenError) {
           setSshFailure({ step: error.step, details: error.details, logPath: error.logPath });
         } else setSshFailure(null);
         setSwitchingState({ isSwitching: false, error: message, status: null });

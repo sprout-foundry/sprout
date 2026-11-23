@@ -14,19 +14,19 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
-// The workspace query gate. One workspace, one runner — a query
+// The project folder query gate. One project folder, one runner — a query
 // from a second chat is rejected with 409 workspace_busy (naming the running
 // chat) while any other chat in the client context has a query running;
 // the gate is the read side only, releasing via the existing query_completed
 // lifecycle.
 
-// setupWorkspaceGateTestServer mirrors concurrent_chat_test.go's setup: a temp
-// workspace plus a pre-registered client context so /api/query resolves.
-func setupWorkspaceGateTestServer(t *testing.T) *ReactWebServer {
+// setupProjectFolderGateTestServer mirrors concurrent_chat_test.go's setup: a temp
+// project folder plus a pre-registered client context so /api/query resolves.
+func setupProjectFolderGateTestServer(t *testing.T) *ReactWebServer {
 	t.Helper()
 	daemonRoot := t.TempDir()
-	workspaceRoot := filepath.Join(daemonRoot, "workspace")
-	if err := os.MkdirAll(workspaceRoot, 0o755); err != nil {
+	projectFolder := filepath.Join(daemonRoot, "workspace")
+	if err := os.MkdirAll(projectFolder, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
@@ -34,11 +34,11 @@ func setupWorkspaceGateTestServer(t *testing.T) *ReactWebServer {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	if _, err := ws.SetWorkspaceRoot(workspaceRoot); err != nil {
+	if _, err := ws.SetProjectFolder(projectFolder); err != nil {
 		t.Fatal(err)
 	}
 	clientCtx := ws.getOrCreateClientContextLocked(testConcurrentClientID)
-	clientCtx.WorkspaceRoot = workspaceRoot
+	clientCtx.ProjectFolder = projectFolder
 	return ws
 }
 
@@ -56,8 +56,8 @@ func setChatRunning(ws *ReactWebServer, chatID string) {
 	ctx.CurrentQuery = "running query"
 }
 
-func TestWorkspaceQueryGateRejectsSecondChat(t *testing.T) {
-	ws := setupWorkspaceGateTestServer(t)
+func TestProjectFolderQueryGateRejectsSecondChat(t *testing.T) {
+	ws := setupProjectFolderGateTestServer(t)
 	if code := switchChatSession(t, ws, testConcurrentClientID, "default"); code != http.StatusOK {
 		t.Fatalf("switch to default chat: %d", code)
 	}
@@ -85,7 +85,7 @@ func TestWorkspaceQueryGateRejectsSecondChat(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatal(err)
 	}
-	if payload.Code != "workspace_busy" {
+	if payload.Code != "project_folder_busy" {
 		t.Fatalf("expected code workspace_busy, got %q", payload.Code)
 	}
 	if payload.RunningChatID != "default" {
@@ -96,8 +96,8 @@ func TestWorkspaceQueryGateRejectsSecondChat(t *testing.T) {
 	}
 }
 
-func TestWorkspaceQueryGateReleasesAfterCompletion(t *testing.T) {
-	ws := setupWorkspaceGateTestServer(t)
+func TestProjectFolderQueryGateReleasesAfterCompletion(t *testing.T) {
+	ws := setupProjectFolderGateTestServer(t)
 	secondID := createChatSession(t, ws, testConcurrentClientID, "Second Chat")
 	if code := switchChatSession(t, ws, testConcurrentClientID, secondID); code != http.StatusOK {
 		t.Fatalf("switch to second chat: %d", code)
@@ -116,20 +116,20 @@ func TestWorkspaceQueryGateReleasesAfterCompletion(t *testing.T) {
 	req.Header.Set(webClientIDHeader, testConcurrentClientID)
 	rec := httptest.NewRecorder()
 	ws.handleAPIQuery(rec, req)
-	// No provider is configured in the test workspace, so the submit past
+	// No provider is configured in the test project folder, so the submit past
 	// the gate fails at agent creation (503) — the point is that it got
-	// PAST the workspace gate (not 409 workspace_busy).
+	// PAST the project folder gate (not 409 workspace_busy).
 	if rec.Code == http.StatusConflict {
 		t.Fatalf("expected the gate to release, got 409: %s", rec.Body.String())
 	}
 }
 
-func TestWorkspaceQueryGateSameChatUnaffected(t *testing.T) {
-	ws := setupWorkspaceGateTestServer(t)
+func TestProjectFolderQueryGateSameChatUnaffected(t *testing.T) {
+	ws := setupProjectFolderGateTestServer(t)
 	setChatRunning(ws, "default")
 
 	// A same-chat submit hits the pre-existing query_in_progress 409 (shared
-	// mode / steer semantics) — never the workspace gate. The workspace gate
+	// mode / steer semantics) — never the project folder gate. The project folder gate
 	// must not widen that rejection's meaning.
 	req := httptest.NewRequest(http.MethodPost, "/api/query?chat_id=default",
 		strings.NewReader(`{"query":"hello"}`))

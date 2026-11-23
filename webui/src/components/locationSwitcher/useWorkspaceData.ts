@@ -1,28 +1,28 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ApiService } from '../../services/api';
-import { getSSHProxyContext, persistTabWorkspacePath } from '../../services/clientSession';
-import { applyWorkspaceRoot, refreshWorkspace, useWorkspaceState } from '../../services/workspaceStore';
+import { getSSHProxyContext, persistTabProjectFolderPath } from '../../services/clientSession';
+import { applyProjectFolder, refreshProjectFolder, useProjectFolderState } from '../../services/workspaceStore';
 import { showThemedConfirm } from '../ThemedDialog';
 import { normalizePath } from './pathUtils';
-import type { SwitchingState, SSHFailureState, RemoteWorkspaceContext } from './types';
+import type { SwitchingState, SSHFailureState, RemoteProjectFolderContext } from './types';
 import { MAX_RECENT_WORKSPACES } from './types';
 import {
-  readRecentWorkspaces,
-  writeRecentWorkspaces,
-  readRemoteRecentWorkspaces,
-  writeRemoteRecentWorkspaces,
-  readSSHFavoriteWorkspaces,
-  writeSSHFavoriteWorkspaces,
+  readRecentProjectFolders,
+  writeRecentProjectFolders,
+  readRemoteRecentProjectFolders,
+  writeRemoteRecentProjectFolders,
+  readSSHFavoriteProjectFolders,
+  writeSSHFavoriteProjectFolders,
 } from './workspaceStorage';
 
-export interface UseWorkspaceDataProps {
+export interface UseProjectFolderDataProps {
   isConnected: boolean;
 }
 
-export interface UseWorkspaceDataResult {
+export interface UseProjectFolderDataResult {
   workspaceRoot: string;
   daemonRoot: string;
-  remoteContext: RemoteWorkspaceContext | null;
+  remoteContext: RemoteProjectFolderContext | null;
   switchingState: SwitchingState;
   isLoading: boolean;
   sshFailure: SSHFailureState | null;
@@ -30,14 +30,14 @@ export interface UseWorkspaceDataResult {
   showExpiredSessionRecovery: boolean;
   isOpeningSshHost: string | null;
   isClosingSshSession: string | null;
-  recentWorkspaces: string[];
-  remoteRecentWorkspaces: Record<string, string[]>;
-  sshFavoriteWorkspaces: Record<string, string[]>;
-  addRecentWorkspace: (path: string) => void;
-  addRemoteRecentWorkspace: (hostAlias: string, path: string) => void;
-  addSSHFavoriteWorkspace: (hostAlias: string, path: string) => void;
-  removeSSHFavoriteWorkspace: (hostAlias: string, path: string) => void;
-  submitWorkspaceChange: (targetPath: string) => Promise<void>;
+  recentProjectFolders: string[];
+  remoteRecentProjectFolders: Record<string, string[]>;
+  sshFavoriteProjectFolders: Record<string, string[]>;
+  addRecentProjectFolder: (path: string) => void;
+  addRemoteRecentProjectFolder: (hostAlias: string, path: string) => void;
+  addSSHFavoriteProjectFolder: (hostAlias: string, path: string) => void;
+  removeSSHFavoriteProjectFolder: (hostAlias: string, path: string) => void;
+  submitProjectFolderChange: (targetPath: string) => Promise<void>;
   handleRefresh: () => Promise<void>;
   handleReloadWithoutSSHPath: () => void;
   setSwitchingState: React.Dispatch<React.SetStateAction<SwitchingState>>;
@@ -48,13 +48,13 @@ export interface UseWorkspaceDataResult {
   setIsClosingSshSession: (v: string | null) => void;
 }
 
-export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWorkspaceDataResult {
-  // The shared store keeps the last known workspace across disconnects, so
+export function useProjectFolderData({ isConnected }: UseProjectFolderDataProps): UseProjectFolderDataResult {
+  // The shared store keeps the last known project folder across disconnects, so
   // the switcher never blanks the path while the connection recovers.
-  const { workspace, error: workspaceError } = useWorkspaceState();
-  const workspaceRoot = normalizePath(workspace?.workspace_root || '');
-  const daemonRoot = normalizePath(workspace?.daemon_root || '');
-  const [remoteContext, setRemoteContext] = useState<RemoteWorkspaceContext | null>(null);
+  const { workspace: folderInfo, error: projectFolderError } = useProjectFolderState();
+  const projectFolder = normalizePath(folderInfo?.project_folder || '');
+  const daemonRoot = normalizePath(folderInfo?.daemon_root || '');
+  const [remoteContext, setRemoteContext] = useState<RemoteProjectFolderContext | null>(null);
   const [switchingState, setSwitchingState] = useState<SwitchingState>({
     isSwitching: false,
     error: null,
@@ -65,39 +65,39 @@ export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWor
   const [sshHomePaths, setSshHomePaths] = useState<Record<string, string>>({});
   const [isOpeningSshHost, setIsOpeningSshHost] = useState<string | null>(null);
   const [isClosingSshSession, setIsClosingSshSession] = useState<string | null>(null);
-  const [recentWorkspaces, setRecentWorkspaces] = useState<string[]>(() => readRecentWorkspaces());
-  const [remoteRecentWorkspaces, setRemoteRecentWorkspaces] = useState<Record<string, string[]>>(() =>
-    readRemoteRecentWorkspaces(),
+  const [recentProjectFolders, setRecentProjectFolders] = useState<string[]>(() => readRecentProjectFolders());
+  const [remoteRecentProjectFolders, setRemoteRecentProjectFolders] = useState<Record<string, string[]>>(() =>
+    readRemoteRecentProjectFolders(),
   );
-  const [sshFavoriteWorkspaces, setSshFavoriteWorkspaces] = useState<Record<string, string[]>>(() =>
-    readSSHFavoriteWorkspaces(),
+  const [sshFavoriteProjectFolders, setSshFavoriteProjectFolders] = useState<Record<string, string[]>>(() =>
+    readSSHFavoriteProjectFolders(),
   );
   const apiService = useRef(ApiService.getInstance());
 
-  const persistRecentWorkspaces = useCallback((updater: (c: string[]) => string[]) => {
-    setRecentWorkspaces((current) => {
+  const persistRecentProjectFolders = useCallback((updater: (c: string[]) => string[]) => {
+    setRecentProjectFolders((current) => {
       const next = updater(current)
         .map((v) => normalizePath(v))
         .filter(Boolean)
         .slice(0, MAX_RECENT_WORKSPACES);
-      writeRecentWorkspaces(next);
+      writeRecentProjectFolders(next);
       return next;
     });
   }, []);
 
-  const addRecentWorkspace = useCallback(
+  const addRecentProjectFolder = useCallback(
     (path: string) => {
       const normalized = normalizePath(path);
       if (!normalized) return;
-      persistRecentWorkspaces((current) => [normalized, ...current.filter((e) => e !== normalized)]);
+      persistRecentProjectFolders((current) => [normalized, ...current.filter((e) => e !== normalized)]);
     },
-    [persistRecentWorkspaces],
+    [persistRecentProjectFolders],
   );
 
-  const addRemoteRecentWorkspace = useCallback((hostAlias: string, path: string) => {
+  const addRemoteRecentProjectFolder = useCallback((hostAlias: string, path: string) => {
     const normalized = normalizePath(path);
     if (!hostAlias || !normalized) return;
-    setRemoteRecentWorkspaces((current) => {
+    setRemoteRecentProjectFolders((current) => {
       const next = {
         ...current,
         [hostAlias]: [normalized, ...(current[hostAlias] || []).filter((e) => e !== normalized)].slice(
@@ -105,15 +105,15 @@ export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWor
           MAX_RECENT_WORKSPACES,
         ),
       };
-      writeRemoteRecentWorkspaces(next);
+      writeRemoteRecentProjectFolders(next);
       return next;
     });
   }, []);
 
-  const addSSHFavoriteWorkspace = useCallback((hostAlias: string, path: string) => {
+  const addSSHFavoriteProjectFolder = useCallback((hostAlias: string, path: string) => {
     const normalized = normalizePath(path);
     if (!hostAlias || !normalized) return;
-    setSshFavoriteWorkspaces((current) => {
+    setSshFavoriteProjectFolders((current) => {
       const next = {
         ...current,
         [hostAlias]: [normalized, ...(current[hostAlias] || []).filter((e) => e !== normalized)].slice(
@@ -121,20 +121,20 @@ export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWor
           MAX_RECENT_WORKSPACES,
         ),
       };
-      writeSSHFavoriteWorkspaces(next);
+      writeSSHFavoriteProjectFolders(next);
       return next;
     });
   }, []);
 
-  const removeSSHFavoriteWorkspace = useCallback((hostAlias: string, path: string) => {
+  const removeSSHFavoriteProjectFolder = useCallback((hostAlias: string, path: string) => {
     const normalized = normalizePath(path);
     if (!hostAlias || !normalized) return;
-    setSshFavoriteWorkspaces((current) => {
+    setSshFavoriteProjectFolders((current) => {
       const nextEntries = (current[hostAlias] || []).filter((e) => e !== normalized);
       const next = { ...current };
       if (nextEntries.length > 0) next[hostAlias] = nextEntries;
       else delete next[hostAlias];
-      writeSSHFavoriteWorkspaces(next);
+      writeSSHFavoriteProjectFolders(next);
       return next;
     });
   }, []);
@@ -142,63 +142,63 @@ export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWor
   // Fetch when the connection comes up (the store joins an in-flight request).
   useEffect(() => {
     if (!isConnected) return;
-    refreshWorkspace().catch(() => {
+    refreshProjectFolder().catch(() => {
       // best-effort: the store records the failure and retries.
     });
   }, [isConnected]);
 
-  // Derive the remote context and record recents from each new workspace.
+  // Derive the remote context and record recents from each new project folder.
   useEffect(() => {
-    if (!workspace) return;
-    const nextWS = normalizePath(workspace.workspace_root || '');
-    if (workspace.ssh_context?.is_remote && workspace.ssh_context.host_alias) {
+    if (!folderInfo) return;
+    const nextWS = normalizePath(folderInfo.project_folder || '');
+    if (folderInfo.ssh_context?.is_remote && folderInfo.ssh_context.host_alias) {
       const next = {
-        hostAlias: workspace.ssh_context.host_alias,
-        sessionKey: workspace.ssh_context.session_key,
-        launcherUrl: workspace.ssh_context.launcher_url,
-        homePath: workspace.ssh_context.home_path,
+        hostAlias: folderInfo.ssh_context.host_alias,
+        sessionKey: folderInfo.ssh_context.session_key,
+        launcherUrl: folderInfo.ssh_context.launcher_url,
+        homePath: folderInfo.ssh_context.home_path,
       };
       setRemoteContext(next);
       if (next.homePath) setSshHomePaths((c) => ({ ...c, [next.hostAlias]: next.homePath as string }));
-      addRemoteRecentWorkspace(next.hostAlias, nextWS);
+      addRemoteRecentProjectFolder(next.hostAlias, nextWS);
       return;
     }
     const proxyCtx = getSSHProxyContext();
     if (proxyCtx) {
       setRemoteContext({ hostAlias: proxyCtx.hostAlias });
-      addRemoteRecentWorkspace(proxyCtx.hostAlias, nextWS);
+      addRemoteRecentProjectFolder(proxyCtx.hostAlias, nextWS);
     } else {
       setRemoteContext(null);
-      addRecentWorkspace(nextWS);
+      addRecentProjectFolder(nextWS);
     }
-  }, [addRecentWorkspace, addRemoteRecentWorkspace, workspace, setSshHomePaths]);
+  }, [addRecentProjectFolder, addRemoteRecentProjectFolder, folderInfo, setSshHomePaths]);
 
-  // Without any workspace yet, an SSH proxy page still knows its host.
+  // Without any project folder yet, an SSH proxy page still knows its host.
   useEffect(() => {
-    if (workspace || !workspaceError) return;
+    if (folderInfo || !projectFolderError) return;
     const proxyCtx = getSSHProxyContext();
     if (proxyCtx) {
       setRemoteContext({ hostAlias: proxyCtx.hostAlias });
-      addRemoteRecentWorkspace(proxyCtx.hostAlias, '');
+      addRemoteRecentProjectFolder(proxyCtx.hostAlias, '');
     }
-    console.error('Failed to load workspace data:', workspaceError);
-  }, [addRemoteRecentWorkspace, workspace, workspaceError]);
+    console.error('Failed to load folderInfo data:', projectFolderError);
+  }, [addRemoteRecentProjectFolder, folderInfo, projectFolderError]);
 
   // After an SSH connect to a specific remote folder, open it. Otherwise the
-  // remote daemon sits in its home, and the workspace gate asks for a folder —
+  // remote daemon sits in its home, and the project folder gate asks for a folder —
   // one chooser, not a second SSH-only picker on top of it.
   useEffect(() => {
     const hostAlias = window.sessionStorage.getItem('sprout:ssh-just-connected');
     if (!hostAlias) return;
     window.sessionStorage.removeItem('sprout:ssh-just-connected');
-    const initialWorkspace = window.SPROUT_INITIAL_WORKSPACE;
+    const initialProjectFolder = window.SPROUT_INITIAL_WORKSPACE;
     const isSpecificPath =
-      initialWorkspace &&
-      initialWorkspace !== '$HOME' &&
-      !initialWorkspace.startsWith('$HOME/') &&
-      !initialWorkspace.startsWith('${HOME}');
+      initialProjectFolder &&
+      initialProjectFolder !== '$HOME' &&
+      !initialProjectFolder.startsWith('$HOME/') &&
+      !initialProjectFolder.startsWith('${HOME}');
     // A failed switch leaves the gate to ask.
-    if (isSpecificPath) submitWorkspaceChange(initialWorkspace).catch(() => {});
+    if (isSpecificPath) submitProjectFolderChange(initialProjectFolder).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -210,17 +210,17 @@ export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWor
     return () => window.clearTimeout(timer);
   }, [switchingState.error, switchingState.status, isOpeningSshHost]);
 
-  const submitWorkspaceChange = useCallback(
+  const submitProjectFolderChange = useCallback(
     async (targetPath: string) => {
       const normalizedTarget = normalizePath(targetPath);
-      if (!normalizedTarget || normalizedTarget === workspaceRoot) return;
-      setSwitchingState({ isSwitching: true, error: null, status: 'Switching workspace\u2026' });
+      if (!normalizedTarget || normalizedTarget === projectFolder) return;
+      setSwitchingState({ isSwitching: true, error: null, status: 'Switching project folder\u2026' });
       try {
         try {
           const sessionCount = await apiService.current.getTerminalSessionCount();
           if (sessionCount > 0) {
             const confirmed = await showThemedConfirm(
-              `${sessionCount} terminal session${sessionCount === 1 ? ' is' : 's are'} active. Switching workspace will close ${sessionCount === 1 ? 'it' : 'them'}. Continue?`,
+              `${sessionCount} terminal session${sessionCount === 1 ? ' is' : 's are'} active. Switching folderInfo will close ${sessionCount === 1 ? 'it' : 'them'}. Continue?`,
               { type: 'warning' },
             );
             if (!confirmed) {
@@ -232,10 +232,10 @@ export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWor
           // best-effort: the terminal-session count only refines the confirm
           // wording; if it can't be read, switch without the warning.
         }
-        const response = await apiService.current.setWorkspace(normalizedTarget);
-        const nextWS = normalizePath(response.workspace_root || normalizedTarget);
-        persistTabWorkspacePath(nextWS);
-        void applyWorkspaceRoot(nextWS, response.daemon_root);
+        const response = await apiService.current.setProjectFolder(normalizedTarget);
+        const nextWS = normalizePath(response.project_folder || normalizedTarget);
+        persistTabProjectFolderPath(nextWS);
+        void applyProjectFolder(nextWS, response.daemon_root);
         if (response.ssh_context?.is_remote && response.ssh_context.host_alias) {
           const next = {
             hostAlias: response.ssh_context.host_alias,
@@ -245,20 +245,20 @@ export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWor
           };
           setRemoteContext(next);
           if (next.homePath) setSshHomePaths((c) => ({ ...c, [next.hostAlias]: next.homePath as string }));
-          addRemoteRecentWorkspace(next.hostAlias, nextWS);
+          addRemoteRecentProjectFolder(next.hostAlias, nextWS);
         } else if (remoteContext?.hostAlias) {
-          addRemoteRecentWorkspace(remoteContext.hostAlias, nextWS);
-        } else addRecentWorkspace(nextWS);
+          addRemoteRecentProjectFolder(remoteContext.hostAlias, nextWS);
+        } else addRecentProjectFolder(nextWS);
         window.setTimeout(() => window.location.reload(), 300);
       } catch (error) {
         // SP-130: the backend rejects selecting the home directory without
         // consent with a structured code. Surface a friendly message and let
-        // the user pick a project folder via the workspace picker instead.
+        // the user pick a project folder via the project folder picker instead.
         const err = error as Error & { code?: string };
-        if (err.code === 'home_workspace_requires_consent') {
+        if (err.code === 'home_project_folder_requires_consent') {
           setSwitchingState({
             isSwitching: false,
-            error: 'Selecting your home directory requires consent. Use the workspace picker to confirm.',
+            error: 'Selecting your home directory requires consent. Use the folderInfo picker to confirm.',
             status: null,
           });
           return;
@@ -267,7 +267,7 @@ export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWor
         if (msg.includes('HTML response')) {
           setSwitchingState({
             isSwitching: false,
-            error: 'Remote workspace API is unavailable on this backend. Update the remote Sprout binary.',
+            error: 'Remote folderInfo API is unavailable on this backend. Update the remote Sprout binary.',
             status: null,
           });
           return;
@@ -279,18 +279,18 @@ export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWor
       }
       setSwitchingState({ isSwitching: false, error: null, status: null });
     },
-    [addRecentWorkspace, addRemoteRecentWorkspace, remoteContext?.hostAlias, workspaceRoot, setSshHomePaths],
+    [addRecentProjectFolder, addRemoteRecentProjectFolder, remoteContext?.hostAlias, projectFolder, setSshHomePaths],
   );
 
   const handleRefresh = useCallback(async () => {
     if (!isConnected) return;
     setIsLoading(true);
     try {
-      await refreshWorkspace({ force: true });
+      await refreshProjectFolder({ force: true });
       setSshFailure(null);
     } catch (error) {
-      console.error('Failed to refresh workspace data:', error);
-      setSwitchingState({ isSwitching: false, error: 'Failed to refresh workspace data', status: null });
+      console.error('Failed to refresh folderInfo data:', error);
+      setSwitchingState({ isSwitching: false, error: 'Failed to refresh folderInfo data', status: null });
     } finally {
       setIsLoading(false);
     }
@@ -307,7 +307,7 @@ export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWor
   }, [switchingState.error]);
 
   return {
-    workspaceRoot,
+    workspaceRoot: projectFolder,
     daemonRoot,
     remoteContext,
     switchingState,
@@ -317,14 +317,14 @@ export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWor
     showExpiredSessionRecovery,
     isOpeningSshHost,
     isClosingSshSession,
-    recentWorkspaces,
-    remoteRecentWorkspaces,
-    sshFavoriteWorkspaces,
-    addRecentWorkspace,
-    addRemoteRecentWorkspace,
-    addSSHFavoriteWorkspace,
-    removeSSHFavoriteWorkspace,
-    submitWorkspaceChange,
+    recentProjectFolders,
+    remoteRecentProjectFolders,
+    sshFavoriteProjectFolders,
+    addRecentProjectFolder,
+    addRemoteRecentProjectFolder,
+    addSSHFavoriteProjectFolder,
+    removeSSHFavoriteProjectFolder,
+    submitProjectFolderChange,
     handleRefresh,
     handleReloadWithoutSSHPath,
     setSwitchingState,

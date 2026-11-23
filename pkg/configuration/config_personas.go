@@ -4,7 +4,7 @@ package configuration
 //
 // The embedded catalog is the immutable core and stays the base of
 // SubagentTypes. Custom personas are read from files — the person's
-// `<config dir>/personas/` and a repository's `<workspace>/.sprout/personas/`
+// `<config dir>/personas/` and a repository's `<project folder>/.sprout/personas/`
 // — and merged in after core. Core entries are never replaced, and a custom
 // definition that reuses a core id or alias is skipped and reported.
 //
@@ -22,7 +22,7 @@ import (
 )
 
 // PersonasDirName is the directory under the config dir (and under a
-// workspace's .sprout) that holds custom persona files.
+// project folder's .sprout) that holds custom persona files.
 const PersonasDirName = "personas"
 
 // PersonaIssue statuses. A persona in any of these states is not usable.
@@ -65,59 +65,59 @@ func UserPersonasDir() (string, error) {
 	return filepath.Join(dir, PersonasDirName), nil
 }
 
-// ProjectPersonasDir returns `<workspace>/.sprout/personas` for a workspace
-// config dir (`<workspace>/.sprout`), or "" when there is no workspace layer.
-func ProjectPersonasDir(workspaceConfigDir string) string {
-	if strings.TrimSpace(workspaceConfigDir) == "" {
+// ProjectPersonasDir returns `<project folder>/.sprout/personas` for a project folder
+// config dir (`<project folder>/.sprout`), or "" when there is no project folder layer.
+func ProjectPersonasDir(projectFolderConfigDir string) string {
+	if strings.TrimSpace(projectFolderConfigDir) == "" {
 		return ""
 	}
-	return filepath.Join(workspaceConfigDir, PersonasDirName)
+	return filepath.Join(projectFolderConfigDir, PersonasDirName)
 }
 
-// WorkspaceRootFromConfigDir turns `<workspace>/.sprout` back into
-// `<workspace>`. The acceptance record is keyed by the workspace root.
-func WorkspaceRootFromConfigDir(workspaceConfigDir string) string {
-	if strings.TrimSpace(workspaceConfigDir) == "" {
+// ProjectFolderFromConfigDir turns `<project folder>/.sprout` back into
+// `<project folder>`. The acceptance record is keyed by the project folder.
+func ProjectFolderFromConfigDir(projectFolderConfigDir string) string {
+	if strings.TrimSpace(projectFolderConfigDir) == "" {
 		return ""
 	}
-	return filepath.Dir(workspaceConfigDir)
+	return filepath.Dir(projectFolderConfigDir)
 }
 
 // ProjectPersonaAcceptances returns the accepted content hashes for one
-// workspace, keyed by persona id. A nil map accepts nothing.
-func (c *Config) ProjectPersonaAcceptances(workspaceRoot string) map[string]string {
-	if c == nil || len(c.AcceptedPersonas) == 0 || workspaceRoot == "" {
+// project folder, keyed by persona id. A nil map accepts nothing.
+func (c *Config) ProjectPersonaAcceptances(projectFolder string) map[string]string {
+	if c == nil || len(c.AcceptedPersonas) == 0 || projectFolder == "" {
 		return nil
 	}
-	return c.AcceptedPersonas[workspaceRoot]
+	return c.AcceptedPersonas[projectFolder]
 }
 
 // AcceptProjectPersona records that the person accepted a project persona at
-// the given content hash. The record is per workspace root, so accepting a
+// the given content hash. The record is per project folder, so accepting a
 // repository's persona does not accept the same id in another checkout.
-func (c *Config) AcceptProjectPersona(workspaceRoot, personaID, hash string) {
-	if c == nil || workspaceRoot == "" || personaID == "" {
+func (c *Config) AcceptProjectPersona(projectFolder, personaID, hash string) {
+	if c == nil || projectFolder == "" || personaID == "" {
 		return
 	}
 	if c.AcceptedPersonas == nil {
 		c.AcceptedPersonas = make(map[string]map[string]string)
 	}
-	accepted := c.AcceptedPersonas[workspaceRoot]
+	accepted := c.AcceptedPersonas[projectFolder]
 	if accepted == nil {
 		accepted = make(map[string]string)
-		c.AcceptedPersonas[workspaceRoot] = accepted
+		c.AcceptedPersonas[projectFolder] = accepted
 	}
 	accepted[personaID] = hash
 }
 
 // HydrateCustomPersonas merges the user- and project-scope persona files into
-// cfg.SubagentTypes, after core. `workspaceConfigDir` is `<workspace>/.sprout`
-// (empty when there is no workspace layer), which locates the project scope
-// and the workspace root the acceptance record is keyed by.
+// cfg.SubagentTypes, after core. `projectFolderConfigDir` is `<project folder>/.sprout`
+// (empty when there is no project folder layer), which locates the project scope
+// and the project folder the acceptance record is keyed by.
 //
 // A failure here never stops Sprout from starting: personas that load are
 // added, and everything that did not is reported in cfg.PersonaIssues.
-func HydrateCustomPersonas(cfg *Config, workspaceConfigDir string) {
+func HydrateCustomPersonas(cfg *Config, projectFolderConfigDir string) {
 	if cfg == nil {
 		return
 	}
@@ -125,7 +125,7 @@ func HydrateCustomPersonas(cfg *Config, workspaceConfigDir string) {
 	if err != nil {
 		log.Printf("[personas] warning: cannot resolve the user persona directory: %v", err)
 	}
-	projectDir := ProjectPersonasDir(workspaceConfigDir)
+	projectDir := ProjectPersonasDir(projectFolderConfigDir)
 
 	if userDir == "" && projectDir == "" {
 		return
@@ -137,11 +137,11 @@ func HydrateCustomPersonas(cfg *Config, workspaceConfigDir string) {
 		return
 	}
 
-	workspaceRoot := WorkspaceRootFromConfigDir(workspaceConfigDir)
+	projectFolder := ProjectFolderFromConfigDir(projectFolderConfigDir)
 	result := personas.LoadCustomPersonas(core, personas.LoadOptions{
 		UserDir:               userDir,
 		ProjectDir:            projectDir,
-		AcceptedProjectHashes: cfg.ProjectPersonaAcceptances(workspaceRoot),
+		AcceptedProjectHashes: cfg.ProjectPersonaAcceptances(projectFolder),
 	})
 
 	if cfg.SubagentTypes == nil {
@@ -151,9 +151,9 @@ func HydrateCustomPersonas(cfg *Config, workspaceConfigDir string) {
 	// Drop the file-scope personas a previous hydration added, so a reload
 	// that finds a persona gone (deleted, or no longer accepted) removes it
 	// instead of leaving a stale entry. Core entries are never touched. A
-	// hydration with no workspace scope owns only the user entries: it must
+	// hydration with no project folder scope owns only the user entries: it must
 	// not delete project entries another layer contributed.
-	ownsProjectScope := strings.TrimSpace(workspaceConfigDir) != ""
+	ownsProjectScope := strings.TrimSpace(projectFolderConfigDir) != ""
 	for id, entry := range cfg.SubagentTypes {
 		switch personas.Source(entry.Source) {
 		case personas.SourceUser:

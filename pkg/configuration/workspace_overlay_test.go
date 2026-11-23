@@ -31,11 +31,11 @@ func readJSONFile(t *testing.T, path string) map[string]interface{} {
 	return out
 }
 
-func TestWorkspaceSave_WritesOnlyWhatChanged(t *testing.T) {
+func TestProjectFolderSave_WritesOnlyWhatChanged(t *testing.T) {
 	global := t.TempDir()
 	ws := filepath.Join(t.TempDir(), ConfigDirName)
 	writeJSONFile(t, filepath.Join(global, ConfigFileName), `{"computer_use":{"enabled":true},"last_used_provider":"openai","provider_priority":["openai"]}`)
-	writeJSONFile(t, filepath.Join(ws, WorkspaceConfigFileName), `{"provider_models":{"openai":"gpt-a"}}`)
+	writeJSONFile(t, filepath.Join(ws, ProjectFolderConfigFileName), `{"provider_models":{"openai":"gpt-a"}}`)
 
 	m, err := NewManagerWithLayers(global, ws)
 	if err != nil {
@@ -45,14 +45,14 @@ func TestWorkspaceSave_WritesOnlyWhatChanged(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	saved := readJSONFile(t, filepath.Join(ws, WorkspaceConfigFileName))
+	saved := readJSONFile(t, filepath.Join(ws, ProjectFolderConfigFileName))
 	delete(saved, "version")
 	if len(saved) != 2 || saved["last_used_provider"] != "deepinfra" || saved["provider_models"] == nil {
-		t.Fatalf("workspace file = %v, want only its own provider_models plus the changed last_used_provider", saved)
+		t.Fatalf("project folder file = %v, want only its own provider_models plus the changed last_used_provider", saved)
 	}
 }
 
-func TestWorkspaceSave_NestedChangeOverridesGlobal(t *testing.T) {
+func TestProjectFolderSave_NestedChangeOverridesGlobal(t *testing.T) {
 	global := t.TempDir()
 	ws := filepath.Join(t.TempDir(), ConfigDirName)
 	writeJSONFile(t, filepath.Join(global, ConfigFileName), `{"mcp":{"enabled":true,"timeout":45}}`)
@@ -65,10 +65,10 @@ func TestWorkspaceSave_NestedChangeOverridesGlobal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	saved := readJSONFile(t, filepath.Join(ws, WorkspaceConfigFileName))
+	saved := readJSONFile(t, filepath.Join(ws, ProjectFolderConfigFileName))
 	mcpSaved, _ := saved["mcp"].(map[string]interface{})
 	if mcpSaved["enabled"] != false || mcpSaved["timeout"] != nil {
-		t.Fatalf("mcp in workspace = %v, want only enabled=false", mcpSaved)
+		t.Fatalf("mcp in project folder = %v, want only enabled=false", mcpSaved)
 	}
 
 	reloaded, err := NewManagerWithLayers(global, ws)
@@ -76,11 +76,11 @@ func TestWorkspaceSave_NestedChangeOverridesGlobal(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got := reloaded.GetConfig().MCP; got.Enabled {
-		t.Fatalf("reloaded mcp = %+v, want disabled in this workspace", got)
+		t.Fatalf("reloaded mcp = %+v, want disabled in this project folder", got)
 	}
 }
 
-func TestWorkspaceSave_LaterGlobalChangeStillApplies(t *testing.T) {
+func TestProjectFolderSave_LaterGlobalChangeStillApplies(t *testing.T) {
 	global := t.TempDir()
 	ws := filepath.Join(t.TempDir(), ConfigDirName)
 	globalFile := filepath.Join(global, ConfigFileName)
@@ -100,18 +100,18 @@ func TestWorkspaceSave_LaterGlobalChangeStillApplies(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !reloaded.GetConfig().MCP.Enabled {
-		t.Fatal("enabling MCP globally didn't reach a workspace that had saved an unrelated setting")
+		t.Fatal("enabling MCP globally didn't reach a project folder that had saved an unrelated setting")
 	}
 }
 
-// TestWorkspaceSave_ConcurrentReadersNeverSeeTruncatedFile pins the
+// TestProjectFolderSave_ConcurrentReadersNeverSeeTruncatedFile pins the
 // atomic-write contract: a reader racing the save either sees the old file
 // or the new one, never a truncated parse error. This is the deterministic
-// fix for e2e runs logging "failed to parse workspace config: unexpected end
-// of JSON input" and silently dropping workspace settings.
-func TestWorkspaceSave_ConcurrentReadersNeverSeeTruncatedFile(t *testing.T) {
+// fix for e2e runs logging "failed to parse project folder config: unexpected end
+// of JSON input" and silently dropping project folder settings.
+func TestProjectFolderSave_ConcurrentReadersNeverSeeTruncatedFile(t *testing.T) {
 	ws := filepath.Join(t.TempDir(), ConfigDirName)
-	writeJSONFile(t, filepath.Join(ws, WorkspaceConfigFileName), `{"provider_models":{"openai":"gpt-a"}}`)
+	writeJSONFile(t, filepath.Join(ws, ProjectFolderConfigFileName), `{"provider_models":{"openai":"gpt-a"}}`)
 
 	m, err := NewManagerWithLayers(t.TempDir(), ws)
 	if err != nil {
@@ -127,7 +127,7 @@ func TestWorkspaceSave_ConcurrentReadersNeverSeeTruncatedFile(t *testing.T) {
 				return
 			default:
 			}
-			data, err := os.ReadFile(filepath.Join(ws, WorkspaceConfigFileName))
+			data, err := os.ReadFile(filepath.Join(ws, ProjectFolderConfigFileName))
 			if err != nil {
 				if os.IsNotExist(err) {
 					continue

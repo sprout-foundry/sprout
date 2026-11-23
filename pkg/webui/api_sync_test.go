@@ -68,10 +68,10 @@ func TestHandleAPISyncOp_WriteOp(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.agent = &agent.Agent{}
-	ws.workspaceRoot = dir
+	ws.projectFolder = dir
 
-	// Create the default client context so getWorkspaceRootForRequest works.
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+	// Create the default client context so getProjectFolderForRequest works.
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 	ws.getClientContextForRequest(req)
 
 	// Now send the write op.
@@ -114,10 +114,10 @@ func TestHandleAPISyncOp_DeleteOp(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.agent = &agent.Agent{}
-	ws.workspaceRoot = dir
+	ws.projectFolder = dir
 
 	// Create the default client context.
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 	ws.getClientContextForRequest(req)
 
 	body := `{"op_type":"delete","path":"todelete.txt","browser_seq":1,"timestamp":1000}`
@@ -155,10 +155,10 @@ func TestHandleAPISyncOp_RenameOp(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.agent = &agent.Agent{}
-	ws.workspaceRoot = dir
+	ws.projectFolder = dir
 
 	// Create the default client context.
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 	ws.getClientContextForRequest(req)
 
 	body := `{"op_type":"rename","path":"old.txt","new_path":"new.txt","browser_seq":1,"timestamp":1000}`
@@ -204,16 +204,16 @@ func TestHandleAPISyncOp_ConflictDetection(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.agent = &agent.Agent{}
-	ws.workspaceRoot = dir
+	ws.projectFolder = dir
 
 	// Pre-set metadata: container has unsynced writes.
-	ws.agent.SetFileMetadata("conflict.txt", agent.WorkspaceFileMetadata{
+	ws.agent.SetFileMetadata("conflict.txt", agent.ProjectFolderFileMetadata{
 		ContainerSeq:        5,
 		LastSyncedContainer: 3,
 	})
 
 	// Create the default client context.
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 	ws.getClientContextForRequest(req)
 
 	body := `{"op_type":"write","path":"conflict.txt","content":"new content","browser_seq":10,"timestamp":1000}`
@@ -247,10 +247,10 @@ func TestHandleAPISyncOp_PathTraversal(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.agent = &agent.Agent{}
-	ws.workspaceRoot = dir
+	ws.projectFolder = dir
 
 	// Create the default client context.
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 	ws.getClientContextForRequest(req)
 
 	body := `{"op_type":"write","path":"../../../etc/passwd","content":"hack","browser_seq":1,"timestamp":1000}`
@@ -343,10 +343,10 @@ func TestHandleAPISyncBatch_MultipleOps(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.agent = &agent.Agent{}
-	ws.workspaceRoot = dir
+	ws.projectFolder = dir
 
 	// Create the default client context.
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 	ws.getClientContextForRequest(req)
 
 	body := `{"ops":[
@@ -401,16 +401,16 @@ func TestHandleAPISyncBatch_StopsOnConflict(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.agent = &agent.Agent{}
-	ws.workspaceRoot = dir
+	ws.projectFolder = dir
 
 	// Set conflict on the second file.
-	ws.agent.SetFileMetadata("conflict.txt", agent.WorkspaceFileMetadata{
+	ws.agent.SetFileMetadata("conflict.txt", agent.ProjectFolderFileMetadata{
 		ContainerSeq:        5,
 		LastSyncedContainer: 3,
 	})
 
 	// Create the default client context.
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 	ws.getClientContextForRequest(req)
 
 	body := `{"ops":[
@@ -521,11 +521,11 @@ func TestHandleAPISyncStatus_WithMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.agent = &agent.Agent{}
-	ws.agent.SetFileMetadata("x.txt", agent.WorkspaceFileMetadata{
+	ws.agent.SetFileMetadata("x.txt", agent.ProjectFolderFileMetadata{
 		BrowserSeq:   5,
 		ContainerSeq: 3,
 	})
-	ws.agent.SetFileMetadata("y.txt", agent.WorkspaceFileMetadata{
+	ws.agent.SetFileMetadata("y.txt", agent.ProjectFolderFileMetadata{
 		BrowserSeq:   2,
 		ContainerSeq: 1,
 	})

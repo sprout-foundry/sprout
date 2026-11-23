@@ -1,5 +1,5 @@
 /**
- * Full (container-backed) workspaces: whether this deployment offers them,
+ * Full (container-backed) dev spaces: whether this deployment offers them,
  * and the create-and-enter flow shared by the header and the escalation toast.
  */
 
@@ -7,7 +7,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { getActiveHost } from '../host/accessor';
 import { clientFetch } from './clientSession';
 
-/** The platform's 503 wording when no workspace compute is configured. */
+/** The platform's 503 wording when no dev space compute is configured. */
 const NOT_CONFIGURED = /not available on this deployment/i;
 
 type Availability = 'unknown' | 'available' | 'unavailable';
@@ -23,8 +23,8 @@ function setAvailability(next: Availability): void {
 }
 
 /**
- * Ask the platform once whether workspaces exist here, through the typed
- * availability endpoint (`GET /workspace/availability`) rather than the
+ * Ask the platform once whether dev spaces exist here, through the typed
+ * availability endpoint (`GET /dev-space/availability`) rather than the
  * legacy list route: a deployment without cloud compute answers
  * `available: false` instead of 503-ing on the probe. Only a definitive
  * `available: false` counts as unavailable; a missing endpoint (a local
@@ -33,13 +33,13 @@ function setAvailability(next: Availability): void {
  *
  * The probe is a platform call, so it goes to the host transport's own API
  * base rather than through clientFetch, which sends paths to the agent's
- * backend — inside an embedded workspace, that workspace's daemon.
+ * backend — inside an embedded dev space, that dev space's daemon.
  */
-export function probeFullWorkspaces(): Promise<void> {
+export function probeDevSpaces(): Promise<void> {
   if (!probe) {
     probe = Promise.resolve()
       .then(() =>
-        fetch(`${getActiveHost()?.transport.apiBaseURL ?? ''}/workspace/availability`, { credentials: 'include' }),
+        fetch(`${getActiveHost()?.transport.apiBaseURL ?? ''}/dev-space/availability`, { credentials: 'include' }),
       )
       .then(async (res) => {
         if (!res || !res.ok) return;
@@ -62,35 +62,35 @@ function getAvailability(): Availability {
 }
 
 /**
- * False once the deployment has said it has no workspace compute. Pass
- * `enabled: false` where full workspaces don't apply (local mode) to skip
+ * False once the deployment has said it has no dev space compute. Pass
+ * `enabled: false` where full dev spaces don't apply (local mode) to skip
  * the probe.
  */
-export function useFullWorkspacesAvailable(enabled = true): boolean {
+export function useDevSpacesAvailable(enabled = true): boolean {
   useEffect(() => {
-    if (enabled) void probeFullWorkspaces();
+    if (enabled) void probeDevSpaces();
   }, [enabled]);
   return useSyncExternalStore(subscribe, getAvailability, getAvailability) !== 'unavailable';
 }
 
-export type StartFullWorkspaceResult =
+export type StartDevSpaceResult =
   | { kind: 'redirecting' }
   | { kind: 'unavailable' }
   | { kind: 'error'; message: string }
   | { kind: 'status'; status: string };
 
 /**
- * Create (or resume) the repo's workspace and enter it through the
- * workspace's auth exchange. Rejects only on network failure.
+ * Create (or resume) the repo's dev space and enter it through the
+ * dev space's auth exchange. Rejects only on network failure.
  */
-export async function startFullWorkspace(repoURL: string): Promise<StartFullWorkspaceResult> {
-  // The host-agnostic cloud create, not the legacy /workspace/fly start route:
+export async function startDevSpace(repoURL: string): Promise<StartDevSpaceResult> {
+  // The host-agnostic cloud create, not the legacy /dev-space/fly start route:
   // host=cloud places on the platform's cloud hosts (the fleet, Fly as
-  // overflow) and never the caller's runner — the full-workspace start is a
+  // overflow) and never the caller's runner — the full-dev-space start is a
   // cloud action, so this keeps the legacy create's semantics on the typed
   // surface (SP-BUILDER-12). The create is idempotent: a live cloud
-  // workspace for the repo is resumed, not duplicated.
-  const response = await clientFetch('/workspace/txn', {
+  // dev space for the repo is resumed, not duplicated.
+  const response = await clientFetch('/dev-space/txn', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_url: repoURL, host: 'cloud' }),
@@ -130,7 +130,7 @@ export async function startFullWorkspace(repoURL: string): Promise<StartFullWork
   return { kind: 'status', status: data.status || 'unknown' };
 }
 
-export function __resetFullWorkspaceForTests(): void {
+export function __resetDevSpacesForTests(): void {
   availability = 'unknown';
   probe = null;
   listeners.clear();

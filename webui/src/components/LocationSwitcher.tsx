@@ -6,9 +6,9 @@ import type { SproutInstance } from '../services/api';
 import { getPathDisplayName, collapseHomePath } from './locationSwitcher/pathUtils';
 import { SSHPanel } from './locationSwitcher/SSHPanel';
 import { useSSHData } from './locationSwitcher/useSSHData';
-import { useWorkspaceData } from './locationSwitcher/useWorkspaceData';
-import { useWorkspaceSuggestions } from './locationSwitcher/useWorkspaceSuggestions';
-import { WorkspacePopover } from './locationSwitcher/WorkspacePopover';
+import { useProjectFolderData } from './locationSwitcher/useWorkspaceData';
+import { useProjectFolderSuggestions } from './locationSwitcher/useWorkspaceSuggestions';
+import { ProjectFolderPopover } from './locationSwitcher/WorkspacePopover';
 
 export interface LocationSwitcherProps {
   isConnected: boolean;
@@ -37,9 +37,9 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
   const isAnyPanelOpen = isOpen || isSshPanelOpen;
 
   // ─── Hook: Workspace data ───
-  const ws = useWorkspaceData({ isConnected });
+  const ws = useProjectFolderData({ isConnected });
 
-  // ─── Hook: SSH data (gets setters from workspace, knows panel state) ───
+  // ─── Hook: SSH data (gets setters from project folder, knows panel state) ───
   const ssh = useSSHData({
     isAnyPanelOpen,
     remoteContext: ws.remoteContext,
@@ -51,7 +51,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
   });
 
   // ─── Hook: Suggestions, input, keyboard, panel toggles ───
-  const sug = useWorkspaceSuggestions({
+  const sug = useProjectFolderSuggestions({
     isConnected,
     workspaceRoot: ws.workspaceRoot,
     daemonRoot: ws.daemonRoot,
@@ -59,10 +59,10 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
     switchingState: ws.switchingState,
     sshFailure: ws.sshFailure,
     isLoading: ws.isLoading,
-    recentWorkspaces: ws.recentWorkspaces,
-    remoteRecentWorkspaces: ws.remoteRecentWorkspaces,
-    sshFavoriteWorkspaces: ws.sshFavoriteWorkspaces,
-    submitWorkspaceChange: ws.submitWorkspaceChange,
+    recentProjectFolders: ws.recentProjectFolders,
+    remoteRecentProjectFolders: ws.remoteRecentProjectFolders,
+    sshFavoriteProjectFolders: ws.sshFavoriteProjectFolders,
+    submitProjectFolderChange: ws.submitProjectFolderChange,
     setSwitchingState: ws.setSwitchingState,
     setSshFailure: ws.setSshFailure,
     sidebarCollapsed,
@@ -73,7 +73,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
   });
 
   // ─── Derived values ───
-  const triggerWorkspaceName = useMemo(() => {
+  const triggerProjectFolderName = useMemo(() => {
     if (nameOnly) return ws.workspaceRoot?.split('/').filter(Boolean).pop() || ws.workspaceRoot || '';
     const display = getPathDisplayName(ws.workspaceRoot);
     if (!ws.remoteContext?.homePath) return display;
@@ -116,10 +116,10 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         disabled={!isConnected || (ws.isLoading && !isOpen)}
-        title={ws.workspaceRoot || 'No workspace'}
+        title={ws.workspaceRoot || 'No project folder'}
       >
         <FolderOpen size={14} className="location-switcher-trigger-icon" />
-        {sug.showText && <span className="location-switcher-trigger-text">{triggerWorkspaceName}</span>}
+        {sug.showText && <span className="location-switcher-trigger-text">{triggerProjectFolderName}</span>}
         {ws.switchingState.isSwitching ? (
           <Loader2 size={12} className="spin" />
         ) : (
@@ -153,7 +153,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
           handleCloseSshSession={ssh.handleCloseSshSession}
           updateSshSessionPathDraft={ssh.updateSshSessionPathDraft}
           getSshSessionTargetPath={ssh.getSshSessionTargetPath}
-          addSSHFavoriteWorkspace={ws.addSSHFavoriteWorkspace}
+          addSSHFavoriteProjectFolder={ws.addSSHFavoriteProjectFolder}
           setSelectedSshBrowseHost={ssh.setSelectedSshBrowseHost}
           setFocusedSshSessionKey={ssh.setFocusedSshSessionKey}
           sshPanelRef={sug.sshPanelRef}
@@ -161,7 +161,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       )}
 
       {isOpen && (
-        <WorkspacePopover
+        <ProjectFolderPopover
           workspaceRoot={ws.workspaceRoot}
           daemonRoot={ws.daemonRoot}
           remoteContext={ws.remoteContext}
@@ -179,13 +179,13 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
           suggestionsError={sug.suggestionsError}
           selectedIndex={sug.selectedIndex}
           setSelectedIndex={sug.setSelectedIndex}
-          recentWorkspaceItems={sug.recentWorkspaceItems}
+          recentProjectFolderItems={sug.recentProjectFolderItems}
           remoteHostFavorites={sug.remoteHostFavorites}
-          sshFavoriteWorkspaces={ws.sshFavoriteWorkspaces}
-          submitWorkspaceChange={ws.submitWorkspaceChange}
+          sshFavoriteProjectFolders={ws.sshFavoriteProjectFolders}
+          submitProjectFolderChange={ws.submitProjectFolderChange}
           handleInputSubmit={sug.handleInputSubmit}
-          addSSHFavoriteWorkspace={ws.addSSHFavoriteWorkspace}
-          removeSSHFavoriteWorkspace={ws.removeSSHFavoriteWorkspace}
+          addSSHFavoriteProjectFolder={ws.addSSHFavoriteProjectFolder}
+          removeSSHFavoriteProjectFolder={ws.removeSSHFavoriteProjectFolder}
           popoverRef={sug.popoverRef}
           pathInputRef={sug.pathInputRef}
           sidebarCollapsed={sidebarCollapsed}

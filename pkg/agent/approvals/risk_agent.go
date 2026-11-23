@@ -15,8 +15,8 @@ import (
 // RiskAgent is the surface the risk resolver (ResolveToolRisk) needs
 // from the agent.
 type RiskAgent interface {
-	// Workspace + session state.
-	GetWorkspaceRoot() string
+	// Project folder + session state.
+	GetProjectFolder() string
 	HasPasswordPrompter() bool
 	IsFolderSessionAllowed(absPath string) bool
 	GetConfig() *configuration.Config

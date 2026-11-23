@@ -63,7 +63,7 @@ type Finding struct {
 	Kind FindingKind `json:"kind"`
 	// Severity ranks the finding.
 	Severity Severity `json:"severity"`
-	// Target identifies what the finding is about: a workspace-relative
+	// Target identifies what the finding is about: a project-folder-relative
 	// file path, a "file:function" location, or a check kind.
 	Target string `json:"target"`
 	// Message is a one-line description of the concern.

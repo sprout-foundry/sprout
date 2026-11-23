@@ -65,7 +65,7 @@ func bgSnapshotFinished(resultJSON string) bool {
 // the session exits or the wait elapses, then returns the snapshot.
 //
 // When the snapshot reports the background command has finished, the
-// workspace mutation diff runs here: the command's writes happened
+// project folder mutation diff runs here: the command's writes happened
 // between its issue and this observation, and this is the first point
 // they can be captured and attributed correctly.
 func (h *shellCommandHandler) handleCheckBackground(ctx context.Context, env ToolEnv, sessionID string, waitSeconds int) (ToolResult, error) {

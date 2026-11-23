@@ -32,7 +32,7 @@ vi.mock('lucide-react', () => {
 });
 
 // ── Mock @sprout/ui ──────────────────────────────────────────────────
-// @sprout/ui is a workspace package — vi.mock's importOriginal() can't resolve
+// @sprout/ui is a project folder package — vi.mock's importOriginal() can't resolve
 // it in this context. We inline all needed exports.
 //
 // Exports the component needs (at runtime):

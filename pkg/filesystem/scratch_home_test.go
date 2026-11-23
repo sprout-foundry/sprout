@@ -9,7 +9,7 @@ import (
 
 // scratchHome returns an isolated HOME for tests that need a writable
 // location OUTSIDE the OS temp dir (the /tmp exception in isInTmpPath makes
-// a t.TempDir workspace vacuous for these tests).
+// a t.TempDir project folder vacuous for these tests).
 //
 // The scratch root lives under $HOME/.cache/sprout-test-homes — a real-home
 // subtree, so os.TempDir() checks still classify it as non-tmp — but each

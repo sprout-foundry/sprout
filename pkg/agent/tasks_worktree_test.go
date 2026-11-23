@@ -226,34 +226,34 @@ func TestSuggestTaskBranch_FallsBackWithoutAgent(t *testing.T) {
 	}
 }
 
-func TestReadWorkspaceConventions(t *testing.T) {
+func TestReadProjectFolderConventions(t *testing.T) {
 	dir := t.TempDir()
-	if got := readWorkspaceConventions(dir); got != "" {
+	if got := readProjectFolderConventions(dir); got != "" {
 		t.Errorf("expected empty conventions, got %q", got)
 	}
 	body := "# Conventions\n\nUse feat/ and fix/ prefixes.\n"
 	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := readWorkspaceConventions(dir); !strings.Contains(got, "feat/ and fix/") {
+	if got := readProjectFolderConventions(dir); !strings.Contains(got, "feat/ and fix/") {
 		t.Errorf("conventions = %q, want the AGENTS.md body", got)
 	}
 }
 
-func TestReadWorkspaceConventions_CapsSize(t *testing.T) {
+func TestReadProjectFolderConventions_CapsSize(t *testing.T) {
 	dir := t.TempDir()
 	big := strings.Repeat("x", taskConventionsBudget*2)
 	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte(big), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := readWorkspaceConventions(dir); len(got) != taskConventionsBudget {
+	if got := readProjectFolderConventions(dir); len(got) != taskConventionsBudget {
 		t.Errorf("conventions length = %d, want the %d cap", len(got), taskConventionsBudget)
 	}
 }
 
 // A task worktree inside .sprout/ must not read as an untracked file, or
 // /task merge (which refuses a dirty tree) could never run.
-func TestCreateTaskWorktree_LeavesWorkspaceStatusClean(t *testing.T) {
+func TestCreateTaskWorktree_LeavesProjectFolderStatusClean(t *testing.T) {
 	repo := initTaskTestRepo(t)
 	ws, err := createTaskWorktree(context.Background(), repo, "feat/clean-status", "")
 	if err != nil {
@@ -266,7 +266,7 @@ func TestCreateTaskWorktree_LeavesWorkspaceStatusClean(t *testing.T) {
 		t.Fatalf("git status: %v", err)
 	}
 	if strings.TrimSpace(out) != "" {
-		t.Errorf("workspace is dirty after creating a task worktree:\n%s", out)
+		t.Errorf("project folder is dirty after creating a task worktree:\n%s", out)
 	}
 }
 
@@ -275,8 +275,8 @@ func TestCreateTaskWorktree_LeavesWorkspaceStatusClean(t *testing.T) {
 // it at a stale version forever.
 func TestEnsureTaskGitignore_LeavesGeneratedFileAlone(t *testing.T) {
 	repo := t.TempDir()
-	if err := configuration.EnsureWorkspaceConfigDir(repo); err != nil {
-		t.Fatalf("EnsureWorkspaceConfigDir: %v", err)
+	if err := configuration.EnsureProjectFolderConfigDir(repo); err != nil {
+		t.Fatalf("EnsureProjectFolderConfigDir: %v", err)
 	}
 	path := filepath.Join(repo, ".sprout", ".gitignore")
 	before, err := os.ReadFile(path)

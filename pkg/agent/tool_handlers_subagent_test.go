@@ -505,7 +505,7 @@ func setupTestSubagentRunner(agent *Agent) {
 		EventBus:      agent.eventBus,
 		TodoManager:   agent.todoMgr,
 		ConfigManager: agent.configManager,
-		WorkspaceRoot: agent.workspaceRoot,
+		ProjectFolder: agent.projectFolder,
 	})
 	// Inject stub client factory so subagents don't hit real API providers
 	runner.testClientFactory = func(clientType agent_api.ClientType, model string) (agent_api.ClientInterface, error) {
@@ -609,7 +609,7 @@ func TestSubagentManifestEndToEnd(t *testing.T) {
 	}
 
 	// 1. Construct a tracker mimicking what the subagent runner sets
-	//    up: shell walk enabled, primed against the workspace.
+	//    up: shell walk enabled, primed against the project folder.
 	tracker := changes.NewChangeTracker(nil, "")
 	tracker.Enable()
 	tracker.ApplyShellWalkConfig(changes.ShellWalkConfig{ShellWalkEnabled: true})

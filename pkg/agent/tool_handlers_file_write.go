@@ -217,10 +217,10 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 		seq := nextPatchSeq()
 		conflict, theirsPath := a.CheckPatchConflict(path)
 		if conflict {
-			a.publishEvent(events.EventTypeWorkspacePatch, events.WorkspacePatchEvent(path, content, "write", seq, events.PatchConflictInfo{Conflict: true, TheirsPath: theirsPath}))
+			a.publishEvent(events.EventTypeProjectFolderPatch, events.ProjectFolderPatchEvent(path, content, "write", seq, events.PatchConflictInfo{Conflict: true, TheirsPath: theirsPath}))
 			a.Logger().Debug("Published workspace_patch event with conflict: %s (seq=%d, theirs=%s)\n", path, seq, theirsPath)
 		} else {
-			a.publishEvent(events.EventTypeWorkspacePatch, events.WorkspacePatchEvent(path, content, "write", seq))
+			a.publishEvent(events.EventTypeProjectFolderPatch, events.ProjectFolderPatchEvent(path, content, "write", seq))
 			a.Logger().Debug("Published workspace_patch event: %s (seq=%d)\n", path, seq)
 		}
 

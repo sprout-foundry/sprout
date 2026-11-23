@@ -97,7 +97,7 @@ const (
 const CompactedFilesHeader = "Files modified during compacted segment:"
 
 // TranscriptSessionDir returns the per-session transcript directory for
-// the given session within the current workspace scope:
+// the given session within the current project folder scope:
 // <state>/transcripts/<scope-hash>/<session-id>. Exported for
 // pkg/agent's CaptureTranscriptSnapshot (SP-141 phase 2).
 func TranscriptSessionDir(sessionID, workingDir string) (string, error) {
@@ -105,7 +105,7 @@ func TranscriptSessionDir(sessionID, workingDir string) (string, error) {
 }
 
 // ListTranscriptSnapshots returns snapshot file paths for the given
-// session within the current workspace scope, sorted oldest-first.
+// session within the current project folder scope, sorted oldest-first.
 func ListTranscriptSnapshots(sessionID, workingDir string) ([]string, error) {
 	dir, err := transcriptSessionDir(sessionID, workingDir)
 	if err != nil {

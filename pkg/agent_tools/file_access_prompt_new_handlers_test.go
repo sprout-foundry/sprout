@@ -24,7 +24,7 @@ func TestReadFile_Image_Deny_LocalPath_ReturnsTypedError(t *testing.T) {
 	h := &readFileHandler{}
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: denyClassifier{},
 	}
 
@@ -50,7 +50,7 @@ func TestReadFile_Image_HTTPURL_SkipsGate(t *testing.T) {
 	// and proceed to AnalyzeImage (which will fail without vision, but
 	// should NOT return the "blocked" error).
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: denyClassifier{},
 	}
 
@@ -77,7 +77,7 @@ func TestReadFile_Image_HTTPSURL_SkipsGate(t *testing.T) {
 	h := &readFileHandler{}
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: denyClassifier{},
 	}
 
@@ -100,7 +100,7 @@ func TestAnalyzeUIScreenshot_Deny_LocalPath_ReturnsTypedError(t *testing.T) {
 	h := &analyzeUIScreenshotHandler{}
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: denyClassifier{},
 	}
 
@@ -123,7 +123,7 @@ func TestAnalyzeUIScreenshot_HTTPURL_SkipsGate(t *testing.T) {
 	h := &analyzeUIScreenshotHandler{}
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: denyClassifier{},
 	}
 
@@ -138,7 +138,7 @@ func TestAnalyzeUIScreenshot_HTTPURL_SkipsGate(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// repo_map_handler — deny on explicit outside-workspace directory
+// repo_map_handler — deny on explicit outside-project-folder directory
 // ---------------------------------------------------------------------------
 
 func TestRepoMap_Deny_ExplicitDirectory_ReturnsTypedError(t *testing.T) {
@@ -147,7 +147,7 @@ func TestRepoMap_Deny_ExplicitDirectory_ReturnsTypedError(t *testing.T) {
 	h := &repoMapHandler{}
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: denyClassifier{},
 	}
 
@@ -173,7 +173,7 @@ func TestRepoMap_DefaultDirectory_SkipsGate(t *testing.T) {
 	// and proceed to GenerateRepoMap (which will
 	// scan the temp dir and return something).
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: denyClassifier{},
 	}
 
@@ -191,10 +191,10 @@ func TestRepoMap_DefaultDirectory_SkipsGate(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRepoMap_Prompt_Approved_Proceeds(t *testing.T) {
-	outside := outsideWorkspaceTarget(t)
+	outside := outsideProjectFolderTarget(t)
 	approved := &fakeFSPrompter{approve: true}
 	env := ToolEnv{
-		WorkspaceRoot:        t.TempDir(),
+		ProjectFolder:        t.TempDir(),
 		FileAccessClassifier: &fakeClassifier{verdict: "prompt"},
 		FileAccessPrompter:   approved,
 	}
@@ -217,10 +217,10 @@ func TestRepoMap_Prompt_Approved_Proceeds(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRepoMap_Prompt_Denied_Blocks(t *testing.T) {
-	outside := outsideWorkspaceTarget(t)
+	outside := outsideProjectFolderTarget(t)
 	denied := &fakeFSPrompter{}
 	env := ToolEnv{
-		WorkspaceRoot:        t.TempDir(),
+		ProjectFolder:        t.TempDir(),
 		FileAccessClassifier: &fakeClassifier{verdict: "prompt"},
 		FileAccessPrompter:   denied,
 	}
@@ -245,7 +245,7 @@ func TestFindDeadCode_Deny_ExplicitDirectory_ReturnsTypedError(t *testing.T) {
 	h := &findDeadCodeHandler{}
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: denyClassifier{},
 	}
 
@@ -268,7 +268,7 @@ func TestFindDeadCode_NoDirectory_SkipsGate(t *testing.T) {
 	h := &findDeadCodeHandler{}
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: denyClassifier{},
 	}
 
@@ -291,7 +291,7 @@ func TestSearch_Deny_ExplicitDirectory_ReturnsTypedError(t *testing.T) {
 	h := &searchHandler{}
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: denyClassifier{},
 	}
 
@@ -315,7 +315,7 @@ func TestSearch_NoDirectory_SkipsGate(t *testing.T) {
 	h := &searchHandler{}
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: denyClassifier{},
 	}
 
@@ -339,7 +339,7 @@ func TestSearch_DotDirectory_SkipsGate(t *testing.T) {
 	h := &searchHandler{}
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: denyClassifier{},
 	}
 
@@ -364,7 +364,7 @@ func TestSearchFiles_Deny_ExplicitDirectory_ReturnsTypedError(t *testing.T) {
 	h := &searchFilesHandler{}
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: denyClassifier{},
 	}
 
@@ -388,7 +388,7 @@ func TestSearchFiles_NoDirectory_SkipsGate(t *testing.T) {
 	h := &searchFilesHandler{}
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: denyClassifier{},
 	}
 
@@ -412,7 +412,7 @@ func TestSearchFiles_DotDirectory_SkipsGate(t *testing.T) {
 	h := &searchFilesHandler{}
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: denyClassifier{},
 	}
 
@@ -447,10 +447,10 @@ func TestIsHTTPURL(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestReadFile_Image_Prompt_Approved_Proceeds(t *testing.T) {
-	outside := outsideWorkspaceTarget(t)
+	outside := outsideProjectFolderTarget(t)
 	approved := &fakeFSPrompter{approve: true}
 	env := ToolEnv{
-		WorkspaceRoot:        t.TempDir(),
+		ProjectFolder:        t.TempDir(),
 		FileAccessClassifier: &fakeClassifier{verdict: "prompt"},
 		FileAccessPrompter:   approved,
 	}
@@ -472,10 +472,10 @@ func TestReadFile_Image_Prompt_Approved_Proceeds(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestAnalyzeUIScreenshot_Prompt_Approved_Proceeds(t *testing.T) {
-	outside := outsideWorkspaceTarget(t)
+	outside := outsideProjectFolderTarget(t)
 	approved := &fakeFSPrompter{approve: true}
 	env := ToolEnv{
-		WorkspaceRoot:        t.TempDir(),
+		ProjectFolder:        t.TempDir(),
 		FileAccessClassifier: &fakeClassifier{verdict: "prompt"},
 		FileAccessPrompter:   approved,
 	}
@@ -496,10 +496,10 @@ func TestAnalyzeUIScreenshot_Prompt_Approved_Proceeds(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestReadFile_Image_Prompt_Denied_Blocks(t *testing.T) {
-	outside := outsideWorkspaceTarget(t)
+	outside := outsideProjectFolderTarget(t)
 	denied := &fakeFSPrompter{}
 	env := ToolEnv{
-		WorkspaceRoot:        t.TempDir(),
+		ProjectFolder:        t.TempDir(),
 		FileAccessClassifier: &fakeClassifier{verdict: "prompt"},
 		FileAccessPrompter:   denied,
 	}
@@ -508,8 +508,8 @@ func TestReadFile_Image_Prompt_Denied_Blocks(t *testing.T) {
 	result, err := h.Execute(context.Background(), env, map[string]any{
 		"path": outside,
 	})
-	// read_file's pinned contract: a denied off-workspace read surfaces the
-	// underlying off-workspace error, not a synthesized "not approved" one
+	// read_file's pinned contract: a denied off-project-folder read surfaces the
+	// underlying off-project-folder error, not a synthesized "not approved" one
 	// (see TestReadFileHandlerPromptFlow).
 	require.Error(t, err, "prompt denial must block the operation")
 	if !strings.Contains(err.Error(), "outside working directory") && !strings.Contains(result.Output, "outside working directory") {
@@ -523,10 +523,10 @@ func TestReadFile_Image_Prompt_Denied_Blocks(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestAnalyzeUIScreenshot_Prompt_Denied_Blocks(t *testing.T) {
-	outside := outsideWorkspaceTarget(t)
+	outside := outsideProjectFolderTarget(t)
 	denied := &fakeFSPrompter{}
 	env := ToolEnv{
-		WorkspaceRoot:        t.TempDir(),
+		ProjectFolder:        t.TempDir(),
 		FileAccessClassifier: &fakeClassifier{verdict: "prompt"},
 		FileAccessPrompter:   denied,
 	}
@@ -546,10 +546,10 @@ func TestAnalyzeUIScreenshot_Prompt_Denied_Blocks(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSearch_Prompt_Approved_Proceeds(t *testing.T) {
-	outside := outsideWorkspaceTarget(t)
+	outside := outsideProjectFolderTarget(t)
 	approved := &fakeFSPrompter{approve: true}
 	env := ToolEnv{
-		WorkspaceRoot:        t.TempDir(),
+		ProjectFolder:        t.TempDir(),
 		FileAccessClassifier: &fakeClassifier{verdict: "prompt"},
 		FileAccessPrompter:   approved,
 	}
@@ -570,10 +570,10 @@ func TestSearch_Prompt_Approved_Proceeds(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSearchFiles_Prompt_Approved_Proceeds(t *testing.T) {
-	outside := outsideWorkspaceTarget(t)
+	outside := outsideProjectFolderTarget(t)
 	approved := &fakeFSPrompter{approve: true}
 	env := ToolEnv{
-		WorkspaceRoot:        t.TempDir(),
+		ProjectFolder:        t.TempDir(),
 		FileAccessClassifier: &fakeClassifier{verdict: "prompt"},
 		FileAccessPrompter:   approved,
 	}
@@ -594,10 +594,10 @@ func TestSearchFiles_Prompt_Approved_Proceeds(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestFindDeadCode_Prompt_Approved_Proceeds(t *testing.T) {
-	outside := outsideWorkspaceTarget(t)
+	outside := outsideProjectFolderTarget(t)
 	approved := &fakeFSPrompter{approve: true}
 	env := ToolEnv{
-		WorkspaceRoot:        t.TempDir(),
+		ProjectFolder:        t.TempDir(),
 		FileAccessClassifier: &fakeClassifier{verdict: "prompt"},
 		FileAccessPrompter:   approved,
 	}
@@ -620,42 +620,42 @@ func TestNewHandlers_PassReadMode(t *testing.T) {
 	t.Parallel()
 	// read_file
 	cc := &captureModeClassifier{}
-	env := ToolEnv{WorkspaceRoot: t.TempDir(), FileAccessClassifier: cc}
+	env := ToolEnv{ProjectFolder: t.TempDir(), FileAccessClassifier: cc}
 	h := &readFileHandler{}
 	_, _ = h.Execute(context.Background(), env, map[string]any{"path": "/etc/hosts"})
 	require.Equal(t, "read", cc.gotMode, "read_file should pass read mode")
 
 	// analyze_ui_screenshot
 	cc = &captureModeClassifier{}
-	env = ToolEnv{WorkspaceRoot: t.TempDir(), FileAccessClassifier: cc}
+	env = ToolEnv{ProjectFolder: t.TempDir(), FileAccessClassifier: cc}
 	h2 := &analyzeUIScreenshotHandler{}
 	h2.Execute(context.Background(), env, map[string]any{"image_path": "/etc/hosts"})
 	require.Equal(t, "read", cc.gotMode, "analyze_ui_screenshot should pass read mode")
 
 	// repo_map
 	cc = &captureModeClassifier{}
-	env = ToolEnv{WorkspaceRoot: t.TempDir(), FileAccessClassifier: cc}
+	env = ToolEnv{ProjectFolder: t.TempDir(), FileAccessClassifier: cc}
 	h3 := &repoMapHandler{}
 	h3.Execute(context.Background(), env, map[string]any{"directory": "/etc"})
 	require.Equal(t, "read", cc.gotMode, "repo_map should pass read mode")
 
 	// find_dead_code
 	cc = &captureModeClassifier{}
-	env = ToolEnv{WorkspaceRoot: t.TempDir(), FileAccessClassifier: cc}
+	env = ToolEnv{ProjectFolder: t.TempDir(), FileAccessClassifier: cc}
 	h4 := &findDeadCodeHandler{}
 	h4.Execute(context.Background(), env, map[string]any{"directory": "/etc"})
 	require.Equal(t, "read", cc.gotMode, "find_dead_code should pass read mode")
 
 	// search
 	cc = &captureModeClassifier{}
-	env = ToolEnv{WorkspaceRoot: t.TempDir(), FileAccessClassifier: cc}
+	env = ToolEnv{ProjectFolder: t.TempDir(), FileAccessClassifier: cc}
 	h5 := &searchHandler{}
 	h5.Execute(context.Background(), env, map[string]any{"query": "x", "directory": "/etc"})
 	require.Equal(t, "read", cc.gotMode, "search should pass read mode")
 
 	// search_files
 	cc = &captureModeClassifier{}
-	env = ToolEnv{WorkspaceRoot: t.TempDir(), FileAccessClassifier: cc}
+	env = ToolEnv{ProjectFolder: t.TempDir(), FileAccessClassifier: cc}
 	h6 := &searchFilesHandler{}
 	h6.Execute(context.Background(), env, map[string]any{"search_pattern": "x", "directory": "/etc"})
 	require.Equal(t, "read", cc.gotMode, "search_files should pass read mode")
@@ -674,7 +674,7 @@ func TestReadFile_Image_HTTPURL_NoClassifierCall(t *testing.T) {
 	h := &readFileHandler{}
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: ncc,
 	}
 
@@ -692,7 +692,7 @@ func TestAnalyzeUIScreenshot_HTTPURL_NoClassifierCall(t *testing.T) {
 	h := &analyzeUIScreenshotHandler{}
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: ncc,
 	}
 
@@ -713,7 +713,7 @@ func TestRepoMap_DefaultDirectory_NoClassifierCall(t *testing.T) {
 	h := &repoMapHandler{}
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: ncc,
 	}
 
@@ -728,7 +728,7 @@ func TestSearch_NoDirectory_NoClassifierCall(t *testing.T) {
 	h := &searchHandler{}
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: ncc,
 	}
 
@@ -743,7 +743,7 @@ func TestSearch_DotDirectory_NoClassifierCall(t *testing.T) {
 	h := &searchHandler{}
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: ncc,
 	}
 
@@ -758,7 +758,7 @@ func TestSearchFiles_NoDirectory_NoClassifierCall(t *testing.T) {
 	h := &searchFilesHandler{}
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: ncc,
 	}
 
@@ -773,7 +773,7 @@ func TestSearchFiles_DotDirectory_NoClassifierCall(t *testing.T) {
 	h := &searchFilesHandler{}
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: ncc,
 	}
 
@@ -788,7 +788,7 @@ func TestFindDeadCode_NoDirectory_NoClassifierCall(t *testing.T) {
 	h := &findDeadCodeHandler{}
 
 	env := ToolEnv{
-		WorkspaceRoot:        dir,
+		ProjectFolder:        dir,
 		FileAccessClassifier: ncc,
 	}
 

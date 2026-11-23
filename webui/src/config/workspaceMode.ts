@@ -1,5 +1,5 @@
 /**
- * Configured default workspace mode.
+ * Configured default project folder mode.
  *
  * An embedding shell — or the build itself — can point new sessions at a mode
  * other than the built-in default by setting `VITE_DEFAULT_WORKSPACE_MODE`.
@@ -11,7 +11,7 @@
  * seam to simulate a configured default without a rebuild.
  *
  * This module only reports the *configured* id (or `null` when nothing is
- * set). Whether that id actually names a mode the workspace offers is the
+ * set). Whether that id actually names a mode the project folder offers is the
  * registry's concern: an id that points at an unavailable or unregistered
  * mode falls back to the built-in default (`workspaces/registry.ts`).
  */
@@ -24,7 +24,7 @@ const BUILD_DEFAULT: string | null =
 let runtimeDefault: string | null = BUILD_DEFAULT;
 
 /**
- * Override the default workspace mode at runtime.
+ * Override the default project folder mode at runtime.
  *
  * Pass a mode id to point new sessions there, or `null` to fall back to the
  * build-time value (and, when that is unset, the built-in default). An
@@ -34,7 +34,7 @@ export function overrideDefaultWorkspaceMode(id: string | null): void {
   runtimeDefault = id;
 }
 
-/** The configured default workspace mode, or `null` when nothing is set. */
+/** The configured default project folder mode, or `null` when nothing is set. */
 export function configuredDefaultWorkspaceMode(): string | null {
   return runtimeDefault;
 }

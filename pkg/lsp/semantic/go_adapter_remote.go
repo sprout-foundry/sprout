@@ -22,7 +22,7 @@ func runGoDefinitionWithRemote(input ToolInput, goplsPath, remoteAddr string) (T
 	args = append(args, "definition", posArg)
 
 	cmd := exec.Command(goplsPath, args...)
-	cmd.Dir = input.WorkspaceRoot
+	cmd.Dir = input.ProjectFolder
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

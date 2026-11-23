@@ -9,7 +9,7 @@
  * clientFetch — NOT sent as a WebSocket event (no backend is listening for
  * it).
  *
- * Daemon agent (a local daemon, or a hosted workspace's daemon reached
+ * Daemon agent (a local daemon, or a hosted project folder's daemon reached
  * through the host): the response is delivered as an 'ask_user_response'
  * WebSocket event via eventsProvider.sendEvent — clientFetch must not be
  * touched. A hosted host declares no local terminal, so the routing must

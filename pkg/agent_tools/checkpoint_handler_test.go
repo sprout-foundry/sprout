@@ -18,7 +18,7 @@ import (
 
 // seedCheckpointToolStore redirects the history store to a temp dir and
 // records one revision with a file change under a workdir. It returns the
-// workdir (used as the tool's workspace, so the workspace-scoped checkpoint
+// workdir (used as the tool's project folder, so the project-folder-scoped checkpoint
 // store is the isolated one). The process-wide checkpoint store is also
 // redirected so a test that reaches the fallback stays isolated.
 func seedCheckpointToolStore(t *testing.T) string {
@@ -62,7 +62,7 @@ func TestCheckpointTool_DefinitionAndValidate(t *testing.T) {
 func TestCheckpointTool_ListCreateRestore(t *testing.T) {
 	workdir := seedCheckpointToolStore(t)
 	h := &checkpointHandler{}
-	env := ToolEnv{WorkspaceRoot: workdir}
+	env := ToolEnv{ProjectFolder: workdir}
 	ctx := context.Background()
 
 	// Create on demand.
@@ -98,7 +98,7 @@ func TestCheckpointTool_ListCreateRestore(t *testing.T) {
 	got, _ := os.ReadFile(filepath.Join(workdir, "a.go"))
 	assert.Equal(t, "package a\n", string(got))
 
-	cps, err := history.ListCheckpointsInWorkspace(workdir, false)
+	cps, err := history.ListCheckpointsInProjectFolder(workdir, false)
 	require.NoError(t, err)
 	require.Len(t, cps, 2)
 	assert.Equal(t, history.CheckpointRestore, cps[1].Origin)

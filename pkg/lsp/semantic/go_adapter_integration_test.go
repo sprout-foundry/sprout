@@ -34,7 +34,7 @@ func TestGoAdapterRunDefinitionWithGopls(t *testing.T) {
 		Method:        "definition",
 		Content:       "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n",
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 6, Column: 6}, // inside Println
 	})
 	if err != nil {
@@ -56,7 +56,7 @@ func TestGoAdapterRunHoverWithGopls(t *testing.T) {
 		Method:        "hover",
 		Content:       "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n",
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 6, Column: 6},
 	})
 	if err != nil {
@@ -78,7 +78,7 @@ func TestGoAdapterRunReferencesWithGopls(t *testing.T) {
 		Method:        "references",
 		Content:       "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n",
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 6, Column: 6},
 	})
 	if err != nil {
@@ -101,7 +101,7 @@ func TestGoAdapterRunRenameWithGopls(t *testing.T) {
 		Method:        "rename",
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 3, Column: 6}, // on 'greet'
 	})
 	if err != nil {
@@ -184,7 +184,7 @@ func TestGoAdapterRunSignatureHelpWithGopls(t *testing.T) {
 		Method:        "signature_help",
 		Content:       content,
 		FilePath:      file,
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		Position:      &Position{Line: 6, Column: 14}, // inside Println(
 	})
 	if err != nil {

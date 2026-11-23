@@ -57,9 +57,9 @@ func ExtractKeyCommentsFromDiff(diff string) string {
 
 // ExtractFileContextForChanges returns up to the first 500 lines of each
 // changed file (skipping files excluded by ShouldSkipFileForContext and paths
-// escaping workspaceRoot), formatted as markdown code blocks. "" when no
+// escaping projectFolder), formatted as markdown code blocks. "" when no
 // readable files remain.
-func ExtractFileContextForChanges(workspaceRoot, diff string) string {
+func ExtractFileContextForChanges(projectFolder, diff string) string {
 	lines := strings.Split(diff, "\n")
 	changedFiles := make(map[string]bool)
 
@@ -74,11 +74,11 @@ func ExtractFileContextForChanges(workspaceRoot, diff string) string {
 
 	contextParts := make([]string, 0, len(changedFiles))
 	for relPath := range changedFiles {
-		if !IsValidRepoFilePath(workspaceRoot, relPath) || ShouldSkipFileForContext(relPath) {
+		if !IsValidRepoFilePath(projectFolder, relPath) || ShouldSkipFileForContext(relPath) {
 			continue
 		}
 
-		absPath := filepath.Join(workspaceRoot, relPath)
+		absPath := filepath.Join(projectFolder, relPath)
 		fi, statErr := os.Stat(absPath)
 		if statErr != nil || os.IsNotExist(statErr) {
 			continue
@@ -148,10 +148,10 @@ func ShouldSkipFileForContext(filePath string) bool {
 }
 
 // IsValidRepoFilePath reports whether relPath is a safe in-repo path: no
-// ".." traversal and the cleaned absolute path stays inside workspaceRoot.
-// An absolute relPath is checked as-is (not re-anchored under workspaceRoot),
-// so "/etc/passwd" against any workspace root is rejected.
-func IsValidRepoFilePath(workspaceRoot, relPath string) bool {
+// ".." traversal and the cleaned absolute path stays inside projectFolder.
+// An absolute relPath is checked as-is (not re-anchored under projectFolder),
+// so "/etc/passwd" against any project folder is rejected.
+func IsValidRepoFilePath(projectFolder, relPath string) bool {
 	if strings.Contains(relPath, "..") {
 		return false
 	}
@@ -162,12 +162,12 @@ func IsValidRepoFilePath(workspaceRoot, relPath string) bool {
 		absPath = cleanRel
 	} else {
 		var err error
-		absPath, err = filepath.Abs(filepath.Join(workspaceRoot, cleanRel))
+		absPath, err = filepath.Abs(filepath.Join(projectFolder, cleanRel))
 		if err != nil {
 			return false
 		}
 	}
-	absRoot, err := filepath.Abs(workspaceRoot)
+	absRoot, err := filepath.Abs(projectFolder)
 	if err != nil {
 		return false
 	}

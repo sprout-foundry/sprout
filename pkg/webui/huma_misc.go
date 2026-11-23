@@ -62,7 +62,7 @@ func registerMiscHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodGet,
 		Path:        "/api/browse",
 		Summary:     "List a directory's contents.",
-		Description: "Lists the files and directories inside the `path` (defaulting to the workspace root), always skipping the .git directory. `ignore=true` additionally skips entries matched by the workspace's gitignore rules.",
+		Description: "Lists the files and directories inside the `path` (defaulting to the project folder), always skipping the .git directory. `ignore=true` additionally skips entries matched by the project folder's gitignore rules.",
 		Tags:        []string{"files"},
 	}, ws.browseDirHumaHandler)
 
@@ -70,8 +70,8 @@ func registerMiscHumaOperations(api huma.API, ws *ReactWebServer) {
 		OperationID: "fileIndex",
 		Method:      http.MethodGet,
 		Path:        "/api/file-index",
-		Summary:     "Return the workspace's whole quick-open file index.",
-		Description: "Walks the workspace once and returns every non-ignored file as a workspace-relative path, bounded by the indexer caps (12k files / 3k dirs / depth 8). One response replaces the palette's per-directory crawl; `truncated` reports when the caps bit.",
+		Summary:     "Return the project folder's whole quick-open file index.",
+		Description: "Walks the project folder once and returns every non-ignored file as a project-folder-relative path, bounded by the indexer caps (12k files / 3k dirs / depth 8). One response replaces the palette's per-directory crawl; `truncated` reports when the caps bit.",
 		Tags:        []string{"files"},
 	}, ws.fileIndexHumaHandler)
 }

@@ -50,7 +50,7 @@ func TestProcessQueryWithSeedAdmittedFailureClearsTimestampAndReleasesGuard(t *t
 	a := &Agent{
 		configManager: configManager,
 		turnTimestamp: time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
-		workspaceRoot: t.TempDir(),
+		projectFolder: t.TempDir(),
 	}
 
 	// A nil provider client makes prepareQueryRun fail after admission and after

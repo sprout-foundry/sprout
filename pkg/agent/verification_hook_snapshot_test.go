@@ -68,7 +68,7 @@ func snapStarterManifestBuild(t *testing.T, root string) string {
 	return m.Build
 }
 
-// snapGuardAgent wires a fresh agent (workspace root = root, verification
+// snapGuardAgent wires a fresh agent (project folder = root, verification
 // section = ver; nil means the default-off path) for the guard tests, which
 // call the file-tool handlers directly (the agent's tool-handling path). The
 // scripted client is never invoked (the handlers are called directly).
@@ -130,14 +130,14 @@ func TestRefuseStarterManifestWrite_PlanPathAllowed(t *testing.T) {
 
 // TestPathResolvesToStarterManifest pins the guard's path-resolution helper:
 // an absolute manifest path, a relative manifest path (resolved against the
-// workspace root), and an unrelated path.
+// project folder), and an unrelated path.
 func TestPathResolvesToStarterManifest(t *testing.T) {
 	root := t.TempDir()
 	manifest := snapWriteStarterManifest(t, root, "echo ok")
 	ag := snapGuardAgent(t, root, &configuration.VerificationConfig{Enabled: true})
 
 	assert.True(t, pathResolvesToStarterManifest(ag, manifest), "the absolute manifest path must match")
-	assert.True(t, pathResolvesToStarterManifest(ag, ".sprout/starter.json"), "a relative manifest path must resolve against the workspace root")
+	assert.True(t, pathResolvesToStarterManifest(ag, ".sprout/starter.json"), "a relative manifest path must resolve against the project folder")
 	assert.False(t, pathResolvesToStarterManifest(ag, filepath.Join(root, "src", "app.js")), "an unrelated path must not match")
 }
 

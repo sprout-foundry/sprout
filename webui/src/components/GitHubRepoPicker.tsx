@@ -5,7 +5,7 @@
  *  - signed in: search + list of the repos visible to the stored token
  *    (name, private badge, description, updated date). Clicking a repo clones
  *    it through browserGit.gitClone with the token attached, so private repos
- *    work, and the clone lands in the same workspace the anonymous import
+ *    work, and the clone lands in the same project folder the anonymous import
  *    flow writes to.
  *  - signed out: the shared PAT sign-in card (GitHubAccountPanel).
  *
@@ -24,7 +24,7 @@ import { useHost } from '../host/useHost';
 import type { HostGitHubRepo } from '../host/types';
 import { clearGitHubAccount, getStoredToken, getStoredUser, listRepos } from '../services/githubService';
 import type { GitHubRepo, GitHubUser } from '../services/githubService';
-import { cloneIntoWorkspace } from '../services/workspaceClone';
+import { cloneIntoProjectFolder } from '../services/workspaceClone';
 import { parseRepoRef } from '../services/workspaceFs/workspaceGit';
 import { useHomeView } from '../services/homeView';
 import { type CloneResult } from '../services/workspaceFs/backendsExport';
@@ -199,10 +199,10 @@ export default function GitHubRepoPicker({
     setCloningRepo(repo.full_name);
     setCloneError(null);
     try {
-      // Clone through the workspaceFs seam into repos/<owner>/<name>/ — the
+      // Clone through the projectFolderFs seam into repos/<owner>/<name>/ — the
       // same layout the agent's git tools use, so UI and agent share one
       // checkout. Old lightning-fs sidecar path removed.
-      const result = await cloneIntoWorkspace(repo.clone_url, { token: activeToken ?? undefined });
+      const result = await cloneIntoProjectFolder(repo.clone_url, { token: activeToken ?? undefined });
       debugLog(
         `[github-picker] cloned ${result.repo} (${result.entries} files, ${result.defaultBranch ?? 'no branch'})`,
       );

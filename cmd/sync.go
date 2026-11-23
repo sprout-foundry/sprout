@@ -22,7 +22,7 @@ var (
 
 var syncCmd = &cobra.Command{
 	Use:   "sync",
-	Short: "Reconcile workspace git state (uncommitted files, ahead/behind, last commit, optional fast-forward pull) as JSON",
+	Short: "Reconcile project folder git state (uncommitted files, ahead/behind, last commit, optional fast-forward pull) as JSON",
 	Long: `Print a JSON summary of the current repository's git state.
 
 This is the sync-on-resume half of ETH-1: the platform runs it inside a

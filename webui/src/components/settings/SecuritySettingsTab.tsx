@@ -161,16 +161,16 @@ function SecurityPolicyEditor({ settings, updateSetting }: SecurityPolicyEditorP
         aria-expanded={expanded}
       >
         {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        <span>Workspace Security Policy</span>
+        <span>Project folder security policy</span>
       </button>
       {!expanded ? (
         <div className="config-help settings-help-spaced-top">
-          Advanced workspace command/path policy. Click to expand.
+          Advanced project folder command/path policy. Click to expand.
         </div>
       ) : (
         <div className="settings-help-spaced-top">
           <div className="config-help settings-help-spaced">
-            Workspace-level security rules. Persisted to config; the workspace file
+            Project-folder security rules. Persisted to config; the project folder&apos;s file
             <code> .sprout/security-policy.json </code>still takes precedence when present.
           </div>
 

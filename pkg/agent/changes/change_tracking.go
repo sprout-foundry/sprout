@@ -116,8 +116,8 @@ type AgentView interface {
 	// GetModel returns the model identifier ("unknown" fallback is the
 	// tracker's, not the agent's).
 	GetModel() string
-	// GetWorkspaceRoot returns the logical workspace root ("" when unset).
-	GetWorkspaceRoot() string
+	// GetProjectFolder returns the logical project folder ("" when unset).
+	GetProjectFolder() string
 	// GenerateResponse runs an LLM completion (AI summary path).
 	GenerateResponse(messages []api.Message) (string, error)
 	// DebugLogger returns the agent logger or nil; the tracker logs
@@ -169,7 +169,7 @@ type ChangeTracker struct {
 	shellCache   map[string]*shellSnapshotEntry
 	shellCacheMu sync.Mutex
 
-	// shellCacheRoot tracks the workspace path the shellCache was built against.
+	// shellCacheRoot tracks the project folder path the shellCache was built against.
 	shellCacheRoot string
 
 	// autoSkipDirs is the adaptive companion to shellSnapshotSkipDirs.
@@ -289,8 +289,8 @@ func (ct *ChangeTracker) TrackFileWriteState(filePath string, originalContent st
 	// independent of the process's CWD.
 	filePath = ct.resolveAbsPath(filePath)
 
-	// Redact content if file is outside the workspace root
-	if ct.IsOutsideWorkspace(filePath) {
+	// Redact content if file is outside the project folder
+	if ct.IsOutsideProjectFolder(filePath) {
 		originalContent = RedactedContentMarker
 		newContent = RedactedContentMarker
 	}
@@ -319,8 +319,8 @@ func (ct *ChangeTracker) TrackFileEdit(filePath string, originalContent string, 
 	}
 	filePath = ct.resolveAbsPath(filePath)
 
-	// Redact content if file is outside the workspace root
-	if ct.IsOutsideWorkspace(filePath) {
+	// Redact content if file is outside the project folder
+	if ct.IsOutsideProjectFolder(filePath) {
 		originalContent = RedactedContentMarker
 		newContent = RedactedContentMarker
 	}
@@ -455,7 +455,7 @@ func (ct *ChangeTracker) sweepCommittedSnapshots(changes []TrackedFileChange) {
 	if ct.view == nil {
 		return
 	}
-	workDir := ct.view.GetWorkspaceRoot()
+	workDir := ct.view.GetProjectFolder()
 	if workDir == "" {
 		return
 	}
@@ -516,7 +516,7 @@ func (ct *ChangeTracker) MarkTurnStart() {
 	ct.turnMark = len(ct.changes)
 }
 
-// TurnChangedPaths returns the distinct workspace paths of the changes
+// TurnChangedPaths returns the distinct project folder paths of the changes
 // recorded since the current turn window opened (MarkTurnStart), in
 // first-seen order. It is non-destructive: the window is not consumed, so
 // repeated calls and the separate checkpoint capture

@@ -30,8 +30,8 @@ type ComputerUseConfig struct {
 	// `sprout audit tail` reads it.
 	AuditLogDir string `json:"audit_log_dir,omitempty"`
 
-	// WorkspaceAllowlist lists workspace roots where computer use is auto-approved.
-	WorkspaceAllowlist []string `json:"workspace_allowlist,omitempty"`
+	// ProjectFolderAllowlist lists project folders where computer use is auto-approved.
+	ProjectFolderAllowlist []string `json:"workspace_allowlist,omitempty"`
 
 	// PanicKeyChord is the key chord that triggers the panic key. Defaults to "ctrl+shift+escape".
 	PanicKeyChord string `json:"panic_key_chord,omitempty"`
@@ -56,7 +56,7 @@ func (c *ComputerUseConfig) Resolve() ComputerUseConfig {
 			result.MaxActionsPerMinute = c.MaxActionsPerMinute
 		}
 		result.AuditLogDir = c.AuditLogDir
-		result.WorkspaceAllowlist = append([]string{}, c.WorkspaceAllowlist...)
+		result.ProjectFolderAllowlist = append([]string{}, c.ProjectFolderAllowlist...)
 		if c.PanicKeyChord != "" {
 			result.PanicKeyChord = c.PanicKeyChord
 		}

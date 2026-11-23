@@ -21,7 +21,7 @@ import (
 // Which content is third-party is a user decision, not something to infer: a
 // cloned repository may be the user's own work, and mislabelling our own code
 // as untrusted makes the model distrust its own output. So the answer is asked
-// once, persisted per machine and per repository (keyed by absolute workspace
+// once, persisted per machine and per repository (keyed by absolute project folder
 // root), and is inspectable and revocable here — a repository can change hands,
 // and a dependency can be adopted and edited.
 var trustCmd = &cobra.Command{
@@ -51,7 +51,7 @@ var trustListCmd = &cobra.Command{
 	Long:  `Show the paths classified as third-party or ours for the current repository.`,
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		root, err := trustWorkspaceRoot()
+		root, err := trustProjectFolder()
 		if err != nil {
 			return err
 		}
@@ -73,7 +73,7 @@ asked again there.`,
 		if err != nil {
 			return usageErrorf(cmd, "%v", err)
 		}
-		root, err := trustWorkspaceRoot()
+		root, err := trustProjectFolder()
 		if err != nil {
 			return err
 		}
@@ -91,7 +91,7 @@ var trustForgetCmd = &cobra.Command{
 	Long:  `Remove the recorded classification for <path> in this repository.`,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		root, err := trustWorkspaceRoot()
+		root, err := trustProjectFolder()
 		if err != nil {
 			return err
 		}
@@ -103,8 +103,8 @@ var trustForgetCmd = &cobra.Command{
 	},
 }
 
-// trustWorkspaceRoot resolves the repository the decisions are recorded
-// against. The store is keyed by the absolute workspace root, so this must be
+// trustProjectFolder resolves the repository the decisions are recorded
+// against. The store is keyed by the absolute project folder, so this must be
 // the repo directory itself — not the .sprout config directory that
 // detectGitRepo reports (it returns the config dir so callers can point
 // SPROUT_CONFIG at it). Taking that value verbatim would key every decision on
@@ -112,15 +112,15 @@ var trustForgetCmd = &cobra.Command{
 //
 // Falls back to the working directory outside a repo, matching how the rest of
 // the CLI decides what "here" means.
-func trustWorkspaceRoot() (string, error) {
-	if autoDetectedWorkspaceDir != "" {
-		// autoDetectedWorkspaceDir is <repo>/.sprout; the workspace root is
+func trustProjectFolder() (string, error) {
+	if autoDetectedProjectFolderDir != "" {
+		// autoDetectedProjectFolderDir is <repo>/.sprout; the project folder is
 		// its parent. Guard the shape so an unexpected value cannot silently
 		// become a key.
-		if filepath.Base(autoDetectedWorkspaceDir) == ".sprout" {
-			return filepath.Dir(autoDetectedWorkspaceDir), nil
+		if filepath.Base(autoDetectedProjectFolderDir) == ".sprout" {
+			return filepath.Dir(autoDetectedProjectFolderDir), nil
 		}
-		return autoDetectedWorkspaceDir, nil
+		return autoDetectedProjectFolderDir, nil
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -149,14 +149,14 @@ func parseTrustClass(s string) (injection.TrustClass, error) {
 // runTrustList prints this repository's recorded decisions, sorted for stable
 // output. An empty store prints "no decisions recorded" rather than nothing,
 // so the command is never silently ambiguous.
-func runTrustList(w io.Writer, workspaceRoot string) error {
+func runTrustList(w io.Writer, projectFolder string) error {
 	cfg, err := configuration.Load()
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
-	decisions := cfg.TrustedContentRoots[workspaceRoot]
+	decisions := cfg.TrustedContentRoots[projectFolder]
 
-	console.Heading(w, fmt.Sprintf("Trust decisions for %s", workspaceRoot))
+	console.Heading(w, fmt.Sprintf("Trust decisions for %s", projectFolder))
 	if len(decisions) == 0 {
 		fmt.Fprintln(w, "no decisions recorded")
 		return nil
@@ -176,10 +176,10 @@ func runTrustList(w io.Writer, workspaceRoot string) error {
 	return nil
 }
 
-// runTrustSet records a decision for workspaceRoot and saves it through the
+// runTrustSet records a decision for projectFolder and saves it through the
 // config manager (the PersistShellCommandPattern precedent). Re-recording the
 // same decision is a no-op that still saves, so the file's mtime updates.
-func runTrustSet(w io.Writer, mgr *configuration.Manager, workspaceRoot, path string, class injection.TrustClass) error {
+func runTrustSet(w io.Writer, mgr *configuration.Manager, projectFolder, path string, class injection.TrustClass) error {
 	if mgr == nil {
 		return fmt.Errorf("no config manager — cannot persist trust decision")
 	}
@@ -193,10 +193,10 @@ func runTrustSet(w io.Writer, mgr *configuration.Manager, workspaceRoot, path st
 		if cfg.TrustedContentRoots == nil {
 			cfg.TrustedContentRoots = make(map[string]map[string]bool)
 		}
-		repo := cfg.TrustedContentRoots[workspaceRoot]
+		repo := cfg.TrustedContentRoots[projectFolder]
 		if repo == nil {
 			repo = make(map[string]bool)
-			cfg.TrustedContentRoots[workspaceRoot] = repo
+			cfg.TrustedContentRoots[projectFolder] = repo
 		}
 		repo[rel] = thirdParty
 		return nil
@@ -213,11 +213,11 @@ func runTrustSet(w io.Writer, mgr *configuration.Manager, workspaceRoot, path st
 	return nil
 }
 
-// runTrustForget removes one recorded decision for workspaceRoot. Forgetting a
+// runTrustForget removes one recorded decision for projectFolder. Forgetting a
 // path that was never recorded is not an error — the postcondition the user
 // asked for ("no decision here") already holds — but it is reported plainly so
 // a typo is visible rather than silent.
-func runTrustForget(w io.Writer, mgr *configuration.Manager, workspaceRoot, path string) error {
+func runTrustForget(w io.Writer, mgr *configuration.Manager, projectFolder, path string) error {
 	if mgr == nil {
 		return fmt.Errorf("no config manager — cannot persist trust decision")
 	}
@@ -225,7 +225,7 @@ func runTrustForget(w io.Writer, mgr *configuration.Manager, workspaceRoot, path
 	removed := false
 
 	if err := mgr.UpdateConfig(func(cfg *configuration.Config) error {
-		repo := cfg.TrustedContentRoots[workspaceRoot]
+		repo := cfg.TrustedContentRoots[projectFolder]
 		if repo == nil {
 			return nil
 		}
@@ -235,7 +235,7 @@ func runTrustForget(w io.Writer, mgr *configuration.Manager, workspaceRoot, path
 		delete(repo, rel)
 		removed = true
 		if len(repo) == 0 {
-			delete(cfg.TrustedContentRoots, workspaceRoot)
+			delete(cfg.TrustedContentRoots, projectFolder)
 		}
 		return nil
 	}); err != nil {

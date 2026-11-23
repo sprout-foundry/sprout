@@ -15,7 +15,7 @@ import (
 func TestSP168_BuildToolEnvPropagatesGate1Decided(t *testing.T) {
 	agent := newIsolatedTestAgent(t)
 	defer agent.Shutdown()
-	agent.SetWorkspaceRoot(t.TempDir())
+	agent.SetProjectFolder(t.TempDir())
 
 	setUnified := func(enabled bool) {
 		if err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {

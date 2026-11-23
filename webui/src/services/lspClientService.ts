@@ -10,8 +10,8 @@ import { LSPClient as LSPClientClass, languageServerExtensions } from '@codemirr
 import type { EditorView } from '@codemirror/view';
 import { debugLog } from '../utils/log';
 import { clientFetch } from './clientSession';
-import { getWorkspaceCwd, normalizeWorkspaceCwd, resolveWorkspacePath } from './workspaceCwd';
-import { ensureWorkspace, getWorkspaceRoot } from './workspaceStore';
+import { getProjectFolderCwd, normalizeProjectFolderCwd, resolveProjectFolderPath } from './workspaceCwd';
+import { ensureProjectFolder, getWorkspaceRoot } from './workspaceStore';
 
 // Types from @codemirror/lsp-client
 
@@ -216,7 +216,7 @@ export async function createTransport(wsUrl: string, onClose?: () => void): Prom
 
 /**
  * Type for displayFile callback.
- * Called by the custom workspace when navigating to another file
+ * Called by the custom project folder when navigating to another file
  * (go-to-definition, find references, etc.).
  *
  * Return the EditorView of the opened file, or null if it couldn't be opened.
@@ -244,7 +244,7 @@ export function getGlobalDisplayFileCallback(): DisplayFileCallback | null {
 
 /**
  * Convert a file:// URI back to a file path.
- * Used internally by patchWorkspaceDisplayFile.
+ * Used internally by patchProjectFolderDisplayFile.
  */
 function privateUriToFilePath(uri: string): string {
   if (uri.startsWith('file://')) {
@@ -255,24 +255,24 @@ function privateUriToFilePath(uri: string): string {
 }
 
 /**
- * Patch the workspace's displayFile method on an existing LSP client.
+ * Patch the project folder's displayFile method on an existing LSP client.
  *
- * The default workspace only returns views for already-open files.
+ * The default project folder only returns views for already-open files.
  * This override:
  * 1. First tries the default behavior (file already open in some editor)
  * 2. Then checks the EditorView registry for open editors
  * 3. Finally invokes the global callback to open the file (if not already open)
  *
  * This is called after client creation because we can't extend the
- * internal DefaultWorkspace class (it's not exported).
+ * internal DefaultProjectFolder class (it's not exported).
  *
  * @param client - The LSP client to patch
  */
-function patchWorkspaceDisplayFile(client: LSPClient): void {
-  const workspace = client.workspace;
-  const originalDisplayFile = workspace.displayFile.bind(workspace);
+function patchProjectFolderDisplayFile(client: LSPClient): void {
+  const projectFolder = client.workspace;
+  const originalDisplayFile = projectFolder.displayFile.bind(projectFolder);
 
-  workspace.displayFile = async (uri: string) => {
+  projectFolder.displayFile = async (uri: string) => {
     // First, try default behavior (file already open in some editor)
     const existingView = await originalDisplayFile(uri);
     if (existingView) return existingView;
@@ -366,13 +366,13 @@ class LSPClientService {
   }
 
   /**
-   * Get the workspace path from the shared workspace store.
+   * Get the project folder path from the shared project folder store.
    * Falls back to the last known root, or '' when none is known yet.
    */
-  async getWorkspacePath(): Promise<string> {
+  async getProjectFolderPath(): Promise<string> {
     try {
-      const workspace = await ensureWorkspace();
-      this.workspacePath = workspace.workspace_root;
+      const projectFolder = await ensureProjectFolder();
+      this.workspacePath = projectFolder.project_folder;
       return this.workspacePath;
     } catch (err) {
       console.error('[LSPClientService] Failed to get workspace:', err);
@@ -381,38 +381,38 @@ class LSPClientService {
   }
 
   /**
-   * Synchronous access to cached workspace path.
+   * Synchronous access to cached project folder path.
    * Returns empty if not yet fetched.
    */
-  getWorkspacePathSync(): string {
+  getProjectFolderPathSync(): string {
     return this.workspacePath;
   }
   /**
-   * Seed the cached workspace path without a network round-trip.
-   * Callers that already have the workspace root (e.g. layout restore)
+   * Seed the cached project folder path without a network round-trip.
+   * Callers that already have the project folder (e.g. layout restore)
    * use this so path resolution works before the first LSP connect.
    */
-  setWorkspaceRoot(path: string): void {
+  setProjectFolder(path: string): void {
     this.workspacePath = path;
   }
 
   /**
    * Build the WebSocket URL for a given language.
    *
-   * URL pattern: ws(s)://host/api/lsp/ws?language={langId}&workspace={encodedPath}
+   * URL pattern: ws(s)://host/api/lsp/ws?language={langId}&project folder={encodedPath}
    *
    * @param languageId - The language ID (e.g., 'go', 'typescript')
    * @returns The WebSocket URL
    */
   getWebSocketURL(languageId: string): string {
-    const workspacePath = this.getWorkspacePathSync();
-    const encodedPath = encodeURIComponent(workspacePath);
+    const projectFolderPath = this.getProjectFolderPathSync();
+    const encodedPath = encodeURIComponent(projectFolderPath);
 
     // Determine protocol based on current page
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
 
-    return `${protocol}//${host}/api/lsp/ws?language=${languageId}&workspace=${encodedPath}`;
+    return `${protocol}//${host}/api/lsp/ws?language=${languageId}&project_folder=${encodedPath}`;
   }
 
   /**
@@ -565,8 +565,8 @@ class LSPClientService {
     // Set initial state to connecting
     this.setClientState(languageId, 'connecting');
 
-    // Ensure workspace is loaded
-    await this.getWorkspacePath();
+    // Ensure project folder is loaded
+    await this.getProjectFolderPath();
 
     try {
       // Create WebSocket transport with onClose callback
@@ -599,7 +599,7 @@ class LSPClientService {
       // Create LSP client
       const config: LSPClientConfig = {
         timeout: DEFAULT_TIMEOUT_MS,
-        rootUri: this.getFileURI(this.getWorkspacePathSync()),
+        rootUri: this.getFileURI(this.getProjectFolderPathSync()),
         extensions: languageServerExtensions(),
       };
 
@@ -609,11 +609,11 @@ class LSPClientService {
       // Wait for initialization
       await client.initializing;
 
-      // Patch the default workspace's displayFile to support cross-file navigation
-      // via the app's editor management. The default workspace only handles files
+      // Patch the default project folder's displayFile to support cross-file navigation
+      // via the app's editor management. The default project folder only handles files
       // already open in an editor; this patch adds support for opening new files.
       if (globalDisplayFileCallback) {
-        patchWorkspaceDisplayFile(client);
+        patchProjectFolderDisplayFile(client);
       }
 
       // Clear any reconnect timer since we successfully connected
@@ -663,7 +663,7 @@ class LSPClientService {
   }
 
   /**
-   * Convert a workspace path to a file:// URI.
+   * Convert a project folder path to a file:// URI.
    *
    * @param filePath - The file path (absolute)
    * @returns file:// URI string
@@ -813,20 +813,20 @@ class LSPClientService {
 // ---------------------------------------------------------------------------
 
 /**
- * The workspace root, from whichever source knows it.
+ * The project folder, from whichever source knows it.
  *
  * The LSP client's cache is the fast path but is only seeded by layout
  * restore and the first LSP connect, so it is empty for a while after boot
- * (and stays empty in a shell that never restores a layout). The workspace
- * store is populated by the app's own workspace fetch, so it covers that
+ * (and stays empty in a shell that never restores a layout). The project folder
+ * store is populated by the app's own project folder fetch, so it covers that
  * window. Callers that resolve or strip a workspace-relative path must use
  * this rather than `getWorkspacePathSync()` alone: an empty root silently
  * turns a relative path into an absolute one (or leaves an absolute path
  * unstripped), which is how a path comparison against the file tree's
  * relative node paths stops matching.
  */
-export function getWorkspaceRootPath(): string {
-  return LSPClientService.getInstance().getWorkspacePathSync() || getWorkspaceRoot();
+export function getProjectFolderPath(): string {
+  return LSPClientService.getInstance().getProjectFolderPathSync() || getWorkspaceRoot();
 }
 
 /**
@@ -841,7 +841,7 @@ export function getWorkspaceRootPath(): string {
  *
  * Passes through absolute paths, file:// URIs, and virtual paths
  * (`__workspace/…`) unchanged; resolves relative paths against the session
- * cwd (when one is set) and then the workspace root. When the workspace
+ * cwd (when one is set) and then the project folder. When the project folder
  * root is not yet cached the path is returned as-is rather than guessed.
  */
 export function resolveEditorFilePath(path: string): string {
@@ -855,33 +855,33 @@ export function resolveEditorFilePath(path: string): string {
 
   // Virtual buffers (untitled files from Ctrl+N, chat tabs, compare/diff
   // views) live under the synthetic `__workspace/` prefix and have no
-  // on-disk counterpart. Resolving them against the workspace root would
+  // on-disk counterpart. Resolving them against the project folder would
   // make `<root>/__workspace/untitled-123` look like a real file path: the
   // save path's virtual-buffer branch and every `startsWith('__workspace/')`
   // guard downstream would miss, and a save would write the synthetic name
-  // to disk as a literal `__workspace/` directory inside the workspace.
+  // to disk as a literal `__workspace/` directory inside the project folder.
   if (normalized.startsWith('__workspace/')) return normalized;
 
   // Resolve cwd-relative paths (terminal links, agent output under a
   // session cwd) to workspace-relative first.
-  let workspaceRelative = normalized;
-  const cwdNormalized = normalizeWorkspaceCwd(normalized);
+  let projectFolderRelative = normalized;
+  const cwdNormalized = normalizeProjectFolderCwd(normalized);
   if (cwdNormalized !== null && cwdNormalized !== '') {
-    const cwd = getWorkspaceCwd();
+    const cwd = getProjectFolderCwd();
     if (cwd) {
-      workspaceRelative = resolveWorkspacePath(normalized, cwd);
+      projectFolderRelative = resolveProjectFolderPath(normalized, cwd);
     }
   }
 
-  const root = getWorkspaceRootPath();
-  if (!root) return workspaceRelative;
-  return `${root.replace(/\/+$/, '')}/${workspaceRelative.replace(/^\//, '')}`;
+  const root = getProjectFolderPath();
+  if (!root) return projectFolderRelative;
+  return `${root.replace(/\/+$/, '')}/${projectFolderRelative.replace(/^\//, '')}`;
 }
 
 /**
- * Convert a workspace path to a file:// URI.
+ * Convert a project folder path to a file:// URI.
  *
- * Relative paths are resolved against the workspace root first (see
+ * Relative paths are resolved against the project folder first (see
  * resolveEditorFilePath) so the resulting URI always points at the real
  * on-disk location.
  *

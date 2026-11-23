@@ -4,7 +4,7 @@
 //
 // The palette's crawl used to cross the JS→WASM boundary once per directory
 // (listDir JSON per call, hundreds of round-trips on real trees). This
-// walks the whole workspace inside the WASM instance in one call and
+// walks the whole project folder inside the WASM instance in one call and
 // returns the index as a single JSON document — the same row shape the
 // daemon's /api/file-index serves.
 
@@ -53,10 +53,10 @@ type wasmIndexResult struct {
 	DirCount  int              `json:"dir_count"`
 }
 
-// WalkFilesJSON walks the workspace root and returns the quick-open index
+// WalkFilesJSON walks the project folder and returns the quick-open index
 // as JSON: {"files":[{name,path,type}...],"truncated":bool,"file_count":n,
-// "dir_count":n}. Paths are workspace-relative with forward slashes, so a
-// stale client-side cache can never leak rows across a workspace switch.
+// "dir_count":n}. Paths are project-folder-relative with forward slashes, so a
+// stale client-side cache can never leak rows across a project folder switch.
 // Hidden files are indexed (dotfiles are legitimate quick-open targets);
 // skip-list directories are pruned. Uses WalkCompat for the js/wasm
 // O_DIRECTORY workaround.

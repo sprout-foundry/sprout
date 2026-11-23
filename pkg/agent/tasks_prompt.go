@@ -20,5 +20,5 @@ package agent
 // taskNoSurfaceMessage explains, in the tool's error text, why a task could
 // not ask and what the user can do about it.
 const taskNoSurfaceMessage = "this task has no interactive surface: no browser tab is attached to answer " +
-	"its approval or question. Open the WebUI for this workspace, or re-run the task " +
+	"its approval or question. Open the WebUI for this project folder, or re-run the task " +
 	"with a risk profile that allows the operation."

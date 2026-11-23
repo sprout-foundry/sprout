@@ -19,16 +19,16 @@ type RiskAssessment = approvals.RiskAssessment
 
 // The RiskSource taxonomy, aliased so existing references are unchanged.
 const (
-	RiskSourceClassifier        = approvals.RiskSourceClassifier
-	RiskSourcePersonaCascade    = approvals.RiskSourcePersonaCascade
-	RiskSourceCriticalOp        = approvals.RiskSourceCriticalOp
-	RiskSourceGitHistoryRewrite = approvals.RiskSourceGitHistoryRewrite
-	RiskSourceGitRebase         = approvals.RiskSourceGitRebase
-	RiskSourceGitWrite          = approvals.RiskSourceGitWrite
-	RiskSourceFSTier            = approvals.RiskSourceFSTier
-	RiskSourceWorkspacePolicy   = approvals.RiskSourceWorkspacePolicy
-	RiskSourceHandler           = approvals.RiskSourceHandler
-	RiskSourcePasswordPrompter  = approvals.RiskSourcePasswordPrompter
+	RiskSourceClassifier          = approvals.RiskSourceClassifier
+	RiskSourcePersonaCascade      = approvals.RiskSourcePersonaCascade
+	RiskSourceCriticalOp          = approvals.RiskSourceCriticalOp
+	RiskSourceGitHistoryRewrite   = approvals.RiskSourceGitHistoryRewrite
+	RiskSourceGitRebase           = approvals.RiskSourceGitRebase
+	RiskSourceGitWrite            = approvals.RiskSourceGitWrite
+	RiskSourceFSTier              = approvals.RiskSourceFSTier
+	RiskSourceProjectFolderPolicy = approvals.RiskSourceProjectFolderPolicy
+	RiskSourceHandler             = approvals.RiskSourceHandler
+	RiskSourcePasswordPrompter    = approvals.RiskSourcePasswordPrompter
 )
 
 // assessmentFromClassifier maps a static-classifier SecurityResult onto

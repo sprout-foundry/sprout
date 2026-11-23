@@ -14,9 +14,9 @@ import (
 // testAgent creates a minimal agent for testing. Uses a real security manager
 // so RemoveSessionAllowedFolder works end-to-end. Mirrors the pattern from
 // agent_cd_security_test.go::newTestAgentWithSecurity.
-func applyPathsTestAgent(workspaceRoot string) *agent.Agent {
-	if workspaceRoot == "" {
-		workspaceRoot = "/workspace"
+func applyPathsTestAgent(projectFolder string) *agent.Agent {
+	if projectFolder == "" {
+		projectFolder = "/workspace"
 	}
 	return agent.NewTestAgent()
 }

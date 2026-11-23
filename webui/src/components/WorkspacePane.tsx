@@ -91,7 +91,7 @@ interface WorkspacePaneProps {
  *
  * The probe starts at `present: false` and resolves asynchronously, so the
  * body waits for it rather than rendering the dev-server pane first — a
- * workspace with a mockup would otherwise flash the stopped dev server before
+ * project folder with a mockup would otherwise flash the stopped dev server before
  * swapping to the mockup on every open.
  */
 const PreviewPaneContent: React.FC<{ onClose: () => void }> = ({ onClose }) => {
@@ -167,7 +167,7 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = React.memo(
         const diffPath = buffer.metadata?.sourcePath as string | undefined;
         const isActiveDiff = diffState.activeDiffPath === diffPath;
         // Full-file contents for the editable merge view. metadata carries
-        // them from useGitWorkspace; undefined = unavailable (fragment
+        // them from useGitProjectFolder; undefined = unavailable (fragment
         // fallback). canSave additionally requires a real filesystem path —
         // virtual buffers (commit:, __workspace/) must never save.
         const fullOriginal = buffer.metadata?.originalContent as string | undefined;

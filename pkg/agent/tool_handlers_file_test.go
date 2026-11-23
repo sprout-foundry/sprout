@@ -633,18 +633,18 @@ func TestSameToolJSONFixHint(t *testing.T) {
 func TestHandleEditFile_TracksFullFileContent(t *testing.T) {
 	// On macOS CI, t.TempDir() is under /var (→ /private/var) which is
 	// in systemPathPrefixes — the filesystem gate blocks the path
-	// regardless of workspace root. Skip on macOS CI.
+	// regardless of project folder. Skip on macOS CI.
 	if runtime.GOOS == "darwin" {
 		t.Skip("macOS temp dirs are under /var (Sensitive) — filesystem gate blocks")
 	}
 	agent := NewTestAgent()
 	ws := t.TempDir()
 	// Resolve symlinks — macOS /var/folders → /private/var/folders
-	// causes the filesystem gate to reject the path as "outside workspace".
+	// causes the filesystem gate to reject the path as "outside project folder".
 	if resolved, err := filepath.EvalSymlinks(ws); err == nil {
 		ws = resolved
 	}
-	agent.SetWorkspaceRoot(ws)
+	agent.SetProjectFolder(ws)
 	agent.changeTracker = NewChangeTracker(agent.changesView(), "test")
 	agent.changeTracker.Enable()
 

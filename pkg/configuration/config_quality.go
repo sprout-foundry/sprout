@@ -3,7 +3,7 @@ package configuration
 // QualityConfig controls the quality-after-edits step: after a turn that
 // changed application code, the runtime runs the project's formatter and
 // linter and repairs the findings in the same turn. The section is off by
-// default in the CLI; a config layer — global, project (workspace), or an
+// default in the CLI; a config layer — global, project (project folder), or an
 // embedding environment writing the same layers — opts in with
 // `{"quality": {"enabled": true}}`.
 //

@@ -1,9 +1,9 @@
 import React from 'react';
 import { collapseHomePath, getPathDisplayName } from './pathUtils';
-import type { RemoteWorkspaceContext } from './types';
+import type { RemoteProjectFolderContext } from './types';
 
-export interface WorkspaceSSHFavoritesProps {
-  remoteContext: RemoteWorkspaceContext;
+export interface ProjectFolderSSHFavoritesProps {
+  remoteContext: RemoteProjectFolderContext;
   workspaceRoot: string;
   favorites: string[];
   isSwitching: boolean;
@@ -13,9 +13,9 @@ export interface WorkspaceSSHFavoritesProps {
   onRemoveFavorite: (path: string) => void;
 }
 
-export const WorkspaceSSHFavorites: React.FC<WorkspaceSSHFavoritesProps> = ({
+export const ProjectFolderSSHFavorites: React.FC<ProjectFolderSSHFavoritesProps> = ({
   remoteContext,
-  workspaceRoot,
+  workspaceRoot: projectFolder,
   favorites,
   isSwitching,
   onSelectFavorite,
@@ -33,7 +33,7 @@ export const WorkspaceSSHFavorites: React.FC<WorkspaceSSHFavoritesProps> = ({
           type="button"
           className="location-switcher-session-btn"
           onClick={onSaveFavorite}
-          disabled={!workspaceRoot || isSwitching}
+          disabled={!projectFolder || isSwitching}
         >
           Save Current Path
         </button>

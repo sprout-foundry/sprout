@@ -268,7 +268,7 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// verification is enabled for this turn; a disabled turn takes none.
 	if a.configManager != nil {
 		if cfg := a.configManager.GetConfig(); cfg != nil && cfg.VerificationEnabled() {
-			a.setTurnVerifySnapshot(verify.New().Snapshot(a.GetWorkspaceRoot()))
+			a.setTurnVerifySnapshot(verify.New().Snapshot(a.GetProjectFolder()))
 		}
 	}
 

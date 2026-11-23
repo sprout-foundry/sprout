@@ -73,13 +73,13 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 	}
 
 	// Execute the tool
-	// Wire workspace root, effective cwd, and session folders into context for
+	// Wire project folder, effective cwd, and session folders into context for
 	// filesystem path resolution (SafeResolvePathWithBypass).
-	workspaceRoot := a.GetWorkspaceRoot()
+	projectFolder := a.GetProjectFolder()
 	effectiveCwd := a.effectiveCwd()
 	sessionFolders := a.SnapshotSessionAllowedFolders()
 	ctx := filesystem.WithAgentContext(
-		filesystem.WithWorkspaceRoot(context.Background(), workspaceRoot),
+		filesystem.WithProjectFolder(context.Background(), projectFolder),
 		effectiveCwd,
 		sessionFolders,
 	)

@@ -147,7 +147,7 @@ func TestHandleAPIGitWorktreesNotGitRepo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.workspaceRoot = "/tmp/non-git-dir"
+	ws.projectFolder = "/tmp/non-git-dir"
 	req := httptest.NewRequest(http.MethodGet, "/api/git/worktrees", nil)
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitWorktrees(rec, req)
@@ -173,7 +173,7 @@ func TestHandleAPIGitWorktreeCreateMissingPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.workspaceRoot = "/tmp"
+	ws.projectFolder = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/worktree-create", strings.NewReader(`{"branch":"feature"}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitWorktreeCreate(rec, req)
@@ -188,7 +188,7 @@ func TestHandleAPIGitWorktreeCreateMissingBranch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.workspaceRoot = "/tmp"
+	ws.projectFolder = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/worktree-create", strings.NewReader(`{"path":"/some/path"}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitWorktreeCreate(rec, req)
@@ -203,7 +203,7 @@ func TestHandleAPIGitWorktreeCreateInvalidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.workspaceRoot = "/tmp"
+	ws.projectFolder = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/worktree-create", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitWorktreeCreate(rec, req)
@@ -229,7 +229,7 @@ func TestHandleAPIGitWorktreeRemoveMissingPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.workspaceRoot = "/tmp"
+	ws.projectFolder = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/worktree-remove", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitWorktreeRemove(rec, req)
@@ -244,7 +244,7 @@ func TestHandleAPIGitWorktreeRemoveInvalidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.workspaceRoot = "/tmp"
+	ws.projectFolder = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/worktree-remove", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitWorktreeRemove(rec, req)
@@ -270,7 +270,7 @@ func TestHandleAPIGitWorktreeCheckoutMissingPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.workspaceRoot = "/tmp"
+	ws.projectFolder = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/worktree-checkout", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitWorktreeCheckout(rec, req)
@@ -285,7 +285,7 @@ func TestHandleAPIGitWorktreeCheckoutInvalidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.workspaceRoot = "/tmp"
+	ws.projectFolder = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/worktree-checkout", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()
 	ws.handleAPIGitWorktreeCheckout(rec, req)
@@ -313,7 +313,7 @@ func runGitInDir(t *testing.T, dir string, args ...string) {
 // setupGitRepoWithWorktree creates a temp git repo (at mainPath) and a
 // sibling worktree (at worktreePath). Returns mainPath, worktreePath.
 // Both paths are resolved through filepath.EvalSymlinks so they match
-// what filepathAbsEval and getWorkspaceRootForRequest produce.
+// what filepathAbsEval and getProjectFolderForRequest produce.
 func setupGitRepoWithWorktree(t *testing.T) (string, string) {
 	t.Helper()
 	dir := t.TempDir()
@@ -339,7 +339,7 @@ func setupGitRepoWithWorktree(t *testing.T) (string, string) {
 	runGitInDir(t, mainPath, "worktree", "add", "-b", "feature", worktreePath)
 
 	// Resolve symlinks so paths match what filepathAbsEval and
-	// getWorkspaceRootForRequest produce (macOS /var → /private/var).
+	// getProjectFolderForRequest produce (macOS /var → /private/var).
 	var err error
 	mainPath, err = filepath.EvalSymlinks(mainPath)
 	if err != nil {
@@ -354,14 +354,14 @@ func setupGitRepoWithWorktree(t *testing.T) (string, string) {
 }
 
 // newWorktreeTestWebServer creates a ReactWebServer suitable for worktree checkout
-// tests, rooted at the given workspaceRoot.
-func newWorktreeTestWebServer(t *testing.T, workspaceRoot string) *ReactWebServer {
+// tests, rooted at the given projectFolder.
+func newWorktreeTestWebServer(t *testing.T, projectFolder string) *ReactWebServer {
 	t.Helper()
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.workspaceRoot = workspaceRoot
+	ws.projectFolder = projectFolder
 	return ws
 }
 
@@ -371,12 +371,12 @@ func newWorktreeTestWebServer(t *testing.T, workspaceRoot string) *ReactWebServe
 
 // TestHandleAPIGitWorktreeCheckoutSiblingAccepted verifies that a sibling
 // worktree (outside the daemon root) is accepted by the checkout handler
-// and returns 200 instead of the old 400 "workspace boundary" rejection.
+// and returns 200 instead of the old 400 "project folder boundary" rejection.
 func TestHandleAPIGitWorktreeCheckoutSiblingAccepted(t *testing.T) {
 	mainPath, worktreePath := setupGitRepoWithWorktree(t)
 
 	ws := newWorktreeTestWebServer(t, mainPath)
-	// Make daemonRoot different from mainPath so the old isWithinWorkspace
+	// Make daemonRoot different from mainPath so the old isWithinProjectFolder
 	// check would have rejected worktreePath (a sibling to mainPath).
 	ws.daemonRoot = mainPath
 
@@ -393,8 +393,8 @@ func TestHandleAPIGitWorktreeCheckoutSiblingAccepted(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if resp["workspace"] != worktreePath {
-		t.Errorf("expected workspace %q in response, got %v", worktreePath, resp["workspace"])
+	if resp["project_folder"] != worktreePath {
+		t.Errorf("expected project folder %q in response, got %v", worktreePath, resp["project_folder"])
 	}
 }
 
@@ -418,18 +418,18 @@ func TestHandleAPIGitWorktreeCheckoutNonDefaultClientKeepsServerRoot(t *testing.
 
 	ws.mutex.RLock()
 	defer ws.mutex.RUnlock()
-	if ws.workspaceRoot != mainPath {
-		t.Errorf("ws.workspaceRoot = %q, want unchanged %q", ws.workspaceRoot, mainPath)
+	if ws.projectFolder != mainPath {
+		t.Errorf("ws.projectFolder = %q, want unchanged %q", ws.projectFolder, mainPath)
 	}
 	ctx := ws.clientContexts["non-default-client"]
 	if ctx == nil {
 		t.Fatal("client context not found for non-default-client")
 	}
-	if ctx.WorkspaceRoot != worktreePath || ctx.ProjectRoot != worktreePath {
-		t.Errorf("ctx roots = (%q, %q), want both %q", ctx.WorkspaceRoot, ctx.ProjectRoot, worktreePath)
+	if ctx.ProjectFolder != worktreePath || ctx.ProjectRoot != worktreePath {
+		t.Errorf("ctx roots = (%q, %q), want both %q", ctx.ProjectFolder, ctx.ProjectRoot, worktreePath)
 	}
-	if got := ws.clientWorkspaces["non-default-client"]; got != worktreePath {
-		t.Errorf("remembered workspace = %q, want %q", got, worktreePath)
+	if got := ws.clientProjectFolders["non-default-client"]; got != worktreePath {
+		t.Errorf("remembered project folder = %q, want %q", got, worktreePath)
 	}
 }
 
@@ -446,14 +446,14 @@ func TestHandleAPIGitWorktreeCheckoutDefaultClientMovesServerRoot(t *testing.T) 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	if got := ws.GetWorkspaceRoot(); got != worktreePath {
-		t.Errorf("ws.workspaceRoot = %q, want %q", got, worktreePath)
+	if got := ws.GetProjectFolder(); got != worktreePath {
+		t.Errorf("ws.projectFolder = %q, want %q", got, worktreePath)
 	}
 }
 
 // TestHandleAPIGitWorktreeCheckoutUpdatesChatSessionWorktreePath verifies
 // that the active chat session's WorktreePath follows the checkout when
-// it is empty or matches the previous workspace root.
+// it is empty or matches the previous project folder.
 func TestHandleAPIGitWorktreeCheckoutUpdatesChatSessionWorktreePath(t *testing.T) {
 	mainPath, worktreePath := setupGitRepoWithWorktree(t)
 
@@ -464,7 +464,7 @@ func TestHandleAPIGitWorktreeCheckoutUpdatesChatSessionWorktreePath(t *testing.T
 	ctx := ws.getOrCreateClientContextLocked(defaultWebClientID)
 	// Chat A: empty WorktreePath — should be updated.
 	chatA := newChatSession("chat-a", "Chat A")
-	// Chat B: WorktreePath matches the main workspace — should be updated.
+	// Chat B: WorktreePath matches the main project folder — should be updated.
 	chatB := newChatSession("chat-b", "Chat B")
 	chatB.WorktreePath = mainPath
 	ctx.ChatSessions = map[string]*chatSession{
@@ -489,7 +489,7 @@ func TestHandleAPIGitWorktreeCheckoutUpdatesChatSessionWorktreePath(t *testing.T
 	}
 	// Chat B (WorktreePath == mainPath) → updated to worktreePath.
 	if got := chatB.getWorktreePath(); got != worktreePath {
-		t.Errorf("chat-b WorktreePath = %q, want %q (matching previous workspace should follow checkout)", got, worktreePath)
+		t.Errorf("chat-b WorktreePath = %q, want %q (matching previous project folder should follow checkout)", got, worktreePath)
 	}
 }
 

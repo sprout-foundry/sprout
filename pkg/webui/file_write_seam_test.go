@@ -25,7 +25,7 @@ import (
 // seamWritePOSTs a write body to the handler for rel under root.
 func seamWrite(t *testing.T, root, rel string, body map[string]interface{}) *httptest.ResponseRecorder {
 	t.Helper()
-	server := newWorkspaceTestServer(t, root)
+	server := newProjectFolderTestServer(t, root)
 
 	payload, jsonErr := json.Marshal(body)
 	require.NoError(t, jsonErr)

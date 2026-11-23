@@ -79,7 +79,7 @@ func init() {
 }
 
 // emitJSONResult writes the AgentResult as indented JSON to stdout.
-// It collects git diff and modified files from the workspace.
+// It collects git diff and modified files from the project folder.
 //
 // Thread safety note: Metrics are read from the agent after it has finished
 // executing (sequential access). The non-interactive --output-json mode guarantees

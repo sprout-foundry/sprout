@@ -209,7 +209,7 @@ func TestBridgeHandlerParameterValidation(t *testing.T) {
 
 		handler := BridgeHandler(manager, upgrader, "/tmp")
 
-		req := httptest.NewRequest("GET", "/?workspace=/tmp", nil)
+		req := httptest.NewRequest("GET", "/?project_folder=/tmp", nil)
 		w := httptest.NewRecorder()
 
 		handler(w, req)
@@ -218,7 +218,7 @@ func TestBridgeHandlerParameterValidation(t *testing.T) {
 		assert.Contains(t, w.Body.String(), "language parameter is required")
 	})
 
-	t.Run("missing workspace parameter returns 400", func(t *testing.T) {
+	t.Run("missing project folder parameter returns 400", func(t *testing.T) {
 		ctx := context.Background()
 		manager := NewManager(ctx)
 		defer manager.Close()
@@ -235,10 +235,10 @@ func TestBridgeHandlerParameterValidation(t *testing.T) {
 		handler(w, req)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.Contains(t, w.Body.String(), "workspace parameter is required")
+		assert.Contains(t, w.Body.String(), "project folder parameter is required")
 	})
 
-	t.Run("non-existent workspace path proceeds to LSP startup which fails with 500", func(t *testing.T) {
+	t.Run("non-existent project folder path proceeds to LSP startup which fails with 500", func(t *testing.T) {
 		ctx := context.Background()
 		manager := NewManager(ctx)
 		defer manager.Close()
@@ -249,12 +249,12 @@ func TestBridgeHandlerParameterValidation(t *testing.T) {
 
 		handler := BridgeHandler(manager, upgrader, "/allowed")
 
-		req := httptest.NewRequest("GET", "/?language=go&workspace=/forbidden", nil)
+		req := httptest.NewRequest("GET", "/?language=go&project_folder=/forbidden", nil)
 		w := httptest.NewRecorder()
 
 		handler(w, req)
 
-		// Workspace check no longer enforces strict equality against the
+		// Project folder check no longer enforces strict equality against the
 		// handler-level root — the frontend is trusted. The request proceeds
 		// to LSP startup, which fails because /forbidden doesn't exist.
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
@@ -270,10 +270,10 @@ func TestBridgeHandlerParameterValidation(t *testing.T) {
 			CheckOrigin: func(r *http.Request) bool { return true },
 		}
 
-		workspace := "/tmp"
-		handler := BridgeHandler(manager, upgrader, workspace)
+		projectFolder := "/tmp"
+		handler := BridgeHandler(manager, upgrader, projectFolder)
 
-		req := httptest.NewRequest("GET", "/?language=unknown-language-xyz&workspace="+workspace, nil)
+		req := httptest.NewRequest("GET", "/?language=unknown-language-xyz&project_folder="+projectFolder, nil)
 		w := httptest.NewRecorder()
 
 		handler(w, req)
@@ -284,7 +284,7 @@ func TestBridgeHandlerParameterValidation(t *testing.T) {
 }
 
 func TestBridgeHandlerEdgeCases(t *testing.T) {
-	t.Run("empty language and workspace", func(t *testing.T) {
+	t.Run("empty language and project folder", func(t *testing.T) {
 		ctx := context.Background()
 		manager := NewManager(ctx)
 		defer manager.Close()
@@ -295,7 +295,7 @@ func TestBridgeHandlerEdgeCases(t *testing.T) {
 
 		handler := BridgeHandler(manager, upgrader, "/tmp")
 
-		req := httptest.NewRequest("GET", "/?language=&workspace=", nil)
+		req := httptest.NewRequest("GET", "/?language=&project_folder=", nil)
 		w := httptest.NewRecorder()
 
 		handler(w, req)
@@ -328,7 +328,7 @@ func TestBridgeHandlerWithCustomConfig(t *testing.T) {
 
 		handler := BridgeHandler(manager, upgrader, "/tmp")
 
-		req := httptest.NewRequest("GET", "/?language=test&workspace=/tmp", nil)
+		req := httptest.NewRequest("GET", "/?language=test&project_folder=/tmp", nil)
 		w := httptest.NewRecorder()
 
 		handler(w, req)
@@ -338,8 +338,8 @@ func TestBridgeHandlerWithCustomConfig(t *testing.T) {
 		// That's fine - we're just checking params passed
 		body := w.Body.String()
 		assert.NotContains(t, body, "language parameter is required")
-		assert.NotContains(t, body, "workspace parameter is required")
-		assert.NotContains(t, body, "workspace not allowed")
+		assert.NotContains(t, body, "project folder parameter is required")
+		assert.NotContains(t, body, "project folder not allowed")
 	})
 }
 

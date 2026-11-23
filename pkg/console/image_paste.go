@@ -75,7 +75,7 @@ func ParsePastedImagePlaceholders(query string) []string {
 
 // legacyPastedImageRe matches the pre-SP-140 free-form placeholder, which
 // clients still send. The path runs to the first image extension on the
-// line, so a workspace path with spaces in it stays whole.
+// line, so a project folder path with spaces in it stays whole.
 var legacyPastedImageRe = regexp.MustCompile(`Pasted image saved to disk: ([^\n]*?\.(?i:png|jpe?g|gif|webp|bmp|avif))`)
 
 // CanonicalizeLegacyImageMarkers rewrites legacy "Pasted image saved to
@@ -146,7 +146,7 @@ func DetectImageMagic(data []byte) (ext string, mimeType string) {
 }
 
 // SavePastedImage saves raw image data to .sprout/pasted-images/ under the
-// provided base directory (typically the workspace root). It returns a
+// provided base directory (typically the project folder). It returns a
 // relative path like "./.sprout/pasted-images/paste_20260320_145959_abc123.png".
 // If baseDir is empty, it falls back to os.Getwd().
 func SavePastedImage(data []byte, baseDir string) (string, error) {

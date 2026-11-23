@@ -5,7 +5,7 @@
 // is the wrong gate for a harness that must score a run
 // (pkg/benchmark's runner): a turn whose changes never reached the
 // tracker's window would then be scored as "no verification", losing the
-// outcome of a turn that did change the workspace.
+// outcome of a turn that did change the project folder.
 //
 // RunForcedTurnEndVerification is that seam: it runs the same trusted
 // verification the hook runs — the starter manifest's commands and the
@@ -27,7 +27,7 @@ import (
 // RunForcedTurnEndVerification runs the turn-end verification without
 // consulting the turn's change window, and stores the result as the
 // turn's verification state. It is the escape hatch for a caller that has
-// independent evidence the turn changed the workspace (the benchmark
+// independent evidence the turn changed the project folder (the benchmark
 // runner's git baseline) but whose changes never reached
 // Agent.TurnChangedPaths.
 //
@@ -70,7 +70,7 @@ func (a *Agent) RunForcedTurnEndVerification(ctx context.Context) (*verify.Resul
 
 	snap := a.getTurnVerifySnapshot()
 	if snap == nil {
-		snap = runner.Snapshot(a.GetWorkspaceRoot())
+		snap = runner.Snapshot(a.GetProjectFolder())
 		a.setTurnVerifySnapshot(snap)
 	}
 
@@ -86,7 +86,7 @@ func (a *Agent) RunForcedTurnEndVerification(ctx context.Context) (*verify.Resul
 		ChangedApplicationPaths: a.TurnChangedApplicationPaths(),
 	}
 
-	res, err := runner.RunSnapshot(ctx, a.GetWorkspaceRoot(), snap)
+	res, err := runner.RunSnapshot(ctx, a.GetProjectFolder(), snap)
 	if err != nil {
 		return nil, fmt.Errorf("forced turn-end verification: %w", err)
 	}

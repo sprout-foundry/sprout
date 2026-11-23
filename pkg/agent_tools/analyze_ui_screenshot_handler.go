@@ -47,11 +47,11 @@ func (h *analyzeUIScreenshotHandler) Execute(ctx context.Context, env ToolEnv, a
 				fmt.Errorf("read blocked: %s is not accessible", imagePath)
 		}
 		if decision == "prompt" && env.FileAccessPrompter != nil {
-			if ctx2, approved := promptForOffWorkspacePath(ctx, env, "analyze_ui_screenshot", imagePath, resolvedPath, "read"); approved {
+			if ctx2, approved := promptForOffProjectFolderPath(ctx, env, "analyze_ui_screenshot", imagePath, resolvedPath, "read"); approved {
 				ctx = ctx2
 			} else {
-				return ToolResult{Output: fmt.Sprintf("read blocked: off-workspace access to %s was not approved", imagePath), IsError: true},
-					fmt.Errorf("read blocked: off-workspace access to %s was not approved", imagePath)
+				return ToolResult{Output: fmt.Sprintf("read blocked: off-project-folder access to %s was not approved", imagePath), IsError: true},
+					fmt.Errorf("read blocked: off-project-folder access to %s was not approved", imagePath)
 			}
 		}
 	}

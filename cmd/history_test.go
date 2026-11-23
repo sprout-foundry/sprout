@@ -150,32 +150,32 @@ func fileHash(filename, code string) string {
 	return hex.EncodeToString(h[:])
 }
 
-// setupTestWorkspace creates a temp workspace with .sprout/changes, .sprout/revisions,
+// setupTestProjectFolder creates a temp project folder with .sprout/changes, .sprout/revisions,
 // .sprout/runlogs directories. The runHistoryClear function will chdir to this
-// workspace before calling history.ClearAll/ClearOlderThan, so the relative
+// project folder before calling history.ClearAll/ClearOlderThan, so the relative
 // paths in the history package will resolve correctly.
-func setupTestWorkspace(t *testing.T) string {
+func setupTestProjectFolder(t *testing.T) string {
 	t.Helper()
-	workspace := t.TempDir()
+	projectFolder := t.TempDir()
 
 	for _, dir := range []string{
-		filepath.Join(workspace, ".sprout", "changes"),
-		filepath.Join(workspace, ".sprout", "revisions"),
-		filepath.Join(workspace, ".sprout", "runlogs"),
+		filepath.Join(projectFolder, ".sprout", "changes"),
+		filepath.Join(projectFolder, ".sprout", "revisions"),
+		filepath.Join(projectFolder, ".sprout", "runlogs"),
 	} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			t.Fatalf("failed to create dir %s: %v", dir, err)
 		}
 	}
-	return workspace
+	return projectFolder
 }
 
 // createChange creates a change entry in the history package's configured dirs.
 // It writes metadata.json and the .original/.updated base64-encoded code files.
-func createChange(t *testing.T, workspace, revisionID, filename string, timestamp time.Time, originalCode, newCode string) string {
+func createChange(t *testing.T, projectFolder, revisionID, filename string, timestamp time.Time, originalCode, newCode string) string {
 	t.Helper()
 	hash := fileHash(filename, newCode)
-	changeDir := filepath.Join(workspace, ".sprout", "changes", hash)
+	changeDir := filepath.Join(projectFolder, ".sprout", "changes", hash)
 	if err := os.MkdirAll(changeDir, 0755); err != nil {
 		t.Fatalf("failed to create change dir: %v", err)
 	}
@@ -200,9 +200,9 @@ func createChange(t *testing.T, workspace, revisionID, filename string, timestam
 }
 
 // createRevision creates a revision directory with instructions and response files.
-func createRevision(t *testing.T, workspace, revisionID string) {
+func createRevision(t *testing.T, projectFolder, revisionID string) {
 	t.Helper()
-	revDir := filepath.Join(workspace, ".sprout", "revisions", revisionID)
+	revDir := filepath.Join(projectFolder, ".sprout", "revisions", revisionID)
 	if err := os.MkdirAll(revDir, 0755); err != nil {
 		t.Fatalf("failed to create revision dir: %v", err)
 	}
@@ -215,9 +215,9 @@ func createRevision(t *testing.T, workspace, revisionID string) {
 }
 
 // createRunlog creates a .jsonl runlog file with optional modification time.
-func createRunlog(t *testing.T, workspace, name string, modTime time.Time) {
+func createRunlog(t *testing.T, projectFolder, name string, modTime time.Time) {
 	t.Helper()
-	runlogsDir := filepath.Join(workspace, ".sprout", "runlogs")
+	runlogsDir := filepath.Join(projectFolder, ".sprout", "runlogs")
 	path := filepath.Join(runlogsDir, name)
 	if err := os.WriteFile(path, []byte(`{"msg":"test"}`), 0644); err != nil {
 		t.Fatalf("failed to write runlog: %v", err)
@@ -268,7 +268,7 @@ func countFiles(t *testing.T, dir string) int {
 // resetClearFlags resets the global flag variables to defaults.
 func resetClearFlags() {
 	clearOlderThan = ""
-	clearWorkspace = ""
+	clearProjectFolder = ""
 	clearYes = false
 	clearDryRun = false
 }
@@ -302,9 +302,9 @@ func pipeStdin(t *testing.T, input string) func() {
 // ---------------------------------------------------------------------------
 
 func TestClearOldRunlogs_NoDirectory(t *testing.T) {
-	workspace := t.TempDir()
+	projectFolder := t.TempDir()
 	// No .sprout/runlogs directory exists
-	count, err := clearOldRunlogs(workspace, time.Now(), true)
+	count, err := clearOldRunlogs(projectFolder, time.Now(), true)
 	if err != nil {
 		t.Fatalf("clearOldRunlogs() unexpected error: %v", err)
 	}
@@ -314,14 +314,14 @@ func TestClearOldRunlogs_NoDirectory(t *testing.T) {
 }
 
 func TestClearOldRunlogs_ClearAll(t *testing.T) {
-	workspace := setupTestWorkspace(t)
+	projectFolder := setupTestProjectFolder(t)
 
 	now := time.Now()
-	createRunlog(t, workspace, "run1.jsonl", now)
-	createRunlog(t, workspace, "run2.jsonl", now)
-	createRunlog(t, workspace, "run3.jsonl", now)
+	createRunlog(t, projectFolder, "run1.jsonl", now)
+	createRunlog(t, projectFolder, "run2.jsonl", now)
+	createRunlog(t, projectFolder, "run3.jsonl", now)
 
-	count, err := clearOldRunlogs(workspace, time.Time{}, true)
+	count, err := clearOldRunlogs(projectFolder, time.Time{}, true)
 	if err != nil {
 		t.Fatalf("clearOldRunlogs() error = %v", err)
 	}
@@ -330,21 +330,21 @@ func TestClearOldRunlogs_ClearAll(t *testing.T) {
 	}
 
 	// Verify files are gone
-	remaining := countFiles(t, filepath.Join(workspace, ".sprout", "runlogs"))
+	remaining := countFiles(t, filepath.Join(projectFolder, ".sprout", "runlogs"))
 	if remaining != 0 {
 		t.Errorf("expected 0 remaining runlog files, got %d", remaining)
 	}
 }
 
 func TestClearOldRunlogs_OnlyRemovesJSONL(t *testing.T) {
-	workspace := setupTestWorkspace(t)
+	projectFolder := setupTestProjectFolder(t)
 
-	createRunlog(t, workspace, "run1.jsonl", time.Now())
+	createRunlog(t, projectFolder, "run1.jsonl", time.Now())
 	// Create a non-.jsonl file that should NOT be removed
-	runlogsDir := filepath.Join(workspace, ".sprout", "runlogs")
+	runlogsDir := filepath.Join(projectFolder, ".sprout", "runlogs")
 	os.WriteFile(filepath.Join(runlogsDir, "notes.txt"), []byte("not a runlog"), 0644)
 
-	count, err := clearOldRunlogs(workspace, time.Time{}, true)
+	count, err := clearOldRunlogs(projectFolder, time.Time{}, true)
 	if err != nil {
 		t.Fatalf("clearOldRunlogs() error = %v", err)
 	}
@@ -359,17 +359,17 @@ func TestClearOldRunlogs_OnlyRemovesJSONL(t *testing.T) {
 }
 
 func TestClearOldRunlogs_OlderThan(t *testing.T) {
-	workspace := setupTestWorkspace(t)
+	projectFolder := setupTestProjectFolder(t)
 
 	cutoff := time.Now().Add(-7 * 24 * time.Hour) // 7 days ago
 	oldTime := cutoff.Add(-24 * time.Hour)        // 8 days ago (should be cleared)
 	recentTime := cutoff.Add(24 * time.Hour)      // 6 days ago (should be kept)
 
-	createRunlog(t, workspace, "old.jsonl", oldTime)
-	createRunlog(t, workspace, "recent.jsonl", recentTime)
-	createRunlog(t, workspace, "very-old.jsonl", oldTime.Add(-24*time.Hour))
+	createRunlog(t, projectFolder, "old.jsonl", oldTime)
+	createRunlog(t, projectFolder, "recent.jsonl", recentTime)
+	createRunlog(t, projectFolder, "very-old.jsonl", oldTime.Add(-24*time.Hour))
 
-	count, err := clearOldRunlogs(workspace, cutoff, false)
+	count, err := clearOldRunlogs(projectFolder, cutoff, false)
 	if err != nil {
 		t.Fatalf("clearOldRunlogs() error = %v", err)
 	}
@@ -378,19 +378,19 @@ func TestClearOldRunlogs_OlderThan(t *testing.T) {
 	}
 
 	// recent.jsonl should still exist
-	if _, err := os.Stat(filepath.Join(workspace, ".sprout", "runlogs", "recent.jsonl")); os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(projectFolder, ".sprout", "runlogs", "recent.jsonl")); os.IsNotExist(err) {
 		t.Error("recent.jsonl should still exist")
 	}
 }
 
 func TestClearOldRunlogs_IgnoresSubdirectories(t *testing.T) {
-	workspace := setupTestWorkspace(t)
+	projectFolder := setupTestProjectFolder(t)
 
-	runlogsDir := filepath.Join(workspace, ".sprout", "runlogs")
+	runlogsDir := filepath.Join(projectFolder, ".sprout", "runlogs")
 	os.MkdirAll(filepath.Join(runlogsDir, "subdir"), 0755)
-	createRunlog(t, workspace, "run1.jsonl", time.Now())
+	createRunlog(t, projectFolder, "run1.jsonl", time.Now())
 
-	count, err := clearOldRunlogs(workspace, time.Time{}, true)
+	count, err := clearOldRunlogs(projectFolder, time.Time{}, true)
 	if err != nil {
 		t.Fatalf("clearOldRunlogs() error = %v", err)
 	}
@@ -409,7 +409,7 @@ func TestClearOldRunlogs_IgnoresSubdirectories(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRunHistoryClear_ClearAll(t *testing.T) {
-	workspace := setupTestWorkspace(t)
+	projectFolder := setupTestProjectFolder(t)
 
 	// Save and restore working directory
 	oldWd, _ := os.Getwd()
@@ -419,16 +419,16 @@ func TestRunHistoryClear_ClearAll(t *testing.T) {
 	defer resetClearFlags()
 
 	// Create test data
-	createRevision(t, workspace, "rev-1")
-	createChange(t, workspace, "rev-1", "file1.go", time.Now().Add(-30*24*time.Hour), "old1", "new1")
-	createChange(t, workspace, "rev-1", "file2.go", time.Now().Add(-30*24*time.Hour), "old2", "new2")
-	createRevision(t, workspace, "rev-2")
-	createChange(t, workspace, "rev-2", "file3.go", time.Now().Add(-30*24*time.Hour), "old3", "new3")
-	createRunlog(t, workspace, "old-run.jsonl", time.Now().Add(-30*24*time.Hour))
+	createRevision(t, projectFolder, "rev-1")
+	createChange(t, projectFolder, "rev-1", "file1.go", time.Now().Add(-30*24*time.Hour), "old1", "new1")
+	createChange(t, projectFolder, "rev-1", "file2.go", time.Now().Add(-30*24*time.Hour), "old2", "new2")
+	createRevision(t, projectFolder, "rev-2")
+	createChange(t, projectFolder, "rev-2", "file3.go", time.Now().Add(-30*24*time.Hour), "old3", "new3")
+	createRunlog(t, projectFolder, "old-run.jsonl", time.Now().Add(-30*24*time.Hour))
 
-	changesBefore := countDirEntries(t, filepath.Join(workspace, ".sprout", "changes"))
-	revisionsBefore := countDirEntries(t, filepath.Join(workspace, ".sprout", "revisions"))
-	runlogsBefore := countFiles(t, filepath.Join(workspace, ".sprout", "runlogs"))
+	changesBefore := countDirEntries(t, filepath.Join(projectFolder, ".sprout", "changes"))
+	revisionsBefore := countDirEntries(t, filepath.Join(projectFolder, ".sprout", "revisions"))
+	runlogsBefore := countFiles(t, filepath.Join(projectFolder, ".sprout", "runlogs"))
 
 	if changesBefore != 3 {
 		t.Fatalf("expected 3 change dirs before clear, got %d", changesBefore)
@@ -442,7 +442,7 @@ func TestRunHistoryClear_ClearAll(t *testing.T) {
 
 	// Set flags and run
 	clearOlderThan = ""
-	clearWorkspace = workspace
+	clearProjectFolder = projectFolder
 	clearYes = true
 
 	if err := runHistoryClear(); err != nil {
@@ -450,9 +450,9 @@ func TestRunHistoryClear_ClearAll(t *testing.T) {
 	}
 
 	// Verify everything is cleared
-	changesAfter := countDirEntries(t, filepath.Join(workspace, ".sprout", "changes"))
-	revisionsAfter := countDirEntries(t, filepath.Join(workspace, ".sprout", "revisions"))
-	runlogsAfter := countFiles(t, filepath.Join(workspace, ".sprout", "runlogs"))
+	changesAfter := countDirEntries(t, filepath.Join(projectFolder, ".sprout", "changes"))
+	revisionsAfter := countDirEntries(t, filepath.Join(projectFolder, ".sprout", "revisions"))
+	runlogsAfter := countFiles(t, filepath.Join(projectFolder, ".sprout", "runlogs"))
 
 	if changesAfter != 0 {
 		t.Errorf("expected 0 change dirs after clear, got %d", changesAfter)
@@ -466,7 +466,7 @@ func TestRunHistoryClear_ClearAll(t *testing.T) {
 }
 
 func TestRunHistoryClear_OlderThan(t *testing.T) {
-	workspace := setupTestWorkspace(t)
+	projectFolder := setupTestProjectFolder(t)
 
 	// Save and restore working directory
 	oldWd, _ := os.Getwd()
@@ -480,56 +480,56 @@ func TestRunHistoryClear_OlderThan(t *testing.T) {
 	recentTime := cutoff.Add(24 * time.Hour) // 6 days ago
 
 	// Create old data
-	createRevision(t, workspace, "old-rev")
-	createChange(t, workspace, "old-rev", "old-file.go", oldTime, "old", "new")
-	createRunlog(t, workspace, "old-run.jsonl", oldTime)
+	createRevision(t, projectFolder, "old-rev")
+	createChange(t, projectFolder, "old-rev", "old-file.go", oldTime, "old", "new")
+	createRunlog(t, projectFolder, "old-run.jsonl", oldTime)
 
 	// Create recent data
-	createRevision(t, workspace, "recent-rev")
-	createChange(t, workspace, "recent-rev", "recent-file.go", recentTime, "old", "new")
-	createRunlog(t, workspace, "recent-run.jsonl", recentTime)
+	createRevision(t, projectFolder, "recent-rev")
+	createChange(t, projectFolder, "recent-rev", "recent-file.go", recentTime, "old", "new")
+	createRunlog(t, projectFolder, "recent-run.jsonl", recentTime)
 
 	// Set flags and run
 	clearOlderThan = "7d"
-	clearWorkspace = workspace
+	clearProjectFolder = projectFolder
 
 	if err := runHistoryClear(); err != nil {
 		t.Fatalf("runHistoryClear() error = %v", err)
 	}
 
 	// Old change should be gone
-	changesAfter := countDirEntries(t, filepath.Join(workspace, ".sprout", "changes"))
+	changesAfter := countDirEntries(t, filepath.Join(projectFolder, ".sprout", "changes"))
 	if changesAfter != 1 {
 		t.Errorf("expected 1 change dir after older-than clear, got %d", changesAfter)
 	}
 
 	// Old revision should be gone (orphaned), recent should remain
-	revisionsAfter := countDirEntries(t, filepath.Join(workspace, ".sprout", "revisions"))
+	revisionsAfter := countDirEntries(t, filepath.Join(projectFolder, ".sprout", "revisions"))
 	if revisionsAfter != 1 {
 		t.Errorf("expected 1 revision dir after older-than clear, got %d", revisionsAfter)
 	}
 
 	// Old runlog should be gone, recent should remain
-	runlogsAfter := countFiles(t, filepath.Join(workspace, ".sprout", "runlogs"))
+	runlogsAfter := countFiles(t, filepath.Join(projectFolder, ".sprout", "runlogs"))
 	if runlogsAfter != 1 {
 		t.Errorf("expected 1 runlog after older-than clear, got %d", runlogsAfter)
 	}
 
 	// Verify the remaining runlog is the recent one
-	if _, err := os.Stat(filepath.Join(workspace, ".sprout", "runlogs", "recent-run.jsonl")); os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(projectFolder, ".sprout", "runlogs", "recent-run.jsonl")); os.IsNotExist(err) {
 		t.Error("recent-run.jsonl should still exist")
 	}
 }
 
 func TestRunHistoryClear_RequiresYes(t *testing.T) {
-	workspace := setupTestWorkspace(t)
+	projectFolder := setupTestProjectFolder(t)
 
 	defer resetClearFlags()
 
 	// No --yes and no --older-than should fail because stdin is not a TTY
 	// (StdinIsTerminal() returns false in tests).
 	clearOlderThan = ""
-	clearWorkspace = workspace
+	clearProjectFolder = projectFolder
 	clearYes = false
 
 	err := runHistoryClear()
@@ -542,7 +542,7 @@ func TestRunHistoryClear_RequiresYes(t *testing.T) {
 }
 
 func TestRunHistoryClear_NoHistory(t *testing.T) {
-	workspace := setupTestWorkspace(t)
+	projectFolder := setupTestProjectFolder(t)
 
 	oldWd, _ := os.Getwd()
 	defer os.Chdir(oldWd)
@@ -550,7 +550,7 @@ func TestRunHistoryClear_NoHistory(t *testing.T) {
 
 	// Directories exist but are empty
 	clearOlderThan = ""
-	clearWorkspace = workspace
+	clearProjectFolder = projectFolder
 	clearYes = true
 
 	// Should not error, just print "No history to clear."
@@ -559,26 +559,26 @@ func TestRunHistoryClear_NoHistory(t *testing.T) {
 	}
 }
 
-func TestRunHistoryClear_NonExistentWorkspace(t *testing.T) {
+func TestRunHistoryClear_NonExistentProjectFolder(t *testing.T) {
 	defer resetClearFlags()
 
 	clearOlderThan = ""
-	clearWorkspace = "/tmp/nonexistent-workspace-" + filepath.Base(os.TempDir())
+	clearProjectFolder = "/tmp/nonexistent-workspace-" + filepath.Base(os.TempDir())
 	clearYes = true
 
-	// Non-existent workspace is handled gracefully (no .sprout dirs exist)
+	// Non-existent project folder is handled gracefully (no .sprout dirs exist)
 	if err := runHistoryClear(); err != nil {
-		t.Fatalf("runHistoryClear() should not error on non-existent workspace: %v", err)
+		t.Fatalf("runHistoryClear() should not error on non-existent project folder: %v", err)
 	}
 }
 
 func TestRunHistoryClear_InvalidOlderThan(t *testing.T) {
-	workspace := setupTestWorkspace(t)
+	projectFolder := setupTestProjectFolder(t)
 
 	defer resetClearFlags()
 
 	clearOlderThan = "invalid"
-	clearWorkspace = workspace
+	clearProjectFolder = projectFolder
 
 	err := runHistoryClear()
 	if err == nil {
@@ -590,7 +590,7 @@ func TestRunHistoryClear_InvalidOlderThan(t *testing.T) {
 }
 
 func TestRunHistoryClear_NonExistentHistoryDirs(t *testing.T) {
-	workspace := t.TempDir()
+	projectFolder := t.TempDir()
 
 	oldWd, _ := os.Getwd()
 	defer os.Chdir(oldWd)
@@ -598,7 +598,7 @@ func TestRunHistoryClear_NonExistentHistoryDirs(t *testing.T) {
 
 	// Don't create any .sprout dirs — runHistoryClear should handle this gracefully
 	clearOlderThan = ""
-	clearWorkspace = workspace
+	clearProjectFolder = projectFolder
 	clearYes = true
 
 	if err := runHistoryClear(); err != nil {
@@ -607,25 +607,25 @@ func TestRunHistoryClear_NonExistentHistoryDirs(t *testing.T) {
 }
 
 func TestRunHistoryClear_UsingCurrentDir(t *testing.T) {
-	workspace := setupTestWorkspace(t)
+	projectFolder := setupTestProjectFolder(t)
 
 	oldWd, _ := os.Getwd()
 	defer os.Chdir(oldWd)
 	defer resetClearFlags()
 
-	// Change into the workspace
-	if err := os.Chdir(workspace); err != nil {
+	// Change into the project folder
+	if err := os.Chdir(projectFolder); err != nil {
 		t.Fatalf("failed to chdir: %v", err)
 	}
 
 	// Create test data
-	createRevision(t, workspace, "rev-1")
-	createChange(t, workspace, "rev-1", "file1.go", time.Now(), "old", "new")
-	createRunlog(t, workspace, "run.jsonl", time.Now())
+	createRevision(t, projectFolder, "rev-1")
+	createChange(t, projectFolder, "rev-1", "file1.go", time.Now(), "old", "new")
+	createRunlog(t, projectFolder, "run.jsonl", time.Now())
 
-	// Run without --workspace (should use current dir)
+	// Run without --project-folder (should use current dir)
 	clearOlderThan = ""
-	clearWorkspace = ""
+	clearProjectFolder = ""
 	clearYes = true
 
 	if err := runHistoryClear(); err != nil {
@@ -633,9 +633,9 @@ func TestRunHistoryClear_UsingCurrentDir(t *testing.T) {
 	}
 
 	// Everything should be cleared
-	changesAfter := countDirEntries(t, filepath.Join(workspace, ".sprout", "changes"))
-	revisionsAfter := countDirEntries(t, filepath.Join(workspace, ".sprout", "revisions"))
-	runlogsAfter := countFiles(t, filepath.Join(workspace, ".sprout", "runlogs"))
+	changesAfter := countDirEntries(t, filepath.Join(projectFolder, ".sprout", "changes"))
+	revisionsAfter := countDirEntries(t, filepath.Join(projectFolder, ".sprout", "revisions"))
+	runlogsAfter := countFiles(t, filepath.Join(projectFolder, ".sprout", "runlogs"))
 
 	if changesAfter != 0 {
 		t.Errorf("expected 0 changes, got %d", changesAfter)
@@ -649,7 +649,7 @@ func TestRunHistoryClear_UsingCurrentDir(t *testing.T) {
 }
 
 func TestRunHistoryClear_OlderThan_Hours(t *testing.T) {
-	workspace := setupTestWorkspace(t)
+	projectFolder := setupTestProjectFolder(t)
 
 	oldWd, _ := os.Getwd()
 	defer os.Chdir(oldWd)
@@ -659,26 +659,26 @@ func TestRunHistoryClear_OlderThan_Hours(t *testing.T) {
 	oldTime := cutoff.Add(-1 * time.Hour)
 	recentTime := cutoff.Add(1 * time.Hour)
 
-	createRevision(t, workspace, "old-rev")
-	createChange(t, workspace, "old-rev", "old.go", oldTime, "old", "new")
-	createRevision(t, workspace, "recent-rev")
-	createChange(t, workspace, "recent-rev", "recent.go", recentTime, "old", "new")
+	createRevision(t, projectFolder, "old-rev")
+	createChange(t, projectFolder, "old-rev", "old.go", oldTime, "old", "new")
+	createRevision(t, projectFolder, "recent-rev")
+	createChange(t, projectFolder, "recent-rev", "recent.go", recentTime, "old", "new")
 
 	clearOlderThan = "24h"
-	clearWorkspace = workspace
+	clearProjectFolder = projectFolder
 
 	if err := runHistoryClear(); err != nil {
 		t.Fatalf("runHistoryClear() error = %v", err)
 	}
 
-	changesAfter := countDirEntries(t, filepath.Join(workspace, ".sprout", "changes"))
+	changesAfter := countDirEntries(t, filepath.Join(projectFolder, ".sprout", "changes"))
 	if changesAfter != 1 {
 		t.Errorf("expected 1 change dir after 24h clear, got %d", changesAfter)
 	}
 }
 
 func TestRunHistoryClear_Revisions_ClearedAsOrphans(t *testing.T) {
-	workspace := setupTestWorkspace(t)
+	projectFolder := setupTestProjectFolder(t)
 
 	oldWd, _ := os.Getwd()
 	defer os.Chdir(oldWd)
@@ -688,14 +688,14 @@ func TestRunHistoryClear_Revisions_ClearedAsOrphans(t *testing.T) {
 	oldTime := cutoff.Add(-24 * time.Hour)
 
 	// Create an old revision with an old change
-	createRevision(t, workspace, "old-rev")
-	createChange(t, workspace, "old-rev", "old.go", oldTime, "old", "new")
+	createRevision(t, projectFolder, "old-rev")
+	createChange(t, projectFolder, "old-rev", "old.go", oldTime, "old", "new")
 
 	// Create a revision with NO changes (orphaned from the start)
-	createRevision(t, workspace, "orphan-rev")
+	createRevision(t, projectFolder, "orphan-rev")
 
-	changesBefore := countDirEntries(t, filepath.Join(workspace, ".sprout", "changes"))
-	revisionsBefore := countDirEntries(t, filepath.Join(workspace, ".sprout", "revisions"))
+	changesBefore := countDirEntries(t, filepath.Join(projectFolder, ".sprout", "changes"))
+	revisionsBefore := countDirEntries(t, filepath.Join(projectFolder, ".sprout", "revisions"))
 	if changesBefore != 1 {
 		t.Fatalf("expected 1 change dir before, got %d", changesBefore)
 	}
@@ -704,14 +704,14 @@ func TestRunHistoryClear_Revisions_ClearedAsOrphans(t *testing.T) {
 	}
 
 	clearOlderThan = "7d"
-	clearWorkspace = workspace
+	clearProjectFolder = projectFolder
 
 	if err := runHistoryClear(); err != nil {
 		t.Fatalf("runHistoryClear() error = %v", err)
 	}
 
 	// Old change gone, old-rev is orphaned, orphan-rev was always orphaned — both should be cleared
-	revisionsAfter := countDirEntries(t, filepath.Join(workspace, ".sprout", "revisions"))
+	revisionsAfter := countDirEntries(t, filepath.Join(projectFolder, ".sprout", "revisions"))
 	if revisionsAfter != 0 {
 		t.Errorf("expected 0 revision dirs after clear (orphans should be removed), got %d", revisionsAfter)
 	}
@@ -735,7 +735,7 @@ func TestHistoryClearCmd_FlagsRegistered(t *testing.T) {
 	if flag == nil {
 		t.Fatal("expected --dir flag to be registered")
 	}
-	if flag.Usage != "Workspace directory to clear history from (default: current directory)" {
+	if flag.Usage != "Project folder directory to clear history from (default: current directory)" {
 		t.Errorf("unexpected --dir usage: %s", flag.Usage)
 	}
 	if ws := historyClearCmd.Flags().Lookup("workspace"); ws == nil || ws.Annotations[deprecationAnnotation] == nil {
@@ -762,22 +762,22 @@ func TestHistoryCmd_Subcommands(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestClearDryRun_ClearAll(t *testing.T) {
-	workspace := setupTestWorkspace(t)
+	projectFolder := setupTestProjectFolder(t)
 
 	oldWd, _ := os.Getwd()
 	defer os.Chdir(oldWd)
 	defer resetClearFlags()
 
 	// Create test data
-	createRevision(t, workspace, "rev-1")
-	createChange(t, workspace, "rev-1", "file1.go", time.Now(), "old", "new")
-	createChange(t, workspace, "rev-1", "file2.go", time.Now(), "old", "new")
-	createRunlog(t, workspace, "run1.jsonl", time.Now())
-	createRunlog(t, workspace, "run2.jsonl", time.Now())
+	createRevision(t, projectFolder, "rev-1")
+	createChange(t, projectFolder, "rev-1", "file1.go", time.Now(), "old", "new")
+	createChange(t, projectFolder, "rev-1", "file2.go", time.Now(), "old", "new")
+	createRunlog(t, projectFolder, "run1.jsonl", time.Now())
+	createRunlog(t, projectFolder, "run2.jsonl", time.Now())
 
 	// Set dry-run flags
 	clearOlderThan = ""
-	clearWorkspace = workspace
+	clearProjectFolder = projectFolder
 	clearDryRun = true
 
 	out := testutil.CaptureStdout(t, func() {
@@ -795,9 +795,9 @@ func TestClearDryRun_ClearAll(t *testing.T) {
 	}
 
 	// Verify nothing was actually deleted
-	changesAfter := countDirEntries(t, filepath.Join(workspace, ".sprout", "changes"))
-	revisionsAfter := countDirEntries(t, filepath.Join(workspace, ".sprout", "revisions"))
-	runlogsAfter := countFiles(t, filepath.Join(workspace, ".sprout", "runlogs"))
+	changesAfter := countDirEntries(t, filepath.Join(projectFolder, ".sprout", "changes"))
+	revisionsAfter := countDirEntries(t, filepath.Join(projectFolder, ".sprout", "revisions"))
+	runlogsAfter := countFiles(t, filepath.Join(projectFolder, ".sprout", "runlogs"))
 
 	if changesAfter != 2 {
 		t.Errorf("expected 2 change dirs after dry-run, got %d", changesAfter)
@@ -811,7 +811,7 @@ func TestClearDryRun_ClearAll(t *testing.T) {
 }
 
 func TestClearDryRun_OlderThan(t *testing.T) {
-	workspace := setupTestWorkspace(t)
+	projectFolder := setupTestProjectFolder(t)
 
 	oldWd, _ := os.Getwd()
 	defer os.Chdir(oldWd)
@@ -822,17 +822,17 @@ func TestClearDryRun_OlderThan(t *testing.T) {
 	recentTime := cutoff.Add(24 * time.Hour)
 
 	// Create old and recent data
-	createRevision(t, workspace, "old-rev")
-	createChange(t, workspace, "old-rev", "old.go", oldTime, "old", "new")
-	createRunlog(t, workspace, "old-run.jsonl", oldTime)
+	createRevision(t, projectFolder, "old-rev")
+	createChange(t, projectFolder, "old-rev", "old.go", oldTime, "old", "new")
+	createRunlog(t, projectFolder, "old-run.jsonl", oldTime)
 
-	createRevision(t, workspace, "recent-rev")
-	createChange(t, workspace, "recent-rev", "recent.go", recentTime, "old", "new")
-	createRunlog(t, workspace, "recent-run.jsonl", recentTime)
+	createRevision(t, projectFolder, "recent-rev")
+	createChange(t, projectFolder, "recent-rev", "recent.go", recentTime, "old", "new")
+	createRunlog(t, projectFolder, "recent-run.jsonl", recentTime)
 
 	// Set dry-run with --older-than
 	clearOlderThan = "7d"
-	clearWorkspace = workspace
+	clearProjectFolder = projectFolder
 	clearDryRun = true
 
 	out := testutil.CaptureStdout(t, func() {
@@ -850,9 +850,9 @@ func TestClearDryRun_OlderThan(t *testing.T) {
 	}
 
 	// Verify nothing was actually deleted
-	changesAfter := countDirEntries(t, filepath.Join(workspace, ".sprout", "changes"))
-	revisionsAfter := countDirEntries(t, filepath.Join(workspace, ".sprout", "revisions"))
-	runlogsAfter := countFiles(t, filepath.Join(workspace, ".sprout", "runlogs"))
+	changesAfter := countDirEntries(t, filepath.Join(projectFolder, ".sprout", "changes"))
+	revisionsAfter := countDirEntries(t, filepath.Join(projectFolder, ".sprout", "revisions"))
+	runlogsAfter := countFiles(t, filepath.Join(projectFolder, ".sprout", "runlogs"))
 
 	// Everything should still be there
 	if changesAfter != 2 {
@@ -867,14 +867,14 @@ func TestClearDryRun_OlderThan(t *testing.T) {
 }
 
 func TestClearDryRun_NoHistory(t *testing.T) {
-	workspace := setupTestWorkspace(t)
+	projectFolder := setupTestProjectFolder(t)
 
 	oldWd, _ := os.Getwd()
 	defer os.Chdir(oldWd)
 	defer resetClearFlags()
 
 	clearOlderThan = ""
-	clearWorkspace = workspace
+	clearProjectFolder = projectFolder
 	clearDryRun = true
 
 	out := testutil.CaptureStdout(t, func() {
@@ -976,20 +976,20 @@ func TestConfirmPrompt_CaseInsensitive(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRunHistoryClear_DryRun_NoConfirm(t *testing.T) {
-	workspace := setupTestWorkspace(t)
+	projectFolder := setupTestProjectFolder(t)
 
 	oldWd, _ := os.Getwd()
 	defer os.Chdir(oldWd)
 	defer resetClearFlags()
 
 	// Create test data
-	createRevision(t, workspace, "rev-1")
-	createChange(t, workspace, "rev-1", "file1.go", time.Now(), "old", "new")
-	createRunlog(t, workspace, "run.jsonl", time.Now())
+	createRevision(t, projectFolder, "rev-1")
+	createChange(t, projectFolder, "rev-1", "file1.go", time.Now(), "old", "new")
+	createRunlog(t, projectFolder, "run.jsonl", time.Now())
 
 	// Set dry-run WITHOUT --yes. Should NOT prompt for confirmation.
 	clearOlderThan = ""
-	clearWorkspace = workspace
+	clearProjectFolder = projectFolder
 	clearDryRun = true
 	clearYes = false
 
@@ -1015,20 +1015,20 @@ func TestRunHistoryClear_DryRun_NoConfirm(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRunHistoryClear_ForceAlias(t *testing.T) {
-	workspace := setupTestWorkspace(t)
+	projectFolder := setupTestProjectFolder(t)
 
 	oldWd, _ := os.Getwd()
 	defer os.Chdir(oldWd)
 	defer resetClearFlags()
 
 	// Create test data
-	createRevision(t, workspace, "rev-1")
-	createChange(t, workspace, "rev-1", "file1.go", time.Now(), "old", "new")
-	createRunlog(t, workspace, "run.jsonl", time.Now())
+	createRevision(t, projectFolder, "rev-1")
+	createChange(t, projectFolder, "rev-1", "file1.go", time.Now(), "old", "new")
+	createRunlog(t, projectFolder, "run.jsonl", time.Now())
 
 	// Setting clearYes=true is how the --force flag works (both bound to the same var)
 	clearOlderThan = ""
-	clearWorkspace = workspace
+	clearProjectFolder = projectFolder
 	clearYes = true
 
 	if err := runHistoryClear(); err != nil {
@@ -1036,9 +1036,9 @@ func TestRunHistoryClear_ForceAlias(t *testing.T) {
 	}
 
 	// Verify everything was cleared (same behavior as --yes)
-	changesAfter := countDirEntries(t, filepath.Join(workspace, ".sprout", "changes"))
-	revisionsAfter := countDirEntries(t, filepath.Join(workspace, ".sprout", "revisions"))
-	runlogsAfter := countFiles(t, filepath.Join(workspace, ".sprout", "runlogs"))
+	changesAfter := countDirEntries(t, filepath.Join(projectFolder, ".sprout", "changes"))
+	revisionsAfter := countDirEntries(t, filepath.Join(projectFolder, ".sprout", "revisions"))
+	runlogsAfter := countFiles(t, filepath.Join(projectFolder, ".sprout", "runlogs"))
 
 	if changesAfter != 0 {
 		t.Errorf("expected 0 changes after clear, got %d", changesAfter)

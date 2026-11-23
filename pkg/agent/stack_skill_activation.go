@@ -44,7 +44,7 @@ import (
 // is handed to the seed agent, so an activation made this turn reaches the
 // model's context in the same turn.
 func (a *Agent) autoActivateStarterSkill() {
-	root := a.currentWorkspaceRoot()
+	root := a.currentProjectFolder()
 	if root == "" {
 		return
 	}

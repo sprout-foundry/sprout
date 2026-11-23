@@ -26,15 +26,15 @@ func newTestWebServer(t *testing.T) (*ReactWebServer, *TerminalManager) {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.workspaceRoot = daemonRoot
+	ws.projectFolder = daemonRoot
 
-	// Workspace must be within daemonRoot to pass the security check in setClientWorkspaceRoot.
-	workspaceDir := daemonRoot // daemonRoot itself is always allowed
-	if _, err := ws.setClientWorkspaceRoot("test-client", workspaceDir); err != nil {
-		t.Fatalf("setClientWorkspaceRoot: %v", err)
+	// Project folder must be within daemonRoot to pass the security check in setClientProjectFolder.
+	projectFolderDir := daemonRoot // daemonRoot itself is always allowed
+	if _, err := ws.setClientProjectFolder("test-client", projectFolderDir); err != nil {
+		t.Fatalf("setClientProjectFolder: %v", err)
 	}
 
-	// After setClientWorkspaceRoot, the client context has its own TerminalManager.
+	// After setClientProjectFolder, the client context has its own TerminalManager.
 	// Get it via the request-based accessor so we create sessions on the right manager.
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set(webClientIDHeader, "test-client")

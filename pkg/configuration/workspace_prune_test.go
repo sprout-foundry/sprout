@@ -7,11 +7,11 @@ import (
 	"testing"
 )
 
-func TestPruneWorkspaceConfig(t *testing.T) {
+func TestPruneProjectFolderConfig(t *testing.T) {
 	global := t.TempDir()
 	writeJSONFile(t, filepath.Join(global, ConfigFileName), `{"last_used_provider":"openai","mcp":{"enabled":true,"timeout":45},"provider_priority":["openai","anthropic"]}`)
 
-	wsFile := filepath.Join(t.TempDir(), ConfigDirName, WorkspaceConfigFileName)
+	wsFile := filepath.Join(t.TempDir(), ConfigDirName, ProjectFolderConfigFileName)
 	bloated := `{
   "version": "2.1",
   "last_used_provider": "openai",
@@ -23,7 +23,7 @@ func TestPruneWorkspaceConfig(t *testing.T) {
 }`
 	writeJSONFile(t, wsFile, bloated)
 
-	dry, err := PruneWorkspaceConfig(global, wsFile, true)
+	dry, err := PruneProjectFolderConfig(global, wsFile, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,14 +31,14 @@ func TestPruneWorkspaceConfig(t *testing.T) {
 		t.Fatal("dry run modified the file")
 	}
 
-	res, err := PruneWorkspaceConfig(global, wsFile, false)
+	res, err := PruneProjectFolderConfig(global, wsFile, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(res.Removed, dry.Removed) {
 		t.Fatalf("dry run reported %v, real run removed %v", dry.Removed, res.Removed)
 	}
-	// mcp.timeout stays: a workspace mcp block without one loads the 30s
+	// mcp.timeout stays: a project folder mcp block without one loads the 30s
 	// default, which would override the global 45.
 	wantRemoved := []string{"computer_use", "last_used_provider", "provider_priority"}
 	if !reflect.DeepEqual(res.Removed, wantRemoved) {
@@ -48,7 +48,7 @@ func TestPruneWorkspaceConfig(t *testing.T) {
 	saved := readJSONFile(t, wsFile)
 	mcp, _ := saved["mcp"].(map[string]interface{})
 	if mcp["enabled"] != false || saved["provider_models"] == nil || saved["future_setting"] != "kept" || saved["version"] == nil {
-		t.Fatalf("pruned file = %v, want the workspace's own settings kept", saved)
+		t.Fatalf("pruned file = %v, want the project folder's own settings kept", saved)
 	}
 	if backup, _ := os.ReadFile(wsFile + ".bak"); string(backup) != bloated {
 		t.Fatal("original not kept as .bak")
@@ -63,13 +63,13 @@ func TestPruneWorkspaceConfig(t *testing.T) {
 	}
 }
 
-func TestPruneWorkspaceConfig_NothingToRemoveLeavesFileAlone(t *testing.T) {
+func TestPruneProjectFolderConfig_NothingToRemoveLeavesFileAlone(t *testing.T) {
 	global := t.TempDir()
 	writeJSONFile(t, filepath.Join(global, ConfigFileName), `{"last_used_provider":"openai"}`)
-	wsFile := filepath.Join(t.TempDir(), WorkspaceConfigFileName)
+	wsFile := filepath.Join(t.TempDir(), ProjectFolderConfigFileName)
 	writeJSONFile(t, wsFile, `{"last_used_provider":"deepinfra"}`)
 
-	res, err := PruneWorkspaceConfig(global, wsFile, false)
+	res, err := PruneProjectFolderConfig(global, wsFile, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,10 +81,10 @@ func TestPruneWorkspaceConfig_NothingToRemoveLeavesFileAlone(t *testing.T) {
 	}
 }
 
-func TestPruneWorkspaceConfig_KeepsSettingsThatReplaceWholesale(t *testing.T) {
+func TestPruneProjectFolderConfig_KeepsSettingsThatReplaceWholesale(t *testing.T) {
 	global := t.TempDir()
 	writeJSONFile(t, filepath.Join(global, ConfigFileName), `{"command_history_by_path":{"/a":["ls"]},"last_used_provider":"openai"}`)
-	wsFile := filepath.Join(t.TempDir(), ConfigDirName, WorkspaceConfigFileName)
+	wsFile := filepath.Join(t.TempDir(), ConfigDirName, ProjectFolderConfigFileName)
 	writeJSONFile(t, wsFile, `{"command_history_by_path":{"/a":["ls"],"/b":["make"]},"last_used_provider":"openai"}`)
 
 	before, err := NewManagerWithLayers(global, filepath.Dir(wsFile))
@@ -93,7 +93,7 @@ func TestPruneWorkspaceConfig_KeepsSettingsThatReplaceWholesale(t *testing.T) {
 	}
 	wantHistory := before.GetConfig().CommandHistoryByPath
 
-	res, err := PruneWorkspaceConfig(global, wsFile, false)
+	res, err := PruneProjectFolderConfig(global, wsFile, false)
 	if err != nil {
 		t.Fatal(err)
 	}

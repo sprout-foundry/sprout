@@ -107,7 +107,7 @@ async function githubFetch(path: string, t: string, init?: RequestInit): Promise
 
 // ── Subcommand handlers ────────────────────────────────────────────────────
 
-/** gh repo clone <owner/name|url> — clone into the workspace. */
+/** gh repo clone <owner/name|url> — clone into the project folder. */
 async function repoClone(args: string[]): Promise<ShellGhResult> {
   const { positionals } = parseFlags(args);
   const target = positionals[0];

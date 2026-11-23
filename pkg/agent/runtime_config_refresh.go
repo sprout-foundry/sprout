@@ -119,7 +119,7 @@ func (a *Agent) reconcileMCPServers(ctx context.Context) error {
 	for name, cfg := range newConfig.MCP.Servers {
 		newServers[name] = cfg
 	}
-	if legacy, err := mcp.LoadMCPConfigForWorkspace(a.GetWorkspaceRoot()); err == nil {
+	if legacy, err := mcp.LoadMCPConfigForProjectFolder(a.GetProjectFolder()); err == nil {
 		for name, serverConfig := range legacy.Servers {
 			if _, exists := newServers[name]; !exists {
 				newServers[name] = serverConfig

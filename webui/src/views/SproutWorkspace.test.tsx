@@ -100,8 +100,8 @@ vi.mock('../services/api', () => {
     async applyHotkeyPreset() {
       return { hotkeys: [] };
     }
-    async getWorkspace() {
-      return { workspace_root: '' };
+    async getProjectFolder() {
+      return { project_folder: '' };
     }
     async getStats() {
       return {};
@@ -187,9 +187,9 @@ describe('SproutWorkspace', () => {
   it('mounts the requested project and space', async () => {
     render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} />);
 
-    const workspace = await screen.findByTestId('sprout-workspace');
-    expect(workspace).toHaveAttribute('data-project', PROJECT.id);
-    expect(workspace).toHaveAttribute('data-space', 'code');
+    const projectFolder = await screen.findByTestId('sprout-workspace');
+    expect(projectFolder).toHaveAttribute('data-project', PROJECT.id);
+    expect(projectFolder).toHaveAttribute('data-space', 'code');
     expect(screen.getByTestId('sprout-workspace-code-shell')).toBeInTheDocument();
   });
 
@@ -226,8 +226,8 @@ describe('SproutWorkspace', () => {
     });
     render(<SproutWorkspace project={PROJECT} space="other-space" host={makeHost()} />);
 
-    const workspace = await screen.findByTestId('sprout-workspace');
-    expect(workspace).toHaveAttribute('data-space', 'other-space');
+    const projectFolder = await screen.findByTestId('sprout-workspace');
+    expect(projectFolder).toHaveAttribute('data-space', 'other-space');
     expect(screen.getByTestId('sprout-workspace-other-shell')).toBeInTheDocument();
     expect(screen.queryByTestId('sprout-workspace-code-shell')).not.toBeInTheDocument();
   });
@@ -237,8 +237,8 @@ describe('SproutWorkspace', () => {
 
     // resolveWorkspaceMode's contract: an unknown id degrades to the built-in
     // default (`code`), never to nothing.
-    const workspace = await screen.findByTestId('sprout-workspace');
-    expect(workspace).toHaveAttribute('data-space', 'code');
+    const projectFolder = await screen.findByTestId('sprout-workspace');
+    expect(projectFolder).toHaveAttribute('data-space', 'code');
     expect(screen.getByTestId('sprout-workspace-code-shell')).toBeInTheDocument();
   });
 
@@ -265,11 +265,11 @@ describe('SproutWorkspace', () => {
       />,
     );
 
-    const workspace = await screen.findByTestId('sprout-workspace');
+    const projectFolder = await screen.findByTestId('sprout-workspace');
     // The layout path: the space's registered shell is replaced by the host's
     // arrangement, and the view lands in the slot the arrangement names.
-    expect(within(workspace).getByTestId('views-layout')).toBeInTheDocument();
-    expect(within(workspace).getByTestId('views-slot-center')).toBeInTheDocument();
+    expect(within(projectFolder).getByTestId('views-layout')).toBeInTheDocument();
+    expect(within(projectFolder).getByTestId('views-slot-center')).toBeInTheDocument();
     expect(screen.queryByTestId('sprout-workspace-code-shell')).not.toBeInTheDocument();
   });
 
@@ -285,8 +285,8 @@ describe('SproutWorkspace', () => {
       />,
     );
 
-    const workspace = await screen.findByTestId('sprout-workspace');
-    const chat = within(workspace).getByTestId('sprout-workspace-chat');
+    const projectFolder = await screen.findByTestId('sprout-workspace');
+    const chat = within(projectFolder).getByTestId('sprout-workspace-chat');
     // The composition handed the chat a real send — an enabled chat, not the
     // empty disabled stub.
     expect(chat).toHaveAttribute('data-enabled', 'true');
@@ -438,10 +438,10 @@ describe('SproutWorkspace', () => {
         </SproutProviders>
       </HostProvider>,
     );
-    const workspace = await screen.findByTestId('sprout-workspace');
+    const projectFolder = await screen.findByTestId('sprout-workspace');
     // The workspace carries its own theme; the host's document is untouched.
-    await waitFor(() => expect(workspace.getAttribute('data-theme')).toBeTruthy());
-    expect(workspace.style.getPropertyValue('--bg-primary')).not.toBe('');
+    await waitFor(() => expect(projectFolder.getAttribute('data-theme')).toBeTruthy());
+    expect(projectFolder.style.getPropertyValue('--bg-primary')).not.toBe('');
     expect(document.documentElement.getAttribute('data-theme')).toBeNull();
     expect(document.documentElement.style.getPropertyValue('--bg-primary')).toBe('');
   });
@@ -458,10 +458,10 @@ describe('SproutWorkspace', () => {
       />,
     );
 
-    const workspace = await screen.findByTestId('sprout-workspace');
+    const projectFolder = await screen.findByTestId('sprout-workspace');
     // The host supplied its own chat props, so the assembled ones are replaced
     // for the `chat` kind; the host's send is the one the chat receives.
-    expect(within(workspace).getByTestId('sprout-workspace-chat')).toHaveAttribute('data-enabled', 'true');
+    expect(within(projectFolder).getByTestId('sprout-workspace-chat')).toHaveAttribute('data-enabled', 'true');
     await act(async () => {
       screen.getByTestId('sprout-workspace-chat-send').click();
     });
@@ -479,11 +479,11 @@ describe('SproutWorkspace', () => {
       />,
     );
 
-    const workspace = await screen.findByTestId('sprout-workspace');
+    const projectFolder = await screen.findByTestId('sprout-workspace');
     // The changes view was not overridden, so it keeps its assembled props
     // (it fetches its own session changes) — the override of `chat` did not
     // disturb it.
-    expect(within(workspace).getByTestId('sprout-workspace-changes')).toBeInTheDocument();
+    expect(within(projectFolder).getByTestId('sprout-workspace-changes')).toBeInTheDocument();
   });
 
   it('calls onSpaceChange only when the mounted space changes, not on mount', async () => {
@@ -593,8 +593,8 @@ describe('SproutWorkspace', () => {
         </SproutProviders>
       </HostProvider>,
     );
-    const workspace = await screen.findByTestId('sprout-workspace');
-    expect(workspace).toHaveAttribute('data-space', 'code');
+    const projectFolder = await screen.findByTestId('sprout-workspace');
+    expect(projectFolder).toHaveAttribute('data-space', 'code');
     expect(screen.getByTestId('sprout-workspace-code-shell')).toBeInTheDocument();
     // The ambient host is the one the subtree reads (no second HostProvider
     // shadowed it with the headless default).
@@ -634,10 +634,10 @@ describe('SproutWorkspace', () => {
       </HostProvider>,
     );
 
-    const workspace = await screen.findByTestId('sprout-workspace');
+    const projectFolder = await screen.findByTestId('sprout-workspace');
     // The host supplied chat props with no send, so the chat is the disabled
     // stub — proving the composition did not assemble a live one in ambient mode.
-    expect(within(workspace).getByTestId('sprout-workspace-chat')).toHaveAttribute('data-enabled', 'false');
+    expect(within(projectFolder).getByTestId('sprout-workspace-chat')).toHaveAttribute('data-enabled', 'false');
   });
 });
 
@@ -651,8 +651,8 @@ describe('SproutWorkspace rules', () => {
     // always resolves to something renderable. Break the rule by having this
     // component render nothing (or throw) for an unknown id and this fails.
     render(<SproutWorkspace project={PROJECT} space="totally-unknown" host={makeHost()} />);
-    const workspace = await screen.findByTestId('sprout-workspace');
-    expect(workspace).toHaveAttribute('data-space', 'code');
+    const projectFolder = await screen.findByTestId('sprout-workspace');
+    expect(projectFolder).toHaveAttribute('data-space', 'code');
     expect(screen.getByTestId('sprout-workspace-code-shell')).toBeInTheDocument();
   });
 
@@ -731,8 +731,8 @@ describe('SproutWorkspace rules', () => {
       Shell: () => <div data-testid="sprout-workspace-test-shell" />,
     });
     render(<SproutWorkspace project={PROJECT} space="test-space" host={makeHost()} />);
-    const workspace = await screen.findByTestId('sprout-workspace');
-    expect(workspace).toHaveAttribute('data-space', 'test-space');
+    const projectFolder = await screen.findByTestId('sprout-workspace');
+    expect(projectFolder).toHaveAttribute('data-space', 'test-space');
     expect(screen.getByTestId('sprout-workspace-test-shell')).toBeInTheDocument();
   });
 
@@ -743,8 +743,8 @@ describe('SproutWorkspace rules', () => {
     // is the DOM side of that contract (the artifact test asserts the CSS side).
     render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} />);
 
-    const workspace = await screen.findByTestId('sprout-workspace');
-    expect(workspace).toHaveClass('sprout-workspace');
+    const projectFolder = await screen.findByTestId('sprout-workspace');
+    expect(projectFolder).toHaveClass('sprout-workspace');
   });
 
   it('rule: the workspace root carries the resolved data-theme the scoped guards key on', async () => {
@@ -754,16 +754,16 @@ describe('SproutWorkspace rules', () => {
     // dead.
     render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} />);
 
-    const workspace = await screen.findByTestId('sprout-workspace');
-    expect(workspace).toHaveAttribute('data-theme', 'dark');
+    const projectFolder = await screen.findByTestId('sprout-workspace');
+    expect(projectFolder).toHaveAttribute('data-theme', 'dark');
   });
 
   it('rule: a supplied className extends the workspace root, never replaces the scope class', async () => {
     render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} className="host-shell" />);
 
-    const workspace = await screen.findByTestId('sprout-workspace');
-    expect(workspace).toHaveClass('sprout-workspace');
-    expect(workspace).toHaveClass('host-shell');
+    const projectFolder = await screen.findByTestId('sprout-workspace');
+    expect(projectFolder).toHaveClass('sprout-workspace');
+    expect(projectFolder).toHaveClass('host-shell');
   });
 
   it('rule: own mode registers the host for the module-level services and restores it on unmount', async () => {

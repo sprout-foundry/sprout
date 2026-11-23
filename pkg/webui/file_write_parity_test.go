@@ -27,7 +27,7 @@ func TestFileWritePublishesFileChangedEvent(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "src"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(root, rel), []byte("<p>v1</p>"), 0o644))
 
-	server := newWorkspaceTestServer(t, root)
+	server := newProjectFolderTestServer(t, root)
 
 	// Subscribe to the bus before the write; Unsubscribe by name at cleanup.
 	const subscriber = "file-write-parity-test"

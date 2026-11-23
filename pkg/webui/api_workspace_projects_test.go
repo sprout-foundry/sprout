@@ -26,7 +26,7 @@ type projectsResponse struct {
 	Cached     bool          `json:"cached"`
 }
 
-func TestHandleAPIWorkspaceProjects_Success(t *testing.T) {
+func TestHandleAPIProjectFolderProjects_Success(t *testing.T) {
 	resetProjectsCache()
 	t.Cleanup(resetProjectsCache)
 
@@ -47,9 +47,9 @@ func TestHandleAPIWorkspaceProjects_Success(t *testing.T) {
 	}
 	ws.daemonRoot = daemonRoot
 
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace/projects", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder/projects", nil)
 	rec := httptest.NewRecorder()
-	ws.handleAPIWorkspaceProjects(rec, req)
+	ws.handleAPIProjectFolderProjects(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -84,7 +84,7 @@ func TestHandleAPIWorkspaceProjects_Success(t *testing.T) {
 	// (unlikely for a temp dir, but the handler also checks IsProjectDirectory on daemonRoot)
 }
 
-func TestHandleAPIWorkspaceProjects_EmptyResults(t *testing.T) {
+func TestHandleAPIProjectFolderProjects_EmptyResults(t *testing.T) {
 	resetProjectsCache()
 	t.Cleanup(resetProjectsCache)
 
@@ -97,9 +97,9 @@ func TestHandleAPIWorkspaceProjects_EmptyResults(t *testing.T) {
 	}
 	ws.daemonRoot = daemonRoot
 
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace/projects", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder/projects", nil)
 	rec := httptest.NewRecorder()
-	ws.handleAPIWorkspaceProjects(rec, req)
+	ws.handleAPIProjectFolderProjects(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -128,7 +128,7 @@ func TestHandleAPIWorkspaceProjects_EmptyResults(t *testing.T) {
 	}
 }
 
-func TestHandleAPIWorkspaceProjects_MethodNotAllowed(t *testing.T) {
+func TestHandleAPIProjectFolderProjects_MethodNotAllowed(t *testing.T) {
 	resetProjectsCache()
 	t.Cleanup(resetProjectsCache)
 
@@ -137,16 +137,16 @@ func TestHandleAPIWorkspaceProjects_MethodNotAllowed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/workspace/projects", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/project-folder/projects", nil)
 	rec := httptest.NewRecorder()
-	ws.handleAPIWorkspaceProjects(rec, req)
+	ws.handleAPIProjectFolderProjects(rec, req)
 
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected 405 for POST, got %d", rec.Code)
 	}
 }
 
-func TestHandleAPIWorkspaceProjects_Caching(t *testing.T) {
+func TestHandleAPIProjectFolderProjects_Caching(t *testing.T) {
 	resetProjectsCache()
 	t.Cleanup(resetProjectsCache)
 
@@ -165,9 +165,9 @@ func TestHandleAPIWorkspaceProjects_Caching(t *testing.T) {
 	ws.daemonRoot = daemonRoot
 
 	// First request — should NOT be cached
-	req1 := httptest.NewRequest(http.MethodGet, "/api/workspace/projects", nil)
+	req1 := httptest.NewRequest(http.MethodGet, "/api/project-folder/projects", nil)
 	rec1 := httptest.NewRecorder()
-	ws.handleAPIWorkspaceProjects(rec1, req1)
+	ws.handleAPIProjectFolderProjects(rec1, req1)
 
 	if rec1.Code != http.StatusOK {
 		t.Fatalf("first request: expected 200, got %d: %s", rec1.Code, rec1.Body.String())
@@ -183,9 +183,9 @@ func TestHandleAPIWorkspaceProjects_Caching(t *testing.T) {
 	}
 
 	// Second request — should be cached
-	req2 := httptest.NewRequest(http.MethodGet, "/api/workspace/projects", nil)
+	req2 := httptest.NewRequest(http.MethodGet, "/api/project-folder/projects", nil)
 	rec2 := httptest.NewRecorder()
-	ws.handleAPIWorkspaceProjects(rec2, req2)
+	ws.handleAPIProjectFolderProjects(rec2, req2)
 
 	if rec2.Code != http.StatusOK {
 		t.Fatalf("second request: expected 200, got %d: %s", rec2.Code, rec2.Body.String())

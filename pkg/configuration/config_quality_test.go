@@ -186,19 +186,19 @@ func TestMergeConfig_Quality(t *testing.T) {
 }
 
 // TestLoadConfigWithLayers_Quality covers the key across layer files: a global
-// enable persists through a silent workspace, an explicit workspace disable
-// wins, and a per-project (workspace) enable works from a silent global.
+// enable persists through a silent project folder, an explicit project folder disable
+// wins, and a per-project (project folder) enable works from a silent global.
 func TestLoadConfigWithLayers_Quality(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
 	globalDir := filepath.Join(home, ".config", "sprout")
-	workspaceDir := filepath.Join(home, "proj", ".sprout")
+	projectFolderDir := filepath.Join(home, "proj", ".sprout")
 	globalPath := filepath.Join(globalDir, ConfigFileName)
-	workspacePath := filepath.Join(workspaceDir, WorkspaceConfigFileName)
+	projectFolderPath := filepath.Join(projectFolderDir, ProjectFolderConfigFileName)
 
 	load := func() *Config {
-		cfg, err := LoadConfigWithLayers(globalPath, workspacePath, "", globalDir)
+		cfg, err := LoadConfigWithLayers(globalPath, projectFolderPath, "", globalDir)
 		require.NoError(t, err)
 		return cfg
 	}
@@ -207,39 +207,39 @@ func TestLoadConfigWithLayers_Quality(t *testing.T) {
 	cfg := load()
 	assert.False(t, cfg.QualityEnabled(), "no layer naming the key means quality is off")
 
-	// Global enables quality; the workspace never names the key — the
+	// Global enables quality; the project folder never names the key — the
 	// broader enable must persist.
 	writeFile(t, globalPath, `{"version":"2.1","quality":{"enabled":true}}`)
-	writeFile(t, workspacePath, `{"reasoning_effort":"high"}`)
+	writeFile(t, projectFolderPath, `{"reasoning_effort":"high"}`)
 	cfg = load()
-	assert.True(t, cfg.QualityEnabled(), "a global enable must persist through a silent workspace")
+	assert.True(t, cfg.QualityEnabled(), "a global enable must persist through a silent project folder")
 
-	// Per-project enable: the global never names the key, the workspace
+	// Per-project enable: the global never names the key, the project folder
 	// (project) enables it.
 	require.NoError(t, os.Remove(globalPath))
-	writeFile(t, workspacePath, `{"quality":{"enabled":true,"format_command":"gofmt -w ."}}`)
+	writeFile(t, projectFolderPath, `{"quality":{"enabled":true,"format_command":"gofmt -w ."}}`)
 	cfg = load()
-	assert.True(t, cfg.QualityEnabled(), "a workspace enable must turn quality on for the project")
+	assert.True(t, cfg.QualityEnabled(), "a project folder enable must turn quality on for the project")
 	assert.Equal(t, "gofmt -w .", cfg.QualityFormatCommand())
 
 	// The narrower layer disables a broader enable with an explicit false.
 	writeFile(t, globalPath, `{"version":"2.1","quality":{"enabled":true}}`)
-	writeFile(t, workspacePath, `{"quality":{"enabled":false}}`)
+	writeFile(t, projectFolderPath, `{"quality":{"enabled":false}}`)
 	cfg = load()
-	assert.False(t, cfg.QualityEnabled(), "an explicit workspace disable must beat the global enable")
+	assert.False(t, cfg.QualityEnabled(), "an explicit project folder disable must beat the global enable")
 
 	// The commands stack across layers: a narrower explicit command wins, a
 	// silent narrower layer keeps the broader command.
 	writeFile(t, globalPath, `{"version":"2.1","quality":{"enabled":true,"lint_command":"go vet"}}`)
-	writeFile(t, workspacePath, `{"quality":{"format_command":"gofmt"}}`)
+	writeFile(t, projectFolderPath, `{"quality":{"format_command":"gofmt"}}`)
 	cfg = load()
 	assert.True(t, cfg.QualityEnabled())
 	assert.Equal(t, "gofmt", cfg.QualityFormatCommand(), "the narrower command must win")
 	assert.Equal(t, "go vet", cfg.QualityLintCommand(), "the broader unsilenced command must persist")
 
-	writeFile(t, workspacePath, `{"reasoning_effort":"high"}`)
+	writeFile(t, projectFolderPath, `{"reasoning_effort":"high"}`)
 	cfg = load()
-	assert.Equal(t, "go vet", cfg.QualityLintCommand(), "a silent workspace must keep the global command")
+	assert.Equal(t, "go vet", cfg.QualityLintCommand(), "a silent project folder must keep the global command")
 }
 
 // TestQualityAccessors pins the accessors' default and configured behavior:

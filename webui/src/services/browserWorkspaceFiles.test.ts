@@ -1,5 +1,5 @@
 /**
- * Tests for the in-browser workspace file API (the host contract's
+ * Tests for the in-browser project folder file API (the host contract's
  * move-to-container seam).
  *
  * The two public functions are capability-gated and read the in-browser
@@ -226,7 +226,7 @@ describe('readBrowserWorkspaceFile', () => {
   it('refuses a path that escapes the workspace root', async () => {
     installAdapterWithShell(makeShell());
     setActiveHost(makeHost());
-    await expect(readBrowserWorkspaceFile('/etc/passwd')).rejects.toThrow(/outside the workspace/i);
+    await expect(readBrowserWorkspaceFile('/etc/passwd')).rejects.toThrow(/outside the project folder/i);
   });
 
   it('rejects an unknown file with an error naming the path', async () => {

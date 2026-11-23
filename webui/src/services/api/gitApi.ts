@@ -7,7 +7,7 @@
  * Working directory (session cwd): every op takes an optional trailing
  * `dir?: string` — a workspace-relative directory (e.g. `repos/owner/name`)
  * taken from services/workspaceCwd.ts. When set, the request carries it so
- * the op targets the repo at that directory instead of the workspace top:
+ * the op targets the repo at that directory instead of the project folder top:
  * a `dir` query parameter on GET requests and a `dir` body field on POSTs.
  * When omitted (cwd unset) the request is byte-identical to today's — the
  * daemon ignores unknown fields, and on device the studio bridge forwards

@@ -145,15 +145,15 @@ func (a *Agent) SetTraceSession(traceSession interface{}) {
 	a.state.SetTraceSession(traceSession)
 }
 
-// ReadFileContent reads the content of a file from the workspace.
-// The path is resolved relative to the agent's workspace root.
+// ReadFileContent reads the content of a file from the project folder.
+// The path is resolved relative to the agent's project folder.
 // Returns an error if the file does not exist or cannot be read.
 func (a *Agent) ReadFileContent(path string) (string, error) {
 	if a == nil {
 		return "", agenterrors.NewValidation("agent is nil", nil)
 	}
-	workspaceRoot := a.currentWorkspaceRoot()
-	absPath := filepath.Join(workspaceRoot, path)
+	projectFolder := a.currentProjectFolder()
+	absPath := filepath.Join(projectFolder, path)
 	data, err := os.ReadFile(absPath)
 	if err != nil {
 		return "", agenterrors.Wrap(err, fmt.Sprintf("failed to read file %s", path))

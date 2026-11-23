@@ -232,11 +232,11 @@ reads at boot. The fields that matter to a non-platform host:
   (Host-driven picker configuration — pointing the CTA at a
   host-chosen route — is a requested follow-up.)
 - **Tasks**: `GET|POST /api/tasks`, `GET /api/tasks/{id}`.
-- **Escalation**: `GET|POST /workspace/txn` + the txn lifecycle
-  (`/workspace/txn/{workspaceId}/txn/...`) — the "Run in cloud container"
+- **Escalation**: `GET|POST /dev-space/txn` + the txn lifecycle
+  (`/dev-space/txn/{devSpaceId}/txn/...`) — the "Run in cloud container"
   path. The surface is backend-agnostic (SP-BUILDER-12): the platform
   routes to the user's own runner when one is attached, else Fly.
-  `/workspace/fly` remains for in-flight legacy clients. A self-host
+  `/dev-space/fly` remains for in-flight legacy clients. A self-host
   backend can implement it against any container host.
 - **Settings/BYOK**: `GET|POST /api/settings`, `/api/settings/providers`,
   `/api/settings/credentials` (+ `/…/{id}`), `GET /api/providers`.

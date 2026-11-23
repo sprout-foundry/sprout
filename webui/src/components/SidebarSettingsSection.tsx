@@ -207,7 +207,7 @@ function CloudProviderModelSection({
 }
 
 /**
- * Browser workspaces served by the platform run the agent in WASM through the
+ * Browser project folders served by the platform run the agent in WASM through the
  * platform proxy, which routes by the account's editor model (managed, or the
  * user's own key — EditorModelSection). Studio's native build keeps the local
  * provider pickers: its shell serves BYOK providers itself.

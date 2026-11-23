@@ -1,4 +1,4 @@
-// Package sandbox confines a runner workspace's processes in native mode
+// Package sandbox confines a runner dev space's processes in native mode
 // (SP-159 §159c): host toolchains under the OS sandbox — Seatbelt on macOS,
 // bubblewrap on Linux. Windows has no native sandbox yet and reports itself
 // unavailable.
@@ -29,11 +29,11 @@ type Capability struct {
 	Detail string
 }
 
-// Policy is what a sandboxed workspace process may touch.
+// Policy is what a sandboxed dev space process may touch.
 type Policy struct {
-	// WorkDir is the workspace clone: readable and writable.
+	// WorkDir is the dev space clone: readable and writable.
 	WorkDir string
-	// TempDir is the per-workspace temp dir: readable and writable.
+	// TempDir is the per-dev-space temp dir: readable and writable.
 	TempDir string
 	// Writable are extra writable paths the user allowlisted (toolchain
 	// caches such as Xcode DerivedData).
@@ -58,5 +58,5 @@ func CommandContext(ctx context.Context, p Policy, name string, args ...string) 
 }
 
 // DefaultDenyRead returns the credential and private-data paths under home
-// that a native workspace must never read.
+// that a native dev space must never read.
 func DefaultDenyRead(home string) []string { return defaultDenyRead(home) }

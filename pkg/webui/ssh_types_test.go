@@ -40,8 +40,8 @@ func TestSSHLaunchError_Error_NilReceiver(t *testing.T) {
 func TestSSHLaunchError_Error_EmptyMessage(t *testing.T) {
 	e := &sshLaunchError{}
 	got := e.Error()
-	if got != "failed to open SSH workspace" {
-		t.Errorf("Error() = %q, want %q", got, "failed to open SSH workspace")
+	if got != "failed to open SSH project folder" {
+		t.Errorf("Error() = %q, want %q", got, "failed to open SSH project folder")
 	}
 }
 
@@ -85,8 +85,8 @@ func TestSSHLaunchError_Error_OnlyStep(t *testing.T) {
 		Message: "",
 	}
 	got := e.Error()
-	if got != "failed to open SSH workspace (connect)" {
-		t.Errorf("Error() = %q, want %q", got, "failed to open SSH workspace (connect)")
+	if got != "failed to open SSH project folder (connect)" {
+		t.Errorf("Error() = %q, want %q", got, "failed to open SSH project folder (connect)")
 	}
 }
 

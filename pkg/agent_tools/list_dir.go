@@ -88,11 +88,11 @@ func (h *listDirHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 		return h.listDirectoryContents(ctx, env, preRes, showHidden)
 	}
 	// "prompt" → interactive approval; on deny fall through to the raw error.
-	if ctx2, approved := promptForOffWorkspacePath(ctx, env, "list_directory", targetPath, preRes, "read"); approved {
+	if ctx2, approved := promptForOffProjectFolderPath(ctx, env, "list_directory", targetPath, preRes, "read"); approved {
 		ctx = ctx2
 	}
 
-	// Resolve path securely. Off-workspace directories will fail with
+	// Resolve path securely. Off-project-folder directories will fail with
 	// the raw filesystem error since the interactive gate is gone.
 	resolvedPath, err := filesystem.SafeResolvePathWithBypass(ctx, targetPath)
 	if err != nil {

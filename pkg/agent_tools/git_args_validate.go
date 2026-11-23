@@ -81,7 +81,7 @@ var gitBlocklist = []blockedGitArg{
 	// --git-dir overrides .git directory location
 	flagPrefix("--git-d", "directory escape", "overrides .git directory, potentially writing to arbitrary locations"),
 	// --work-tree overrides working tree directory
-	flagPrefix("--work-t", "directory escape", "overrides working tree, potentially writing files outside workspace"),
+	flagPrefix("--work-t", "directory escape", "overrides working tree, potentially writing files outside project folder"),
 	// --separate-git-dir places .git data in separate directory
 	flagPrefix("--separate-git", "directory escape", "overrides git directory location, potentially writing to arbitrary paths"),
 	// --prefix overrides pathspec prefix
@@ -188,7 +188,7 @@ func ValidateGitArgs(args string) error {
 	for _, field := range strings.Fields(args) {
 		// -C as standalone flag or -C<path> (attached path)
 		if field == "-C" || (len(field) > 2 && strings.HasPrefix(field, "-C")) {
-			return fmt.Errorf("rejected dangerous git flag %q: overrides working directory, bypassing workspace restriction (directory escape)",
+			return fmt.Errorf("rejected dangerous git flag %q: overrides working directory, bypassing project folder restriction (directory escape)",
 				field)
 		}
 	}

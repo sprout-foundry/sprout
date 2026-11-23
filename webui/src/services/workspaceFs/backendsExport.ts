@@ -5,10 +5,10 @@
 export { createMemoryFs } from './memoryFs';
 export { createNativeBridgeFs, detectBridgeCall } from './nativeBridgeFs';
 export { createRestFs } from './restFs';
-export { cloneRepo, listRepos as listWorkspaceRepos, removeRepo, repoDir, parseRepoRef } from './workspaceGit';
+export { cloneRepo, listRepos as listProjectFolderRepos, removeRepo, repoDir, parseRepoRef } from './workspaceGit';
 export type { CloneProgress, CloneOpts, CloneResult } from './workspaceGit';
-export { getWorkspaceFs } from './index';
-export { isWorkspaceFs, normalizeFsPath, WRITE_BATCH_CAP } from './types';
+export { getProjectFolderFs } from './index';
+export { isProjectFolderFs, normalizeFsPath, WRITE_BATCH_CAP } from './types';
 export type {
   BatchResult,
   FsEntry,
@@ -17,6 +17,6 @@ export type {
   ListResult,
   ReadResult,
   StatResult,
-  WorkspaceFs,
+  ProjectFolderFs,
   WriteEntry,
 } from './types';

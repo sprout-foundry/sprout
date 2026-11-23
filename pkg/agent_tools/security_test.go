@@ -159,8 +159,8 @@ func TestClassifyShellCommandSafe(t *testing.T) {
 		{"pip uninstall", "pip uninstall requests", SecuritySafe},
 		{"npm install", "npm install", SecuritySafe},
 		{"perl -pi", "perl -pi -e 's/old/new/' file.go", SecuritySafe},
-		{"chmod workspace", "chmod 755 script.sh", SecuritySafe},
-		{"chown workspace", "chown user:group file.txt", SecuritySafe},
+		{"chmod project folder", "chmod 755 script.sh", SecuritySafe},
+		{"chown project folder", "chown user:group file.txt", SecuritySafe},
 		{
 			"readonly for-loop with command substitution",
 			`for f in $(find . -name "*.json"); do echo "Checking $f..."; python3 -m json.tool "$f" > /dev/null 2>&1 && echo "  Valid JSON" || echo "  INVALID JSON"; done`,
@@ -315,7 +315,7 @@ func TestClassifyWriteOperation(t *testing.T) {
 		path     string
 		expected SecurityRisk
 	}{
-		{"safe workspace", "src/main.go", SecuritySafe},
+		{"safe project folder", "src/main.go", SecuritySafe},
 		{"safe tmp", "/tmp/test.txt", SecuritySafe},
 		{"safe tmp dir", "/tmp/", SecuritySafe},
 		{"critical /etc/shadow", "/etc/shadow", SecurityDangerous},
@@ -537,7 +537,7 @@ func TestNewCautionPatterns(t *testing.T) {
 		{"docker kill", "docker kill container", SecurityCaution},
 		{"docker rmi", "docker rmi image", SecurityCaution},
 		{"docker volume rm", "docker volume rm vol", SecurityCaution},
-		// output redirection to workspace files
+		// output redirection to project folder files
 		{"redirect to file", "echo hello > output.txt", SecurityCaution},
 		{"append to file", "echo hello >> output.txt", SecurityCaution},
 		// git rebase (history-rewriting)
@@ -626,8 +626,8 @@ func TestRiskTypeClassification(t *testing.T) {
 	}
 }
 
-// TestPathIsWorkspaceSafe tests path validation for workspace operations
-func TestPathIsWorkspaceSafe(t *testing.T) {
+// TestPathIsProjectFolderSafe tests path validation for project folder operations
+func TestPathIsProjectFolderSafe(t *testing.T) {
 	tests := []struct {
 		name     string
 		path     string
@@ -681,9 +681,9 @@ func TestPathIsWorkspaceSafe(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := pathIsWorkspaceSafe(tt.path)
+			result := pathIsProjectFolderSafe(tt.path)
 			if result != tt.expected {
-				t.Errorf("pathIsWorkspaceSafe(%q) = %v, want %v", tt.path, result, tt.expected)
+				t.Errorf("pathIsProjectFolderSafe(%q) = %v, want %v", tt.path, result, tt.expected)
 			}
 		})
 	}
@@ -825,7 +825,7 @@ func TestSystemPathTargetEdgeCases(t *testing.T) {
 	}{
 		// strip command with system path
 		{"strip system file", "strip /bin/bash", SecurityDangerous},
-		{"strip workspace file", "strip binary", SecuritySafe},
+		{"strip project folder file", "strip binary", SecuritySafe},
 		{"strip /usr/bin", "strip /usr/bin/app", SecurityDangerous},
 		// chmod --reference bypass
 		{"chmod reference system file", "chmod --reference=/etc/shadow target.txt", SecurityDangerous},

@@ -277,7 +277,7 @@ const sentinelEventTypes = [
   'delegated_task_outcome',
   'metrics_update',
   'file_content_changed',
-  'workspace_patch',
+  'project_folder_patch',
   'session_changed',
   'rate_limited',
   'compact_started',

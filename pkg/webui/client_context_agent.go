@@ -82,7 +82,7 @@ func (ws *ReactWebServer) setAgentStateForClientChat(clientID, chatID string, sn
 
 // buildWebUIAgent constructs a client or chat agent. A variable so tests can
 // observe (and stub) agent builds.
-var buildWebUIAgent = agent.NewAgentWithLayersInWorkspace
+var buildWebUIAgent = agent.NewAgentWithLayersInProjectFolder
 
 func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) {
 	clientID = strings.TrimSpace(clientID)
@@ -93,12 +93,12 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 	ws.mutex.RLock()
 	if ctx := ws.clientContexts[clientID]; ctx != nil && ctx.Agent != nil {
 		agentInst := ctx.Agent
-		workspaceRoot := ctx.WorkspaceRoot
+		projectFolder := ctx.ProjectFolder
 		terminal := ctx.Terminal
 		userID := ctx.UserID // Capture before releasing lock
 		ws.mutex.RUnlock()
 		rearmWebUIAgent(agentInst, ws, agentSetupConfig{
-			WorkspaceRoot: workspaceRoot,
+			ProjectFolder: projectFolder,
 			ClientID:      clientID,
 			UserID:        userID,
 		})
@@ -117,10 +117,10 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 				userID := ctx.UserID // Capture before releasing lock
 				cs.mu.Unlock()
 				ctx.Agent = agentInst // cache for next time
-				workspaceRoot := ctx.WorkspaceRoot
+				projectFolder := ctx.ProjectFolder
 				ws.mutex.RUnlock()
 				rearmWebUIAgent(agentInst, ws, agentSetupConfig{
-					WorkspaceRoot: workspaceRoot,
+					ProjectFolder: projectFolder,
 					ClientID:      clientID,
 					UserID:        userID,
 				})
@@ -138,12 +138,12 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 	ctx := ws.getOrCreateClientContextLocked(clientID)
 	if ctx.Agent != nil {
 		agentInst := ctx.Agent
-		workspaceRoot := ctx.WorkspaceRoot
+		projectFolder := ctx.ProjectFolder
 		terminal := ctx.Terminal
 		userID := ctx.UserID // Capture before releasing lock
 		ws.mutex.Unlock()
 		rearmWebUIAgent(agentInst, ws, agentSetupConfig{
-			WorkspaceRoot: workspaceRoot,
+			ProjectFolder: projectFolder,
 			ClientID:      clientID,
 			UserID:        userID,
 		})
@@ -178,7 +178,7 @@ func (ws *ReactWebServer) createClientAgent(clientID string) (*agent.Agent, erro
 		ws.mutex.Unlock()
 		return agentInst, nil
 	}
-	workspaceRoot := ctx.WorkspaceRoot
+	projectFolder := ctx.ProjectFolder
 	snapshot := append([]byte(nil), ctx.AgentState...)
 	userID := ctx.UserID // Capture before releasing lock
 	ws.mutex.Unlock()
@@ -188,43 +188,43 @@ func (ws *ReactWebServer) createClientAgent(clientID string) (*agent.Agent, erro
 	// NOTE: A narrow TOCTOU race exists between this config read and the
 	// config read inside agent.NewAgentWithModel. Acceptable since the worst
 	// case is a single unnecessary retry after the user configures a provider.
-	if !isProviderAvailableInWorkspace(workspaceRoot) {
+	if !isProviderAvailableInProjectFolder(projectFolder) {
 		return nil, ErrNoProviderConfigured
 	}
 
 	var created *agent.Agent
 	var createErr error
 
-	// Compute layered config directories: global + workspace (no session file)
+	// Compute layered config directories: global + project folder (no session file)
 	configBase, err := configuration.GetConfigDir()
 	if err != nil {
 		return nil, fmt.Errorf("get config directory: %w", err)
 	}
 
-	// Workspace config is in {workspaceRoot}/.sprout/ (if workspace exists)
-	var workspaceDir string
-	if workspaceRoot != "" {
-		workspaceDir = configuration.WorkspaceConfigDir(workspaceRoot)
-		// Ensure the workspace .sprout/ dir exists with a .gitignore
+	// Project folder config is in {projectFolder}/.sprout/ (if project folder exists)
+	var projectFolderDir string
+	if projectFolder != "" {
+		projectFolderDir = configuration.ProjectFolderConfigDir(projectFolder)
+		// Ensure the project folder .sprout/ dir exists with a .gitignore
 		// covering personal overrides and state directories.
-		if err := configuration.EnsureWorkspaceConfigDir(workspaceRoot); err != nil {
-			ws.log().Warn("failed to ensure workspace config dir", slog.String("workspace_root", workspaceRoot), slog.Any("err", err))
+		if err := configuration.EnsureProjectFolderConfigDir(projectFolder); err != nil {
+			ws.log().Warn("failed to ensure project folder config dir", slog.String("project_folder", projectFolder), slog.Any("err", err))
 		}
-		// Auto-bootstrap workspace config when opening a git repo that
+		// Auto-bootstrap project folder config when opening a git repo that
 		// doesn't have .sprout/config.json yet. Same logic as
-		// PersistentPreRunE auto-detection, applied at workspace-switch time.
-		gitPath := filepath.Join(workspaceRoot, ".git")
+		// PersistentPreRunE auto-detection, applied at project-folder-switch time.
+		gitPath := filepath.Join(projectFolder, ".git")
 		if info, statErr := os.Stat(gitPath); statErr == nil && info.IsDir() {
-			configPath := filepath.Join(workspaceDir, "config.json")
+			configPath := filepath.Join(projectFolderDir, "config.json")
 			if _, statErr := os.Stat(configPath); os.IsNotExist(statErr) {
-				if err := configuration.BootstrapIsolatedConfig(workspaceDir); err != nil {
-					ws.log().Warn("isolated daemon workspace configuration bootstrap failed", slog.String("workspace_root", workspaceRoot), slog.Any("err", err))
+				if err := configuration.BootstrapIsolatedConfig(projectFolderDir); err != nil {
+					ws.log().Warn("isolated daemon project folder configuration bootstrap failed", slog.String("project_folder", projectFolder), slog.Any("err", err))
 				}
 			}
 		}
 	}
 
-	created, createErr = buildWebUIAgent(configBase, workspaceDir, workspaceRoot, "")
+	created, createErr = buildWebUIAgent(configBase, projectFolderDir, projectFolder, "")
 	if createErr != nil {
 		if errors.Is(createErr, agent.ErrModelNotAvailable) || errors.Is(createErr, agent.ErrProviderNotConfigured) {
 			return nil, createErr
@@ -241,7 +241,7 @@ func (ws *ReactWebServer) createClientAgent(clientID string) (*agent.Agent, erro
 
 	setupWebUIAgent(created, agentSetupConfig{
 		EventBus:      ws.eventBus,
-		WorkspaceRoot: workspaceRoot,
+		ProjectFolder: projectFolder,
 		ClientID:      clientID,
 		ChatID:        chatID,
 		UserID:        userID,
@@ -337,20 +337,20 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 		ws.mutex.RLock()
 		ctx = ws.clientContexts[clientID]
 	}
-	workspaceRoot := ctx.WorkspaceRoot
+	projectFolder := ctx.ProjectFolder
 	eventBus := ws.eventBus
 	terminal := ctx.Terminal
 	userID := ctx.UserID // Capture before releasing lock
 	ws.mutex.RUnlock()
 
-	// Compute layered config directories: global + workspace (no session file)
+	// Compute layered config directories: global + project folder (no session file)
 	configBase, err := configuration.GetConfigDir()
 	if err != nil {
 		return nil, fmt.Errorf("get config directory: %w", err)
 	}
-	var workspaceDir string
-	if workspaceRoot != "" {
-		workspaceDir = configuration.WorkspaceConfigDir(workspaceRoot)
+	var projectFolderDir string
+	if projectFolder != "" {
+		projectFolderDir = configuration.ProjectFolderConfigDir(projectFolder)
 	}
 
 	// In shared mode (CLI + WebUI in the same process), seed the default
@@ -360,12 +360,12 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 	//
 	// SP-136 isolation guarantee: the seed is gated on BOTH
 	// clientID == defaultWebClientID AND chatID == defaultChatID.
-	// Therefore a WebUI session for a different workspace (which uses a
+	// Therefore a WebUI session for a different project folder (which uses a
 	// non-default clientID) never receives the CLI agent.  Furthermore,
 	// even if the CLI agent IS seeded, getOrCreateAgent calls
-	// rearmWebUIAgent which re-sets the workspace root to the context's
-	// WorkspaceRoot — preventing workspace-A agents from leaking into
-	// workspace-B sessions.
+	// rearmWebUIAgent which re-sets the project folder to the context's
+	// ProjectFolder — preventing project-folder-A agents from leaking into
+	// project-folder-B sessions.
 	if ws.IsSharedMode() && clientID == defaultWebClientID && chatID == defaultChatID {
 		if ws.agent != nil && cs.Agent == nil {
 			cs.mu.Lock()
@@ -376,7 +376,7 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 		}
 	}
 
-	agentInst, err := cs.getOrCreateAgent(workspaceRoot, configBase, workspaceDir, eventBus, clientID, userID, ws.withAgentWorkspace)
+	agentInst, err := cs.getOrCreateAgent(projectFolder, configBase, projectFolderDir, eventBus, clientID, userID, ws.withAgentProjectFolder)
 	if err != nil {
 		if errors.Is(err, agent.ErrModelNotAvailable) || errors.Is(err, agent.ErrProviderNotConfigured) {
 			return nil, err

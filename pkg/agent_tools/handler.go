@@ -116,8 +116,8 @@ type ParameterDef struct {
 type ToolEnv struct {
 	// EventBus for publishing events (tool_start, tool_end, etc.)
 	EventBus *events.EventBus
-	// WorkspaceRoot is the working directory root for path resolution
-	WorkspaceRoot string
+	// ProjectFolder is the working directory root for path resolution
+	ProjectFolder string
 	// OutputWriter for writing tool output (stdout, logs, etc.)
 	OutputWriter io.Writer
 	// ApprovalManager for security approvals; nil if approvals are not supported
@@ -125,9 +125,9 @@ type ToolEnv struct {
 	// FileAccessClassifier provides Gate 1's path-tier verdict before
 	// a file operation runs. Nil means no classifier is available.
 	FileAccessClassifier FileAccessClassifier
-	// FileAccessPrompter restores the interactive off-workspace approval
+	// FileAccessPrompter restores the interactive off-project-folder approval
 	// flow for "prompt" verdicts. When set, handlers consult it before
-	// failing with the raw off-workspace error; when nil (no agent
+	// failing with the raw off-project-folder error; when nil (no agent
 	// context, or a surface that cannot prompt), handlers keep the
 	// SP-127 M4 behavior of returning the raw filesystem error.
 	FileAccessPrompter FileAccessPrompter // MaxTokensFunc returns the current token budget limit
@@ -303,7 +303,7 @@ type ToolFuncSet struct {
 	// agent's ChangeTracker. Nil when no tracker is available.
 	TrackFileEdit func(filePath string, originalContent string, newContent string) error
 	// TrackShellCommand records filesystem mutations caused by a shell
-	// command (workspace diff — captures writes AND deletes made outside
+	// command (project folder diff — captures writes AND deletes made outside
 	// the file tools). The closure owns read-only classification, cwd
 	// resolution, and destructive detection. Nil when no tracker.
 	TrackShellCommand func(command string) error
@@ -398,13 +398,13 @@ type ApprovalManager interface {
 // running a file operation. It lives in the tool layer so handlers
 // can classify a path without importing pkg/agent. Nil means no
 // classifier is available (e.g., unit tests).
-// FileAccessPrompter surfaces the interactive off-workspace approval
+// FileAccessPrompter surfaces the interactive off-project-folder approval
 // dialog (WebUI or CLI) for file operations that classified as "prompt".
 // pkg/agent implements it on *Agent by delegating to the shared
 // handleFileSecurityError flow; pkg/agent_tools consumes it without an
 // import cycle.
 type FileAccessPrompter interface {
-	// PromptFileAccess asks the user to approve out-of-workspace access.
+	// PromptFileAccess asks the user to approve out-of-project-folder access.
 	// toolName is the calling tool; filePath is the user-supplied path;
 	// resolvedPath is the canonical target ("" when unresolvable); mode
 	// is "read" or "write". Returns a context carrying the security

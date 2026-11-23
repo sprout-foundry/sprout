@@ -60,7 +60,7 @@ func TestPolicyList_Empty(t *testing.T) {
 	assert.NotContains(t, out, "===")
 	assert.Contains(t, out, "User Safe Patterns (0):")
 	assert.Contains(t, out, "User Dangerous Patterns (0):")
-	assert.Contains(t, out, "Workspace Overlay Mode: tighten_only")
+	assert.Contains(t, out, "Project folder Overlay Mode: tighten_only")
 }
 
 func TestPolicyList_WithPatterns(t *testing.T) {

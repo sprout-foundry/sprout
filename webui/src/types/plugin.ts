@@ -11,7 +11,7 @@ import type { ComponentType } from 'react';
 // ── Plugin Views ──────────────────────────────────────────────────────
 
 /**
- * A main view that takes over the editor workspace area.
+ * A main view that takes over the editor project folder area.
  * Registered by plugins to provide full-page experiences (e.g. dashboard, billing).
  */
 export interface PluginView {
@@ -70,7 +70,7 @@ export interface PluginSettingsTab {
 /**
  * A plugin definition. Plugins register views, panels, and settings tabs.
  * The platform repo will implement a plugin that registers dashboard,
- * billing, tasks, workspaces, and team as views.
+ * billing, tasks, project folders, and team as views.
  */
 export interface SproutPlugin {
   /** Unique plugin ID */

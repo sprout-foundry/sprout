@@ -59,7 +59,7 @@ func TestPastedImageFiles_LeavesOtherTextAlone(t *testing.T) {
 	}
 }
 
-func TestAttachPastedImageFile_CopiesIntoWorkspace(t *testing.T) {
+func TestAttachPastedImageFile_CopiesIntoProjectFolder(t *testing.T) {
 	src := writeFile(t, filepath.Join(t.TempDir(), "Screenshot\u202fPM.png"), pngHeader)
 	t.Chdir(t.TempDir())
 

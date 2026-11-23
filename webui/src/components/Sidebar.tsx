@@ -93,7 +93,7 @@ interface SidebarProps {
   onSidebarToggle?: () => void;
   /** Conversations listed in the layered layout's project sidebar. */
   conversations?: ProjectNavConversations;
-  /** Workspace modes offered for the current workspace, in switcher order. */
+  /** Workspace modes offered for the current project folder, in switcher order. */
   modes?: WorkspaceMode[];
   /** The active mode's id. */
   activeModeId?: WorkspaceModeId;
@@ -198,7 +198,7 @@ function Sidebar({
     git: supportsGit,
     workspaceSwitching: supportsWorkspaceSwitching,
   } = useHostCapabilities();
-  const staticWorkspaceLabel = repoSlug(useActiveRepoURL()) ?? copy('workspace.none');
+  const staticProjectFolderLabel = repoSlug(useActiveRepoURL()) ?? copy('workspace.none');
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
   // UI Size: hook mount applies data-ui-scale to <html> on boot
   // (persisted choice, tablet heuristic on first run) and re-applies on change.
@@ -328,7 +328,7 @@ function Sidebar({
 
   /**
    * Mode selection from the top-left switcher. Optional because Sidebar is also
-   * rendered in hosts that don't own workspace state (tests, storybook-style
+   * rendered in hosts that don't own project folder state (tests, storybook-style
    * harnesses); without a handler the switcher simply doesn't render options
    * that do nothing.
    */
@@ -341,7 +341,7 @@ function Sidebar({
 
   /**
    * Section selection from the active mode's rail. Optional for the same
-   * reason as `selectMode`: Sidebar is rendered in hosts without workspace
+   * reason as `selectMode`: Sidebar is rendered in hosts without project folder
    * state, and a rail without a handler is a read-only indicator there.
    */
   const handleModeSectionChange = useCallback(
@@ -567,9 +567,9 @@ function Sidebar({
                       sidebarCollapsed={effectiveSidebarCollapsed}
                     />
                   ) : (
-                    <div className="sidebar-static-workspace" title={staticWorkspaceLabel}>
+                    <div className="sidebar-static-workspace" title={staticProjectFolderLabel}>
                       <FolderOpen size={14} className="sidebar-static-workspace-icon" />
-                      <span className="sidebar-static-workspace-label">{staticWorkspaceLabel}</span>
+                      <span className="sidebar-static-workspace-label">{staticProjectFolderLabel}</span>
                     </div>
                   )}
                 </>

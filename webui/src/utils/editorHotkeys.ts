@@ -775,7 +775,7 @@ export function getEditorKeymap(hotkeyEntries: HotkeyEntry[] | null, actions: Ed
     }),
   );
 
-  // Go to workspace symbol — fallback Mod-t (Ctrl+T / Cmd+T) matching the preset definition.
+  // Go to project folder symbol — fallback Mod-t (Ctrl+T / Cmd+T) matching the preset definition.
   const gotoWorkspaceSymbolBindings = bindingsFor('editor_workspace_symbol', () => {
     actions.onGoToWorkspaceSymbol?.();
     return true;

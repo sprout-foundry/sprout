@@ -21,9 +21,9 @@ func setupProxyChatTestServer(t *testing.T) *ReactWebServer {
 	t.Helper()
 
 	daemonRoot := t.TempDir()
-	workspaceRoot := filepath.Join(daemonRoot, "workspace")
-	if err := os.MkdirAll(workspaceRoot, 0o755); err != nil {
-		t.Fatalf("mkdir workspace: %v", err)
+	projectFolder := filepath.Join(daemonRoot, "workspace")
+	if err := os.MkdirAll(projectFolder, 0o755); err != nil {
+		t.Fatalf("mkdir project folder: %v", err)
 	}
 
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
@@ -31,14 +31,14 @@ func setupProxyChatTestServer(t *testing.T) *ReactWebServer {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.workspaceRoot = workspaceRoot
+	ws.projectFolder = projectFolder
 	ws.terminalManager = NewTerminalManager(daemonRoot)
 	ws.fileConsents = newFileConsentManager()
 
 	// Pre-register client context
 	clientCtx := ws.getOrCreateClientContextLocked(testProxyChatClientID)
-	clientCtx.WorkspaceRoot = workspaceRoot
-	clientCtx.Terminal = NewTerminalManager(workspaceRoot)
+	clientCtx.ProjectFolder = projectFolder
+	clientCtx.Terminal = NewTerminalManager(projectFolder)
 	clientCtx.FileConsents = newFileConsentManager()
 
 	return ws

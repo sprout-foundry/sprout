@@ -16,7 +16,7 @@ import (
 // lifetime context that keeps background watchers running,
 // and stops MCP child processes. An agent whose reference is merely cleared
 // stays reachable from its own goroutines, so it keeps running — and keeps
-// writing to the workspace index — for the life of the daemon.
+// writing to the project folder index — for the life of the daemon.
 //
 // Callers pass every agent they are releasing; duplicates and nils are
 // filtered, because ctx.Agent commonly aliases a chat session's agent and

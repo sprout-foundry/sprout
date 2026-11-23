@@ -336,13 +336,13 @@ async function runPull(_args: string[]): Promise<ShellGitResult> {
   return ok('Already up to date.\n');
 }
 
-/** git init — initialize a repository in the workspace. */
+/** git init — initialize a repository in the project folder. */
 async function runInit(_args: string[]): Promise<ShellGitResult> {
   await gitInit();
   return ok(`Initialized empty Git repository\n`);
 }
 
-/** git clone <url> [dir] — clone a repository into the workspace. */
+/** git clone <url> [dir] — clone a repository into the project folder. */
 async function runClone(args: string[]): Promise<ShellGitResult> {
   const url = args.find((a) => !a.startsWith('-'));
   if (!url) return fail('fatal: repository URL not given\n', 128);

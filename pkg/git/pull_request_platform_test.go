@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// platformEnv makes the test process look like a platform workspace whose
+// platformEnv makes the test process look like a platform project folder whose
 // platform API is srv.
 func platformEnv(t *testing.T, srv *httptest.Server) {
 	t.Setenv("PLATFORM_API_URL", srv.URL)
@@ -40,7 +40,7 @@ func TestCreatePullRequest_ViaPlatform_AnyHost(t *testing.T) {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
 		if r.Header.Get("X-Workspace-Token") != "ws-secret" {
-			t.Errorf("workspace token = %q", r.Header.Get("X-Workspace-Token"))
+			t.Errorf("project folder token = %q", r.Header.Get("X-Workspace-Token"))
 		}
 		_ = json.NewDecoder(r.Body).Decode(&got)
 		w.WriteHeader(http.StatusCreated)

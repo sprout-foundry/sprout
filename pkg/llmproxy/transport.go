@@ -10,7 +10,7 @@
 // it's a no-op when no endpoint is configured.
 //
 // See roadmap/SP-045-wasm-feature-parity.md §"Tier 2b" for the broader
-// design and roadmap/SP-046-workspace-sync-model.md for the related sync
+// design and roadmap/SP-046-project-folder-sync-model.md for the related sync
 // transport.
 package llmproxy
 

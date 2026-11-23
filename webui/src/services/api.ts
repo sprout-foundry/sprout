@@ -28,7 +28,7 @@ export type {
   SSHBrowseEntry,
   SSHOpenErrorPayload,
   SSHLaunchStatus,
-  WorkspaceResponse,
+  ProjectFolderResponse,
   ProvidersResponse,
   SproutSettings,
   HotkeyEntry,
@@ -50,5 +50,5 @@ export type {
   InstantiateStarterResponse,
 } from './api/types';
 
-// Re-export SSHWorkspaceOpenError as a value for backward compatibility
-export { SSHWorkspaceOpenError } from './api/types';
+// Re-export SSHProjectFolderOpenError as a value for backward compatibility
+export { SSHProjectFolderOpenError } from './api/types';

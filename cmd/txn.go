@@ -36,7 +36,7 @@ var (
 
 var txnStatusCmd = &cobra.Command{
 	Use:   "txn-status",
-	Short: "Report workspace tree state (dirty/untracked/deleted files) as JSON",
+	Short: "Report project folder tree state (dirty/untracked/deleted files) as JSON",
 	Long: `Print the ETH-2 transaction status JSON for a repository.
 
 This is the preflight half of a transaction: which tracked files are dirty,

@@ -100,7 +100,7 @@ func (h *writeFileHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 	}
 	// "prompt" → interactive approval; on deny fall through to the raw error.
 	if decision == "prompt" {
-		if ctx2, approved := promptForOffWorkspacePath(ctx, env, "write_file", path, resolvedWrite, "write"); approved {
+		if ctx2, approved := promptForOffProjectFolderPath(ctx, env, "write_file", path, resolvedWrite, "write"); approved {
 			ctx = ctx2
 		}
 	}

@@ -7,7 +7,7 @@ import (
 )
 
 // handleAPIProxyStats handles GET /api/proxy/stats — Foundry proxy stats endpoint.
-// It returns the same stats payload used by the workspace stats API but is
+// It returns the same stats payload used by the project folder stats API but is
 // exposed under the proxy path for cloud-mode CloudAdapter consumers.
 func (ws *ReactWebServer) handleAPIProxyStats(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodGet) {

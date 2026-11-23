@@ -23,5 +23,5 @@ func (a *Agent) PromptFileAccess(ctx context.Context, toolName, filePath, resolv
 	} else {
 		sentinel = filesystem.ErrOutsideWorkingDirectory
 	}
-	return handleFileSecurityError(ctx, a, toolName, filePath, resolvedPath, fmt.Errorf("access outside workspace: %w", sentinel))
+	return handleFileSecurityError(ctx, a, toolName, filePath, resolvedPath, fmt.Errorf("access outside project folder: %w", sentinel))
 }

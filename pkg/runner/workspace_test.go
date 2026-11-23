@@ -8,23 +8,23 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
-func TestWorkspaceEnvAppliesTheTaskModelForEveryProvider(t *testing.T) {
+func TestDevSpaceEnvAppliesTheTaskModelForEveryProvider(t *testing.T) {
 	cases := []struct {
 		name         string
-		task         WorkspaceTask
+		task         DevSpaceTask
 		wantModel    string
 		wantProvider string
 	}{
-		{"public provider", WorkspaceTask{LLMProvider: "openai", LLMKey: "sk", Model: " gpt-test "}, "gpt-test", "openai"},
-		{"gateway", WorkspaceTask{LLMProvider: "gateway", LLMKey: "gw", Model: "m1"}, "m1", GatewayProviderName},
-		{"model without key", WorkspaceTask{LLMProvider: "deepseek", Model: "deepseek-chat"}, "deepseek-chat", "deepseek"},
-		{"unknown provider is not pinned", WorkspaceTask{LLMProvider: "nope", LLMKey: "k", Model: "m2"}, "m2", ""},
-		{"no model leaves the daemon default", WorkspaceTask{LLMProvider: "openai", LLMKey: "sk"}, "", ""},
+		{"public provider", DevSpaceTask{LLMProvider: "openai", LLMKey: "sk", Model: " gpt-test "}, "gpt-test", "openai"},
+		{"gateway", DevSpaceTask{LLMProvider: "gateway", LLMKey: "gw", Model: "m1"}, "m1", GatewayProviderName},
+		{"model without key", DevSpaceTask{LLMProvider: "deepseek", Model: "deepseek-chat"}, "deepseek-chat", "deepseek"},
+		{"unknown provider is not pinned", DevSpaceTask{LLMProvider: "nope", LLMKey: "k", Model: "m2"}, "m2", ""},
+		{"no model leaves the daemon default", DevSpaceTask{LLMProvider: "openai", LLMKey: "sk"}, "", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			tc.task.WorkspaceID = "ws-1"
-			env := workspaceEnv(tc.task)
+			tc.task.DevSpaceID = "ws-1"
+			env := devSpaceEnv(tc.task)
 			if env["SPROUT_MODEL"] != tc.wantModel {
 				t.Errorf("SPROUT_MODEL = %q, want %q", env["SPROUT_MODEL"], tc.wantModel)
 			}
@@ -38,7 +38,7 @@ func TestWorkspaceEnvAppliesTheTaskModelForEveryProvider(t *testing.T) {
 // The daemon resolves its starting model with configuration.ResolveProviderModel;
 // the env the runner sets must win over the config's provider default there.
 func TestTaskModelTakesEffectInTheDaemonsResolution(t *testing.T) {
-	env := workspaceEnv(WorkspaceTask{WorkspaceID: "ws-1", LLMProvider: "openai", LLMKey: "sk", Model: "task-model"})
+	env := devSpaceEnv(DevSpaceTask{DevSpaceID: "ws-1", LLMProvider: "openai", LLMKey: "sk", Model: "task-model"})
 	t.Setenv("SPROUT_PROVIDER", env["SPROUT_PROVIDER"])
 	t.Setenv("SPROUT_MODEL", env["SPROUT_MODEL"])
 	provider, model, err := configuration.ResolveProviderModel(configuration.NewConfig(), "", "")
@@ -50,9 +50,9 @@ func TestTaskModelTakesEffectInTheDaemonsResolution(t *testing.T) {
 	}
 }
 
-func TestWorkspaceEnvUserVarsNeverOverrideTheRunner(t *testing.T) {
-	env := workspaceEnv(WorkspaceTask{
-		WorkspaceID: "ws-1", RepoURL: "https://github.com/o/r", TxnSecret: "s3cret",
+func TestDevSpaceEnvUserVarsNeverOverrideTheRunner(t *testing.T) {
+	env := devSpaceEnv(DevSpaceTask{
+		DevSpaceID: "ws-1", RepoURL: "https://github.com/o/r", TxnSecret: "s3cret",
 		GitToken: "gh-tok", LLMProvider: "openai", LLMKey: "sk-llm",
 		UserEnv: map[string]string{
 			"NPM_TOKEN":         "npm-1",
@@ -113,14 +113,14 @@ func TestGitAuthEnvUser(t *testing.T) {
 	}
 }
 
-func TestWorkspaceDirRejectsPathTricks(t *testing.T) {
+func TestDevSpaceDirRejectsPathTricks(t *testing.T) {
 	t.Setenv("SPROUT_STATE_DIR", t.TempDir())
 	for _, bad := range []string{"", "..", "../x", "a/b", `a\b`, ".hidden", strings.Repeat("a", 200)} {
-		if _, err := workspaceDir(bad); err == nil {
-			t.Errorf("workspaceDir(%q) must be rejected", bad)
+		if _, err := devSpaceDir(bad); err == nil {
+			t.Errorf("projectFolderDir(%q) must be rejected", bad)
 		}
 	}
-	if _, err := workspaceDir("6f1c2a3e-1b2c-4d5e-8f90-123456789abc"); err != nil {
+	if _, err := devSpaceDir("6f1c2a3e-1b2c-4d5e-8f90-123456789abc"); err != nil {
 		t.Errorf("a UUID must be accepted: %v", err)
 	}
 }

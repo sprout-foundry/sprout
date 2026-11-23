@@ -2,9 +2,9 @@
 
 package webui
 
-// workspace_lifecycle.go — the workspace lifecycle surface the hosting platform drives
+// workspace_lifecycle.go — the dev space lifecycle surface the hosting platform drives
 // (docs: workspace lifecycle contract §1). The daemon is the source of truth
-// for "is this workspace busy, and when was it last used":
+// for "is this dev space busy, and when was it last used":
 //
 //   - GET  /api/lifecycle/activity      busy state + last user/agent activity
 //   - POST /api/lifecycle/prepare-stop  drain, persist and checkpoint before a stop
@@ -34,9 +34,9 @@ const (
 	busyReasonCheckpoint = "checkpoint"
 )
 
-// errCodeWorkspaceStopping is the error code a query gets once prepare-stop
+// errCodeDevSpaceStopping is the error code a query gets once prepare-stop
 // has run and the daemon no longer accepts work.
-const errCodeWorkspaceStopping = "workspace_stopping"
+const errCodeDevSpaceStopping = "dev_space_stopping"
 
 // lifecycleState is the daemon's activity and stop bookkeeping. The zero
 // value is ready to use.
@@ -213,10 +213,10 @@ func (ws *ReactWebServer) countActiveQueries() int {
 	return len(ws.runningChats())
 }
 
-// lifecycleWorkspaceRoots returns the distinct workspace roots the daemon
-// serves: its launch workspace, every client's project and current root, and
+// lifecycleProjectFolders returns the distinct project folders the daemon
+// serves: its launch project folder, every client's project and current root, and
 // every chat worktree.
-func (ws *ReactWebServer) lifecycleWorkspaceRoots() []string {
+func (ws *ReactWebServer) lifecycleProjectFolders() []string {
 	ws.mutex.RLock()
 	defer ws.mutex.RUnlock()
 	seen := map[string]bool{}
@@ -229,13 +229,13 @@ func (ws *ReactWebServer) lifecycleWorkspaceRoots() []string {
 		seen[root] = true
 		roots = append(roots, root)
 	}
-	add(ws.workspaceRoot)
+	add(ws.projectFolder)
 	for _, ctx := range ws.clientContexts {
 		if ctx == nil {
 			continue
 		}
 		add(ctx.ProjectRoot)
-		add(ctx.WorkspaceRoot)
+		add(ctx.ProjectFolder)
 		for _, cs := range ctx.ChatSessions {
 			if cs != nil {
 				add(cs.getWorktreePath())
@@ -246,9 +246,9 @@ func (ws *ReactWebServer) lifecycleWorkspaceRoots() []string {
 }
 
 // hasRunningAutomation reports whether an automate workflow process started
-// from any served workspace is still alive.
+// from any served project folder is still alive.
 func (ws *ReactWebServer) hasRunningAutomation() bool {
-	for _, root := range ws.lifecycleWorkspaceRoots() {
+	for _, root := range ws.lifecycleProjectFolders() {
 		sessions, err := automate.ListSessionFiles(root + "/.sprout")
 		if err != nil {
 			continue
@@ -312,13 +312,13 @@ func (tm *TerminalManager) runningBackgroundCount() int {
 	return n
 }
 
-// publishWorkspaceStopping relays a workspace_stopping warning to every
+// publishDevSpaceStopping relays a workspace_stopping warning to every
 // connected client.
-func (ws *ReactWebServer) publishWorkspaceStopping(reason string, deadlineSeconds int) {
+func (ws *ReactWebServer) publishDevSpaceStopping(reason string, deadlineSeconds int) {
 	if ws.eventBus == nil {
 		return
 	}
-	ws.eventBus.Publish(events.EventTypeWorkspaceStopping, map[string]interface{}{
+	ws.eventBus.Publish(events.EventTypeDevSpaceStopping, map[string]interface{}{
 		"reason":           reason,
 		"at":               time.Now().UTC().Format(time.RFC3339),
 		"deadline_seconds": deadlineSeconds,
@@ -359,12 +359,12 @@ func (ws *ReactWebServer) handleAPILifecycleNotice(w http.ResponseWriter, r *htt
 	if reason == "" {
 		reason = "user"
 	}
-	ws.publishWorkspaceStopping(reason, req.DeadlineSeconds)
+	ws.publishDevSpaceStopping(reason, req.DeadlineSeconds)
 	writeJSON(w, http.StatusOK, map[string]interface{}{"relayed": true})
 }
 
 // userEditPathPrefixes are the mutating API surfaces a person drives from
-// the UI (editor saves, tree operations, browser→workspace file sync, git
+// the UI (editor saves, tree operations, browser→project folder file sync, git
 // actions, terminal management, chat sends).
 var userEditPathPrefixes = []string{
 	"/api/file", "/api/create", "/api/delete", "/api/rename", "/api/upload/",

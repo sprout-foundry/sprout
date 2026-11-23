@@ -30,7 +30,7 @@ func (ws *ReactWebServer) handleAPISessions(w http.ResponseWriter, r *http.Reque
 
 	if scope == "current" {
 		// Get sessions for current working directory
-		workingDir := ws.getWorkspaceRootForRequest(r)
+		workingDir := ws.getProjectFolderForRequest(r)
 		sessionInfos, err := agent.ListSessionsWithTimestampsScoped(workingDir)
 		if err != nil {
 			ws.log().Error("failed to list scoped sessions", slog.Any("err", err))
@@ -144,15 +144,15 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 	if chatID == "" {
 		chatID = ws.resolveChatID(r, clientID)
 	}
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 
 	var state *agent.ConversationState
 	recovered := false
-	if baseState, _, journalErr := agent.LoadStateRecoverable(sessionID, workspaceRoot); journalErr == nil {
+	if baseState, _, journalErr := agent.LoadStateRecoverable(sessionID, projectFolder); journalErr == nil {
 		state = baseState
 		recovered = state.RecoveredFromJournal
 	} else {
-		loaded, loadErr := agent.LoadStateWithoutAgentScoped(sessionID, workspaceRoot)
+		loaded, loadErr := agent.LoadStateWithoutAgentScoped(sessionID, projectFolder)
 		if loadErr != nil {
 			ws.log().Error("failed to load session", slog.String("session_id", sessionID), slog.Any("err", loadErr))
 			writeJSONErr(w, http.StatusBadRequest, "failed_to_load_session", fmt.Sprintf("Failed to load session: %v", loadErr))
@@ -186,7 +186,7 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 	ws.setAgentStateForClientChat(clientID, chatID, stateData)
 	if chatAgent, err := ws.getChatAgent(clientID, chatID); err == nil && chatAgent != nil {
 		_ = chatAgent.ImportState(stateData)
-		chatAgent.SetWorkspaceRoot(workspaceRoot)
+		chatAgent.SetProjectFolder(projectFolder)
 		if recovered {
 			chatAgent.NoteRecoveredSession()
 		}

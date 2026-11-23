@@ -112,12 +112,12 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 	}
 	systemPrompt = r.appendPreambleForPersona(systemPrompt, opts.Persona)
 
-	// Determine effective workspace root
-	effectiveWorkspaceRoot := r.shared.WorkspaceRoot
+	// Determine effective project folder
+	effectiveProjectFolder := r.shared.ProjectFolder
 	if opts.WorkingDir != "" {
-		effectiveWorkspaceRoot = opts.WorkingDir
+		effectiveProjectFolder = opts.WorkingDir
 	}
-	systemPrompt += subagentConventionsSection(effectiveWorkspaceRoot)
+	systemPrompt += subagentConventionsSection(effectiveProjectFolder)
 
 	// Create interrupt context derived from the parent's context so
 	// cancellation (Ctrl+C, timeout, runCtx cancel) propagates into the
@@ -159,7 +159,7 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 		interruptCtx:        interruptCtx,
 		interruptCancel:     interruptCancel,
 		parentInterruptCtx:  parentCtx, // preserve parent link across resetInterruptForNewQuery/ClearInterrupt
-		workspaceRoot:       effectiveWorkspaceRoot,
+		projectFolder:       effectiveProjectFolder,
 		state:               stateMgr,
 		output:              outputMgr,
 		security:            securityMgr,

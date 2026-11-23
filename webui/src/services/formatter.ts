@@ -90,7 +90,7 @@ const DEFAULT_OPTIONS = {
   printWidth: 80,
 };
 
-/** Cached Prettier config (single entry — the backend resolves from workspace root). */
+/** Cached Prettier config (single entry — the backend resolves from project folder). */
 let cachedConfig: Record<string, unknown> | null = null;
 
 /** Prettier config fetcher function - set by the consumer (formatter.ts doesn't directly import api) */
@@ -106,7 +106,7 @@ export function setConfigFetcher(fetcher: (filePath: string) => Promise<Record<s
 
 /**
  * Fetch and cache Prettier config.
- * The backend resolves config from the workspace root, so the result is the
+ * The backend resolves config from the project folder, so the result is the
  * same regardless of which file path is passed. We cache a single entry.
  */
 async function fetchAndCacheConfig(filePath: string): Promise<Record<string, unknown>> {

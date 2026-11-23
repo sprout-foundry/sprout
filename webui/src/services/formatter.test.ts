@@ -594,7 +594,7 @@ describe('formatCodeWithConfigDiscovery — config discovery', () => {
     await formatCodeWithConfigDiscovery('input1', 'src/components/a.js');
     await formatCodeWithConfigDiscovery('input2', 'lib/utils/b.ts');
 
-    // Should only fetch config once (backend resolves from workspace root)
+    // Should only fetch config once (backend resolves from project folder)
     expect(mockFetcher).toHaveBeenCalledTimes(1);
   });
 

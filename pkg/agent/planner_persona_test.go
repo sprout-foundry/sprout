@@ -16,13 +16,13 @@ import (
 const plannerPromptPath = "pkg/agent/prompts/subagent_prompts/planner.md"
 
 // newPlannerAgent returns a test agent with the planner persona active and a
-// fresh temp workspace root.
+// fresh temp project folder.
 func newPlannerAgent(t *testing.T) (*Agent, string) {
 	t.Helper()
 	agent := newTestAgent(t)
 	t.Cleanup(agent.Shutdown)
 	root := t.TempDir()
-	agent.SetWorkspaceRoot(root)
+	agent.SetProjectFolder(root)
 	if err := agent.ApplyPersona(personas.IDPlanner); err != nil {
 		t.Fatalf("ApplyPersona(planner): %v", err)
 	}
@@ -234,7 +234,7 @@ func TestPlannerPersona_PreExecuteHookEnforces(t *testing.T) {
 func TestPersonaConfinement_UnconfinedPersonaUnaffected(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
-	agent.SetWorkspaceRoot(t.TempDir())
+	agent.SetProjectFolder(t.TempDir())
 	if err := agent.ApplyPersona(personas.IDDesigner); err != nil {
 		t.Fatalf("ApplyPersona(designer): %v", err)
 	}

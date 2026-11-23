@@ -40,8 +40,8 @@ const (
 )
 
 type webClientContext struct {
-	WorkspaceRoot string
-	// ProjectRoot is the workspace the user selected. WorkspaceRoot follows
+	ProjectFolder string
+	// ProjectRoot is the project folder the user selected. ProjectFolder follows
 	// the active chat into its worktree; chats without one use ProjectRoot.
 	ProjectRoot      string
 	SSHHostAlias     string
@@ -94,15 +94,15 @@ type webClientContext struct {
 	DeletedChats map[string]struct{}
 }
 
-func newWebClientContext(workspaceRoot, sshHostAlias, sshSessionKey, sshLauncherURL, sshHomePath string) *webClientContext {
+func newWebClientContext(projectFolder, sshHostAlias, sshSessionKey, sshLauncherURL, sshHomePath string) *webClientContext {
 	ctx := &webClientContext{
-		WorkspaceRoot:  workspaceRoot,
-		ProjectRoot:    workspaceRoot,
+		ProjectFolder:  projectFolder,
+		ProjectRoot:    projectFolder,
 		SSHHostAlias:   strings.TrimSpace(sshHostAlias),
 		SSHSessionKey:  strings.TrimSpace(sshSessionKey),
 		SSHLauncherURL: strings.TrimSpace(sshLauncherURL),
 		SSHHomePath:    strings.TrimSpace(sshHomePath),
-		Terminal:       NewTerminalManager(workspaceRoot),
+		Terminal:       NewTerminalManager(projectFolder),
 		FileConsents:   newFileConsentManager(),
 		AgentState:     emptyAgentStateSnapshot(),
 		LastSeenAt:     time.Now(),
@@ -222,14 +222,14 @@ func (ws *ReactWebServer) getOrCreateClientContextLocked(clientID string) *webCl
 	// SP-136 isolation invariants (enforced by this function):
 	//   1. clientContexts is keyed by clientID — each browser tab / client
 	//      session gets its own context.
-	//   2. Each webClientContext owns its own WorkspaceRoot, Agent,
-	//      Terminal, FileConsents, and ChatSessions.  When the workspace
-	//      root changes (setClientWorkspaceRoot), old agents are released
+	//   2. Each webClientContext owns its own ProjectFolder, Agent,
+	//      Terminal, FileConsents, and ChatSessions.  When the project folder
+	//      root changes (setClientProjectFolder), old agents are released
 	//      and chat sessions are reset.
-	//   3. Agents are created per-chat via NewAgentWithLayersInWorkspace
-	//      using the workspace-specific config directory
-	//      (configuration.WorkspaceConfigDir(workspaceRoot)), ensuring
-	//      per-workspace config isolation.
+	//   3. Agents are created per-chat via NewAgentWithLayersInProjectFolder
+	//      using the project-folder-specific config directory
+	//      (configuration.ProjectFolderConfigDir(projectFolder)), ensuring
+	//      per-project-folder config isolation.
 	//
 	// EXCEPTIONS (intentional shared state):
 	//   - The defaultWebClientID context shares ws.terminalManager and
@@ -245,7 +245,7 @@ func (ws *ReactWebServer) getOrCreateClientContextLocked(clientID string) *webCl
 	if ctx := ws.clientContexts[clientID]; ctx != nil {
 		ctx.LastSeenAt = time.Now()
 		if ctx.Terminal == nil {
-			ctx.Terminal = NewTerminalManager(ctx.WorkspaceRoot)
+			ctx.Terminal = NewTerminalManager(ctx.ProjectFolder)
 			ws.startTerminalCleanupIfNeeded(ctx.Terminal)
 		}
 		if ctx.FileConsents == nil {
@@ -260,20 +260,20 @@ func (ws *ReactWebServer) getOrCreateClientContextLocked(clientID string) *webCl
 		return ctx
 	}
 
-	// Determine workspace root for the new client context. A context that
-	// selects a workspace and is later evicted (or whose daemon restarted)
-	// must come back in that workspace, not the daemon's launch directory —
+	// Determine project folder for the new client context. A context that
+	// selects a project folder and is later evicted (or whose daemon restarted)
+	// must come back in that project folder, not the daemon's launch directory —
 	// the recreated context owns every new terminal session's cwd, and the
 	// client has no way to know the switch happened.
-	workspaceRoot := ws.workspaceRoot
+	projectFolder := ws.projectFolder
 	if clientID != defaultWebClientID {
-		if remembered := strings.TrimSpace(ws.clientWorkspaces[clientID]); remembered != "" {
+		if remembered := strings.TrimSpace(ws.clientProjectFolders[clientID]); remembered != "" {
 			if info, err := os.Stat(remembered); err == nil && info.IsDir() {
-				workspaceRoot = remembered
-				ws.touchClientWorkspaceLocked(clientID)
-				ws.saveClientWorkspacesLocked()
+				projectFolder = remembered
+				ws.touchClientProjectFolderLocked(clientID)
+				ws.saveClientProjectFoldersLocked()
 			} else {
-				ws.forgetClientWorkspaceLocked(clientID)
+				ws.forgetClientProjectFolderLocked(clientID)
 			}
 		}
 	}
@@ -281,8 +281,8 @@ func (ws *ReactWebServer) getOrCreateClientContextLocked(clientID string) *webCl
 	var ctx *webClientContext
 	if clientID == defaultWebClientID {
 		ctx = &webClientContext{
-			WorkspaceRoot:  workspaceRoot,
-			ProjectRoot:    workspaceRoot,
+			ProjectFolder:  projectFolder,
+			ProjectRoot:    projectFolder,
 			SSHHostAlias:   ws.sshHostAlias,
 			SSHSessionKey:  ws.sshSessionKey,
 			SSHLauncherURL: ws.sshLauncherURL,
@@ -293,7 +293,7 @@ func (ws *ReactWebServer) getOrCreateClientContextLocked(clientID string) *webCl
 			LastSeenAt:     time.Now(),
 		}
 		if ctx.Terminal == nil {
-			ctx.Terminal = NewTerminalManager(ctx.WorkspaceRoot)
+			ctx.Terminal = NewTerminalManager(ctx.ProjectFolder)
 			ws.terminalManager = ctx.Terminal
 			ws.startTerminalCleanupIfNeeded(ctx.Terminal)
 		}
@@ -303,7 +303,7 @@ func (ws *ReactWebServer) getOrCreateClientContextLocked(clientID string) *webCl
 		}
 		ctx.ensureDefaultChatSession()
 	} else {
-		ctx = newWebClientContext(workspaceRoot, ws.sshHostAlias, ws.sshSessionKey, ws.sshLauncherURL, ws.sshHomePath)
+		ctx = newWebClientContext(projectFolder, ws.sshHostAlias, ws.sshSessionKey, ws.sshLauncherURL, ws.sshHomePath)
 		ws.startTerminalCleanupIfNeeded(ctx.Terminal)
 	}
 

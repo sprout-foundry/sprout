@@ -4,7 +4,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { HostProvider } from '../host/HostProvider';
 import { makeTestHost } from '../host/testHost';
-import WorkspaceGateModal from './WorkspaceGateModal';
+import ProjectFolderGateModal from './WorkspaceGateModal';
 
 // A hoisted, mutable flag so the mode mock factory can flip
 // supportsWorkspaceSwitching per test (cloud mode = false).
@@ -23,19 +23,19 @@ vi.mock('../config/mode', () => ({
 vi.mock('./WorkspaceGateModal.css', () => ({}));
 vi.mock('./WorkspaceBrowser.css', () => ({}));
 
-// The inline browser talks to /api/workspace/browse; stub the service so the
+// The inline browser talks to /api/project-folder/browse; stub the service so the
 // modal tests stay offline.
 const browseMock = vi.hoisted(() => vi.fn());
-const setWorkspaceMock = vi.hoisted(() => vi.fn());
-const getWorkspaceMock = vi.hoisted(() => vi.fn());
+const setProjectFolderMock = vi.hoisted(() => vi.fn());
+const getProjectFolderMock = vi.hoisted(() => vi.fn());
 const listStartersMock = vi.hoisted(() => vi.fn());
 const instantiateStarterMock = vi.hoisted(() => vi.fn());
 vi.mock('../services/api', () => ({
   ApiService: {
     getInstance: () => ({
       browseDirectory: browseMock,
-      setWorkspace: setWorkspaceMock,
-      getWorkspace: getWorkspaceMock,
+      setProjectFolder: setProjectFolderMock,
+      getProjectFolder: getProjectFolderMock,
       listStarters: listStartersMock,
       instantiateStarter: instantiateStarterMock,
     }),
@@ -46,27 +46,27 @@ vi.mock('../services/api', () => ({
 // (services/nativeFs). Stub the two helpers so the modal tests never touch
 // window.SproutStudio — the bridge surface itself is covered by the
 // nativeFs unit tests.
-const pickWorkspaceMock = vi.hoisted(() => vi.fn());
-const createWorkspaceMock = vi.hoisted(() => vi.fn());
+const pickProjectFolderMock = vi.hoisted(() => vi.fn());
+const createProjectFolderMock = vi.hoisted(() => vi.fn());
 vi.mock('../services/nativeFs', () => ({
-  pickWorkspaceNative: pickWorkspaceMock,
-  createWorkspaceNative: createWorkspaceMock,
+  pickProjectFolderNative: pickProjectFolderMock,
+  createProjectFolderNative: createProjectFolderMock,
 }));
 
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
 
-const baseWorkspaceInfo = {
+const baseProjectFolderInfo = {
   daemon_root: '/home/alice/.sprout',
-  workspace_root: '/home/alice',
+  project_folder: '/home/alice',
   is_project: false,
   project_markers: [],
-  needs_workspace_selection: true,
-  workspace_is_home: true,
+  needs_project_folder_selection: true,
+  project_folder_is_home: true,
   home_dir: '/home/alice',
   suggested_projects: [{ path: '/home/alice/dev/myapp', name: 'myapp', markers: ['.git'] }],
-  recent_workspaces: [
+  recent_project_folders: [
     {
       path: '/home/alice/dev/old',
       name: 'old',
@@ -87,10 +87,10 @@ let root: ReturnType<typeof createRoot> | null = null;
 beforeEach(() => {
   modeState.cloud = false; // local mode by default
   modeState.studio = false; // desktop variant by default
-  pickWorkspaceMock.mockReset();
-  createWorkspaceMock.mockReset();
-  setWorkspaceMock.mockReset();
-  getWorkspaceMock.mockReset();
+  pickProjectFolderMock.mockReset();
+  createProjectFolderMock.mockReset();
+  setProjectFolderMock.mockReset();
+  getProjectFolderMock.mockReset();
   listStartersMock.mockReset();
   instantiateStarterMock.mockReset();
   container = document.createElement('div');
@@ -113,8 +113,8 @@ afterEach(() => {
 /** Render the modal with default props (local mode). */
 function renderModal(overrides: Record<string, unknown> = {}) {
   const props = {
-    workspaceInfo: baseWorkspaceInfo,
-    onSelectWorkspace: vi.fn(),
+    projectFolderInfo: baseProjectFolderInfo,
+    onSelectProjectFolder: vi.fn(),
     onConsentHome: vi.fn(),
     ...overrides,
   };
@@ -129,7 +129,7 @@ function renderModal(overrides: Record<string, unknown> = {}) {
     root = createRoot(container!);
     root.render(
       <HostProvider host={host}>
-        <WorkspaceGateModal {...props} />
+        <ProjectFolderGateModal {...props} />
       </HostProvider>,
     );
   });
@@ -199,7 +199,7 @@ function stubReload(): ReturnType<typeof vi.fn> {
 // ---------------------------------------------------------------------------
 
 describe('WorkspaceGateModal', () => {
-  it('renders the blocking overlay when needs_workspace_selection && workspace_is_home', () => {
+  it('renders the blocking overlay when needs_project_folder_selection && project_folder_is_home', () => {
     renderModal();
     expect(container!.querySelector('[data-testid="workspace-gate-modal"]')).not.toBeNull();
   });
@@ -207,7 +207,7 @@ describe('WorkspaceGateModal', () => {
   it('renders the title and warning subtitle', () => {
     renderModal();
     const text = container!.textContent ?? '';
-    expect(text).toMatch(/select a workspace/i);
+    expect(text).toMatch(/select a project folder/i);
     expect(text).toContain('home directory');
   });
 
@@ -244,7 +244,7 @@ describe('WorkspaceGateModal', () => {
 
   it('surfaces an inline error when a workspace selection rejects', async () => {
     const props = renderModal({
-      onSelectWorkspace: vi.fn().mockRejectedValue(new Error('query_in_progress')),
+      onSelectProjectFolder: vi.fn().mockRejectedValue(new Error('query_in_progress')),
     });
     const row = findRowByPath('~/dev/myapp');
     await act(async () => {
@@ -253,20 +253,20 @@ describe('WorkspaceGateModal', () => {
     const err = container!.querySelector('[data-testid="workspace-gate-error"]');
     expect(err).not.toBeNull();
     expect(err!.textContent).toContain('query_in_progress');
-    expect(props.onSelectWorkspace).toHaveBeenCalledTimes(1);
+    expect(props.onSelectProjectFolder).toHaveBeenCalledTimes(1);
   });
 
   it('calls onSelectWorkspace when a project row is clicked', () => {
     const props = renderModal();
-    // WorkspacePicker expands the home prefix (~/dev/myapp) for display,
+    // ProjectFolderPicker expands the home prefix (~/dev/myapp) for display,
     // but onSelect receives the raw path (/home/alice/dev/myapp).
     const row = findRowByPath('~/dev/myapp');
     expect(row).not.toBeNull();
     act(() => {
       row!.click();
     });
-    expect(props.onSelectWorkspace).toHaveBeenCalledTimes(1);
-    expect(props.onSelectWorkspace).toHaveBeenCalledWith('/home/alice/dev/myapp');
+    expect(props.onSelectProjectFolder).toHaveBeenCalledTimes(1);
+    expect(props.onSelectProjectFolder).toHaveBeenCalledWith('/home/alice/dev/myapp');
   });
 
   // Browse used to dispatch a global event that opened the chrome's location
@@ -308,7 +308,7 @@ describe('WorkspaceGateModal', () => {
       container!.querySelector<HTMLButtonElement>('[data-testid="workspace-browser-confirm"]')!.click();
     });
 
-    expect(props.onSelectWorkspace).toHaveBeenCalledWith('/home/alice/dev');
+    expect(props.onSelectProjectFolder).toHaveBeenCalledWith('/home/alice/dev');
   });
 
   it('returns to the picker when the browser is cancelled', async () => {
@@ -343,7 +343,7 @@ describe('WorkspaceGateModal', () => {
     modeState.studio = true;
     renderModal();
     expect(container!.querySelector('[data-testid="workspace-gate-modal"]')).not.toBeNull();
-    expect(container!.textContent).toMatch(/choose a workspace/i);
+    expect(container!.textContent).toMatch(/choose a project folder/i);
     expect(container!.textContent).toMatch(/pick where this project lives/i);
     expect(container!.querySelector('[data-testid="workspace-gate-pick-btn"]')).not.toBeNull();
     expect(container!.querySelector('[data-testid="workspace-gate-new-btn"]')).not.toBeNull();
@@ -364,14 +364,14 @@ describe('WorkspaceGateModal', () => {
     modeState.studio = true;
     const reloadSpy = vi.fn();
     Object.defineProperty(window, 'location', { value: { reload: reloadSpy }, writable: true });
-    pickWorkspaceMock.mockResolvedValue({ ok: true, rootName: 'myapp' });
+    pickProjectFolderMock.mockResolvedValue({ ok: true, rootName: 'myapp' });
 
     renderModal();
     await act(async () => {
       container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-pick-btn"]')!.click();
     });
 
-    expect(pickWorkspaceMock).toHaveBeenCalledTimes(1);
+    expect(pickProjectFolderMock).toHaveBeenCalledTimes(1);
     expect(reloadSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -379,7 +379,7 @@ describe('WorkspaceGateModal', () => {
     modeState.studio = true;
     const reloadSpy = vi.fn();
     Object.defineProperty(window, 'location', { value: { reload: reloadSpy }, writable: true });
-    pickWorkspaceMock.mockResolvedValue({ ok: false, error: 'userCancelled' });
+    pickProjectFolderMock.mockResolvedValue({ ok: false, error: 'userCancelled' });
 
     renderModal();
     await act(async () => {
@@ -408,7 +408,7 @@ describe('WorkspaceGateModal', () => {
     modeState.studio = true;
     const reloadSpy = vi.fn();
     Object.defineProperty(window, 'location', { value: { reload: reloadSpy }, writable: true });
-    createWorkspaceMock.mockResolvedValue({ ok: true, rootName: 'fresh-project' });
+    createProjectFolderMock.mockResolvedValue({ ok: true, rootName: 'fresh-project' });
 
     renderModal();
     act(() => {
@@ -422,8 +422,8 @@ describe('WorkspaceGateModal', () => {
       container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-create-submit"]')!.click();
     });
 
-    expect(createWorkspaceMock).toHaveBeenCalledTimes(1);
-    expect(createWorkspaceMock).toHaveBeenCalledWith('fresh-project');
+    expect(createProjectFolderMock).toHaveBeenCalledTimes(1);
+    expect(createProjectFolderMock).toHaveBeenCalledWith('fresh-project');
     expect(reloadSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -431,7 +431,7 @@ describe('WorkspaceGateModal', () => {
     modeState.studio = true;
     const reloadSpy = vi.fn();
     Object.defineProperty(window, 'location', { value: { reload: reloadSpy }, writable: true });
-    createWorkspaceMock.mockResolvedValue({ ok: false, error: 'alreadyExists' });
+    createProjectFolderMock.mockResolvedValue({ ok: false, error: 'alreadyExists' });
 
     renderModal();
     act(() => {
@@ -451,20 +451,20 @@ describe('WorkspaceGateModal', () => {
     expect(err!.textContent).toMatch(/already exists/i);
   });
 
-  it('consents through POST /api/workspace (setWorkspace with consentHome) and reloads', async () => {
+  it('consents through POST /api/project-folder (setWorkspace with consentHome) and reloads', async () => {
     modeState.studio = true;
     const reloadSpy = vi.fn();
     Object.defineProperty(window, 'location', { value: { reload: reloadSpy }, writable: true });
-    setWorkspaceMock.mockResolvedValue({
-      workspace_root: '/home/alice',
+    setProjectFolderMock.mockResolvedValue({
+      project_folder: '/home/alice',
       daemon_root: '/home/alice/.sprout',
       message: 'Workspace updated',
     });
-    getWorkspaceMock.mockResolvedValue({
-      workspace_root: '/home/alice',
+    getProjectFolderMock.mockResolvedValue({
+      project_folder: '/home/alice',
       daemon_root: '/home/alice',
-      workspace_is_home: true,
-      needs_workspace_selection: true,
+      project_folder_is_home: true,
+      needs_project_folder_selection: true,
     });
 
     renderModal();
@@ -472,20 +472,20 @@ describe('WorkspaceGateModal', () => {
       container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-home-btn"]')!.click();
     });
 
-    // The api-service consent path: setWorkspace(workspace_root, consentHome=true)
-    // POSTs /api/workspace with { path, consent_home: true }.
-    expect(setWorkspaceMock).toHaveBeenCalledTimes(1);
-    expect(setWorkspaceMock).toHaveBeenCalledWith('/home/alice', true);
+    // The api-service consent path: setProjectFolder(project_folder, consentHome=true)
+    // POSTs /api/project-folder with { path, consent_home: true }.
+    expect(setProjectFolderMock).toHaveBeenCalledTimes(1);
+    expect(setProjectFolderMock).toHaveBeenCalledWith('/home/alice', true);
   });
 
   it('does not consent to home when a re-read shows a project was restored meanwhile', async () => {
     modeState.studio = true;
     // The modal's snapshot still says home; the server already moved on.
-    getWorkspaceMock.mockResolvedValue({
-      workspace_root: '/home/alice/project',
+    getProjectFolderMock.mockResolvedValue({
+      project_folder: '/home/alice/project',
       daemon_root: '/home/alice',
-      workspace_is_home: false,
-      needs_workspace_selection: false,
+      project_folder_is_home: false,
+      needs_project_folder_selection: false,
     });
 
     renderModal();
@@ -493,15 +493,15 @@ describe('WorkspaceGateModal', () => {
       container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-home-btn"]')!.click();
     });
 
-    expect(getWorkspaceMock).toHaveBeenCalled();
-    expect(setWorkspaceMock).not.toHaveBeenCalled();
+    expect(getProjectFolderMock).toHaveBeenCalled();
+    expect(setProjectFolderMock).not.toHaveBeenCalled();
   });
 
   // ── Starter chooser ────────────────────────────────────────────────
   //
   // The studio create form offers the embedded starter catalogue. "Blank"
   // (no starter) is the default; picking a starter instantiates it into the
-  // new workspace root on create. A failed/empty list degrades to "blank".
+  // new project folder on create. A failed/empty list degrades to "blank".
 
   describe('starter chooser', () => {
     it('fetches the starter list on reveal and renders the options (blank first)', async () => {
@@ -537,10 +537,10 @@ describe('WorkspaceGateModal', () => {
     it('instantiates the selected starter into the new workspace root on create', async () => {
       modeState.studio = true;
       const reloadSpy = stubReload();
-      createWorkspaceMock.mockResolvedValue({ ok: true, rootName: 'myproj' });
+      createProjectFolderMock.mockResolvedValue({ ok: true, rootName: 'myproj' });
       listStartersMock.mockResolvedValue([{ id: 'fixture', version: '0.1.0', files: 4, has_manifest: true }]);
-      getWorkspaceMock.mockResolvedValue({
-        workspace_root: '/home/alice/myproj',
+      getProjectFolderMock.mockResolvedValue({
+        project_folder: '/home/alice/myproj',
         daemon_root: '/home/alice/.sprout',
       });
       instantiateStarterMock.mockResolvedValue({
@@ -563,12 +563,12 @@ describe('WorkspaceGateModal', () => {
       await act(async () => {
         container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-create-submit"]')!.click();
       });
-      await act(async () => {}); // flush getWorkspace + instantiateStarter + reload.
+      await act(async () => {}); // flush getProjectFolder + instantiateStarter + reload.
 
-      expect(createWorkspaceMock).toHaveBeenCalledWith('myproj');
-      expect(getWorkspaceMock).toHaveBeenCalledTimes(1);
+      expect(createProjectFolderMock).toHaveBeenCalledWith('myproj');
+      expect(getProjectFolderMock).toHaveBeenCalledTimes(1);
       expect(instantiateStarterMock).toHaveBeenCalledTimes(1);
-      // Exact arguments: the new workspace root path + the chosen starter.
+      // Exact arguments: the new project folder path + the chosen starter.
       expect(instantiateStarterMock).toHaveBeenCalledWith({
         starter: 'fixture',
         path: '/home/alice/myproj',
@@ -580,7 +580,7 @@ describe('WorkspaceGateModal', () => {
     it('does NOT call instantiate when "blank" is selected (create flow unchanged)', async () => {
       modeState.studio = true;
       const reloadSpy = stubReload();
-      createWorkspaceMock.mockResolvedValue({ ok: true, rootName: 'myproj' });
+      createProjectFolderMock.mockResolvedValue({ ok: true, rootName: 'myproj' });
       listStartersMock.mockResolvedValue([{ id: 'fixture', version: '0.1.0', files: 4, has_manifest: true }]);
 
       renderModal();
@@ -596,7 +596,7 @@ describe('WorkspaceGateModal', () => {
       await act(async () => {});
 
       expect(instantiateStarterMock).not.toHaveBeenCalled();
-      expect(getWorkspaceMock).not.toHaveBeenCalled();
+      expect(getProjectFolderMock).not.toHaveBeenCalled();
       // The plain folder-create + reload still happens.
       expect(reloadSpy).toHaveBeenCalledTimes(1);
     });
@@ -604,7 +604,7 @@ describe('WorkspaceGateModal', () => {
     it('degrades to "blank" only when the starter list fetch fails', async () => {
       modeState.studio = true;
       const reloadSpy = stubReload();
-      createWorkspaceMock.mockResolvedValue({ ok: true, rootName: 'myproj' });
+      createProjectFolderMock.mockResolvedValue({ ok: true, rootName: 'myproj' });
       listStartersMock.mockRejectedValue(new Error('network down'));
 
       renderModal();

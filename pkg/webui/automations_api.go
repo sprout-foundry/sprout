@@ -120,7 +120,7 @@ func (ws *ReactWebServer) handleAPIAutomateRun(w http.ResponseWriter, r *http.Re
 		return
 	}
 	if !ws.acceptingWork() {
-		writeJSONErr(w, http.StatusServiceUnavailable, errCodeWorkspaceStopping, "The workspace is stopping and is not accepting new work")
+		writeJSONErr(w, http.StatusServiceUnavailable, errCodeDevSpaceStopping, "The project folder is stopping and is not accepting new work")
 		return
 	}
 
@@ -152,7 +152,7 @@ func (ws *ReactWebServer) handleAPIAutomateRun(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Check approval requirement using the workspace-aware directory.
+	// Check approval requirement using the project-folder-aware directory.
 	// If approval is required, return a JSON response (not an error) so the
 	// frontend can show a confirmation prompt.
 	//
@@ -190,7 +190,7 @@ func (ws *ReactWebServer) handleAPIAutomateRun(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Wrap context with the workspace-aware sprout dir so that
+	// Wrap context with the project-folder-aware sprout dir so that
 	// writeAutomatePIDFile writes session files to the correct location.
 	ctx := agent.ContextWithSproutDir(r.Context(), ws.getSproutDir(r))
 	result, err := agentInst.RunAutomateWorkflow(ctx, req.Workflow)
@@ -227,17 +227,17 @@ func (ws *ReactWebServer) handleAPIAutomateRun(w http.ResponseWriter, r *http.Re
 // --- helpers ---
 
 // getSproutDir resolves the .sprout directory for the current client's
-// workspace, falling back to the CWD.
+// project folder, falling back to the CWD.
 func (ws *ReactWebServer) getSproutDir(r *http.Request) string {
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	if workspaceRoot == "" {
+	projectFolder := ws.getProjectFolderForRequest(r)
+	if projectFolder == "" {
 		wd, err := os.Getwd()
 		if err != nil {
 			return "."
 		}
-		workspaceRoot = wd
+		projectFolder = wd
 	}
-	return filepath.Join(workspaceRoot, ".sprout")
+	return filepath.Join(projectFolder, ".sprout")
 }
 
 // makeSessionResponse enriches a raw session info with live process status.

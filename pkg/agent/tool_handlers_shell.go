@@ -95,17 +95,17 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 		return "", agenterrors.NewInvalidInputError("command parameter is required when check_background is not provided", nil)
 	}
 
-	// Enrich context with workspace root, effective cwd, and session folders
+	// Enrich context with project folder, effective cwd, and session folders
 	// BEFORE any dispatch: every execution path below (unified, legacy,
 	// background) shells out through runShellCommand, which resolves cmd.Dir
 	// from this context and falls back to os.Getwd() when it is missing —
 	// the daemon's start directory in daemon mode, or the package source dir
 	// inside a real repo during tests.
-	workspaceRoot := a.GetWorkspaceRoot()
+	projectFolder := a.GetProjectFolder()
 	effectiveCwd := a.effectiveCwd()
 	sessionFolders := a.SnapshotSessionAllowedFolders()
 	ctx = filesystem.WithAgentContext(
-		filesystem.WithWorkspaceRoot(ctx, workspaceRoot),
+		filesystem.WithProjectFolder(ctx, projectFolder),
 		effectiveCwd,
 		sessionFolders,
 	)

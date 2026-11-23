@@ -21,8 +21,8 @@ import (
 // opens consistent with agent read_file calls — one approval covers
 // both surfaces.
 func TestHandleFileRead_SessionAllowlistBypassesTokenCheck(t *testing.T) {
-	workspaceRoot := t.TempDir()
-	externalDir := t.TempDir() // outside workspaceRoot
+	projectFolder := t.TempDir()
+	externalDir := t.TempDir() // outside projectFolder
 	externalFile := filepath.Join(externalDir, "audit.log")
 	if err := os.WriteFile(externalFile, []byte("hello from outside"), 0o644); err != nil {
 		t.Fatal(err)
@@ -35,7 +35,7 @@ func TestHandleFileRead_SessionAllowlistBypassesTokenCheck(t *testing.T) {
 
 	clientID := "test-client"
 	ctx := ws.getOrCreateClientContext(clientID)
-	ctx.WorkspaceRoot = workspaceRoot
+	ctx.ProjectFolder = projectFolder
 
 	// Without the allowlist, the request must be rejected with the
 	// external_path_consent_required code (baseline).
@@ -84,7 +84,7 @@ func TestHandleFileRead_SessionAllowlistBypassesTokenCheck(t *testing.T) {
 // allowlist check doesn't BREAK the legacy 2-minute token flow. A
 // token-issued request must still work for paths NOT on the allowlist.
 func TestHandleFileRead_AllowlistAndTokenAreEitherOr(t *testing.T) {
-	workspaceRoot := t.TempDir()
+	projectFolder := t.TempDir()
 	externalDir := t.TempDir()
 	externalFile := filepath.Join(externalDir, "data.txt")
 	if err := os.WriteFile(externalFile, []byte("token-allowed"), 0o644); err != nil {
@@ -97,7 +97,7 @@ func TestHandleFileRead_AllowlistAndTokenAreEitherOr(t *testing.T) {
 	}
 	clientID := "test-client"
 	ctx := ws.getOrCreateClientContext(clientID)
-	ctx.WorkspaceRoot = workspaceRoot
+	ctx.ProjectFolder = projectFolder
 
 	// Issue a consent token directly via the per-client manager.
 	token, _, err := ctx.FileConsents.issue(externalFile, "read", 2*time.Minute)
@@ -118,15 +118,15 @@ func TestHandleFileRead_AllowlistAndTokenAreEitherOr(t *testing.T) {
 	}
 }
 
-// Make sure the t.TempDir paths actually qualify as outside-workspace
+// Make sure the t.TempDir paths actually qualify as outside-project-folder
 // (TempDir on some platforms can be a symlinked /tmp -> /private/tmp).
 // If this guard fires, the test was no-op rather than catching the
 // case we care about.
-func TestExternalPathFixturesAreOutsideWorkspace(t *testing.T) {
+func TestExternalPathFixturesAreOutsideProjectFolder(t *testing.T) {
 	ws := t.TempDir()
 	ext := t.TempDir()
-	if isWithinWorkspace(filepath.Clean(ext), filepath.Clean(ws)) {
-		t.Fatalf("test precondition broken: %q reported as inside workspace %q", ext, ws)
+	if isWithinProjectFolder(filepath.Clean(ext), filepath.Clean(ws)) {
+		t.Fatalf("test precondition broken: %q reported as inside project folder %q", ext, ws)
 	}
 	_ = fmt.Sprintf("noop: %s %s", ws, ext) // keep fmt import if other tests get trimmed
 }

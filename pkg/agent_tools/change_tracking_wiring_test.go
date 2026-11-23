@@ -20,7 +20,7 @@ func TestWriteHandler_InvokesTrackFileWrite(t *testing.T) {
 
 	var trackedPath, trackedOriginal, trackedContent string
 	env := ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		ToolFuncs: &ToolFuncSet{
 			TrackFileWrite: func(filePath string, originalContent string, content string) error {
 				trackedPath = filePath
@@ -61,7 +61,7 @@ func TestWriteHandler_NoTrackerStillWrites(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "plain.txt")
 
-	env := ToolEnv{WorkspaceRoot: dir, ToolFuncs: &ToolFuncSet{}}
+	env := ToolEnv{ProjectFolder: dir, ToolFuncs: &ToolFuncSet{}}
 	h := &writeFileHandler{}
 	_, err := h.Execute(context.Background(), env, map[string]any{
 		"path":    path,
@@ -84,7 +84,7 @@ func TestEditHandler_InvokesTrackFileEdit(t *testing.T) {
 
 	var trackedOriginal, trackedNew string
 	env := ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		ToolFuncs: &ToolFuncSet{
 			TrackFileEdit: func(filePath string, originalContent string, newContent string) error {
 				trackedOriginal = originalContent
@@ -116,7 +116,7 @@ func TestShellHandler_InvokesTrackShellCommand(t *testing.T) {
 
 	var trackedCommand string
 	env := ToolEnv{
-		WorkspaceRoot: dir,
+		ProjectFolder: dir,
 		ToolFuncs: &ToolFuncSet{
 			TrackShellCommand: func(command string) error {
 				trackedCommand = command

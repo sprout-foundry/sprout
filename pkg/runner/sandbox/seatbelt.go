@@ -26,7 +26,7 @@ const seatbeltDeviceWrites = `  (literal "/dev/null")
 const seatbeltSharedTemp = "/private/tmp"
 
 // seatbeltProfile renders p as an SBPL profile. Reads are allowed host-wide
-// except p.DenyRead; writes only to the workspace, its temp dir, the
+// except p.DenyRead; writes only to the dev space, its temp dir, the
 // allowlisted paths and the per-user system dirs toolchains cannot work
 // without. Seatbelt evaluates the last matching rule, so deny-read rules
 // come last and win over any overlapping allow.

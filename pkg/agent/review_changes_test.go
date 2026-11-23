@@ -70,7 +70,7 @@ func TestReviewChanges_SingleReviewerParsesFindings(t *testing.T) {
 	parent, _ := newReviewTestRunner(t)
 	dir := initReviewRepo(t)
 	writeFile(t, dir, "main.go", "package main\n\nfunc main() { println(\"debug\") }\n")
-	parent.workspaceRoot = dir
+	parent.projectFolder = dir
 	prompts := scriptReviewers(t, parent, func(string) string { return findingsMustFix })
 
 	review, err := parent.ReviewChanges(context.Background(), ReviewChangesOptions{Focus: "debug output"})
@@ -120,9 +120,9 @@ func resolveTestPath(t *testing.T, p string) string {
 }
 
 // The repo_dir parameter must redirect the review to a worktree of the
-// workspace repo: without it, HEAD resolved in the workspace root and the
+// project folder repo: without it, HEAD resolved in the project folder and the
 // review covered the wrong tree.
-func TestHandleReviewChanges_RepoDirOverridesWorkspace(t *testing.T) {
+func TestHandleReviewChanges_RepoDirOverridesProjectFolder(t *testing.T) {
 	parent, _ := newReviewTestRunner(t)
 	ws := initReviewRepo(t)
 	wtRoot := filepath.Join(filepath.Dir(ws), "review-wt")
@@ -160,30 +160,30 @@ func firstPrompt(prompts []string) string {
 }
 
 // review_changes must gate repo_dir through the same containment the git and
-// commit handlers enforce: an arbitrary path outside the workspace is
+// commit handlers enforce: an arbitrary path outside the project folder is
 // refused, so a caller cannot point the review at an unrelated repo (whose
 // files the reviewers would read and run git in).
-func TestHandleReviewChanges_RepoDirRejectsOutOfWorkspacePath(t *testing.T) {
+func TestHandleReviewChanges_RepoDirRejectsOutOfProjectFolderPath(t *testing.T) {
 	parent, _ := newReviewTestRunner(t)
 	ws := initReviewRepo(t)
-	parent.SetWorkspaceRoot(ws)
+	parent.SetProjectFolder(ws)
 
-	// A directory that is neither the workspace nor a worktree of it.
+	// A directory that is neither the project folder nor a worktree of it.
 	outside := t.TempDir()
 
 	_, err := handleReviewChanges(context.Background(), parent, map[string]any{
 		"repo_dir": outside,
 	})
 	if err == nil {
-		t.Fatalf("repo_dir %q outside the workspace must be refused", outside)
+		t.Fatalf("repo_dir %q outside the project folder must be refused", outside)
 	}
-	if !strings.Contains(err.Error(), "outside workspace root") {
+	if !strings.Contains(err.Error(), "outside project folder") {
 		t.Errorf("error should explain the containment failure, got: %v", err)
 	}
 
-	// The workspace root itself is admitted by the same gate the handler uses.
+	// The project folder itself is admitted by the same gate the handler uses.
 	if _, err := tools.ValidateRepoDir(ws, ws); err != nil {
-		t.Errorf("in-workspace repo_dir should be admitted, got: %v", err)
+		t.Errorf("in-project-folder repo_dir should be admitted, got: %v", err)
 	}
 }
 
@@ -194,7 +194,7 @@ func TestReviewChanges_SplitsLargeChangeAcrossReviewers(t *testing.T) {
 	for _, name := range []string{"a.go", "b.go", "c.go"} {
 		writeFile(t, dir, name, "package main\n"+body)
 	}
-	parent.workspaceRoot = dir
+	parent.projectFolder = dir
 	prompts := scriptReviewers(t, parent, func(prompt string) string {
 		if strings.Contains(prompt, "own only these files: a.go") {
 			return strings.ReplaceAll(findingsMustFix, "main.go", "a.go")
@@ -229,7 +229,7 @@ func TestReviewChanges_RangeScopeExcerptsCommitContent(t *testing.T) {
 	writeFile(t, dir, "main.go", "package main\n\nfunc main() { println(\"committed\") }\n")
 	gitIn(t, dir, "commit", "-qam", "change")
 	writeFile(t, dir, "main.go", "package main\n\nfunc main() { println(\"later edit\") }\n")
-	parent.workspaceRoot = dir
+	parent.projectFolder = dir
 	prompts := scriptReviewers(t, parent, func(string) string { return findingsClean })
 
 	review, err := parent.ReviewChanges(context.Background(), ReviewChangesOptions{Scope: "range", Range: "HEAD^!"})
@@ -248,7 +248,7 @@ func TestReviewChanges_RangeScopeExcerptsCommitContent(t *testing.T) {
 
 func TestReviewChanges_Errors(t *testing.T) {
 	parent, _ := newReviewTestRunner(t)
-	parent.workspaceRoot = initReviewRepo(t)
+	parent.projectFolder = initReviewRepo(t)
 
 	if _, err := parent.ReviewChanges(context.Background(), ReviewChangesOptions{}); err == nil {
 		t.Error("expected an error when there is nothing to review")

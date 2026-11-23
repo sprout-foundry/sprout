@@ -2,7 +2,7 @@
 
 // verification_hook_test.go — the turn-end verification acceptance tests: the
 // turn-end verification hook drives a full agent turn (scripted model,
-// real workspace fixture, real shell execution of the manifest's build
+// real project folder fixture, real shell execution of the manifest's build
 // command) and pins the gate, the repair loop, and the final-reply
 // contract:
 //
@@ -88,7 +88,7 @@ func vhWriteBareStarterManifest(t *testing.T, root string) {
 	}
 }
 
-// vhAgent wires a scripted client into a fresh agent whose workspace root
+// vhAgent wires a scripted client into a fresh agent whose project folder
 // is the given project directory ("" pins an empty root for the runner
 // setup-error test). ver (nil = unset, the default-off path) sets the
 // verification section. Full context mode keeps the file tools on the
@@ -114,12 +114,12 @@ func vhAgent(t *testing.T, client *ScriptedClient, root string, ver *configurati
 	}
 	t.Cleanup(ag.Shutdown)
 	ag.SetMaxIterations(10)
-	ag.SetWorkspaceRoot(root)
+	ag.SetProjectFolder(root)
 	return ag
 }
 
 // vhWriteToolCall is the scripted tool call that changes a file in the
-// workspace (so the change tracker records the turn's change and the
+// project folder (so the change tracker records the turn's change and the
 // hook's gate opens): write_file on a new file under the project root.
 func vhWriteToolCall(t *testing.T, root, path string) *ScriptedResponse {
 	t.Helper()

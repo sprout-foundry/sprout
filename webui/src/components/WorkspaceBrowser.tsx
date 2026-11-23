@@ -5,7 +5,7 @@ import type { BrowseEntry } from '../services/api/workspaceApi';
 import './WorkspaceBrowser.css';
 
 /**
- * WorkspaceBrowser — an inline directory picker for the workspace gate.
+ * ProjectFolderBrowser — an inline directory picker for the project folder gate.
  *
  * The gate is a blocking overlay, so it cannot delegate browsing to the
  * chrome's location switcher: that popover renders far below the overlay in
@@ -15,8 +15,8 @@ import './WorkspaceBrowser.css';
  * Navigation is bounded by the daemon root, matching the backend, which
  * rejects any path outside it.
  */
-interface WorkspaceBrowserProps {
-  /** Directory to open first — usually the current workspace root. */
+interface ProjectFolderBrowserProps {
+  /** Directory to open first — usually the current project folder. */
   initialPath: string;
   /** Called with the directory the user commits to. */
   onSelect: (path: string) => void;
@@ -31,7 +31,7 @@ function parentOf(path: string): string {
   return trimmed.slice(0, idx);
 }
 
-function WorkspaceBrowser({ initialPath, onSelect, onCancel }: WorkspaceBrowserProps): JSX.Element {
+function ProjectFolderBrowser({ initialPath, onSelect, onCancel }: ProjectFolderBrowserProps): JSX.Element {
   const [path, setPath] = useState(initialPath);
   const [daemonRoot, setDaemonRoot] = useState('');
   const [directories, setDirectories] = useState<BrowseEntry[]>([]);
@@ -127,4 +127,4 @@ function WorkspaceBrowser({ initialPath, onSelect, onCancel }: WorkspaceBrowserP
   );
 }
 
-export default WorkspaceBrowser;
+export default ProjectFolderBrowser;

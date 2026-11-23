@@ -57,7 +57,7 @@ func (ws *ReactWebServer) handleAPIFile(w http.ResponseWriter, r *http.Request) 
 
 // handleFileRead handles file read operations
 func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request) {
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 	fileConsents := ws.getFileConsentManagerForRequest(r)
 	// Get file path from query parameter
 	path := r.URL.Query().Get("path")
@@ -66,7 +66,7 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	canonicalPath, err := canonicalizePath(path, workspaceRoot, false)
+	canonicalPath, err := canonicalizePath(path, projectFolder, false)
 	if err != nil {
 		if _, notExist := err.(*pathNotExistError); notExist {
 			writeJSONErr(w, http.StatusNotFound, "file_not_found", fmt.Sprintf("File not found: %v", err))
@@ -101,7 +101,7 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if !isWithinWorkspace(canonicalPath, workspaceRoot) && !isAppConfigPath(canonicalPath) {
+	if !isWithinProjectFolder(canonicalPath, projectFolder) && !isAppConfigPath(canonicalPath) {
 		// Unified session allowlist (filesystem perms work): if the
 		// active chat agent has the file's folder on its session
 		// allowlist (because the user previously approved it via the
@@ -187,7 +187,7 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 
 // handleFileWrite handles file write operations
 func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request) {
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 	fileConsents := ws.getFileConsentManagerForRequest(r)
 	// Get file path from query parameter
 	path := r.URL.Query().Get("path")
@@ -196,13 +196,13 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	canonicalPath, err := canonicalizePath(path, workspaceRoot, true)
+	canonicalPath, err := canonicalizePath(path, projectFolder, true)
 	if err != nil {
 		writeJSONErr(w, http.StatusBadRequest, "invalid_file_path", fmt.Sprintf("Invalid file path: %v", err))
 		return
 	}
 
-	if !isWithinWorkspace(canonicalPath, workspaceRoot) && !isAppConfigPath(canonicalPath) {
+	if !isWithinProjectFolder(canonicalPath, projectFolder) && !isAppConfigPath(canonicalPath) {
 		if a := ws.getActiveAgentForRequest(r); a != nil && a.IsFolderSessionAllowed(canonicalPath) {
 			// Allowlisted — fall through and write the file.
 		} else {

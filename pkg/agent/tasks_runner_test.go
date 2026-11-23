@@ -37,7 +37,7 @@ func resetProcessTasks(t *testing.T) {
 func newTaskTestAgent(t *testing.T, repo string) *Agent {
 	t.Helper()
 	a := newTestAgent(t)
-	a.SetWorkspaceRoot(repo)
+	a.SetProjectFolder(repo)
 	a.GetSubagentRunner().testClientFactory = func(_ api.ClientType, model string) (api.ClientInterface, error) {
 		return NewScriptedClient(NewScriptedResponseBuilder().Content("task done").Build()), nil
 	}
@@ -116,14 +116,14 @@ func TestMergeTask_RefusesRunningTask(t *testing.T) {
 	repo := initTaskTestRepo(t)
 	a := newTaskTestAgent(t, repo)
 
-	processTasks.add(&taskRecord{ID: "bg-task-run", Branch: "feat/running", Path: repo, Status: "running", Workspace: repo})
+	processTasks.add(&taskRecord{ID: "bg-task-run", Branch: "feat/running", Path: repo, Status: "running", ProjectFolder: repo})
 
 	if _, err := a.MergeTask(context.Background(), "bg-task-run"); err == nil {
 		t.Fatal("expected an error merging a running task")
 	}
 }
 
-func TestMergeTask_RefusesDirtyWorkspace(t *testing.T) {
+func TestMergeTask_RefusesDirtyProjectFolder(t *testing.T) {
 	resetProcessTasks(t)
 	repo := initTaskTestRepo(t)
 	a := newTaskTestAgent(t, repo)
@@ -133,13 +133,13 @@ func TestMergeTask_RefusesDirtyWorkspace(t *testing.T) {
 		t.Fatalf("createTaskWorktree: %v", err)
 	}
 	t.Cleanup(func() { wt.remove(context.Background()) })
-	processTasks.add(&taskRecord{ID: "bg-task-dirty", Branch: wt.Branch, Path: wt.Path, Status: "completed", Workspace: repo, worktree: wt})
+	processTasks.add(&taskRecord{ID: "bg-task-dirty", Branch: wt.Branch, Path: wt.Path, Status: "completed", ProjectFolder: repo, worktree: wt})
 
 	if err := os.WriteFile(filepath.Join(repo, "dirty.txt"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := a.MergeTask(context.Background(), "bg-task-dirty"); err == nil {
-		t.Fatal("expected an error merging into a dirty workspace")
+		t.Fatal("expected an error merging into a dirty project folder")
 	}
 }
 
@@ -158,7 +158,7 @@ func TestMergeTask_MergesBranchAndRemovesWorktree(t *testing.T) {
 	if _, err := commitTaskWork(context.Background(), wt); err != nil {
 		t.Fatalf("commitTaskWork: %v", err)
 	}
-	processTasks.add(&taskRecord{ID: "bg-task-ok", Branch: wt.Branch, Path: wt.Path, Status: "completed", Workspace: repo, worktree: wt})
+	processTasks.add(&taskRecord{ID: "bg-task-ok", Branch: wt.Branch, Path: wt.Path, Status: "completed", ProjectFolder: repo, worktree: wt})
 
 	msg, err := a.MergeTask(context.Background(), "bg-task-ok")
 	if err != nil {
@@ -168,7 +168,7 @@ func TestMergeTask_MergesBranchAndRemovesWorktree(t *testing.T) {
 		t.Errorf("merge message = %q, want the branch name", msg)
 	}
 	if _, err := os.Stat(filepath.Join(repo, "feature.txt")); err != nil {
-		t.Errorf("merged file missing from the workspace: %v", err)
+		t.Errorf("merged file missing from the project folder: %v", err)
 	}
 	if _, err := os.Stat(wt.Path); !os.IsNotExist(err) {
 		t.Errorf("worktree still exists after merge: %v", err)
@@ -178,7 +178,7 @@ func TestMergeTask_MergesBranchAndRemovesWorktree(t *testing.T) {
 	}
 }
 
-func TestMergeTask_ConflictLeavesWorkspaceUntouched(t *testing.T) {
+func TestMergeTask_ConflictLeavesProjectFolderUntouched(t *testing.T) {
 	resetProcessTasks(t)
 	repo := initTaskTestRepo(t)
 	a := newTaskTestAgent(t, repo)
@@ -213,7 +213,7 @@ func TestMergeTask_ConflictLeavesWorkspaceUntouched(t *testing.T) {
 	if _, err := runGitIn(context.Background(), repo, "commit", "-qam", "primary"); err != nil {
 		t.Fatal(err)
 	}
-	processTasks.add(&taskRecord{ID: "bg-task-conflict", Branch: wt.Branch, Path: wt.Path, Status: "completed", Workspace: repo, worktree: wt})
+	processTasks.add(&taskRecord{ID: "bg-task-conflict", Branch: wt.Branch, Path: wt.Path, Status: "completed", ProjectFolder: repo, worktree: wt})
 
 	if _, err := a.MergeTask(context.Background(), "bg-task-conflict"); err == nil {
 		t.Fatal("expected a conflict error")
@@ -224,7 +224,7 @@ func TestMergeTask_ConflictLeavesWorkspaceUntouched(t *testing.T) {
 		t.Fatal(err)
 	}
 	if string(data) != "primary side\n" {
-		t.Errorf("workspace file = %q, want the primary's content untouched", string(data))
+		t.Errorf("project folder file = %q, want the primary's content untouched", string(data))
 	}
 	if _, err := os.Stat(filepath.Join(repo, ".git", "MERGE_HEAD")); !os.IsNotExist(err) {
 		t.Errorf("a merge is still in progress after a conflict: %v", err)
@@ -245,7 +245,7 @@ func TestStartTask_RefusesBeyondConcurrencyLimit(t *testing.T) {
 	a := newTaskTestAgent(t, repo)
 
 	for i := 0; i < 2; i++ {
-		processTasks.add(&taskRecord{ID: "bg-task-busy-" + string(rune('a'+i)), Status: "running", Workspace: repo})
+		processTasks.add(&taskRecord{ID: "bg-task-busy-" + string(rune('a'+i)), Status: "running", ProjectFolder: repo})
 	}
 	_, err := a.StartTask(context.Background(), StartTaskOptions{Description: "do work", MaxConcurrent: 2})
 	if err == nil {
@@ -282,8 +282,8 @@ func TestNewTaskAgent_IsIsolatedFromPrimaryTurnState(t *testing.T) {
 		t.Fatalf("newTaskAgent: %v", err)
 	}
 
-	if got := taskAgent.GetWorkspaceRoot(); got != wt.Path {
-		t.Errorf("workspace root = %q, want the worktree %q", got, wt.Path)
+	if got := taskAgent.GetProjectFolder(); got != wt.Path {
+		t.Errorf("project folder = %q, want the worktree %q", got, wt.Path)
 	}
 	if got := taskAgent.GetRole(); got != taskRole {
 		t.Errorf("role = %q, want %q", got, taskRole)
@@ -317,7 +317,7 @@ func TestNewTaskAgent_IsIsolatedFromPrimaryTurnState(t *testing.T) {
 func TestTaskRegistry_SetTerminalReleasesSlot(t *testing.T) {
 	resetProcessTasks(t)
 	repo := initTaskTestRepo(t)
-	processTasks.add(&taskRecord{ID: "bg-task-1", Status: "running", Workspace: repo, Started: time.Now()})
+	processTasks.add(&taskRecord{ID: "bg-task-1", Status: "running", ProjectFolder: repo, Started: time.Now()})
 
 	if _, reserveErr := processTasks.reserve(repo, 1); reserveErr == nil {
 		t.Fatal("a running task should occupy the only slot")
@@ -337,12 +337,12 @@ func TestTaskRegistry_SetTerminalReleasesSlot(t *testing.T) {
 	}
 }
 
-func TestTaskRegistry_ReserveIsPerWorkspace(t *testing.T) {
+func TestTaskRegistry_ReserveIsPerProjectFolder(t *testing.T) {
 	resetProcessTasks(t)
-	processTasks.add(&taskRecord{ID: "bg-task-a", Status: "running", Workspace: "/ws/a", Started: time.Now()})
+	processTasks.add(&taskRecord{ID: "bg-task-a", Status: "running", ProjectFolder: "/ws/a", Started: time.Now()})
 
 	if _, reserveErr := processTasks.reserve("/ws/b", 1); reserveErr != nil {
-		t.Errorf("a task in another workspace should not consume this workspace's slot: %v", reserveErr)
+		t.Errorf("a task in another project folder should not consume this project folder's slot: %v", reserveErr)
 	}
 }
 
@@ -351,7 +351,7 @@ func TestTaskRegistry_PrunesFinishedBeyondCap(t *testing.T) {
 	repo := initTaskTestRepo(t)
 	for i := 0; i < maxRetainedTasks+5; i++ {
 		id := fmt.Sprintf("bg-task-%d", i)
-		processTasks.add(&taskRecord{ID: id, Status: "running", Workspace: repo, Started: time.Now()})
+		processTasks.add(&taskRecord{ID: id, Status: "running", ProjectFolder: repo, Started: time.Now()})
 		processTasks.setTerminal(id, "completed", "", "")
 	}
 
@@ -364,10 +364,10 @@ func TestTaskRegistry_PrunesFinishedBeyondCap(t *testing.T) {
 func TestTaskRegistry_NeverPrunesRunning(t *testing.T) {
 	resetProcessTasks(t)
 	repo := initTaskTestRepo(t)
-	processTasks.add(&taskRecord{ID: "bg-task-live", Status: "running", Workspace: repo, Started: time.Now()})
+	processTasks.add(&taskRecord{ID: "bg-task-live", Status: "running", ProjectFolder: repo, Started: time.Now()})
 	for i := 0; i < maxRetainedTasks+5; i++ {
 		id := fmt.Sprintf("bg-task-done-%d", i)
-		processTasks.add(&taskRecord{ID: id, Status: "running", Workspace: repo, Started: time.Now()})
+		processTasks.add(&taskRecord{ID: id, Status: "running", ProjectFolder: repo, Started: time.Now()})
 		processTasks.setTerminal(id, "completed", "", "")
 	}
 
@@ -381,7 +381,7 @@ func TestTaskRegistry_NeverPrunesRunning(t *testing.T) {
 func TestTaskRegistry_MarkStopped(t *testing.T) {
 	resetProcessTasks(t)
 	repo := initTaskTestRepo(t)
-	processTasks.add(&taskRecord{ID: "bg-task-stop", Status: "running", Workspace: repo, Started: time.Now()})
+	processTasks.add(&taskRecord{ID: "bg-task-stop", Status: "running", ProjectFolder: repo, Started: time.Now()})
 
 	processTasks.markStopped("bg-task-stop")
 
@@ -401,7 +401,7 @@ func TestTaskRegistry_MarkStoppedIgnoresUnknownAndFinished(t *testing.T) {
 	resetProcessTasks(t)
 	processTasks.markStopped("bg-subagent-1")
 
-	processTasks.add(&taskRecord{ID: "bg-task-done", Status: "completed", Workspace: "/ws", Started: time.Now()})
+	processTasks.add(&taskRecord{ID: "bg-task-done", Status: "completed", ProjectFolder: "/ws", Started: time.Now()})
 	processTasks.markStopped("bg-task-done")
 	if got := processTasks.get("bg-task-done").Status; got != "completed" {
 		t.Errorf("status = %q, want the completed status preserved", got)
@@ -465,7 +465,7 @@ func TestTaskRegistry_AdoptRegistersUnderID(t *testing.T) {
 func TestTaskRegistry_SetTerminalPreservesStopped(t *testing.T) {
 	resetProcessTasks(t)
 	repo := initTaskTestRepo(t)
-	processTasks.add(&taskRecord{ID: "bg-task-race", Status: "running", Workspace: repo, Started: time.Now()})
+	processTasks.add(&taskRecord{ID: "bg-task-race", Status: "running", ProjectFolder: repo, Started: time.Now()})
 
 	processTasks.markStopped("bg-task-race")
 	processTasks.setTerminal("bg-task-race", "completed", "output", "abc1234")
@@ -570,7 +570,7 @@ func TestMergeTask_InterruptedKeepsWorktree(t *testing.T) {
 	// handle, marked interrupted.
 	processTasks.add(&taskRecord{
 		ID: "bg-task-int", Branch: wt.Branch, Path: wt.Path,
-		Status: "running", Workspace: repo, Started: time.Now(),
+		Status: "running", ProjectFolder: repo, Started: time.Now(),
 	})
 	processTasks.save(repo)
 	resetProcessTasks(t)

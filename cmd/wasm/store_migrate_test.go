@@ -4,7 +4,7 @@ package main
 
 import "testing"
 
-func TestLegacyRelocationsMovesTheOldRootProjectIntoTheWorkspace(t *testing.T) {
+func TestLegacyRelocationsMovesTheOldRootProjectIntoTheProjectFolder(t *testing.T) {
 	files := []IDBFile{
 		{Path: "/README.md"},
 		{Path: "/src/main.go"},
@@ -26,12 +26,12 @@ func TestLegacyRelocationsMovesTheOldRootProjectIntoTheWorkspace(t *testing.T) {
 	}
 }
 
-func TestLegacyRelocationsRunOnlyBeforeTheWorkspaceHasFiles(t *testing.T) {
+func TestLegacyRelocationsRunOnlyBeforeTheProjectFolderHasFiles(t *testing.T) {
 	files := []IDBFile{
 		{Path: "/workspace/README.md"},
 		{Path: "/notes.txt"},
 	}
 	if got := legacyRelocations(files, "/workspace", "/home/user"); len(got) != 0 {
-		t.Errorf("a workspace already in use must not be touched, got moves %v", got)
+		t.Errorf("a project folder already in use must not be touched, got moves %v", got)
 	}
 }

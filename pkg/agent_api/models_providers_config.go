@@ -127,11 +127,11 @@ func (w *genericConfigListModelsWrapper) loadBuiltInProviderModels() ([]ModelInf
 }
 
 func (w *genericConfigListModelsWrapper) loadCustomProviderModels(ctx context.Context) ([]ModelInfo, error) {
-	// Try the scoped config dir first (e.g. workspace .sprout/ when isolated
+	// Try the scoped config dir first (e.g. project folder .sprout/ when isolated
 	// config is active). If the provider file isn't there, fall back to the
 	// global home dir. This mirrors LoadCustomProviders' merge behavior —
 	// without it, /model select fails for providers registered globally when
-	// running inside a workspace with isolated config.
+	// running inside a project folder with isolated config.
 	data, scopedErr := os.ReadFile(customProviderFilePath(w.providerName))
 	if scopedErr != nil {
 		// Try the global home dir as fallback
@@ -204,7 +204,7 @@ func customProviderFilePath(providerName string) string {
 // user's home ~/.config/sprout/providers/ directory, ignoring SPROUT_CONFIG
 // overrides. Used as a fallback when customProviderFilePath (which honors
 // SPROUT_CONFIG) doesn't find the file — e.g. when running inside a
-// workspace with isolated config but the provider was registered globally.
+// project folder with isolated config but the provider was registered globally.
 func globalCustomProviderFilePath(providerName string) string {
 	homeDir, err := envutil.HomeDir()
 	if err != nil {

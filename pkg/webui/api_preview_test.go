@@ -28,7 +28,7 @@ import (
 
 // newPreviewTestServer builds the minimal server shape the other pkg/webui
 // handler tests use, rooted at a fresh temp project directory (the preview
-// manager is keyed by the workspace root), and stops the preview managers
+// manager is keyed by the project folder), and stops the preview managers
 // (and any dev server they own) on cleanup.
 func newPreviewTestServer(t *testing.T) (*ReactWebServer, string) {
 	t.Helper()
@@ -37,7 +37,7 @@ func newPreviewTestServer(t *testing.T) (*ReactWebServer, string) {
 		t.Fatal(err)
 	}
 	root := t.TempDir()
-	server.workspaceRoot = root
+	server.projectFolder = root
 	t.Cleanup(server.stopPreviewManagers)
 	return server, root
 }

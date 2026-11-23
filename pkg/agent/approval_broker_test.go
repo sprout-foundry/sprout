@@ -31,8 +31,8 @@ func TestApprovalBroker_NonInteractiveAutoApprove(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 	agent.state.SetActivePersona(personas.IDOrchestrator)
 
 	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
@@ -70,8 +70,8 @@ func TestApprovalBroker_LowRiskNoPrompt(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	assessment := agent.ResolveToolRisk("shell_command", map[string]interface{}{"command": "ls -la"})
 
@@ -103,8 +103,8 @@ func TestApprovalBroker_CriticalHardBlock(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	args := map[string]interface{}{"command": "rm -rf /"}
 	assessment := agent.ResolveToolRisk("shell_command", args)
@@ -136,8 +136,8 @@ func TestApprovalBroker_AllowlistBypass(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	const allowlistedCmd = "rm cached_file.tmp"
 	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
@@ -176,8 +176,8 @@ func TestApprovalBroker_UnsafeModeBypass(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 	agent.SetUnsafeMode(true)
 
 	args := map[string]interface{}{"command": "rm somefile.txt"}
@@ -207,8 +207,8 @@ func TestApprovalBroker_SessionElevatedBypass(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	// Elevate to permissive profile
 	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
@@ -250,8 +250,8 @@ func TestApprovalBroker_UnsafeShellBypass(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 	agent.SetUnsafeShellMode(true)
 
 	// Medium risk: should bypass via unsafe-shell
@@ -282,8 +282,8 @@ func TestApprovalBroker_RunAutomateSessionMarking(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	const workflowName = "test-workflow"
 
@@ -317,8 +317,8 @@ func TestApprovalBroker_CriticalOverridesAllBypasses(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	// Stack every possible bypass
 	agent.SetUnsafeMode(true)
@@ -353,8 +353,8 @@ func TestApprovalBroker_SurfaceReporting(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	// Low risk → no surface (auto-approve immediate)
 	assessment := agent.ResolveToolRisk("shell_command", map[string]interface{}{"command": "ls -la"})
@@ -390,8 +390,8 @@ func TestApprovalBroker_AssessmentEcho(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	args := map[string]interface{}{"command": "ls -la"}
 	assessment := agent.ResolveToolRisk("shell_command", args)
@@ -492,8 +492,8 @@ func TestSP068_SingleApprovalEvent_WebUI(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 	agent.state.SetActivePersona(personas.IDOrchestrator)
 
 	// The agent must look interactive for the WebUI path to be selected.
@@ -555,8 +555,8 @@ func TestSP068_SingleApprovalEvent_NonInteractive(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 	agent.state.SetActivePersona(personas.IDOrchestrator)
 
 	// Ensure no WebUI and SkipPrompt already set by newTestAgent.
@@ -588,8 +588,8 @@ func TestSP068_SingleApprovalEvent_LowRisk(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 	agent.SetHasActiveWebUIClients(func() bool { return true })
 
 	eventBus := events.NewEventBus()
@@ -624,8 +624,8 @@ func TestSP068_SingleApprovalEvent_UnifiedGate(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 	agent.state.SetActivePersona(personas.IDOrchestrator)
 	agent.SetHasActiveWebUIClients(func() bool { return true })
 

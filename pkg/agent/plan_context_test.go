@@ -85,13 +85,13 @@ func pcWritePlanFile(t *testing.T, root, content string) {
 	}
 }
 
-// pcAgent wires client into a fresh agent whose workspace root is a project
+// pcAgent wires client into a fresh agent whose project folder is a project
 // directory (the .sprout/ plan files land under it). It mirrors the e2e agent
 // setup from plan_structured_e2e_test.go but accepts any api.ClientInterface
 // so the scripted client's recorded requests can be inspected. The full
 // context profile keeps the tools on the roster; SkipPrompt keeps the turn
 // from ever blocking on an interactive prompt (stdin is closed in tests).
-func pcAgent(t *testing.T, client api.ClientInterface, workspaceRoot string) *Agent {
+func pcAgent(t *testing.T, client api.ClientInterface, projectFolder string) *Agent {
 	t.Helper()
 
 	mgr, cleanup := configuration.NewTestManager(t)
@@ -110,7 +110,7 @@ func pcAgent(t *testing.T, client api.ClientInterface, workspaceRoot string) *Ag
 	}
 	t.Cleanup(ag.Shutdown)
 	ag.SetMaxIterations(10)
-	ag.SetWorkspaceRoot(workspaceRoot)
+	ag.SetProjectFolder(projectFolder)
 	return ag
 }
 
@@ -181,7 +181,7 @@ func TestPlanContextSummary_PresentWhenPlanExists(t *testing.T) {
 	pcWritePlanFile(t, root, pcFixturePlanJSON)
 
 	ag := NewTestAgent()
-	ag.SetWorkspaceRoot(root)
+	ag.SetProjectFolder(root)
 
 	summary := ag.planContextSummary()
 	for _, want := range []string{
@@ -201,7 +201,7 @@ func TestPlanContextSummary_AbsentWhenNoPlan(t *testing.T) {
 	root := t.TempDir() // no .sprout/plan.json
 
 	ag := NewTestAgent()
-	ag.SetWorkspaceRoot(root)
+	ag.SetProjectFolder(root)
 
 	if got := ag.planContextSummary(); got != "" {
 		t.Errorf("no plan -> empty summary, got %q", got)
@@ -215,7 +215,7 @@ func TestPlanContextSummary_CorruptPlanIsIgnored(t *testing.T) {
 	pcWritePlanFile(t, root, pcCorruptPlanJSON)
 
 	ag := NewTestAgent()
-	ag.SetWorkspaceRoot(root)
+	ag.SetProjectFolder(root)
 
 	if got := ag.planContextSummary(); got != "" {
 		t.Errorf("corrupt plan -> empty summary (turn never fails), got %q", got)
@@ -230,7 +230,7 @@ func TestPlanContextSummary_InvalidPlanIsIgnored(t *testing.T) {
 	pcWritePlanFile(t, root, pcInvalidPlanJSON)
 
 	ag := NewTestAgent()
-	ag.SetWorkspaceRoot(root)
+	ag.SetProjectFolder(root)
 
 	if got := ag.planContextSummary(); got != "" {
 		t.Errorf("invalid plan -> empty summary (turn never fails), got %q", got)

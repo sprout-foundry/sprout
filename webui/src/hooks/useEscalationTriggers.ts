@@ -3,7 +3,7 @@
  * surfaces the "Start Building" escalation path to the user.
  *
  * Three trigger categories:
- *   1. Git push failure — a failed /api/git/push response on the workspace's
+ *   1. Git push failure — a failed /api/git/push response on the project folder's
  *      request channel (services/workspaceResponses.ts)
  *   2. VFS quota error — wasmShell.writeFile returns ENOSPC
  *   3. Command timeout — WASM terminal long-running command timeout
@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { useHostCapabilities } from '../host';
-import { onWorkspaceResponse } from '../services/workspaceResponses';
+import { onProjectFolderResponse } from '../services/workspaceResponses';
 
 export interface EscalationTriggerEvent {
   /** Unique trigger identifier */
@@ -26,7 +26,7 @@ export interface EscalationTriggerEvent {
   severity: 'blocking' | 'info';
   /** Toast message to display */
   message: string;
-  /** Repo URL to pass to the workspace creation endpoint */
+  /** Repo URL to pass to the project folder creation endpoint */
   repoURL?: string;
   /** The exact command that hit the browser limit (127 — no runtime in the
    *  WASM shell). Carried so the txn action can run it in the container. */
@@ -81,14 +81,14 @@ export interface UseEscalationTriggersOptions {
   onBlockingTrigger?: (event: EscalationTriggerEvent) => void;
   /** Called when an info trigger fires (e.g. build command detected). */
   onInfoTrigger?: (event: EscalationTriggerEvent) => void;
-  /** Current repo URL (from ?repo= param or workspace state) */
+  /** Current repo URL (from ?repo= param or project folder state) */
   repoURL?: string;
 }
 
 /**
  * useEscalationTriggers hook.
  *
- * In cloud mode, watches the workspace's request responses for git push
+ * In cloud mode, watches the project folder's request responses for git push
  * failures and WASM shell errors to detect when the user hits browser
  * limitations.
  * Fires EscalationTriggerEvent custom events that the app's toast
@@ -133,10 +133,10 @@ export function useEscalationTriggers({
   useEffect(() => {
     if (localTerminal) return;
 
-    // ── Watch the workspace's git push responses ───────────────
-    // Observes the workspace's own request channel rather than wrapping the
+    // ── Watch the project folder's git push responses ───────────────
+    // Observes the project folder's own request channel rather than wrapping the
     // global fetch, which belongs to the page (the host, in an embed).
-    const stopWatchingResponses = onWorkspaceResponse((url, response) => {
+    const stopWatchingResponses = onProjectFolderResponse((url, response) => {
       if (!response.ok && (url.includes('/api/git/push') || url.includes('/api/proxy/git/push'))) {
         fireTrigger({
           id: 'git-push-failure',

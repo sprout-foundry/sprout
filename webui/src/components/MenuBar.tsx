@@ -177,7 +177,7 @@ function tidyDividers(items: MenuBarItem[]): MenuBarItem[] {
 
 /**
  * The menus with only the items something handles. The menu's commands are
- * handled by the app root; a host embedding the workspace without it gets the
+ * handled by the app root; a host embedding the project folder without it gets the
  * items its own mounted listeners answer, and no menu bar at all when none of
  * the routed commands has a handler (the self-handled Help items alone do not
  * justify one).

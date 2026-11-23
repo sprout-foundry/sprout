@@ -1,6 +1,6 @@
 /**
  * escalationHost.ts — where an escalated command runs: one of the user's
- * runners, the cloud (Fly) workspace, or "auto" (the platform decides).
+ * runners, the cloud (Fly) project folder, or "auto" (the platform decides).
  *
  * The full app's escalation prompt and terminal toast let the user pick a
  * host; the choice is remembered per repository in localStorage

@@ -46,8 +46,8 @@ const STALL_CLEAR_DEFAULT_MS = 120_000;
 /** Props for the agent escalation bridge. */
 export interface AgentEscalationBridgeProps {
   /**
-   * Repository the browser workspace was imported from. The bridge resolves
-   * workspaces against it and remembers the user's host choice per repo;
+   * Repository the browser project folder was imported from. The bridge resolves
+   * project folders against it and remembers the user's host choice per repo;
    * escalation stays off until it is set.
    */
   repoURL?: string;

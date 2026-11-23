@@ -35,7 +35,7 @@ function eventChatId(e: SproutEvent): string | undefined {
  * summary of the active run's progress events — the same text the CLI
  * renders. No model call, no invented detail.
  *
- * Subscribes to the events transport the way useGitWorkspace does: a
+ * Subscribes to the events transport the way useGitProjectFolder does: a
  * stable callback registered via onEvent/removeEvent in a single effect.
  * The latest non-empty summary wins; a `query_started` event (a new
  * run) clears the stored summary so the previous run's state is not

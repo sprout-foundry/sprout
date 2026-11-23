@@ -1,6 +1,6 @@
 /**
  * Layer 2 while Home is open: the host's work places (dashboard, tasks,
- * workspaces) and account pages, plus the way back to the project.
+ * project folders) and account pages, plus the way back to the project.
  *
  * The item lists come from the host (`host.navigation.workItems` /
  * `accountItems`): the host owns the labels and each item's destination, and

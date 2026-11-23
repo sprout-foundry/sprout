@@ -10,12 +10,12 @@ const DISMISSAL_KEY = 'sprout:sync-banner-dismissed';
 /**
  * SyncStatusBanner — ETH-1 sync-on-resume surface.
  *
- * Shows the workspace git snapshot taken at boot (`sync` field of
+ * Shows the project folder git snapshot taken at boot (`sync` field of
  * /api/bootstrap, surfaced through getBootstrapSync()): dirty files,
  * ahead/behind, last commit. "Refresh" re-reads the live state via
  * GET /api/sync (status only — never pulls); "Pull" runs POST /api/sync,
  * the non-destructive `git pull --ff-only` reconcile. Hidden entirely when
- * the workspace is clean and in sync, or once dismissed for the session.
+ * the project folder is clean and in sync, or once dismissed for the session.
  */
 const SyncStatusBanner: React.FC = () => {
   const [report, setReport] = useState<GitSyncReport | null>(() => getBootstrapSync());
@@ -84,7 +84,7 @@ const SyncStatusBanner: React.FC = () => {
   const dirtyCount = report?.dirty_files.length ?? 0;
   const ahead = report?.ahead ?? 0;
   const behind = report?.behind ?? 0;
-  // Only a remote that has moved past the workspace needs reconciling (Pull).
+  // Only a remote that has moved past the project folder needs reconciling (Pull).
   // Uncommitted files and unpushed commits are ordinary work — Source control
   // shows them — and a banner for them would sit over the sidebar all day.
   const needsPull = report !== null && report.in_git_repo && behind > 0;

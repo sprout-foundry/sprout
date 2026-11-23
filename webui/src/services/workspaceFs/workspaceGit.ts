@@ -1,10 +1,10 @@
 /**
- * workspaceGit — clone/list/remove git repos THROUGH the workspaceFs seam.
+ * projectFolderGit — clone/list/remove git repos THROUGH the projectFolderFs seam.
  *
  * One service for every UI and agent path that touches git:
  *   - `cloneRepo(url, opts)`  — shallow clone into repos/<owner>/<name>,
  *     landing natively on device (native fs backend) or in the daemon's
- *     workspace on desktop. No sidecar filesystem, no fan-out sync.
+ *     project folder on desktop. No sidecar filesystem, no fan-out sync.
  *   - `listRepos()`           — the repos/ directory from the same seam.
  *   - `removeRepo(repo)`      — recursive delete via the seam.
  *
@@ -20,7 +20,7 @@ import http from 'isomorphic-git/http/web';
 import { gitCorsProxy } from '../gitCorsProxy';
 import { createGitFs } from './gitFs';
 import { normalizeFsPath } from './types';
-import type { WorkspaceFs } from './types';
+import type { ProjectFolderFs } from './types';
 
 /** Standard repo directory for owner/name. */
 export function repoDir(repo: string): string {
@@ -82,7 +82,7 @@ export interface CloneProgress {
 }
 
 export interface CloneOpts {
-  fs?: WorkspaceFs;
+  fs?: ProjectFolderFs;
   token?: string;
   depth?: number;
   branch?: string;
@@ -99,7 +99,7 @@ export interface CloneResult {
 /** Clone `urlOrRef` into repos/<owner>/<name>/ through the seam. */
 export async function cloneRepo(urlOrRef: string, opts: CloneOpts = {}): Promise<CloneResult> {
   const { owner, name, url, host } = parseRepoRef(urlOrRef);
-  const fs = opts.fs ?? (await import('./index')).getWorkspaceFs();
+  const fs = opts.fs ?? (await import('./index')).getProjectFolderFs();
   const dir = repoDir(`${owner}/${name}`);
 
   // Refuse to clobber an existing checkout (caller deletes first to re-clone).
@@ -125,9 +125,9 @@ export async function cloneRepo(urlOrRef: string, opts: CloneOpts = {}): Promise
       onProgress: opts.onProgress,
     });
   } catch (err) {
-    // Don't leave a half-written checkout in the workspace: remove the
+    // Don't leave a half-written checkout in the project folder: remove the
     // repos/<owner>/<name> directory so a retry starts clean and the
-    // workspace never shows a broken repo.
+    // project folder never shows a broken repo.
     try {
       await fs.remove(dir);
     } catch {
@@ -155,8 +155,8 @@ export async function cloneRepo(urlOrRef: string, opts: CloneOpts = {}): Promise
  * List cloned repos: directories under repos/ that contain .git, as their
  * path below repos/ ("owner/name", or "group/sub/name" for nested hosts).
  */
-export async function listRepos(fs?: WorkspaceFs): Promise<string[]> {
-  const seam = fs ?? (await import('./index')).getWorkspaceFs();
+export async function listRepos(fs?: ProjectFolderFs): Promise<string[]> {
+  const seam = fs ?? (await import('./index')).getProjectFolderFs();
   const repos: string[] = [];
   // owner/name is depth 2; subgroups nest deeper. A repo's own directory is
   // never searched further.
@@ -184,8 +184,8 @@ export async function listRepos(fs?: WorkspaceFs): Promise<string[]> {
 }
 
 /** Remove a cloned repo (recursive) via the seam. */
-export async function removeRepo(repo: string, fs?: WorkspaceFs): Promise<boolean> {
-  const seam = fs ?? (await import('./index')).getWorkspaceFs();
+export async function removeRepo(repo: string, fs?: ProjectFolderFs): Promise<boolean> {
+  const seam = fs ?? (await import('./index')).getProjectFolderFs();
   const dir = normalizeFsPath(repoDir(repo));
   const stat = await seam.stat(dir);
   if (!stat.ok) return false;

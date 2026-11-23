@@ -27,7 +27,7 @@ function SearchView({ onFileClick, autoFocus = true }: SearchViewProps): JSX.Ele
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
   // Replace-all rewrites every matched file; the first click arms it and
-  // the second applies, so a stray click can't mass-edit the workspace.
+  // the second applies, so a stray click can't mass-edit the project folder.
   const [replaceArmed, setReplaceArmed] = useState(false);
 
   const onRowContextMenu = useCallback((e: MouseEvent, filePath: string, lineNumber: number, lineText: string) => {

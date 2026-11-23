@@ -1,15 +1,15 @@
 /**
- * Channel for responses to the workspace's own API requests.
+ * Channel for responses to the project folder's own API requests.
  *
  * clientFetch and useSproutFetch publish every response they receive here,
  * so features that react to request outcomes (such as the escalation
- * triggers) can observe the workspace's traffic without wrapping the global
+ * triggers) can observe the project folder's traffic without wrapping the global
  * fetch, which belongs to the page and, in an embed, to the host.
  */
 
-export type WorkspaceResponseListener = (url: string, response: Response, init?: RequestInit) => void;
+export type ProjectFolderResponseListener = (url: string, response: Response, init?: RequestInit) => void;
 
-const listeners = new Set<WorkspaceResponseListener>();
+const listeners = new Set<ProjectFolderResponseListener>();
 
 export function requestURL(input: RequestInfo | URL): string {
   if (typeof input === 'string') return input;
@@ -17,16 +17,16 @@ export function requestURL(input: RequestInfo | URL): string {
   return input.url;
 }
 
-/** Subscribe to workspace responses. Returns an unsubscribe function. */
-export function onWorkspaceResponse(listener: WorkspaceResponseListener): () => void {
+/** Subscribe to project folder responses. Returns an unsubscribe function. */
+export function onProjectFolderResponse(listener: ProjectFolderResponseListener): () => void {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
   };
 }
 
-/** Publish a workspace response. Listener errors never affect the request. */
-export function publishWorkspaceResponse(input: RequestInfo | URL, response: Response, init?: RequestInit): void {
+/** Publish a project folder response. Listener errors never affect the request. */
+export function publishProjectFolderResponse(input: RequestInfo | URL, response: Response, init?: RequestInit): void {
   if (listeners.size === 0) return;
   const url = requestURL(input);
   for (const listener of listeners) {

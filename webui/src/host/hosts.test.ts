@@ -56,7 +56,7 @@ describe('localHost', () => {
   it('selects the local daemon as its agent backend', () => {
     // The local build's agent is the local daemon, reached at the transport's
     // own same-origin URLs. Stating the backend explicitly lets a host that
-    // embeds the workspace read the choice off the contract.
+    // embeds the project folder read the choice off the contract.
     expect(localHost.transport.agent).toEqual({ kind: 'daemon', apiBaseURL: '', wsURL: '' });
   });
 
@@ -179,7 +179,7 @@ describe('cloudHost', () => {
       serverGit: false,
       chatSessions: false,
       // The hosted agent runs in-browser, so the host may read the in-browser
-      // workspace's files (move-to-container). Not a CloudAdapter constant.
+      // project folder's files (move-to-container). Not a CloudAdapter constant.
       browserFiles: true,
     });
   });

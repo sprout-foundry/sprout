@@ -29,8 +29,8 @@ function hostWithApiBase(apiBaseURL: string) {
 }
 
 /**
- * The platform host once a project's workspace is running: the platform's own
- * base and socket on the transport, the daemon behind its workspace proxy.
+ * The platform host once a project's project folder is running: the platform's own
+ * base and socket on the transport, the daemon behind its project folder proxy.
  */
 function platformDaemonHost(daemonBase = '/dev-space/ws-1/proxy') {
   return {
@@ -99,7 +99,7 @@ describe('clientFetch host transport', () => {
   describe('daemon agent backend', () => {
     it("prefixes /api/query with the daemon backend's base, not the host's", async () => {
       // The platform's transport base is the platform, which does not serve the
-      // workspace's query route; the daemon's proxy base is where it lives.
+      // project folder's query route; the daemon's proxy base is where it lives.
       activeHostRef.value = platformDaemonHost();
       await clientFetch('/api/query', { method: 'POST' });
       expect(fetchMock).toHaveBeenCalledWith('/dev-space/ws-1/proxy/api/query', expect.anything());
@@ -138,7 +138,7 @@ describe('clientFetch with a daemon agent backend', () => {
 
   it("prefixes /api/query with the daemon backend's base, not the host's", async () => {
     // The platform's transport base is the platform, which does not serve the
-    // workspace's query route; the daemon's proxy base is where it lives.
+    // project folder's query route; the daemon's proxy base is where it lives.
     activeHostRef.value = platformDaemonHost();
     await clientFetch('/api/query', { method: 'POST' });
     expect(fetchMock).toHaveBeenCalledWith('/dev-space/ws-1/proxy/api/query', expect.anything());

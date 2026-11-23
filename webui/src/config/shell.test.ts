@@ -43,9 +43,9 @@ function setBridge(bridge: unknown): void {
 function fsBridge(): unknown {
   return {
     getCapabilities: async () => ({}),
-    readWorkspaceFile: async () => ({ ok: false, error: 'x' }),
-    writeWorkspaceFile: async () => ({ ok: false, error: 'x' }),
-    listWorkspace: async () => ({ ok: true, files: [] }),
+    readProjectFolderFile: async () => ({ ok: false, error: 'x' }),
+    writeProjectFolderFile: async () => ({ ok: false, error: 'x' }),
+    listProjectFolder: async () => ({ ok: true, files: [] }),
   };
 }
 
@@ -68,7 +68,7 @@ describe('isStudioShellSync', () => {
   });
 
   it('is false for a bridge missing FS methods', () => {
-    setBridge({ pickWorkspace: async () => ({ ok: false, error: 'x' }) });
+    setBridge({ pickProjectFolder: async () => ({ ok: false, error: 'x' }) });
     expect(isStudioShellSync()).toBe(false);
   });
 });

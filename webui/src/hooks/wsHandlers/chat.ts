@@ -313,8 +313,8 @@ export const handleError = (ctx: EventHandlerContext): void => {
 };
 
 // Handle workspace_stopping: the hosting platform is about to stop this
-// workspace (idle timeout, runtime cap, drain) and warns ahead of time.
-export const handleWorkspaceStopping = (ctx: EventHandlerContext): void => {
+// project folder (idle timeout, runtime cap, drain) and warns ahead of time.
+export const handleDevSpaceStopping = (ctx: EventHandlerContext): void => {
   const { event, setState } = ctx;
   const logEntry = createLogEntry(event);
   logEntry.category = 'system';

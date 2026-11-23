@@ -1,5 +1,5 @@
 /**
- * WorkspaceCwdBar.test.tsx — the Files workspace row (cwd select + add-repo).
+ * WorkspaceCwdBar.test.tsx — the Files project folder row (cwd select + add-repo).
  *
  * Covers the contract that keeps the row non-duplicative and honest:
  *  - one option per cloned repo, plus "Workspace root" ('' value)
@@ -14,22 +14,22 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import WorkspaceCwdBar, { buildCwdOptions } from './WorkspaceCwdBar';
+import ProjectFolderCwdBar, { buildCwdOptions } from './WorkspaceCwdBar';
 
-// repoDir lives in workspaceGit (pure helper); no mocking needed.
+// repoDir lives in projectFolderGit (pure helper); no mocking needed.
 
 let container: HTMLDivElement;
 let root: Root;
 
-function renderBar(props: Partial<Parameters<typeof WorkspaceCwdBar>[0]> = {}) {
+function renderBar(props: Partial<Parameters<typeof ProjectFolderCwdBar>[0]> = {}) {
   const full = {
     cwd: '',
     repos: [] as string[],
     onChange: vi.fn(),
     ...props,
-  } as Parameters<typeof WorkspaceCwdBar>[0];
+  } as Parameters<typeof ProjectFolderCwdBar>[0];
   act(() => {
-    root.render(<WorkspaceCwdBar {...full} />);
+    root.render(<ProjectFolderCwdBar {...full} />);
   });
   return full;
 }

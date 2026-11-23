@@ -222,7 +222,7 @@ export const cloudHost: SproutHost = {
     // list lives in the browser (the in-browser agent), so this stays off.
     chatSessions: false,
     // The hosted agent runs in the browser, so the host may read the
-    // in-browser workspace's files (to carry them into a container when the
+    // in-browser project folder's files (to carry them into a container when the
     // project moves off the in-browser agent).
     browserFiles: true,
   },

@@ -247,7 +247,7 @@ describe('CloudAdapter', () => {
     });
 
     it('should prefer a host-supplied repo over the ?repo= query parameter', () => {
-      // A host that mounts a workspace already knows the project, so its repo
+      // A host that mounts a project folder already knows the project, so its repo
       // comes from the config (the project's repoUrl), not the URL parameter.
       window.history.replaceState({}, '', '/?repo=https://github.com/from/query');
       const withRepo = new CloudAdapter({ ...mockConfig, repoUrl: 'https://github.com/acme/widgets' });
@@ -400,7 +400,7 @@ describe('CloudAdapter', () => {
     });
   });
 
-  const workspaceSyntheticResponse = {
+  const projectFolderSyntheticResponse = {
     message: 'ok',
     workspace_root: '/workspace',
     daemon_root: '/workspace',
@@ -414,7 +414,7 @@ describe('CloudAdapter', () => {
 
       expect(response.ok).toBe(true);
       const data = await response.json();
-      expect(data).toEqual(workspaceSyntheticResponse);
+      expect(data).toEqual(projectFolderSyntheticResponse);
 
       // Should NOT call the actual fetch
       expect(mockFetch).not.toHaveBeenCalled();
@@ -429,7 +429,7 @@ describe('CloudAdapter', () => {
 
       expect(response.ok).toBe(true);
       const data = await response.json();
-      expect(data).toEqual(workspaceSyntheticResponse);
+      expect(data).toEqual(projectFolderSyntheticResponse);
 
       // Should NOT call the actual fetch
       expect(mockFetch).not.toHaveBeenCalled();
@@ -448,7 +448,7 @@ describe('CloudAdapter', () => {
 
       expect(response.ok).toBe(true);
       const data = await response.json();
-      expect(data).toEqual(workspaceSyntheticResponse);
+      expect(data).toEqual(projectFolderSyntheticResponse);
 
       // Should NOT call the actual fetch
       expect(mockFetch).not.toHaveBeenCalled();
@@ -460,7 +460,7 @@ describe('CloudAdapter', () => {
 
       expect(response.ok).toBe(true);
       const data = await response.json();
-      expect(data).toEqual(workspaceSyntheticResponse);
+      expect(data).toEqual(projectFolderSyntheticResponse);
 
       // Should NOT call the actual fetch
       expect(mockFetch).not.toHaveBeenCalled();

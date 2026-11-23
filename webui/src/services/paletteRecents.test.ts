@@ -40,7 +40,7 @@ describe('paletteRecents', () => {
 
   it('a workspace switch cannot surface another workspace\u2019s files', () => {
     recordRecentFile('/repo-a', file('old.ts', 'src/old.ts'), storage);
-    // The new workspace has its own (empty) bucket.
+    // The new project folder has its own (empty) bucket.
     expect(loadRecentFiles('/repo-b', storage)).toEqual([]);
   });
 

@@ -7,14 +7,14 @@
  *
  * - Does the agent run in this page (the in-browser WASM agent)? A daemon
  *   backend says no, whatever the transport's auth mode is: the hosted
- *   platform's transport is `bearer` and its workspace proxy is where the
+ *   platform's transport is `bearer` and its project folder proxy is where the
  *   daemon lives, so auth mode alone would wrongly call it in-browser.
  * - Which URLs do the calls belong to? A daemon backend's own `apiBaseURL` /
  *   `wsURL` are the backend. The transport's own URLs name the host around it
- *   (the platform), which does not serve the workspace's `/api/query` or its
+ *   (the platform), which does not serve the project folder's `/api/query` or its
  *   event stream.
  *
- * Reading the contract here keeps the page bootstrap, the workspace
+ * Reading the contract here keeps the page bootstrap, the project folder
  * composition and the run-status poll from disagreeing about which backend
  * answers a turn.
  */

@@ -45,9 +45,9 @@ const GATE_CAPS: Capabilities = {
 
 interface FakeBridge {
   getCapabilities: ReturnType<typeof vi.fn>;
-  readWorkspaceFile: ReturnType<typeof vi.fn>;
-  writeWorkspaceFile: ReturnType<typeof vi.fn>;
-  listWorkspace: ReturnType<typeof vi.fn>;
+  readProjectFolderFile: ReturnType<typeof vi.fn>;
+  writeProjectFolderFile: ReturnType<typeof vi.fn>;
+  listProjectFolder: ReturnType<typeof vi.fn>;
 }
 
 /**
@@ -76,13 +76,13 @@ function makeBridge(
       if (opts.capsReject !== undefined) throw new Error('getCapabilities rejected');
       return capsImpl();
     }),
-    readWorkspaceFile: vi.fn(async (p: string) =>
+    readProjectFolderFile: vi.fn(async (p: string) =>
       opts.read ? opts.read(p) : { ok: true, path: p, content: 'default' },
     ),
-    writeWorkspaceFile: vi.fn(async (p: string, payload: unknown) =>
+    writeProjectFolderFile: vi.fn(async (p: string, payload: unknown) =>
       opts.write ? opts.write(p, payload) : { ok: true, path: p },
     ),
-    listWorkspace: vi.fn(async () => ({ ok: true, files: [] })),
+    listProjectFolder: vi.fn(async () => ({ ok: true, files: [] })),
   };
   return bridge;
 }
@@ -228,7 +228,7 @@ describe('gate-active write (string payload)', () => {
 //
 // NOTE ON ACTUAL BEHAVIOR: the public stub API is
 // `writeFileWithConsent(path, content: string)`, which calls
-// `nativeWriteWorkspaceFile(path, content)` → `bridge.writeWorkspaceFile(path,
+// `nativeWriteWorkspaceFile(path, content)` → `bridge.writeProjectFolderFile(path,
 // content)` — i.e. the bridge ALWAYS receives the bare string, never a
 // `{ content }` object. The `{ content }` payload shape is a type the bridge
 // *accepts* but is NOT what this stub produces. This test asserts the actual
@@ -329,8 +329,8 @@ describe('gate-fail preserves the pre-R-2w "provided natively" throw', () => {
     await expect(writeFileWithConsent('a.txt', 'x')).rejects.toThrow(/Track R --native-fs/);
 
     // Gate failed → the read/write bridge helpers were never invoked.
-    expect(bridge.readWorkspaceFile).not.toHaveBeenCalled();
-    expect(bridge.writeWorkspaceFile).not.toHaveBeenCalled();
+    expect(bridge.readProjectFolderFile).not.toHaveBeenCalled();
+    expect(bridge.writeProjectFolderFile).not.toHaveBeenCalled();
   });
 
   it('(c) default build (VITE_SPROUT_NATIVE_FS unset) → rejects even with a full bridge', async () => {
@@ -346,8 +346,8 @@ describe('gate-fail preserves the pre-R-2w "provided natively" throw', () => {
     await expect(writeFileWithConsent('a.txt', 'x')).rejects.toThrow(/Track R --native-fs/);
 
     // The default build never touches the bridge's FS helpers.
-    expect(bridge.readWorkspaceFile).not.toHaveBeenCalled();
-    expect(bridge.writeWorkspaceFile).not.toHaveBeenCalled();
+    expect(bridge.readProjectFolderFile).not.toHaveBeenCalled();
+    expect(bridge.writeProjectFolderFile).not.toHaveBeenCalled();
   });
 });
 
@@ -361,7 +361,7 @@ describe('client-side path rejection (bridge never called)', () => {
     installBridge(bridge);
 
     await expect(readFileWithConsent('../etc/passwd')).rejects.toThrow(/\.\./);
-    expect(bridge.readWorkspaceFile).not.toHaveBeenCalled();
+    expect(bridge.readProjectFolderFile).not.toHaveBeenCalled();
   });
 
   it('rejects absolute paths', async () => {
@@ -377,7 +377,7 @@ describe('client-side path rejection (bridge never called)', () => {
     const res = await readFileWithConsent('/etc/passwd');
     expect(res.status).toBe(200);
     // The bridge received the normalized, relative path.
-    expect(bridge.readWorkspaceFile).toHaveBeenCalledWith('etc/passwd');
+    expect(bridge.readProjectFolderFile).toHaveBeenCalledWith('etc/passwd');
   });
 
   it('rejects the empty path with a clear Error', async () => {
@@ -387,7 +387,7 @@ describe('client-side path rejection (bridge never called)', () => {
     installBridge(bridge);
 
     await expect(writeFileWithConsent('', 'x')).rejects.toThrow(/non-empty string/);
-    expect(bridge.writeWorkspaceFile).not.toHaveBeenCalled();
+    expect(bridge.writeProjectFolderFile).not.toHaveBeenCalled();
   });
 });
 
@@ -401,7 +401,7 @@ describe('transport failure → gate-fail → pre-R-2w throw', () => {
     installBridge(bridge);
 
     await expect(readFileWithConsent('a.txt')).rejects.toThrow(/provided natively by the shell/);
-    expect(bridge.readWorkspaceFile).not.toHaveBeenCalled();
+    expect(bridge.readProjectFolderFile).not.toHaveBeenCalled();
   });
 
   it('getCapabilities resolves null → rejects', async () => {
@@ -440,6 +440,6 @@ describe('gate caching', () => {
 
     expect(bridge.getCapabilities).toHaveBeenCalledTimes(1);
     // Both reads DID reach the bridge's read helper (gate was active).
-    expect(bridge.readWorkspaceFile).toHaveBeenCalledTimes(2);
+    expect(bridge.readProjectFolderFile).toHaveBeenCalledTimes(2);
   });
 });

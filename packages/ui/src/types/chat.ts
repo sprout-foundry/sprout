@@ -225,7 +225,7 @@ export interface ChatProps {
   isProcessing?: boolean;
   lastError?: string | null;
   /**
-   * SP-142 §3: another chat in this workspace has a query running — the
+   * SP-142 §3: another chat in this project folder has a query running — the
    * server rejected this chat's send with 409 workspace_busy. The composer
    * footer renders an inline notice naming the running chat, with a
    * send-anyway affordance that queues locally (drains on completion).
@@ -321,7 +321,7 @@ export interface ChatProps {
   /**
    * Overrides the input's default placeholder ("Ask me anything about your
    * code..."). Hosts that embed the chat in a specific surface use this to
-   * prompt for the right kind of input — e.g. the Design workspace's agent
+   * prompt for the right kind of input — e.g. the Design project folder's agent
    * panel asks about the design tree, not the codebase.
    */
   inputPlaceholder?: string;

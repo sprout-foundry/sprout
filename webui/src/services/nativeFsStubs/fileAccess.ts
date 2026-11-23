@@ -24,7 +24,12 @@
  * deferral-wiring section and docs/WEBUI_DECOUPLING_AUDIT.md §4).
  */
 
-import { nativeFsGate, nativeReadWorkspaceFile, nativeWriteWorkspaceFile, normalizeWorkspacePath } from '../nativeFs';
+import {
+  nativeFsGate,
+  nativeReadProjectFolderFile,
+  nativeWriteProjectFolderFile,
+  normalizeProjectFolderPath,
+} from '../nativeFs';
 
 function notProvidedNative(op: string): Error {
   return new Error(
@@ -42,8 +47,8 @@ export async function readFileWithConsent(filePath: string): Promise<Response> {
   }
   // Normalize webui path → workspace-relative (rejects `..` / empty /
   // absolute paths client-side, before ever hitting the bridge).
-  const wsPath = normalizeWorkspacePath(filePath);
-  return nativeReadWorkspaceFile(wsPath);
+  const wsPath = normalizeProjectFolderPath(filePath);
+  return nativeReadProjectFolderFile(wsPath);
 }
 
 export async function writeFileWithConsent(filePath: string, content: string): Promise<Response> {
@@ -51,6 +56,6 @@ export async function writeFileWithConsent(filePath: string, content: string): P
   if (!gate.active) {
     throw notProvidedNative('writeFileWithConsent');
   }
-  const wsPath = normalizeWorkspacePath(filePath);
-  return nativeWriteWorkspaceFile(wsPath, content);
+  const wsPath = normalizeProjectFolderPath(filePath);
+  return nativeWriteProjectFolderFile(wsPath, content);
 }

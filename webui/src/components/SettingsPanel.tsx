@@ -273,10 +273,10 @@ function SettingsPanel({
     setProviderBillingType: state.setProviderBillingType,
     providerModelContextSizes: state.providerModelContextSizes,
     setProviderModelContextSizes: state.setProviderModelContextSizes,
-    // Refs and workspace
+    // Refs and project folder
     settingsRef,
-    creatingWorkspaceConfig: state.creatingWorkspaceConfig,
-    setCreatingWorkspaceConfig: state.setCreatingWorkspaceConfig,
+    creatingProjectFolderConfig: state.creatingProjectFolderConfig,
+    setCreatingProjectFolderConfig: state.setCreatingProjectFolderConfig,
     setLayerData: state.setLayerData,
     refreshProviderCatalog: state.refreshSubagentProviders,
   });

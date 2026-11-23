@@ -1,5 +1,5 @@
 /**
- * Tests for the in-browser workspace file API (the host contract's
+ * Tests for the in-browser project folder file API (the host contract's
  * move-to-container seam).
  *
  * The two public functions are capability-gated and read the in-browser

@@ -78,7 +78,7 @@ vi.mock('../services/api', () => {
   const instance = {
     getHotkeys: async () => ({ hotkeys: [], platform: 'test' }),
     applyHotkeyPreset: async () => ({ hotkeys: [] }),
-    getWorkspace: async () => ({ workspace_root: '' }),
+    getProjectFolder: async () => ({ workspace_root: '' }),
     getStats: async () => ({}),
     getSettings: async () => ({}),
   };

@@ -28,7 +28,7 @@ export interface UseChatSessionsSyncParams {
 }
 
 /**
- * Mirrors chat sessions into workspace chat tabs.
+ * Mirrors chat sessions into project folder chat tabs.
  *
  * Chat tabs are never pinned: a pinned tab collapses to an icon and carries
  * the selected-tab accent, so pinning the active chat made several chats look

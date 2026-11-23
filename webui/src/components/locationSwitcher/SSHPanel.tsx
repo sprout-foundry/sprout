@@ -3,10 +3,10 @@ import React from 'react';
 import { useHostCapabilities } from '../../host';
 import type { SSHHostEntry, SSHSessionEntry } from '../../services/api';
 import { collapseHomePath } from './pathUtils';
-import type { SwitchingState, SSHFailureState, RemoteWorkspaceContext, WorkspaceDirectory } from './types';
+import type { SwitchingState, SSHFailureState, RemoteProjectFolderContext, ProjectFolderDirectory } from './types';
 
 export interface SSHPanelProps {
-  remoteContext: RemoteWorkspaceContext | null;
+  remoteContext: RemoteProjectFolderContext | null;
   workspaceRoot: string;
   switchingState: SwitchingState;
   sshFailure: SSHFailureState | null;
@@ -21,7 +21,7 @@ export interface SSHPanelProps {
   selectedSshBrowseHost: string;
   focusedSshSessionKey: string | null;
   sshSessionPathDrafts: Record<string, string>;
-  sshSessionSuggestions: Record<string, WorkspaceDirectory[]>;
+  sshSessionSuggestions: Record<string, ProjectFolderDirectory[]>;
   sshSessionSuggestionsLoading: Record<string, boolean>;
   sshSessionSuggestionsError: Record<string, string | null>;
   sshHomePaths: Record<string, string>;
@@ -32,7 +32,7 @@ export interface SSHPanelProps {
   handleCloseSshSession: (sessionKey: string) => Promise<void>;
   updateSshSessionPathDraft: (sessionKey: string, value: string) => void;
   getSshSessionTargetPath: (session: SSHSessionEntry) => string | undefined;
-  addSSHFavoriteWorkspace: (hostAlias: string, path: string) => void;
+  addSSHFavoriteProjectFolder: (hostAlias: string, path: string) => void;
   setSelectedSshBrowseHost: (host: string) => void;
   setFocusedSshSessionKey: (key: string | null) => void;
 
@@ -41,7 +41,7 @@ export interface SSHPanelProps {
 
 export const SSHPanel: React.FC<SSHPanelProps> = ({
   remoteContext,
-  workspaceRoot,
+  workspaceRoot: projectFolder,
   switchingState,
   sshFailure,
   showExpiredSessionRecovery,
@@ -64,7 +64,7 @@ export const SSHPanel: React.FC<SSHPanelProps> = ({
   handleCloseSshSession,
   updateSshSessionPathDraft,
   getSshSessionTargetPath,
-  addSSHFavoriteWorkspace,
+  addSSHFavoriteProjectFolder,
   setSelectedSshBrowseHost,
   setFocusedSshSessionKey,
   sshPanelRef,
@@ -77,7 +77,7 @@ export const SSHPanel: React.FC<SSHPanelProps> = ({
       ref={sshPanelRef}
       className="location-switcher-popover location-ssh-panel"
       // Mixed-content popover (errors + lists) — not a listbox. See
-      // WorkspacePopover for the same rationale.
+      // ProjectFolderPopover for the same rationale.
       role="dialog"
       aria-label="SSH connection panel"
       tabIndex={0}
@@ -131,7 +131,7 @@ export const SSHPanel: React.FC<SSHPanelProps> = ({
               <div className="location-ssh-connected-info">
                 <div className="location-ssh-connected-host">{remoteContext.hostAlias}</div>
                 <div className="location-ssh-connected-path">
-                  {collapseHomePath(workspaceRoot, remoteContext.homePath)}
+                  {collapseHomePath(projectFolder, remoteContext.homePath)}
                 </div>
               </div>
               <button
@@ -275,7 +275,7 @@ export const SSHPanel: React.FC<SSHPanelProps> = ({
                     onClick={() => {
                       const targetPath = getSshSessionTargetPath(session);
                       if (targetPath) {
-                        addSSHFavoriteWorkspace(session.host_alias, targetPath);
+                        addSSHFavoriteProjectFolder(session.host_alias, targetPath);
                       }
                     }}
                     disabled={

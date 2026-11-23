@@ -57,7 +57,7 @@ function hostEscalationDefaults(): { policy: 'ask' | 'always' | 'never' | null; 
 }
 
 export interface StandaloneEscalationBoot {
-  /** The repo URL escalation will resolve workspaces against ('' when none). */
+  /** The repo URL escalation will resolve project folders against ('' when none). */
   repoURL: string;
 }
 
@@ -117,7 +117,7 @@ export function bootStandaloneEscalation(shell: WasmShell): StandaloneEscalation
   });
 
   // 2. The escalation bridge: exit-127 commands ask the host (postMessage),
-  //    run transactionally in the user's workspace, pull deltas back into
+  //    run transactionally in the user's project folder, pull deltas back into
   //    the VFS the editor is showing.
   installEscalationBridge({
     repoURL: repoURL || undefined,

@@ -151,7 +151,7 @@ export function useChatSessionManager({
   activeChatIdRef,
   queuedMessagesRef,
   isProcessing,
-  workspaceBusy = null,
+  workspaceBusy: projectFolderBusy = null,
   api,
   sessions,
 }: UseChatSessionManagerParams): UseChatSessionManagerReturn {
@@ -680,9 +680,9 @@ export function useChatSessionManager({
       } catch (error) {
         // workspace_busy (SP-142 §3): another chat in this client context has
         // a query running — the server refuses to start a second concurrent
-        // runner on one workspace. Queue the message for this chat and hold
+        // runner on one project folder. Queue the message for this chat and hold
         // it until the running chat finishes (the drain effect waits while
-        // workspaceBusy names this chat). The optimistic bubble comes back
+        // projectFolderBusy names this chat). The optimistic bubble comes back
         // out: until it is sent it lives in the queue panel, not the
         // transcript.
         if (error instanceof Error && (error as Error & { code?: string }).code === 'workspace_busy') {
@@ -752,7 +752,7 @@ export function useChatSessionManager({
             return;
           }
         }
-        // workspace_stopping: the daemon is draining before the workspace
+        // workspace_stopping: the daemon is draining before the project folder
         // stops. The server already reported it on the chat (a terminal error
         // event); only undo the optimistic running state here.
         if (error instanceof Error && (error as Error & { code?: string }).code === 'workspace_stopping') {
@@ -967,7 +967,7 @@ export function useChatSessionManager({
     }
     const activeChat = activeChatIdRef.current;
     // Held back behind another chat's run: wait for it to finish.
-    if (workspaceBusy && workspaceBusy.chatId === (activeChat ?? '')) {
+    if (projectFolderBusy && projectFolderBusy.chatId === (activeChat ?? '')) {
       return;
     }
     const headIdx = queuedMessagesRef.current.findIndex(
@@ -998,12 +998,12 @@ export function useChatSessionManager({
     });
     // activeChatIdRef is a ref; isProcessing/queuedMessagesCount drive re-runs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isProcessing, handleSendMessage, queuedMessagesCount, activeChatIdRef.current, workspaceBusy]);
+  }, [isProcessing, handleSendMessage, queuedMessagesCount, activeChatIdRef.current, projectFolderBusy]);
 
-  // The running chat's completion normally clears workspaceBusy (event
+  // The running chat's completion normally clears projectFolderBusy (event
   // routing), but a missed event would hold the queue forever. While held,
   // poll the chat list and release once the running chat is idle.
-  const runningChatId = workspaceBusy?.runningChatId ?? '';
+  const runningChatId = projectFolderBusy?.runningChatId ?? '';
   useEffect(() => {
     if (!runningChatId) return;
     const timer = setInterval(() => {

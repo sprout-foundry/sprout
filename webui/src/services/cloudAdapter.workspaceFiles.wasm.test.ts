@@ -1,5 +1,5 @@
 /**
- * The workspace file routes against the real WASM binary: a repo imported
+ * The project folder file routes against the real WASM binary: a repo imported
  * through CloudAdapter.restoreRepo is listed, read and searched by the file
  * API at every root spelling, and the editor and the agent's shell see each
  * other's writes.

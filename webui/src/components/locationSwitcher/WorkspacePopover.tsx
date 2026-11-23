@@ -3,16 +3,16 @@ import React from 'react';
 import { useHostCapabilities } from '../../host';
 import type { SproutInstance } from '../../services/api';
 import { normalizePath } from './pathUtils';
-import type { WorkspaceDirectory, SwitchingState, SSHFailureState, RemoteWorkspaceContext } from './types';
+import type { ProjectFolderDirectory, SwitchingState, SSHFailureState, RemoteProjectFolderContext } from './types';
 import { WorkspaceInstances } from './WorkspaceInstances';
-import { WorkspaceRecentList } from './WorkspaceRecentList';
-import { WorkspaceSSHFavorites } from './WorkspaceSSHFavorites';
-import { WorkspaceSuggestionList } from './WorkspaceSuggestionList';
+import { ProjectFolderRecentList } from './WorkspaceRecentList';
+import { ProjectFolderSSHFavorites } from './WorkspaceSSHFavorites';
+import { ProjectFolderSuggestionList } from './WorkspaceSuggestionList';
 
-export interface WorkspacePopoverProps {
+export interface ProjectFolderPopoverProps {
   workspaceRoot: string;
   daemonRoot: string;
-  remoteContext: RemoteWorkspaceContext | null;
+  remoteContext: RemoteProjectFolderContext | null;
   switchingState: SwitchingState;
   sshFailure: SSHFailureState | null;
   showExpiredSessionRecovery: boolean;
@@ -23,21 +23,21 @@ export interface WorkspacePopoverProps {
 
   inputValue: string;
   setInputValue: (value: string) => void;
-  suggestions: WorkspaceDirectory[];
+  suggestions: ProjectFolderDirectory[];
   suggestionsLoading: boolean;
   suggestionsError: string | null;
 
   selectedIndex: number;
   setSelectedIndex: (index: number | ((prev: number) => number)) => void;
 
-  recentWorkspaceItems: string[];
+  recentProjectFolderItems: string[];
   remoteHostFavorites: string[];
-  sshFavoriteWorkspaces: Record<string, string[]>;
+  sshFavoriteProjectFolders: Record<string, string[]>;
 
-  submitWorkspaceChange: (targetPath: string) => Promise<void>;
+  submitProjectFolderChange: (targetPath: string) => Promise<void>;
   handleInputSubmit: () => Promise<void>;
-  addSSHFavoriteWorkspace: (hostAlias: string, path: string) => void;
-  removeSSHFavoriteWorkspace: (hostAlias: string, path: string) => void;
+  addSSHFavoriteProjectFolder: (hostAlias: string, path: string) => void;
+  removeSSHFavoriteProjectFolder: (hostAlias: string, path: string) => void;
 
   popoverRef: React.RefObject<HTMLDivElement>;
   pathInputRef: React.RefObject<HTMLInputElement>;
@@ -49,8 +49,8 @@ export interface WorkspacePopoverProps {
   onInstanceChange?: (pid: number) => void;
 }
 
-export const WorkspacePopover: React.FC<WorkspacePopoverProps> = ({
-  workspaceRoot,
+export const ProjectFolderPopover: React.FC<ProjectFolderPopoverProps> = ({
+  workspaceRoot: projectFolder,
   daemonRoot,
   remoteContext,
   switchingState,
@@ -67,12 +67,12 @@ export const WorkspacePopover: React.FC<WorkspacePopoverProps> = ({
   suggestionsError,
   selectedIndex,
   setSelectedIndex,
-  recentWorkspaceItems,
+  recentProjectFolderItems,
   remoteHostFavorites,
-  submitWorkspaceChange,
+  submitProjectFolderChange,
   handleInputSubmit,
-  addSSHFavoriteWorkspace,
-  removeSSHFavoriteWorkspace,
+  addSSHFavoriteProjectFolder,
+  removeSSHFavoriteProjectFolder,
   popoverRef,
   pathInputRef,
   instances = [],
@@ -88,7 +88,7 @@ export const WorkspacePopover: React.FC<WorkspacePopoverProps> = ({
       // role="listbox" was wrong — this popover contains mixed content
       // (error alerts, status text, and several lists), not bare options.
       // Lighthouse flagged the missing required option children. The
-      // inner WorkspaceRecentList / WorkspaceInstances components carry
+      // inner ProjectFolderRecentList / WorkspaceInstances components carry
       // their own list semantics. Using role="dialog" with aria-label so
       // assistive tech announces it as a popover.
       role="dialog"
@@ -192,37 +192,37 @@ export const WorkspacePopover: React.FC<WorkspacePopoverProps> = ({
             : 'Press Enter to switch. Arrow keys select a suggestion or recent workspace.'}
         </div>
 
-        <WorkspaceSuggestionList
-          workspaceRoot={workspaceRoot}
+        <ProjectFolderSuggestionList
+          workspaceRoot={projectFolder}
           remoteContext={remoteContext}
           suggestions={suggestions}
           suggestionsLoading={suggestionsLoading}
           suggestionsError={suggestionsError}
           selectedIndex={selectedIndex}
-          onSelectSuggestion={submitWorkspaceChange}
+          onSelectSuggestion={submitProjectFolderChange}
         />
 
         {/* SSH Favorites (remote only) */}
         {remoteContext ? (
-          <WorkspaceSSHFavorites
+          <ProjectFolderSSHFavorites
             remoteContext={remoteContext}
-            workspaceRoot={workspaceRoot}
+            workspaceRoot={projectFolder}
             favorites={remoteHostFavorites}
             isSwitching={switchingState.isSwitching}
-            onSelectFavorite={submitWorkspaceChange}
+            onSelectFavorite={submitProjectFolderChange}
             onFillInput={setInputValue}
-            onSaveFavorite={() => addSSHFavoriteWorkspace(remoteContext.hostAlias, workspaceRoot)}
-            onRemoveFavorite={(path) => removeSSHFavoriteWorkspace(remoteContext.hostAlias, path)}
+            onSaveFavorite={() => addSSHFavoriteProjectFolder(remoteContext.hostAlias, projectFolder)}
+            onRemoveFavorite={(path) => removeSSHFavoriteProjectFolder(remoteContext.hostAlias, path)}
           />
         ) : null}
 
         {/* Recent */}
-        <WorkspaceRecentList
+        <ProjectFolderRecentList
           remoteContext={remoteContext}
-          recentWorkspaces={recentWorkspaceItems}
+          recentProjectFolders={recentProjectFolderItems}
           selectedIndex={selectedIndex}
           suggestionCount={suggestions.length}
-          onSelectWorkspace={submitWorkspaceChange}
+          onSelectProjectFolder={submitProjectFolderChange}
         />
 
         <div className="location-switcher-divider" role="separator" />

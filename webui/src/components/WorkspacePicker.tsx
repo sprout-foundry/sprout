@@ -12,7 +12,7 @@ export interface ProjectSuggestion {
   markers: string[];
 }
 
-export interface RecentWorkspace {
+export interface RecentProjectFolder {
   path: string;
   name: string;
   last_used: string;
@@ -20,11 +20,11 @@ export interface RecentWorkspace {
   session_count: number;
 }
 
-export interface WorkspacePickerProps {
+export interface ProjectFolderPickerProps {
   daemonRoot: string;
-  currentWorkspace: string;
+  currentProjectFolder: string;
   suggestedProjects: ProjectSuggestion[];
-  recentWorkspaces: RecentWorkspace[];
+  recentProjectFolders: RecentProjectFolder[];
   onSelect: (path: string) => void;
   onBrowse: () => void;
 }
@@ -109,15 +109,15 @@ function ProjectRow({
 
 /* ── Main Component ───────────────────────────────────────────────── */
 
-function WorkspacePicker({
+function ProjectFolderPicker({
   daemonRoot,
-  currentWorkspace,
+  currentProjectFolder,
   suggestedProjects,
-  recentWorkspaces,
+  recentProjectFolders,
   onSelect,
   onBrowse,
-}: WorkspacePickerProps): JSX.Element {
-  // Switching a workspace is a user-initiated action that can fail (backend
+}: ProjectFolderPickerProps): JSX.Element {
+  // Switching a project folder is a user-initiated action that can fail (backend
   // unreachable, permission denied on the target). Track the in-flight row so
   // the button shows progress, and surface failures inline instead of
   // leaving an unhandled rejection.
@@ -133,7 +133,7 @@ function WorkspacePicker({
     return '';
   })();
 
-  const displayWorkspace = expandHomePath(currentWorkspace, homeDir) || '/';
+  const displayProjectFolder = expandHomePath(currentProjectFolder, homeDir) || '/';
   const isSwitching = switchingPath !== null;
 
   const handleSelect = (path: string) => {
@@ -159,7 +159,7 @@ function WorkspacePicker({
         <div>
           <h2 className="workspace-picker-title">No project workspace detected</h2>
           <p className="workspace-picker-subtitle">
-            Current: <span className="workspace-picker-path">{displayWorkspace}</span>
+            Current: <span className="workspace-picker-path">{displayProjectFolder}</span>
           </p>
         </div>
       </div>
@@ -176,8 +176,8 @@ function WorkspacePicker({
       {/* ── Recent Projects ─────────────────────────────────────── */}
       <section className="workspace-picker-section">
         <h3 className="workspace-picker-section-title">Recent Projects</h3>
-        {recentWorkspaces.length > 0 ? (
-          recentWorkspaces.map((ws) => (
+        {recentProjectFolders.length > 0 ? (
+          recentProjectFolders.map((ws) => (
             <ProjectRow
               key={ws.path}
               icon={<Folder size={18} />}
@@ -230,4 +230,4 @@ function WorkspacePicker({
   );
 }
 
-export default WorkspacePicker;
+export default ProjectFolderPicker;

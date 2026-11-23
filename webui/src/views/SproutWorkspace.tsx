@@ -502,10 +502,10 @@ export function SproutWorkspace({
   }
 
   const root = (
-    <WorkspaceRoot rootClass={rootClass} projectId={project.id} spaceId={resolved.id} documentScope={!ambient}>
+    <ProjectFolder rootClass={rootClass} projectId={project.id} spaceId={resolved.id} documentScope={!ambient}>
       {content}
       {children}
-    </WorkspaceRoot>
+    </ProjectFolder>
   );
 
   if (ambient) return root;
@@ -537,7 +537,7 @@ export function SproutWorkspace({
  * than on `documentElement` because this element — not `documentElement` — is
  * scoped to the workspace.
  */
-function WorkspaceRoot({
+function ProjectFolder({
   rootClass,
   projectId,
   spaceId,

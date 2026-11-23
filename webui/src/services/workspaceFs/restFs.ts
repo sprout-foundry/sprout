@@ -1,5 +1,5 @@
 /**
- * REST backend for the workspaceFs seam (daemon / cloud mode).
+ * REST backend for the projectFolderFs seam (daemon / cloud mode).
  *
  * Maps the seam onto the daemon endpoints the hosted editor also serves:
  * `/api/files` (list), `/api/file` (read/write), `/api/create`,
@@ -11,7 +11,16 @@
  */
 
 import { clientFetch } from '../clientSession';
-import type { BatchResult, FsOk, FsEntry, ListResult, ReadResult, StatResult, WorkspaceFs, WriteEntry } from './types';
+import type {
+  BatchResult,
+  FsOk,
+  FsEntry,
+  ListResult,
+  ReadResult,
+  StatResult,
+  ProjectFolderFs,
+  WriteEntry,
+} from './types';
 import { normalizeFsPath, WRITE_BATCH_CAP } from './types';
 
 export type FetchFn = typeof fetch;
@@ -64,7 +73,7 @@ function json(init: BodyInit): RequestInit {
  * same backend as every other webui request (installed adapter, embedding
  * host's transport, SSH proxy base) rather than the page origin.
  */
-export function createRestFs(fetchFn: FetchFn = clientFetch): WorkspaceFs {
+export function createRestFs(fetchFn: FetchFn = clientFetch): ProjectFolderFs {
   return {
     // The file endpoint answers a read with the raw bytes: text types come
     // back as content, anything else as base64.
@@ -120,7 +129,7 @@ export function createRestFs(fetchFn: FetchFn = clientFetch): WorkspaceFs {
 
     async stat(path) {
       // No dedicated daemon endpoint; derive from a listing (cached cheaply
-      // by the daemon for small workspaces; acceptable for stat's rarity).
+      // by the daemon for small project folders; acceptable for stat's rarity).
       const p = normalizeFsPath(path);
       if (p === '') return { ok: true, path: '', size: 0, isDir: true };
       const listing = await this.list('', 6);

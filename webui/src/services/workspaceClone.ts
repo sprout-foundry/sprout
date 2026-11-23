@@ -9,15 +9,15 @@ function announceRepoChanged(): void {
 }
 
 /**
- * Clone a repository into the workspace the way this build stores git.
+ * Clone a repository into the project folder the way this build stores git.
  *
  * The hosted browser IDE keeps git objects in lightning-fs (IndexedDB is
  * binary-safe; the WASM VFS is string-backed) and mirrors the working tree
- * into the VFS, with the workspace root as the repository — the model the
+ * into the VFS, with the project folder as the repository — the model the
  * Git panel and terminal git use. Other builds (native shells, local daemon)
- * clone through the workspaceFs seam into repos/<owner>/<name>/.
+ * clone through the projectFolderFs seam into repos/<owner>/<name>/.
  */
-export async function cloneIntoWorkspace(url: string, opts: { token?: string } = {}): Promise<CloneResult> {
+export async function cloneIntoProjectFolder(url: string, opts: { token?: string } = {}): Promise<CloneResult> {
   const { cloneRepo, parseRepoRef } = await import('./workspaceFs/workspaceGit');
   if (!gitCorsProxy()) {
     const cloned = await cloneRepo(url, opts);

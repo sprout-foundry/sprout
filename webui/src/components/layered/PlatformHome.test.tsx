@@ -80,8 +80,8 @@ describe('PlatformHome', () => {
     // Home hides under the editor bar.
     const app = document.createElement('div');
     app.className = 'app';
-    const workspaceRoot = document.createElement('div');
-    workspaceRoot.className = 'sprout-workspace';
+    const projectFolder = document.createElement('div');
+    projectFolder.className = 'sprout-workspace';
     const main = document.createElement('main');
     main.className = 'main-content';
     const header = document.createElement('div');
@@ -90,8 +90,8 @@ describe('PlatformHome', () => {
     // and lets the assertion distinguish "matched" from "not matched".
     Object.defineProperty(header, 'offsetHeight', { value: 35, configurable: true });
     main.appendChild(header);
-    workspaceRoot.appendChild(main);
-    app.appendChild(workspaceRoot);
+    projectFolder.appendChild(main);
+    app.appendChild(projectFolder);
     document.body.appendChild(app);
 
     try {

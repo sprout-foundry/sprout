@@ -49,11 +49,11 @@ export interface BrowseTarget {
 }
 
 /**
- * Compute the directory the workspace switcher should browse for suggestions,
+ * Compute the directory the project folder switcher should browse for suggestions,
  * clamped to the daemon root.
  *
- * The switcher pre-fills its input with the current workspace root. When the
- * workspace IS the home directory (and the daemon root is home), the natural
+ * The switcher pre-fills its input with the current project folder. When the
+ * project folder IS the home directory (and the daemon root is home), the natural
  * "browse the parent of the input" targets a directory ABOVE the daemon root,
  * which the backend rejects with `directory_outside_daemon_root`. The clamp
  * makes a home-workspace input browse the daemon root itself instead.

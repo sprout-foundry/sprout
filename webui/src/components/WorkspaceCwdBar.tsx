@@ -4,24 +4,24 @@ import type { ReactElement } from 'react';
 import { repoDir } from '../services/workspaceFs/workspaceGit';
 
 /**
- * WorkspaceCwdBar — the Files workspace row: one select that shows and
+ * ProjectFolderCwdBar — the Files project folder row: one select that shows and
  * changes the session working directory shared by Files / Terminal / Git /
- * Agent (services/workspaceCwd.ts), plus an optional "+ add workspace from
+ * Agent (services/workspaceCwd.ts), plus an optional "+ add project folder from
  * repo" trigger.
  *
  * Deliberately the SINGLE surface for the cwd — no companion chip repeating
  * the current value. The select itself always reflects reality: when the cwd
  * is a folder inside a repo (e.g. set by `cd` in the terminal), a dynamic
  * option is synthesized for it ("owner/name › sub/path") instead of the
- * select silently claiming the workspace root.
+ * select silently claiming the project folder.
  */
 
-export interface WorkspaceCwdBarProps {
-  /** Session working directory, workspace-relative ('' = workspace root). */
+export interface ProjectFolderCwdBarProps {
+  /** Session working directory, workspace-relative ('' = project folder). */
   cwd: string;
   /** Cloned repos in owner/name form (one selector entry each). */
   repos: string[];
-  /** Called with the newly selected cwd ('' = workspace root). */
+  /** Called with the newly selected cwd ('' = project folder). */
   onChange: (cwd: string) => void;
   /**
    * Whether the cwd SELECT renders. Studio shells are single-workspace
@@ -70,14 +70,14 @@ export function buildCwdOptions(cwd: string, repos: string[]): CwdOption[] {
   return options;
 }
 
-export default function WorkspaceCwdBar({
+export default function ProjectFolderCwdBar({
   cwd,
   repos,
   onChange,
   showSelector = true,
   onAddRepo,
   addRepoDisabled,
-}: WorkspaceCwdBarProps): ReactElement | null {
+}: ProjectFolderCwdBarProps): ReactElement | null {
   const options = useMemo(() => buildCwdOptions(cwd, repos), [cwd, repos]);
   const value = options.some((option) => option.value === cwd) ? cwd : '';
   if (!showSelector && !onAddRepo) return null;

@@ -937,7 +937,7 @@ describe('error cause surfacing', () => {
 //
 // Bug: the old handler called window.location.reload() unconditionally,
 // which in service mode caused the user to land in the home directory
-// because per-client server state was re-initialised from ws.workspaceRoot
+// because per-client server state was re-initialised from ws.projectFolder
 // (home) after the reload destroyed in-memory React state.
 //
 // Fix: the handler now does an in-place refresh — LSP teardown, cache
@@ -948,7 +948,7 @@ describe('error cause surfacing', () => {
 describe('workspace_changed', () => {
   function setup(clientId?: string) {
     const stateHolder = { current: createDefaultState() };
-    // Seed caches that should be cleared on workspace change.
+    // Seed caches that should be cleared on project folder change.
     stateHolder.current.recentLogs = ['old log entry'];
 
     const setStateMock = vi.fn((updater: unknown) => {

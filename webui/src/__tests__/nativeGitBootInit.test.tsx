@@ -86,8 +86,8 @@ vi.mock('../services/api', () => ({
     getInstance: () => ({
       getStats: async () => ({ provider: '', model: '', stats: {} }),
       getFiles: async () => ({ files: [] }),
-      getWorkspace: async () => ({}),
-      setWorkspace: async () => ({}),
+      getProjectFolder: async () => ({}),
+      setProjectFolder: async () => ({}),
       getSessions: async () => ({ sessions: [], current_session_id: '' }),
       restoreSession: async () => ({ messages: [] }),
     }),
@@ -99,7 +99,7 @@ vi.mock('../services/serviceWorkerRegistration', () => ({
 }));
 
 vi.mock('../services/clientSession', () => ({
-  getTabWorkspacePath: () => '',
+  getTabProjectFolderPath: () => '',
 }));
 
 vi.mock('../bootstrapAdapter', () => ({

@@ -289,11 +289,11 @@ vi.mock('../hooks/useEditorContextMenu', () => {
       } | null>(null);
       const [wsRoot, setWsRoot] = React.useState<string | null>(null);
       React.useEffect(() => {
-        // Read workspace root from apiService mock
+        // Read project folder from apiService mock
         const apiService = (globalThis as any).__mockApiService;
         if (apiService) {
           apiService
-            .getWorkspace()
+            .getProjectFolder()
             .then((ws: any) => {
               setWsRoot(ws?.workspace_root || null);
             })
@@ -994,14 +994,14 @@ describe('EditorPane', () => {
 
     // ── Context & service mocks ──
     apiServiceMock = {
-      getWorkspace: vi.fn().mockResolvedValue({
+      getProjectFolder: vi.fn().mockResolvedValue({
         workspace_root: '/home/user/project',
         daemon_root: '/home/user/project/.sprout',
       }),
       getGitDiff: vi.fn().mockResolvedValue({ diff: '' }),
     };
     (ApiService.getInstance as vi.Mock).mockReturnValue(apiServiceMock);
-    // Update global ref so context menu mock can read workspace root
+    // Update global ref so context menu mock can read project folder
     (globalThis as any).__mockApiService = apiServiceMock;
 
     mockUseEditorManager.mockReturnValue({ ...defaultMockEditorManager });
@@ -1190,7 +1190,7 @@ describe('EditorPane', () => {
     });
 
     it('"Copy absolute path" item is NOT present when workspace root is empty', async () => {
-      apiServiceMock.getWorkspace.mockResolvedValueOnce({
+      apiServiceMock.getProjectFolder.mockResolvedValueOnce({
         workspace_root: '',
         daemon_root: '/home/user/project/.sprout',
       });

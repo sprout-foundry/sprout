@@ -1,11 +1,11 @@
 /**
  * agentEscalation.ts — lets the agent's shell commands run in a remote
- * workspace (the user's runner or the cloud) when the in-browser shell can't.
+ * project folder (the user's runner or the cloud) when the in-browser shell can't.
  *
  * The WASM executor (cmd/wasm/shell_executor.go) calls
  * globalThis.__sproutEscalate.run(command) when an agent command exits 127.
  * This module decides, per the user's policy, whether to run it in one of the
- * user's workspaces — on their own runner or in the cloud (runTxnCommand:
+ * user's project folders — on their own runner or in the cloud (runTxnCommand:
  * push browser files, run, pull results back) — and answers with the real
  * result, or explains why it didn't run, so the model can adapt instead of
  * seeing "command not found".
@@ -68,7 +68,7 @@ export function setEscalationPolicy(policy: EscalationPolicy): void {
 }
 
 export interface EscalationBridgeOptions {
-  /** Repository the browser workspace was imported from; required to pick a workspace. */
+  /** Repository the browser project folder was imported from; required to pick a project folder. */
   repoURL?: string;
   /**
    * Ask the user whether to run this command outside the browser. Answering

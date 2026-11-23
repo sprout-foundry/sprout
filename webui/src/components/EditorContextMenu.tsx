@@ -58,7 +58,7 @@ export function areContextMenuEqual(prev: EditorContextMenuProps, next: EditorCo
  * Component that renders the editor context menu.
  */
 const EditorContextMenuImpl: FC<EditorContextMenuProps> = ({ contextMenu: ctx, isSemanticLanguage }) => {
-  const { contextMenu, workspaceRoot } = ctx;
+  const { contextMenu, workspaceRoot: projectFolder } = ctx;
 
   return (
     <ContextMenu
@@ -96,7 +96,7 @@ const EditorContextMenuImpl: FC<EditorContextMenuProps> = ({ contextMenu: ctx, i
         <ClipboardCopy size={13} />
         <span className="menu-item-label">Copy relative path</span>
       </button>
-      {workspaceRoot && (
+      {projectFolder && (
         <button className="context-menu-item" onClick={ctx.handleCopyAbsolutePath} type="button">
           <ClipboardCopy size={13} />
           <span className="menu-item-label">Copy absolute path</span>

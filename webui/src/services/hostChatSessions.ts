@@ -42,7 +42,7 @@ export function hostApiURL(apiBaseURL: string, path: string): string {
 /**
  * The project the host's chat session store is scoped to. A host store keeps
  * one chat list per project (see `docs/integration/host-contract.md`), so every
- * host session call names the project of the mounted workspace. Recorded by
+ * host session call names the project of the mounted project folder. Recorded by
  * the chat unit (`WorkspaceChatProvider`'s `chatSessionsProject`) for the
  * module-level paths — the turn append and the list/messages refreshes — the
  * same way the active host is recorded for them; the chat unit's own session
@@ -54,7 +54,7 @@ let activeChatSessionsProject = '';
 /**
  * Record the project the host chat session calls are scoped to, returning a
  * restore function that puts back the previous one (the `registerActiveHost`
- * pattern, so an unmounting workspace hands the scope back).
+ * pattern, so an unmounting project folder hands the scope back).
  */
 export function registerActiveChatSessionsProject(project: string | undefined): () => void {
   const previous = activeChatSessionsProject;

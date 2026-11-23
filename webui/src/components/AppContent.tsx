@@ -10,7 +10,7 @@ import { useHotkeyCommandHandler } from '../hooks/useHotkeyCommandHandler';
 import { useChatSessionsSync } from '../hooks/useChatSessionsSync';
 import { getPluginViewIds } from '../services/pluginRegistry';
 import { useFileHandler } from '../hooks/useFileHandler';
-import { useGitWorkspace } from '../hooks/useGitWorkspace';
+import { useGitProjectFolder } from '../hooks/useGitWorkspace';
 import { buildGitPanelProps } from './git/gitPanelProps';
 import { useHotkeysConfig } from '../hooks/useHotkeysConfig';
 import { useShallowStable } from '../hooks/useShallowStable';
@@ -36,7 +36,7 @@ import ErrorBoundary from './ErrorBoundary';
 import Sidebar from './Sidebar';
 import { useMockupPresence } from './useMockupPresence';
 import Terminal from './Terminal';
-import WorkspaceGateModal from './WorkspaceGateModal';
+import ProjectFolderGateModal from './WorkspaceGateModal';
 import { WorktreeChatDialog } from './WorktreeChatDialog';
 import { isLayeredLayout, OPEN_COMMAND_PALETTE_EVENT } from '../config/layout';
 import { ChatHistorySwitcher } from './chat/ChatHistorySwitcher';
@@ -168,17 +168,17 @@ const AppContent: React.FC<AppContentProps> = ({
     saveAllBuffers,
     toggleBufferPin,
   } = useEditorManager();
-  const { openFile: openWorkspaceFile } = useWorkspaceEditor();
+  const { openFile: openProjectFolderFile } = useWorkspaceEditor();
   const apiService = ApiService.getInstance();
   const sproutFetch = useSproutFetch();
-  // SP-130: home-directory gate. `useWorkspace` fetches workspace metadata
+  // SP-130: home-directory gate. `useWorkspace` fetches project folder metadata
   // (is_project, needs_workspace_selection, workspace_is_home, …). When the
-  // resolved workspace is the user's home directory without consent, a
+  // resolved project folder is the user's home directory without consent, a
   // blocking overlay renders on top of the normal UI until the user either
   // selects a project folder or explicitly consents to running in home.
-  const { workspaceInfo, setWorkspace: setWorkspaceViaHook, consentHome } = useWorkspace();
+  const { projectFolderInfo, setProjectFolder: setProjectFolderViaHook, consentHome } = useWorkspace();
   const handleConsentHome = useCallback(async () => {
-    // Re-reads the workspace first; a successful consent reloads the page,
+    // Re-reads the project folder first; a successful consent reloads the page,
     // and a project restored meanwhile closes the modal through the store.
     await consentHome();
   }, [consentHome]);
@@ -368,7 +368,7 @@ const AppContent: React.FC<AppContentProps> = ({
 
   const initialViewSyncRef = useRef(false);
 
-  // The workspace's mockup, probed once here and handed to the Code shell's
+  // The project folder's mockup, probed once here and handed to the Code shell's
   // preview panel. A mockup is a view of the work, not a mode: `draw_mockup`
   // writes `design/mockup.html` and the panel shows it beside the code.
   const { present: hasMockup, loading: mockupLoading } = useMockupPresence();
@@ -411,7 +411,7 @@ const AppContent: React.FC<AppContentProps> = ({
     [onViewChange, openWorkspaceBuffer, buffersRef, activeChatId],
   );
 
-  const { handleFileClick } = useFileHandler({ onViewChange, openFile: openWorkspaceFile });
+  const { handleFileClick } = useFileHandler({ onViewChange, openFile: openProjectFolderFile });
 
   // Open a conversation from outside the tabs (the layered sidebar): focus its
   // chat tab — or open one bound to it — exactly as clicking the tab would,
@@ -539,17 +539,17 @@ const AppContent: React.FC<AppContentProps> = ({
 
   // ── Command palette plumbing ─────────────────────────────────────────
   // The palette's data sources (commands, the file index, recents, symbol
-  // search) are shared with the composed workspace's palette unit.
+  // search) are shared with the composed project folder's palette unit.
   const {
     commands: paletteCommands,
     isLoading: paletteIsLoading,
     recentFiles: paletteRecentFiles,
-    workspaceRoot: paletteWorkspaceRoot,
+    workspaceRoot: paletteProjectFolder,
     onSearchFiles: handlePaletteSearchFiles,
     onSearchSymbols: handlePaletteSearchSymbols,
     onSearchWorkspaceSymbols: handlePaletteSearchWorkspaceSymbols,
     onOpenFileAtLine: handlePaletteOpenFileAtLine,
-  } = useCommandPaletteSources({ isOpen: isCommandPaletteOpen, openFile: openWorkspaceFile });
+  } = useCommandPaletteSources({ isOpen: isCommandPaletteOpen, openFile: openProjectFolderFile });
   // Open a file in a new editor pane (split). Bound to ⌘/Ctrl+↵ in the
   // palette. Splits the currently-active pane to the right, then opens the
   // file in the newly-focused pane.
@@ -560,9 +560,9 @@ const AppContent: React.FC<AppContentProps> = ({
       if (newPaneId) {
         switchPane(newPaneId);
       }
-      openWorkspaceFile(filePath);
+      openProjectFolderFile(filePath);
     },
-    [activePaneId, splitPane, switchPane, openWorkspaceFile],
+    [activePaneId, splitPane, switchPane, openProjectFolderFile],
   );
   // Returning `false` from onExecuteCommand keeps the palette open — used by
   // commands that change the palette's own mode (quick_open, goto_symbol).
@@ -607,7 +607,7 @@ const AppContent: React.FC<AppContentProps> = ({
     [onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded, handleOpenHotkeysConfig],
   );
 
-  const gitWorkspace = useGitWorkspace({
+  const gitProjectFolder = useGitProjectFolder({
     fetchFn: sproutFetch,
     gitRefreshToken,
     selectedGitFilePath: null,
@@ -623,7 +623,7 @@ const AppContent: React.FC<AppContentProps> = ({
   const {
     gitStatus,
     gitBranches,
-    workspaceRoot,
+    workspaceRoot: projectFolder,
     activeDiffPath,
     activeDiff,
     diffMode,
@@ -638,7 +638,7 @@ const AppContent: React.FC<AppContentProps> = ({
     deepReview,
     handleFixFromReview,
     handleDiffModeChange,
-  } = gitWorkspace;
+  } = gitProjectFolder;
 
   // Open/close the inline tool detail from a tool pill. The chat
   // renders the detail inline (below the message) instead of routing it to
@@ -760,7 +760,7 @@ const AppContent: React.FC<AppContentProps> = ({
     git: {
       gitBranches,
       gitStatus,
-      workspaceRoot,
+      workspaceRoot: projectFolder,
     },
     // Ship payload. The deploy data source is the backend deploy API via the
     // app's services; until it is wired, Ship renders its not-yet-deployed
@@ -773,7 +773,7 @@ const AppContent: React.FC<AppContentProps> = ({
     },
   };
 
-  // The workspace composition (SP-160 §160a): the app renders the active space
+  // The project folder composition (SP-160 §160a): the app renders the active space
   // through `SproutWorkspace` — the same component a host mounts — rather than
   // assembling the registry shell itself. The space is the app's resolved
   // mode; the app owns "which space" (its switcher lives in the Sidebar) and
@@ -786,11 +786,11 @@ const AppContent: React.FC<AppContentProps> = ({
   // the ambient one and renders only the space.
   //
   // `project` mirrors how the web UI already identifies a project: the local
-  // workspace root (falling back to the workspace metadata's root), which is
+  // project folder (falling back to the project folder metadata's root), which is
   // the stable identifier a local/daemon host uses.
   const project = useMemo(
-    () => ({ id: workspaceRoot || workspaceInfo.workspace_root || '' }),
-    [workspaceRoot, workspaceInfo.workspace_root],
+    () => ({ id: projectFolder || projectFolderInfo.workspace_root || '' }),
+    [projectFolder, projectFolderInfo.workspace_root],
   );
 
   // ── Sidebar props ────────────────────────────────────────────────
@@ -865,7 +865,7 @@ const AppContent: React.FC<AppContentProps> = ({
   // rebuild them each render (no stale closures) and keep the identity only
   // when they are unchanged.
   const gitPanel = useShallowStable(
-    buildGitPanelProps(gitWorkspace, { openWorkspaceBuffer, onOpenFile: handleFileClick }),
+    buildGitPanelProps(gitProjectFolder, { openWorkspaceBuffer, onOpenFile: handleFileClick }),
   );
 
   return (
@@ -874,10 +874,10 @@ const AppContent: React.FC<AppContentProps> = ({
        * overlay on top of the normal UI when the workspace resolves to the
        * user's home directory without consent. The component itself also
        * short-circuits in cloud mode (supportsWorkspaceSwitching = false). */}
-      {workspaceInfo.needs_workspace_selection && workspaceInfo.workspace_is_home && (
-        <WorkspaceGateModal
-          workspaceInfo={workspaceInfo}
-          onSelectWorkspace={(path) => setWorkspaceViaHook(path)}
+      {projectFolderInfo.needs_workspace_selection && projectFolderInfo.workspace_is_home && (
+        <ProjectFolderGateModal
+          projectFolderInfo={projectFolderInfo}
+          onSelectProjectFolder={(path) => setProjectFolderViaHook(path)}
           onConsentHome={handleConsentHome}
         />
       )}
@@ -951,7 +951,7 @@ const AppContent: React.FC<AppContentProps> = ({
         onOpenFile={(filePath) => {
           // Search stays usable above Home; what it opens shows in the editor.
           closeHome();
-          openWorkspaceFile(filePath);
+          openProjectFolderFile(filePath);
           // Recents are populated by the buffer-watcher effect — no explicit
           // recordRecentFile call needed here.
         }}
@@ -966,7 +966,7 @@ const AppContent: React.FC<AppContentProps> = ({
         commands={paletteCommands}
         isLoading={paletteIsLoading}
         recentFiles={paletteRecentFiles}
-        workspaceRoot={paletteWorkspaceRoot}
+        workspaceRoot={paletteProjectFolder}
         onSearchFiles={handlePaletteSearchFiles}
         onSearchSymbols={handlePaletteSearchSymbols}
         onSearchWorkspaceSymbols={handlePaletteSearchWorkspaceSymbols}

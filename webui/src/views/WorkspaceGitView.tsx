@@ -6,8 +6,8 @@ import { buildGitPanelProps } from '../components/git/gitPanelProps';
 import SidebarGitSection from '../components/SidebarGitSection';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
 import { useGitHandlers } from '../hooks/useGitHandlers';
-import { useGitWorkspace } from '../hooks/useGitWorkspace';
-import type { GitDiffResponse, UseGitWorkspaceResult } from '../hooks/useGitWorkspace';
+import { useGitProjectFolder } from '../hooks/useGitWorkspace';
+import type { GitDiffResponse, UseGitProjectFolderResult } from '../hooks/useGitWorkspace';
 import { useHostCapabilities } from '../host';
 import { requestOpenInEditor } from './openInEditor';
 import '../components/Sidebar.css';
@@ -104,7 +104,7 @@ function ConnectedGitView({
     return options.path;
   }, []);
 
-  const gitWorkspace = useGitWorkspace({
+  const gitProjectFolder = useGitProjectFolder({
     fetchFn,
     gitRefreshToken: refreshToken,
     onViewChange: noop,
@@ -120,14 +120,14 @@ function ConnectedGitView({
   // The review opens as an editor tab the assembled editor does not show, so
   // the view leaves it out.
   const panel: SidebarGitPanelProps = {
-    ...buildGitPanelProps(gitWorkspace, { openWorkspaceBuffer, onOpenFile: openFile }),
+    ...buildGitPanelProps(gitProjectFolder, { openWorkspaceBuffer, onOpenFile: openFile }),
     onRunReview: undefined,
   };
 
-  if (isMissingRepository(gitWorkspace)) {
+  if (isMissingRepository(gitProjectFolder)) {
     return (
       <div className={rootClass} data-testid="workspace-git">
-        <MissingRepositoryState workspace={gitWorkspace} />
+        <MissingRepositoryState workspace={gitProjectFolder} />
       </div>
     );
   }
@@ -175,16 +175,16 @@ function ConnectedGitView({
 }
 
 /** Whether the git backend answered and reported no repository (no history to show). */
-function isMissingRepository(workspace: UseGitWorkspaceResult): boolean {
-  return workspace.hasLoadedGitStatus && !workspace.isGitLoading && !workspace.gitStatus;
+function isMissingRepository(projectFolder: UseGitProjectFolderResult): boolean {
+  return projectFolder.hasLoadedGitStatus && !projectFolder.isGitLoading && !projectFolder.gitStatus;
 }
 
-function MissingRepositoryState({ workspace }: { workspace: UseGitWorkspaceResult }): JSX.Element {
+function MissingRepositoryState({ workspace: projectFolder }: { workspace: UseGitProjectFolderResult }): JSX.Element {
   return (
     <GitEmptyState
       title="No git repository"
-      detail={workspace.gitActionError ?? 'This workspace is not a git repository.'}
-      onRefresh={() => void workspace.refreshGitStatus()}
+      detail={projectFolder.gitActionError ?? 'This workspace is not a git repository.'}
+      onRefresh={() => void projectFolder.refreshGitStatus()}
     />
   );
 }
@@ -196,16 +196,16 @@ function MissingRepositoryState({ workspace }: { workspace: UseGitWorkspaceResul
  * once the backend reports no repository.
  */
 export function WorkspaceGitStatusPanel({
-  workspace,
+  workspace: projectFolder,
   panel,
 }: {
-  workspace: UseGitWorkspaceResult;
+  workspace: UseGitProjectFolderResult;
   panel: SidebarGitPanelProps;
 }): JSX.Element {
-  if (isMissingRepository(workspace)) {
+  if (isMissingRepository(projectFolder)) {
     return (
       <div className="sprout-workspace-git" data-testid="workspace-git">
-        <MissingRepositoryState workspace={workspace} />
+        <MissingRepositoryState workspace={projectFolder} />
       </div>
     );
   }

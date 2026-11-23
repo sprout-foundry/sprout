@@ -19,11 +19,11 @@ export interface SproutDesktopAPI {
   listSshHosts: () => Promise<unknown[]>;
   listWslDistros: () => Promise<unknown[]>;
   pickRepository: () => Promise<unknown>;
-  pickWorkspace: () => Promise<unknown>;
+  pickProjectFolder: () => Promise<unknown>;
   pickWorktree: () => Promise<unknown>;
   pickWorktreeParent: () => Promise<unknown>;
-  openSshWorkspace: (options: unknown) => Promise<unknown>;
-  openWorkspace: (options: unknown) => Promise<unknown>;
+  openSshProjectFolder: (options: unknown) => Promise<unknown>;
+  openProjectFolder: (options: unknown) => Promise<unknown>;
   openWorktree: (options: unknown) => Promise<unknown>;
   createWorktree: (options: unknown) => Promise<unknown>;
   installWsl: () => Promise<unknown>;

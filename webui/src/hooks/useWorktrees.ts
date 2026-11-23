@@ -1,5 +1,5 @@
 /**
- * Hook for managing git worktrees in the workspace.
+ * Hook for managing git worktrees in the project folder.
  *
  * Provides functionality to:
  * - List available worktrees

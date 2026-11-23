@@ -42,7 +42,7 @@ vi.mock('../services/api', () => {
     async applyHotkeyPreset() {
       return { hotkeys: [] };
     }
-    async getWorkspace() {
+    async getProjectFolder() {
       return { workspace_root: '' };
     }
   }

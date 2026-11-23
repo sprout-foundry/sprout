@@ -29,7 +29,7 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
   const hosted = host.transport.authMode === 'bearer';
   // A daemon backend has the project's checkout already, so there is nothing
   // for the user to open: the panel's picker would offer to clone a repository
-  // into a workspace that already has one. Only a host whose agent runs in the
+  // into a project folder that already has one. Only a host whose agent runs in the
   // page has no checkout of its own, which is what the panel is for.
   const daemonBackend = host.transport.agent?.kind === 'daemon';
   // A space bound to a project opens that project's repository: no picker.

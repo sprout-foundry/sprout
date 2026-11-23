@@ -42,7 +42,7 @@ export const localHost: SproutHost = {
     authMode: 'none',
     // The local build's agent is the local daemon, reached at the transport's
     // own same-origin URLs. Stating it explicitly lets a host that embeds the
-    // workspace read the backend choice off the contract rather than infer it.
+    // project folder read the backend choice off the contract rather than infer it.
     agent: { kind: 'daemon', apiBaseURL: '', wsURL: '' },
   },
   navigation: {

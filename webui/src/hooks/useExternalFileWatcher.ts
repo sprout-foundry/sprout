@@ -20,7 +20,7 @@ interface WatcherReturn {
 function getWatchablePaths(buffers: Map<string, EditorBuffer>): { path: string; mtime: number }[] {
   const result: { path: string; mtime: number }[] = [];
   for (const buf of Array.from(buffers.values())) {
-    // Skip virtual workspace buffers (untitled files created via Ctrl+N)
+    // Skip virtual project folder buffers (untitled files created via Ctrl+N)
     // They don't exist on disk and shouldn't be polled
     if (buf.kind === 'file' && buf.file.path && !buf.file.path.startsWith('__workspace/')) {
       result.push({ path: buf.file.path, mtime: buf.file.modified });

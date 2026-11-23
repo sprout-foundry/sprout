@@ -6,7 +6,7 @@ import {
   MAX_RECENT_WORKSPACES,
 } from './types';
 
-export const readRecentWorkspaces = (): string[] => {
+export const readRecentProjectFolders = (): string[] => {
   if (typeof window === 'undefined') {
     return [];
   }
@@ -28,14 +28,14 @@ export const readRecentWorkspaces = (): string[] => {
   }
 };
 
-export const writeRecentWorkspaces = (paths: string[]) => {
+export const writeRecentProjectFolders = (paths: string[]) => {
   if (typeof window === 'undefined') {
     return;
   }
   window.localStorage.setItem(RECENT_WORKSPACES_KEY, JSON.stringify(paths.slice(0, MAX_RECENT_WORKSPACES)));
 };
 
-export const readRemoteRecentWorkspaces = (): Record<string, string[]> => {
+export const readRemoteRecentProjectFolders = (): Record<string, string[]> => {
   if (typeof window === 'undefined') {
     return {};
   }
@@ -64,14 +64,14 @@ export const readRemoteRecentWorkspaces = (): Record<string, string[]> => {
   }
 };
 
-export const writeRemoteRecentWorkspaces = (value: Record<string, string[]>) => {
+export const writeRemoteRecentProjectFolders = (value: Record<string, string[]>) => {
   if (typeof window === 'undefined') {
     return;
   }
   window.localStorage.setItem(REMOTE_RECENT_WORKSPACES_KEY, JSON.stringify(value));
 };
 
-export const readSSHFavoriteWorkspaces = (): Record<string, string[]> => {
+export const readSSHFavoriteProjectFolders = (): Record<string, string[]> => {
   if (typeof window === 'undefined') {
     return {};
   }
@@ -100,7 +100,7 @@ export const readSSHFavoriteWorkspaces = (): Record<string, string[]> => {
   }
 };
 
-export const writeSSHFavoriteWorkspaces = (value: Record<string, string[]>) => {
+export const writeSSHFavoriteProjectFolders = (value: Record<string, string[]>) => {
   if (typeof window === 'undefined') {
     return;
   }

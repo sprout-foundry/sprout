@@ -12,7 +12,7 @@ import MenuBar from './MenuBar';
 import { CreditsChip } from './CreditsChip';
 import { UsageChip } from './UsageChip';
 import { UserMenu } from './UserMenu';
-import WorkspaceBar from './WorkspaceBar';
+import DevSpaceBar from './WorkspaceBar';
 
 export interface HeaderBarProps {
   isMobile: boolean;
@@ -53,8 +53,8 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
     null;
   const backHref = backPath ? (host.navigation.platformPagePath?.(backPath) ?? backPath) : undefined;
   // Hidden on deployments without dev space compute rather than offering an
-  // action that can only fail, when the agent already runs on a workspace's
-  // daemon (that workspace is the dev space the button would start, and
+  // action that can only fail, when the agent already runs on a dev space's
+  // daemon (that dev space is the dev space the button would start, and
   // the host owns its lifecycle), and when the host offers the move itself
   // (capabilities.containerUpgrade off).
   const onDaemon = host.transport.agent?.kind === 'daemon';
@@ -157,7 +157,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
         {/* SP-016 P0.6: ambient usage signal — cloud mode only, renders
          * nothing when the bootstrap carried no badge values. */}
         <UsageChip />
-        <WorkspaceBar isConnected={isConnected} isMobile={isMobile} isMobileMenuOpen={isSidebarOpen} />
+        <DevSpaceBar isConnected={isConnected} isMobile={isMobile} isMobileMenuOpen={isSidebarOpen} />
       </div>
     </div>
   );

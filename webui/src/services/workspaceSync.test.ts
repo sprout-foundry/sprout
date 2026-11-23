@@ -1,21 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const api = vi.hoisted(() => ({ getWorkspace: vi.fn(), setWorkspace: vi.fn() }));
+const api = vi.hoisted(() => ({ getProjectFolder: vi.fn(), setProjectFolder: vi.fn() }));
 const tab = vi.hoisted(() => ({ path: '', persist: vi.fn() }));
 
 vi.mock('./api', () => ({
-  ApiService: { getInstance: () => ({ getWorkspace: api.getWorkspace, setWorkspace: api.setWorkspace }) },
+  ApiService: {
+    getInstance: () => ({ getProjectFolder: api.getProjectFolder, setProjectFolder: api.setProjectFolder }),
+  },
 }));
 vi.mock('./clientSession', () => ({
-  getTabWorkspacePath: () => tab.path,
-  persistTabWorkspacePath: (path: string) => {
+  getTabProjectFolderPath: () => tab.path,
+  persistTabProjectFolderPath: (path: string) => {
     tab.persist(path);
     tab.path = path;
   },
 }));
 
-import { __resetWorkspaceStoreForTests, getWorkspaceRoot } from './workspaceStore';
-import { consentToHomeWorkspace, installWorkspaceReconnectSync, reconcileTabWorkspace } from './workspaceSync';
+import { __resetProjectFolderStoreForTests, getWorkspaceRoot } from './workspaceStore';
+import {
+  consentToHomeProjectFolder,
+  installProjectFolderReconnectSync,
+  reconcileTabProjectFolder,
+} from './workspaceSync';
 
 function ws(root: string, extra: Record<string, unknown> = {}) {
   return {
@@ -36,9 +42,9 @@ describe('reconcileTabWorkspace', () => {
   const changed = vi.fn();
 
   beforeEach(() => {
-    __resetWorkspaceStoreForTests();
-    api.getWorkspace.mockReset();
-    api.setWorkspace.mockReset();
+    __resetProjectFolderStoreForTests();
+    api.getProjectFolder.mockReset();
+    api.setProjectFolder.mockReset();
     tab.persist.mockReset();
     tab.path = '';
     changed.mockReset();
@@ -47,17 +53,17 @@ describe('reconcileTabWorkspace', () => {
 
   afterEach(() => {
     window.removeEventListener('sprout:workspace-changed', changed);
-    __resetWorkspaceStoreForTests();
+    __resetProjectFolderStoreForTests();
   });
 
   it('re-selects the remembered workspace when the server is back at its default root', async () => {
     tab.path = '/home/u/proj';
-    api.setWorkspace.mockResolvedValue({ ...ws('/home/u/proj'), message: 'ok' });
-    api.getWorkspace.mockResolvedValue(ws('/home/u/proj'));
+    api.setProjectFolder.mockResolvedValue({ ...ws('/home/u/proj'), message: 'ok' });
+    api.getProjectFolder.mockResolvedValue(ws('/home/u/proj'));
 
-    await expect(reconcileTabWorkspace(ws('/home/u'))).resolves.toBe('restored');
+    await expect(reconcileTabProjectFolder(ws('/home/u'))).resolves.toBe('restored');
 
-    expect(api.setWorkspace).toHaveBeenCalledWith('/home/u/proj');
+    expect(api.setProjectFolder).toHaveBeenCalledWith('/home/u/proj');
     expect(changed).toHaveBeenCalledTimes(1);
     await vi.waitFor(() => expect(getWorkspaceRoot()).toBe('/home/u/proj'));
   });
@@ -65,37 +71,37 @@ describe('reconcileTabWorkspace', () => {
   it('follows a deliberate server-side change instead of fighting it', async () => {
     tab.path = '/home/u/proj';
 
-    await expect(reconcileTabWorkspace(ws('/home/u/other'))).resolves.toBe('adopted');
+    await expect(reconcileTabProjectFolder(ws('/home/u/other'))).resolves.toBe('adopted');
 
-    expect(api.setWorkspace).not.toHaveBeenCalled();
+    expect(api.setProjectFolder).not.toHaveBeenCalled();
     expect(tab.persist).toHaveBeenCalledWith('/home/u/other');
     expect(changed).toHaveBeenCalledTimes(1);
   });
 
   it('leaves an agreeing tab alone', async () => {
     tab.path = '/home/u/proj';
-    await expect(reconcileTabWorkspace(ws('/home/u/proj'))).resolves.toBe('unchanged');
-    expect(api.setWorkspace).not.toHaveBeenCalled();
+    await expect(reconcileTabProjectFolder(ws('/home/u/proj'))).resolves.toBe('unchanged');
+    expect(api.setProjectFolder).not.toHaveBeenCalled();
     expect(changed).not.toHaveBeenCalled();
   });
 
   it('defers to the gate when nothing is remembered', async () => {
-    await expect(reconcileTabWorkspace(ws('/home/u'))).resolves.toBe('unresolved');
-    expect(api.setWorkspace).not.toHaveBeenCalled();
+    await expect(reconcileTabProjectFolder(ws('/home/u'))).resolves.toBe('unresolved');
+    expect(api.setProjectFolder).not.toHaveBeenCalled();
   });
 
   it('does not re-select where the host disallows switching', async () => {
     tab.path = '/home/u/proj';
-    await expect(reconcileTabWorkspace(ws('/home/u'), false)).resolves.toBe('unresolved');
-    expect(api.setWorkspace).not.toHaveBeenCalled();
+    await expect(reconcileTabProjectFolder(ws('/home/u'), false)).resolves.toBe('unresolved');
+    expect(api.setProjectFolder).not.toHaveBeenCalled();
   });
 });
 
 describe('installWorkspaceReconnectSync', () => {
   beforeEach(() => {
-    __resetWorkspaceStoreForTests();
-    api.getWorkspace.mockReset();
-    api.setWorkspace.mockReset();
+    __resetProjectFolderStoreForTests();
+    api.getProjectFolder.mockReset();
+    api.setProjectFolder.mockReset();
     tab.path = '/home/u/proj';
   });
 
@@ -105,20 +111,20 @@ describe('installWorkspaceReconnectSync', () => {
       onEvent: (cb: (e: { type: string; data?: unknown }) => void) => callbacks.add(cb),
       removeEvent: (cb: (e: { type: string; data?: unknown }) => void) => callbacks.delete(cb),
     };
-    api.getWorkspace.mockResolvedValue(ws('/home/u'));
-    api.setWorkspace.mockResolvedValue({ ...ws('/home/u/proj'), message: 'ok' });
+    api.getProjectFolder.mockResolvedValue(ws('/home/u'));
+    api.setProjectFolder.mockResolvedValue({ ...ws('/home/u/proj'), message: 'ok' });
 
-    const uninstall = installWorkspaceReconnectSync(source as never);
-    expect(installWorkspaceReconnectSync(source as never)).toBe(uninstall);
+    const uninstall = installProjectFolderReconnectSync(source as never);
+    expect(installProjectFolderReconnectSync(source as never)).toBe(uninstall);
     const emit = (data: unknown) => callbacks.forEach((cb) => cb({ type: 'connection_status', data }));
 
     emit({ connected: true });
     await Promise.resolve();
-    expect(api.getWorkspace).not.toHaveBeenCalled();
+    expect(api.getProjectFolder).not.toHaveBeenCalled();
 
     emit({ connected: false });
     emit({ connected: true });
-    await vi.waitFor(() => expect(api.setWorkspace).toHaveBeenCalledWith('/home/u/proj'));
+    await vi.waitFor(() => expect(api.setProjectFolder).toHaveBeenCalledWith('/home/u/proj'));
 
     uninstall();
     expect(callbacks.size).toBe(0);
@@ -127,21 +133,21 @@ describe('installWorkspaceReconnectSync', () => {
 
 describe('consentToHomeWorkspace', () => {
   beforeEach(() => {
-    __resetWorkspaceStoreForTests();
-    api.getWorkspace.mockReset();
+    __resetProjectFolderStoreForTests();
+    api.getProjectFolder.mockReset();
   });
 
   it('consents with the freshly read home root', async () => {
-    api.getWorkspace.mockResolvedValue(ws('/home/u'));
-    const setWorkspace = vi.fn().mockResolvedValue(undefined);
-    await expect(consentToHomeWorkspace(setWorkspace)).resolves.toBe(true);
-    expect(setWorkspace).toHaveBeenCalledWith('/home/u', true);
+    api.getProjectFolder.mockResolvedValue(ws('/home/u'));
+    const setProjectFolder = vi.fn().mockResolvedValue(undefined);
+    await expect(consentToHomeProjectFolder(setProjectFolder)).resolves.toBe(true);
+    expect(setProjectFolder).toHaveBeenCalledWith('/home/u', true);
   });
 
   it('skips consent when a project was restored since the gate rendered', async () => {
-    api.getWorkspace.mockResolvedValue(ws('/home/u/proj'));
-    const setWorkspace = vi.fn();
-    await expect(consentToHomeWorkspace(setWorkspace)).resolves.toBe(false);
-    expect(setWorkspace).not.toHaveBeenCalled();
+    api.getProjectFolder.mockResolvedValue(ws('/home/u/proj'));
+    const setProjectFolder = vi.fn();
+    await expect(consentToHomeProjectFolder(setProjectFolder)).resolves.toBe(false);
+    expect(setProjectFolder).not.toHaveBeenCalled();
   });
 });

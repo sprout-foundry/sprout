@@ -4,7 +4,7 @@
  * out, in priority order:
  *
  *   Txn  — "Run in cloud container" / "Run on <runner>" (ETH-2, primary):
- *          open a transaction on the user's workspace on the chosen host (one
+ *          open a transaction on the user's dev space on the chosen host (one
  *          of their runners, or the cloud), push the browser's dirty files,
  *          run the exact command that returned 127 there, pull the resulting
  *          deltas back into the browser VFS, finish. The user never leaves
@@ -90,8 +90,8 @@ export function EscalationListener() {
   const [cloudTask, setCloudTask] = useState<CloudTaskProgress | null>(null);
   const [txn, setTxn] = useState<(TxnProgress & { host: EscalationHost; offerCloud?: boolean }) | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [startingWorkspace, setStartingWorkspace] = useState(false);
-  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [startingDevSpace, setStartingDevSpace] = useState(false);
+  const [devSpaceError, setDevSpaceError] = useState<string | null>(null);
   // The confirmation step: opened by the txn CTA, closed by confirming or
   // cancelling. The command reaches a remote machine only from there.
   const [confirmTxn, setConfirmTxn] = useState(false);
@@ -127,7 +127,7 @@ export function EscalationListener() {
         setCloudTask(null);
         setTxn(null);
         setSubmitting(false);
-        setWorkspaceError(null);
+        setDevSpaceError(null);
         setConfirmTxn(false);
         setPendingPushCount(null);
         setEscalation({ trigger: detail, visible: true });
@@ -146,14 +146,14 @@ export function EscalationListener() {
     setCloudTask(null);
     setTxn(null);
     setSubmitting(false);
-    setWorkspaceError(null);
+    setDevSpaceError(null);
     setConfirmTxn(false);
     setPendingPushCount(null);
   }, []);
 
   /**
    * ETH-2: run the triggering command transactionally in the user's
-   * workspace on `host` — open → push browser deltas → run → pull deltas
+   * dev space on `host` — open → push browser deltas → run → pull deltas
    * back into the VFS → finish. `finish` is ALWAYS called (success, failure
    * or timeout) so the pay-per-run machine is never left running: the
    * finally block is the guarantee, the in-flow call just avoids an extra
@@ -303,36 +303,36 @@ export function EscalationListener() {
       });
   }, [escalation, submitting, cloudTask]);
 
-  const handleStartWorkspace = useCallback(() => {
+  const handleStartDevSpace = useCallback(() => {
     const repoURL = escalation?.trigger?.repoURL;
     if (!repoURL) {
       // No repo context: the host's account/dashboard page is where a
-      // workspace gets picked. The host owns the path (and its outward URL).
+      // dev space gets picked. The host owns the path (and its outward URL).
       const dashboard = navigation.intentPath?.({ type: 'account' }) ?? null;
       if (dashboard && !openPlatformPage(dashboard)) {
         window.location.href = navigation.platformPagePath?.(dashboard) ?? dashboard;
       }
       return;
     }
-    setWorkspaceError(null);
-    setStartingWorkspace(true);
+    setDevSpaceError(null);
+    setStartingDevSpace(true);
     startDevSpace(repoURL)
       .then((result) => {
         if (!mountedRef.current) return;
         if (result.kind === 'unavailable') {
-          setWorkspaceError("This deployment doesn't offer dev spaces.");
+          setDevSpaceError("This deployment doesn't offer dev spaces.");
         } else if (result.kind === 'error') {
-          setWorkspaceError(`Couldn't start the workspace: ${result.message}`);
+          setDevSpaceError(`Couldn't start the workspace: ${result.message}`);
         } else if (result.kind === 'status') {
-          setWorkspaceError(`Workspace is ${result.status}; try again shortly.`);
+          setDevSpaceError(`Workspace is ${result.status}; try again shortly.`);
         }
       })
       .catch((err: unknown) => {
         if (!mountedRef.current) return;
-        setWorkspaceError(`Couldn't start the workspace: ${err instanceof Error ? err.message : String(err)}`);
+        setDevSpaceError(`Couldn't start the workspace: ${err instanceof Error ? err.message : String(err)}`);
       })
       .finally(() => {
-        if (mountedRef.current) setStartingWorkspace(false);
+        if (mountedRef.current) setStartingDevSpace(false);
       });
   }, [escalation, navigation]);
 
@@ -466,9 +466,9 @@ export function EscalationListener() {
               </div>
             ) : null}
 
-            {workspaceError ? (
+            {devSpaceError ? (
               <p className="escalation-toast-task-error" data-testid="escalation-toast-workspace-error">
-                {workspaceError}
+                {devSpaceError}
               </p>
             ) : null}
 
@@ -566,11 +566,11 @@ export function EscalationListener() {
                 {devSpacesAvailable ? (
                   <button
                     className="escalation-toast-action"
-                    onClick={handleStartWorkspace}
-                    disabled={startingWorkspace}
+                    onClick={handleStartDevSpace}
+                    disabled={startingDevSpace}
                     data-testid="escalation-toast-start-workspace"
                   >
-                    {startingWorkspace ? (
+                    {startingDevSpace ? (
                       <Loader2 size={14} className="spinner" aria-hidden="true" />
                     ) : (
                       <Rocket size={14} />

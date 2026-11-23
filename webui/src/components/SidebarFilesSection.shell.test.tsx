@@ -1,7 +1,7 @@
 /**
  * SidebarFilesSection.shell.test.tsx — the shell-scoped cwd row.
  *
- * The Files section shows the WorkspaceCwdBar SELECT only inside the
+ * The Files section shows the ProjectFolderCwdBar SELECT only inside the
  * studio shell (config/shell.ts identity); the plain webui keeps the row
  * for its "+ add repo" clone button but hides the selector — the root is
  * fixed for the daemon's lifetime and LocationSwitcher already names it.
@@ -16,8 +16,8 @@ import { makeTestHost } from '../host/testHost';
 import SidebarFilesSection from './SidebarFilesSection';
 
 vi.mock('../services/workspaceFs/backendsExport', () => ({
-  getWorkspaceFs: vi.fn(),
-  listWorkspaceRepos: vi.fn().mockResolvedValue(['octo/sprout']),
+  getProjectFolderFs: vi.fn(),
+  listProjectFolderRepos: vi.fn().mockResolvedValue(['octo/sprout']),
 }));
 
 // The Files section shows the "+ add repo" clone button only when the host has

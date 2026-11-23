@@ -13,8 +13,8 @@ import type {
   InstancesResponse,
 } from './types';
 
-// Import SSHWorkspaceOpenError as a value (it's a class)
-import { SSHWorkspaceOpenError } from './types';
+// Import SSHProjectFolderOpenError as a value (it's a class)
+import { SSHProjectFolderOpenError } from './types';
 
 /** Maximum time (ms) to wait for a ssh-launch-status poll to show completion. */
 const SSH_POLL_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
@@ -33,13 +33,13 @@ export async function getSSHHosts(fetchFn: typeof fetch): Promise<SSHHostsRespon
 }
 
 /**
- * Open SSH workspace with polling for completion.
- * This function polls until the SSH workspace launch completes.
+ * Open SSH project folder with polling for completion.
+ * This function polls until the SSH project folder launch completes.
  */
-export async function openSSHWorkspace(
+export async function openSSHProjectFolder(
   fetchFn: typeof fetch,
   hostAlias: string,
-  remoteWorkspacePath?: string,
+  remoteProjectFolderPath?: string,
 ): Promise<SSHOpenResponse> {
   // Kick off the launch asynchronously — the server returns 202 immediately
   // so the browser never hits a long HTTP timeout.
@@ -48,7 +48,7 @@ export async function openSSHWorkspace(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       host_alias: hostAlias,
-      remote_workspace_path: remoteWorkspacePath,
+      remote_workspace_path: remoteProjectFolderPath,
     }),
   });
 
@@ -60,7 +60,7 @@ export async function openSSHWorkspace(
       details?: string;
       log_path?: string;
     };
-    throw new SSHWorkspaceOpenError({
+    throw new SSHProjectFolderOpenError({
       error: errData.error || errData.message || 'Failed to start SSH workspace launch',
       step: errData.step,
       details: errData.details,
@@ -75,7 +75,7 @@ export async function openSSHWorkspace(
 
     let status: SSHLaunchStatus;
     try {
-      status = await getSSHLaunchStatus(fetchFn, hostAlias, remoteWorkspacePath);
+      status = await getSSHLaunchStatus(fetchFn, hostAlias, remoteProjectFolderPath);
     } catch {
       // best-effort: transient network error — keep polling.
       continue;
@@ -86,7 +86,7 @@ export async function openSSHWorkspace(
     }
 
     if (status.last_error) {
-      throw new SSHWorkspaceOpenError({
+      throw new SSHProjectFolderOpenError({
         error: status.last_error,
         step: status.step,
         details: status.details || `SSH launch failed at step: ${status.step}`,
@@ -96,7 +96,7 @@ export async function openSSHWorkspace(
 
     // Success — proxy_url and proxy_base are populated by the server.
     if (!status.proxy_url) {
-      throw new SSHWorkspaceOpenError({
+      throw new SSHProjectFolderOpenError({
         error: 'SSH workspace launch completed but no proxy URL was returned.',
         step: status.step,
       });
@@ -111,7 +111,7 @@ export async function openSSHWorkspace(
     };
   }
 
-  throw new SSHWorkspaceOpenError({
+  throw new SSHProjectFolderOpenError({
     error: 'SSH workspace launch timed out. Check SSH connectivity and ~/.config/sprout/workspace.log for details.',
     step: 'launch-timeout',
     details: `Launch did not complete within ${Math.round(SSH_POLL_TIMEOUT_MS / 60_000)} minutes.`,
@@ -121,10 +121,10 @@ export async function openSSHWorkspace(
 export async function getSSHLaunchStatus(
   fetchFn: typeof fetch,
   hostAlias: string,
-  remoteWorkspacePath?: string,
+  remoteProjectFolderPath?: string,
 ): Promise<SSHLaunchStatus> {
   const params = new URLSearchParams({ host_alias: hostAlias });
-  if (remoteWorkspacePath) params.set('remote_workspace_path', remoteWorkspacePath);
+  if (remoteProjectFolderPath) params.set('remote_workspace_path', remoteProjectFolderPath);
   const response = await fetchFn(`/api/instances/ssh-launch-status?${params}`);
   if (!response.ok) throw new Error('Failed to get SSH launch status');
   return response.json();

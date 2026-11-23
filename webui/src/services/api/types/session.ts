@@ -1,14 +1,14 @@
 /**
- * Chat session, workspace, and session management API types.
+ * Chat session, project folder, and session management API types.
  */
 
-export interface WorkspaceResponse {
+export interface ProjectFolderResponse {
   daemon_root: string;
   workspace_root: string;
   is_project: boolean;
   project_markers: string[];
   needs_workspace_selection: boolean;
-  /** True when the resolved workspace root is the user's home directory (SP-130). */
+  /** True when the resolved project folder is the user's home directory (SP-130). */
   workspace_is_home: boolean;
   /** The user's actual home directory (SP-130), used to display and consent. */
   home_dir: string;

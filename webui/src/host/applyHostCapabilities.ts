@@ -40,7 +40,7 @@ const CAPABILITY_FIELD: Record<(typeof ADAPTER_CAPABILITY_KEYS)[number], keyof H
  * The adapter is the host shell's own declaration of what it provides (it
  * ships the concrete native operations), so a declared key wins over the
  * host's local default: a studio shell that advertises the folder picker and
- * workspace switching reports them even though `localHost` defaults
+ * project folder switching reports them even though `localHost` defaults
  * `folderPicker` off. Keys the adapter leaves `undefined` are not touched, so
  * a plain local build (no capabilities declared) keeps today's
  * `localHost.capabilities` byte-identical, and the cloud host is unaffected

@@ -31,7 +31,7 @@ function ageLabel(iso: string): string {
 /**
  * Chat-header history switcher (SP-139 Phase 3). A permanent header row
  * control that opens a popover for browsing/restoring past conversations
- * in this workspace — the relocated Sessions tab.
+ * in this project folder — the relocated Sessions tab.
  *
  * Performance contract: closed popover renders ONE button; the list and
  * search fetch only on open/typing (debounced). No polling, no store
@@ -62,7 +62,7 @@ function ChatHistorySwitcherInner({ chatId, onRestoreSession, iconOnly = false }
   const [restoring, setRestoring] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   // Inline notice shown in the footer after "Export all" so an empty run
-  // (no saved conversations in this workspace) doesn't look like a no-op.
+  // (no saved conversations in this project folder) doesn't look like a no-op.
   const [exportNotice, setExportNotice] = useState<string | null>(null);
   const log = useLog();
   const btnRef = useRef<HTMLButtonElement>(null);

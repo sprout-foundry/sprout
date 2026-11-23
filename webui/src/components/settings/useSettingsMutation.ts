@@ -86,8 +86,8 @@ interface MutationHookParams {
   // Shared settings ref (kept up-to-date by useSettingsState)
   settingsRef: React.MutableRefObject<SproutSettings | null>;
   // Workspace config
-  creatingWorkspaceConfig: boolean;
-  setCreatingWorkspaceConfig: (v: boolean) => void;
+  creatingProjectFolderConfig: boolean;
+  setCreatingProjectFolderConfig: (v: boolean) => void;
   setLayerData: (v: Record<string, unknown> | null) => void;
   // Provider catalog refresh (used after custom provider CRUD)
   refreshProviderCatalog?: () => void;
@@ -155,8 +155,8 @@ export function useSettingsMutation(params: MutationHookParams) {
     setProviderBillingType,
     providerModelContextSizes,
     setProviderModelContextSizes,
-    creatingWorkspaceConfig,
-    setCreatingWorkspaceConfig,
+    creatingProjectFolderConfig,
+    setCreatingProjectFolderConfig,
     setLayerData,
     refreshProviderCatalog,
   } = params;
@@ -319,20 +319,20 @@ export function useSettingsMutation(params: MutationHookParams) {
 
   /* ─── Workspace config creation ────────────────────────── */
 
-  const handleCreateWorkspaceConfig = async () => {
-    if (creatingWorkspaceConfig) return;
-    setCreatingWorkspaceConfig(true);
+  const handleCreateProjectFolderConfig = async () => {
+    if (creatingProjectFolderConfig) return;
+    setCreatingProjectFolderConfig(true);
     try {
       const globalData = await api.getSettingsLayer('global');
-      const { mcp: _mcpRedacted, ...workspaceData } = globalData;
-      await api.updateSettings(workspaceData, 'workspace');
+      const { mcp: _mcpRedacted, ...projectFolderData } = globalData;
+      await api.updateSettings(projectFolderData, 'workspace');
       const data = await api.getSettingsLayer('workspace');
       setLayerData(data);
       addNotification('success', 'Settings', 'Workspace config created from global settings', 3000);
     } catch (err) {
       addNotification('error', 'Settings', 'Failed to create workspace config', 5000);
     } finally {
-      setCreatingWorkspaceConfig(false);
+      setCreatingProjectFolderConfig(false);
     }
   };
 
@@ -346,6 +346,6 @@ export function useSettingsMutation(params: MutationHookParams) {
     // Skills
     toggleSkill,
     // Workspace
-    handleCreateWorkspaceConfig,
+    handleCreateProjectFolderConfig,
   };
 }

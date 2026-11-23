@@ -24,7 +24,7 @@
  * the helpers (`mapWorkspaceListing`, `workspaceListDepth`, `nativeFsGate`)
  * are covered by nativeFsDeferral.test.ts. The thing this file uniquely
  * verifies is the BRANCH SELECTION in `SidebarFilesSection.onFetchFiles`
- * (NATIVE_FS_ENABLED gate → bridge listWorkspace path vs. clientFetch
+ * (NATIVE_FS_ENABLED gate → bridge listProjectFolder path vs. clientFetch
  * fallback path), which only exists in the component.
  */
 
@@ -107,9 +107,9 @@ function makeBridge(
   } = {},
 ): {
   getCapabilities: ReturnType<typeof vi.fn>;
-  readWorkspaceFile: ReturnType<typeof vi.fn>;
-  writeWorkspaceFile: ReturnType<typeof vi.fn>;
-  listWorkspace: ReturnType<typeof vi.fn>;
+  readProjectFolderFile: ReturnType<typeof vi.fn>;
+  writeProjectFolderFile: ReturnType<typeof vi.fn>;
+  listProjectFolder: ReturnType<typeof vi.fn>;
 } {
   const caps = opts.capabilities ?? {
     capabilities: { fs: true },
@@ -123,9 +123,9 @@ function makeBridge(
       manifestPresent: true,
       servable: true,
     })),
-    readWorkspaceFile: vi.fn(async (p: string) => ({ ok: true, path: p, content: 'x' })),
-    writeWorkspaceFile: vi.fn(async (p: string) => ({ ok: true, path: p })),
-    listWorkspace: vi.fn(async (maxDepth?: number) =>
+    readProjectFolderFile: vi.fn(async (p: string) => ({ ok: true, path: p, content: 'x' })),
+    writeProjectFolderFile: vi.fn(async (p: string) => ({ ok: true, path: p })),
+    listProjectFolder: vi.fn(async (maxDepth?: number) =>
       opts.list
         ? opts.list(maxDepth)
         : { ok: true, files: [] as Array<{ path: string; size: number; isDir: boolean }> },
@@ -165,7 +165,7 @@ beforeEach(() => {
   clientFetchMock.mockReset();
 });
 
-// ── 1. Gate active → bridge listWorkspace path (root) ───────────────────────
+// ── 1. Gate active → bridge listProjectFolder path (root) ───────────────────────
 
 describe('onFetchFiles — gate ACTIVE routes through the bridge', () => {
   it('resolves the sorted listing, calls listWorkspace(1), and never calls clientFetch', async () => {
@@ -313,6 +313,6 @@ describe('onFetchFiles — gate INACTIVE falls back to clientFetch', () => {
     // The clientFetch path ran with the encoded path; the bridge listing did NOT.
     expect(clientFetchMock).toHaveBeenCalledTimes(1);
     expect(String(clientFetchMock.mock.calls[0][0])).toContain('/api/files?path=');
-    expect(bridge.listWorkspace).not.toHaveBeenCalled();
+    expect(bridge.listProjectFolder).not.toHaveBeenCalled();
   });
 });

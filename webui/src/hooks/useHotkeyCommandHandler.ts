@@ -200,8 +200,8 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
           break;
         }
         case 'editor_copy_absolute_path': {
-          // The backend stores absolute paths in file.path when the workspace
-          // root is known; for relative paths we need the workspace root.
+          // The backend stores absolute paths in file.path when the project folder
+          // root is known; for relative paths we need the project folder.
           // Use the same path either way — consumers can canonicalize.
           const buf = activeBufferId ? buffersRef.current.get(activeBufferId) : null;
           const path = buf?.file?.path;

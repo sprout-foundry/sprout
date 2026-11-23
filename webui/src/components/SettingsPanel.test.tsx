@@ -255,10 +255,10 @@ describe('SECTION_GROUPS rendering', () => {
     expect(agentBadge?.textContent?.trim()).toBe('session');
     expect(agentBadge?.classList.contains('scope-session')).toBe(true);
 
-    // Workspace → workspace
-    const workspaceBadge = sections[1].querySelector('.settings-scope-badge');
-    expect(workspaceBadge?.textContent?.trim()).toBe('workspace');
-    expect(workspaceBadge?.classList.contains('scope-workspace')).toBe(true);
+    // Workspace → project folder
+    const projectFolderBadge = sections[1].querySelector('.settings-scope-badge');
+    expect(projectFolderBadge?.textContent?.trim()).toBe('workspace');
+    expect(projectFolderBadge?.classList.contains('scope-workspace')).toBe(true);
 
     // Environment → global
     const envBadge = sections[2].querySelector('.settings-scope-badge');
@@ -370,7 +370,7 @@ describe('localStorage persistence', () => {
   });
 
   it('restores expanded sections from localStorage on mount', () => {
-    // Pre-populate localStorage with workspace expanded
+    // Pre-populate localStorage with project folder expanded
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({

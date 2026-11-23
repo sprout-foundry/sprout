@@ -68,7 +68,7 @@ export interface SSHLaunchStatus {
   local_port?: number;
 }
 
-export class SSHWorkspaceOpenError extends Error {
+export class SSHProjectFolderOpenError extends Error {
   step?: string;
   details?: string;
   logPath?: string;

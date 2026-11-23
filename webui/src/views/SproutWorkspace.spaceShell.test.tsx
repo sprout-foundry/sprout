@@ -165,9 +165,9 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function mount(workspaceHost: SproutHost, space: 'code' | 'design' = 'code') {
-  setActiveHost(workspaceHost);
-  return render(<SproutWorkspace project={PROJECT} space={space} host={workspaceHost} />);
+function mount(projectFolderHost: SproutHost, space: 'code' | 'design' = 'code') {
+  setActiveHost(projectFolderHost);
+  return render(<SproutWorkspace project={PROJECT} space={space} host={projectFolderHost} />);
 }
 
 function tabPaths(): string[] {

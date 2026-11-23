@@ -1,8 +1,8 @@
 /**
- * Workspace domain API — adapter-aware workspace operations.
+ * Workspace domain API — adapter-aware project folder operations.
  */
 
-import type { WorkspaceResponse } from './types';
+import type { ProjectFolderResponse } from './types';
 
 /** Raw JSON shape for a suggested project entry from the backend. */
 interface RawProjectEntry {
@@ -11,8 +11,8 @@ interface RawProjectEntry {
   markers?: unknown;
 }
 
-/** Raw JSON shape for a recent workspace entry from the backend. */
-interface RawWorkspaceEntry {
+/** Raw JSON shape for a recent project folder entry from the backend. */
+interface RawProjectFolderEntry {
   path?: unknown;
   name?: unknown;
   last_used?: unknown;
@@ -20,7 +20,7 @@ interface RawWorkspaceEntry {
   session_count?: unknown;
 }
 
-function toWorkspaceResponse(data: Record<string, unknown>): WorkspaceResponse {
+function toProjectFolderResponse(data: Record<string, unknown>): ProjectFolderResponse {
   const parseBool = (v: unknown): boolean => v === true || v === 'true';
   const parseStrArray = (v: unknown): string[] => {
     if (Array.isArray(v)) return v.filter((x) => typeof x === 'string');
@@ -47,7 +47,7 @@ function toWorkspaceResponse(data: Record<string, unknown>): WorkspaceResponse {
   }> => {
     if (!Array.isArray(data.recent_workspaces)) return [];
     return data.recent_workspaces
-      .filter((w): w is RawWorkspaceEntry => typeof w === 'object' && w != null && 'path' in w)
+      .filter((w): w is RawProjectFolderEntry => typeof w === 'object' && w != null && 'path' in w)
       .map((w) => ({
         path: String(w.path ?? ''),
         name: String(w.name ?? ''),
@@ -69,16 +69,16 @@ function toWorkspaceResponse(data: Record<string, unknown>): WorkspaceResponse {
     suggested_projects,
     recent_workspaces,
     ...(data.ssh_context != null && typeof data.ssh_context === 'object'
-      ? { ssh_context: data.ssh_context as WorkspaceResponse['ssh_context'] }
+      ? { ssh_context: data.ssh_context as ProjectFolderResponse['ssh_context'] }
       : {}),
   };
 }
 
-export async function getWorkspace(fetchFn: typeof fetch): Promise<WorkspaceResponse> {
+export async function getProjectFolder(fetchFn: typeof fetch): Promise<ProjectFolderResponse> {
   const response = await fetchFn('/api/workspace');
   const text = await response.text();
 
-  const parseWorkspacePayload = (t: string): Record<string, unknown> => {
+  const parseProjectFolderPayload = (t: string): Record<string, unknown> => {
     const trimmed = t.trim();
     if (!trimmed) return {};
     try {
@@ -99,7 +99,7 @@ export async function getWorkspace(fetchFn: typeof fetch): Promise<WorkspaceResp
     );
   };
 
-  const data = parseWorkspacePayload(text);
+  const data = parseProjectFolderPayload(text);
 
   if (!response.ok) {
     const errMsg = String(data.error ?? data.message ?? 'Failed to fetch workspace');
@@ -111,17 +111,17 @@ export async function getWorkspace(fetchFn: typeof fetch): Promise<WorkspaceResp
   }
 
   if (data && typeof data === 'object' && 'workspace_root' in data && 'daemon_root' in data) {
-    return toWorkspaceResponse(data);
+    return toProjectFolderResponse(data);
   }
 
   throw new Error('Workspace API returned malformed response');
 }
 
-export async function setWorkspace(
+export async function setProjectFolder(
   fetchFn: typeof fetch,
   path: string,
   consentHome?: boolean,
-): Promise<WorkspaceResponse & { message: string }> {
+): Promise<ProjectFolderResponse & { message: string }> {
   const response = await fetchFn('/api/workspace', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -156,15 +156,15 @@ export async function setWorkspace(
   }
 
   if (data && typeof data === 'object' && 'workspace_root' in data && 'daemon_root' in data) {
-    return { ...toWorkspaceResponse(data), message: String(data.message ?? '') };
+    return { ...toProjectFolderResponse(data), message: String(data.message ?? '') };
   }
 
   // Remote/proxy setups may respond with non-JSON success body
-  const workspace = await getWorkspace(fetchFn);
-  return { ...workspace, message: String(data.message ?? 'Workspace updated') };
+  const projectFolder = await getProjectFolder(fetchFn);
+  return { ...projectFolder, message: String(data.message ?? 'Workspace updated') };
 }
 
-/** A directory entry returned by the workspace browser. */
+/** A directory entry returned by the project folder browser. */
 export interface BrowseEntry {
   name: string;
   path: string;
@@ -175,15 +175,15 @@ export interface BrowseResult {
   path: string;
   /** Daemon root — the browse boundary; nothing above it is reachable. */
   daemonRoot: string;
-  /** Sub-directories only; files are not selectable as a workspace. */
+  /** Sub-directories only; files are not selectable as a project folder. */
   directories: BrowseEntry[];
 }
 
 /**
  * List the sub-directories of `path` (defaults to the daemon root).
  *
- * Used by the workspace gate's inline browser. Only directories are returned —
- * a workspace root is always a directory, and listing files would just add
+ * Used by the project folder gate's inline browser. Only directories are returned —
+ * a project folder is always a directory, and listing files would just add
  * noise to the picker.
  */
 export async function browseDirectory(fetchFn: typeof fetch, path?: string): Promise<BrowseResult> {

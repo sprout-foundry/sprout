@@ -403,9 +403,9 @@ describe('writeCapabilityManifest', () => {
   });
 
   // ── Studio workspace-gate capability keys ────────────────────────────
-  // The fs-portion dist declares the workspace gate flags so a studio shell
+  // The fs-portion dist declares the project folder gate flags so a studio shell
   // reading the manifest can truthfully report them (the native
-  // pickWorkspace / createWorkspace ops ship with the fs exclusion).
+  // pickProjectFolder / createProjectFolder ops ship with the fs exclusion).
 
   it('declares the workspace gate capabilities for --native-fs', () => {
     const m = mod.buildCapabilityManifest(mod.parseArgs(['--native-fs']));
@@ -418,7 +418,7 @@ describe('writeCapabilityManifest', () => {
   it('omits the capabilities key entirely for non-fs builds', () => {
     // Default build: shell-declares / webui-defers — nothing to declare.
     expect(mod.buildCapabilityManifest(mod.parseArgs([])).capabilities).toBeUndefined();
-    // Terminal/chat/git-only builds do not carry the workspace ops either.
+    // Terminal/chat/git-only builds do not carry the project folder ops either.
     expect(mod.buildCapabilityManifest(mod.parseArgs(['--native-terminal'])).capabilities).toBeUndefined();
     expect(mod.buildCapabilityManifest(mod.parseArgs(['--native-chat'])).capabilities).toBeUndefined();
     expect(mod.buildCapabilityManifest(mod.parseArgs(['--native-git'])).capabilities).toBeUndefined();

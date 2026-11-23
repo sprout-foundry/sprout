@@ -33,7 +33,7 @@ import type {
   SSHOpenResponse,
   SSHBrowseEntry,
   SSHLaunchStatus,
-  WorkspaceResponse,
+  ProjectFolderResponse,
   SproutSettings,
   HotkeyConfig,
   MCPServerConfig,
@@ -50,7 +50,7 @@ import type {
   InstantiateStarterParams,
   InstantiateStarterResponse,
 } from './types';
-import * as workspaceApi from './workspaceApi';
+import * as projectFolderApi from './workspaceApi';
 
 class ApiService {
   private static instance: ApiService;
@@ -76,16 +76,16 @@ class ApiService {
 
   // ── Workspace ──────────────────────────────────────────────────────
 
-  async getWorkspace(): Promise<WorkspaceResponse> {
-    return workspaceApi.getWorkspace(clientFetch);
+  async getProjectFolder(): Promise<ProjectFolderResponse> {
+    return projectFolderApi.getProjectFolder(clientFetch);
   }
 
-  async setWorkspace(path: string, consentHome?: boolean): Promise<WorkspaceResponse & { message: string }> {
-    return workspaceApi.setWorkspace(clientFetch, path, consentHome);
+  async setProjectFolder(path: string, consentHome?: boolean): Promise<ProjectFolderResponse & { message: string }> {
+    return projectFolderApi.setProjectFolder(clientFetch, path, consentHome);
   }
 
-  async browseDirectory(path?: string): Promise<workspaceApi.BrowseResult> {
-    return workspaceApi.browseDirectory(clientFetch, path);
+  async browseDirectory(path?: string): Promise<projectFolderApi.BrowseResult> {
+    return projectFolderApi.browseDirectory(clientFetch, path);
   }
 
   // ── Starters ────────────────────────────────────────────────────
@@ -267,12 +267,12 @@ class ApiService {
     return result.hosts;
   }
 
-  async openSSHWorkspace(hostAlias: string, remoteWorkspacePath?: string): Promise<SSHOpenResponse> {
-    return sshApi.openSSHWorkspace(clientFetch, hostAlias, remoteWorkspacePath);
+  async openSSHProjectFolder(hostAlias: string, remoteProjectFolderPath?: string): Promise<SSHOpenResponse> {
+    return sshApi.openSSHProjectFolder(clientFetch, hostAlias, remoteProjectFolderPath);
   }
 
-  async getSSHLaunchStatus(hostAlias: string, remoteWorkspacePath?: string): Promise<SSHLaunchStatus> {
-    return sshApi.getSSHLaunchStatus(clientFetch, hostAlias, remoteWorkspacePath);
+  async getSSHLaunchStatus(hostAlias: string, remoteProjectFolderPath?: string): Promise<SSHLaunchStatus> {
+    return sshApi.getSSHLaunchStatus(clientFetch, hostAlias, remoteProjectFolderPath);
   }
 
   async getSSHSessions(): Promise<SSHSessionEntry[]> {

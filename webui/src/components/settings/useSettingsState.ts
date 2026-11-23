@@ -31,8 +31,8 @@ interface UseSettingsStateReturn {
   setLayerData: (v: Record<string, unknown> | null) => void;
   layerError: string | null;
   setLayerError: (v: string | null) => void;
-  creatingWorkspaceConfig: boolean;
-  setCreatingWorkspaceConfig: (v: boolean) => void;
+  creatingProjectFolderConfig: boolean;
+  setCreatingProjectFolderConfig: (v: boolean) => void;
   provenanceSources: Record<string, string>;
   setProvenanceSources: (v: Record<string, string>) => void;
   displaySettingsRef: React.MutableRefObject<SproutSettings | null>;
@@ -138,7 +138,7 @@ export function useSettingsState(
   const [layerError, setLayerError] = useState<string | null>(null);
 
   const displaySettingsRef = useRef<SproutSettings | null>(null);
-  const [creatingWorkspaceConfig, setCreatingWorkspaceConfig] = useState(false);
+  const [creatingProjectFolderConfig, setCreatingProjectFolderConfig] = useState(false);
   const [provenanceSources, setProvenanceSources] = useState<Record<string, string>>({});
 
   const { addNotification } = useNotifications();
@@ -389,8 +389,8 @@ export function useSettingsState(
     setLayerData,
     layerError,
     setLayerError,
-    creatingWorkspaceConfig,
-    setCreatingWorkspaceConfig,
+    creatingProjectFolderConfig,
+    setCreatingProjectFolderConfig,
     provenanceSources,
     setProvenanceSources,
     displaySettingsRef,

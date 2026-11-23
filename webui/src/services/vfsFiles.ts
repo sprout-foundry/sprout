@@ -4,7 +4,7 @@
  *
  * Split out of cloudWasmHandlers.ts so the standalone embed pages can
  * track writes and enumerate files WITHOUT dragging the React-dependent
- * chain (workspaceCwd → react) into their bundles: the standalone pages
+ * chain (projectFolderCwd → react) into their bundles: the standalone pages
  * are advertised React-free, and this module keeps them honest.
  *
  * No React imports, no cloud/session state — only the shell.
@@ -27,16 +27,16 @@ const vfsManifest = new Set<string>();
 
 /** The project directory. Binaries built before the bridge exposed it kept
  * everything at the (unmovable) cwd. */
-export function workspaceRootOf(wasm: { getCwd(): string; getWorkspaceRoot?(): string } | undefined): string {
+export function projectFolderOf(wasm: { getCwd(): string; getWorkspaceRoot?(): string } | undefined): string {
   if (!wasm) return '/workspace';
   return wasm.getWorkspaceRoot ? wasm.getWorkspaceRoot() : wasm.getCwd();
 }
 
 /** Normalize a path to absolute form; relative paths are relative to the
- *  workspace (never the terminal's cwd, which `cd` moves). */
+ *  project folder (never the terminal's cwd, which `cd` moves). */
 export function normalizeVfsPath(p: string): string {
   if (!p.startsWith('/')) {
-    const root = workspaceRootOf(typeof window !== 'undefined' ? window.SproutWasm : undefined);
+    const root = projectFolderOf(typeof window !== 'undefined' ? window.SproutWasm : undefined);
     p = p === '.' ? root : `${root}/${p}`;
   }
   // Collapse ./ and resolve ../
@@ -71,16 +71,16 @@ function collapseVfsPath(p: string): string {
  * Resolve a path the file API was handed to the absolute VFS path it names.
  *
  * The file API takes the daemon's paths: workspace-relative (`src/a.ts`, the
- * form search results, the file tree's created children and the workspaceFs
+ * form search results, the file tree's created children and the projectFolderFs
  * seam use) or absolute (`/workspace/src/a.ts`, the form listings return).
- * Relative paths resolve against the workspace root, never `/`, so the file
+ * Relative paths resolve against the project folder, never `/`, so the file
  * API reads and writes the same files the agent and its shell see. Every
  * spelling of the root names it: '', '.', './', the root with or without a
  * trailing slash, and the root without its leading slash (`workspace`) —
- * unless the workspace itself holds an entry by that name (`hasEntry`), in
+ * unless the project folder itself holds an entry by that name (`hasEntry`), in
  * which case the workspace-relative reading wins.
  */
-export function resolveWorkspacePath(raw: string, root: string, hasEntry?: (absPath: string) => boolean): string {
+export function resolveProjectFolderPath(raw: string, root: string, hasEntry?: (absPath: string) => boolean): string {
   const rootAbs = collapseVfsPath(root || '/');
   const clean = raw.replace(/\0/g, '').replace(/\\/g, '/').trim();
   if (clean === '') return rootAbs;
@@ -118,7 +118,7 @@ export function getVfsManifestSnapshot(): Set<string> {
 
 const within = (p: string, dir: string) => p === dir || p.startsWith(`${dir}/`);
 
-/** Whether `p` is runtime state rather than content of the workspace at `root`. */
+/** Whether `p` is runtime state rather than content of the project folder at `root`. */
 export function isRuntimePath(p: string, root: string): boolean {
   return RUNTIME_DIRS.some((dir) => within(p, dir) && !within(root, dir));
 }
@@ -134,7 +134,7 @@ export function joinVfsPath(dir: string, name: string): string {
  * before git operations, and by the standalone escalation push.
  */
 export async function listAllVfsFiles(shell: WasmShell): Promise<Array<{ path: string; content: string }>> {
-  const cwd = workspaceRootOf(shell);
+  const cwd = projectFolderOf(shell);
   const files: Array<{ path: string; content: string }> = [];
 
   // Every file in the tree: a one-level listing left out everything in
@@ -152,7 +152,7 @@ export async function listAllVfsFiles(shell: WasmShell): Promise<Array<{ path: s
     try {
       const result = shell.readFile(absPath);
       if (!result.error) {
-        // Only the workspace's own files, relative to it.
+        // Only the project folder's own files, relative to it.
         const normalizedCwd = cwd.endsWith('/') ? cwd : cwd + '/';
         if (!absPath.startsWith(normalizedCwd)) continue;
         files.push({ path: absPath.slice(normalizedCwd.length), content: result.content });
@@ -227,7 +227,7 @@ function flattenEntries(shell: WasmShell, dir: string): Array<{ path: string; mo
 
 /**
  * One file the in-browser VFS holds, with the metadata the directory listing
- * carries. The path is relative to the workspace root. `size` and `mode` are
+ * carries. The path is relative to the project folder. `size` and `mode` are
  * 0 when the entry came from the write manifest (which records paths only),
  * so a consumer treats them as "unknown", not as an empty file.
  */
@@ -254,7 +254,7 @@ function relativeToRoot(absPath: string, root: string): string {
 }
 
 /**
- * Every file the workspace's own directory holds, with its size and mode:
+ * Every file the project folder's own directory holds, with its size and mode:
  * a read-only view for a host that offers the in-browser files (the
  * move-to-container collector). Runtime dirs (the agent home, the scratch
  * space) and .git are excluded, so only the project's own files are
@@ -265,11 +265,11 @@ function relativeToRoot(absPath: string, root: string): string {
  * directory failure) marks the walk incomplete: the write manifest (which
  * records paths only, so those entries carry size/mode 0) is folded in so
  * a file known to have been written is never silently dropped. A healthy,
- * complete listing trusts listDir alone — an empty workspace is a real
+ * complete listing trusts listDir alone — an empty project folder is a real
  * "no files" and the manifest is not consulted.
  */
 export function listVfsFileEntries(shell: WasmShell): VfsFileEntry[] {
-  const root = workspaceRootOf(shell);
+  const root = projectFolderOf(shell);
 
   // The binary's listDir, recursively. A directory whose listing errors is
   // recorded as a sentinel so the caller can tell the walk was incomplete.

@@ -1,11 +1,11 @@
 /**
- * browserWorkspaceFiles — the host contract's read-only in-browser workspace
+ * browserWorkspaceFiles — the host contract's read-only in-browser project folder
  * file API (the move-to-container seam).
  *
  * A host that moves a project off the in-browser WASM agent (e.g. into a
  * container) must carry along the files the user edited in the browser but
  * never pushed. This module offers two read-only functions over that
- * in-browser workspace: list the project's files (path, size, mode, and
+ * in-browser project folder: list the project's files (path, size, mode, and
  * whether each differs from the repository's checkout) and read a file's
  * bytes. It is built on the pure VFS enumeration in `vfsFiles.ts` (the
  * runtime dirs are excluded) and the browser repository's checkout
@@ -29,12 +29,12 @@ import { getActiveHost } from '../host/accessor';
 import { getAdapter } from './apiAdapter';
 import { gitCheckoutDiffers } from './browserGit';
 import type { CloudAdapter } from './cloudAdapter';
-import { isRuntimePath, listVfsFileEntries, resolveWorkspacePath, workspaceRootOf } from './vfsFiles';
+import { isRuntimePath, listVfsFileEntries, resolveProjectFolderPath, projectFolderOf } from './vfsFiles';
 import type { VfsFileEntry } from './vfsFiles';
 import type { WasmShell } from './wasmShell';
 
 /**
- * One workspace file as the host reads it: the VFS listing (path, size,
+ * One project folder file as the host reads it: the VFS listing (path, size,
  * mode) plus whether the file differs from the repository's checkout. A
  * `false` means the container's clone already carries the same bytes (skip
  * it); a `true` (or an absent checkout) means carry it along.
@@ -67,7 +67,7 @@ export class BrowserFilesUnavailableError extends Error {
 }
 
 /**
- * The in-browser workspace's WASM shell, gated on the host's capability and
+ * The in-browser project folder's WASM shell, gated on the host's capability and
  * agent backend. Throws the stable gate error when the API is unavailable,
  * so the two public functions share one availability check.
  */
@@ -91,7 +91,7 @@ function resolveActiveShell(): WasmShell {
 }
 
 /**
- * List the in-browser workspace's own files: path, size, mode, and whether
+ * List the in-browser project folder's own files: path, size, mode, and whether
  * each differs from the repository's checkout. The runtime dirs (the agent
  * home, the scratch space) and .git are excluded; the listing reads no file
  * content. A file that is identical to the checkout (or to no checkout when
@@ -110,8 +110,8 @@ export async function listBrowserWorkspaceFiles(): Promise<WorkspaceFileEntry[]>
 }
 
 /**
- * Read one in-browser workspace file's bytes. The path is resolved against
- * the workspace root; a path that escapes the root or lands in a runtime
+ * Read one in-browser project folder file's bytes. The path is resolved against
+ * the project folder; a path that escapes the root or lands in a runtime
  * dir is refused. Prefers the byte-exact read and falls back to the
  * text read (re-encoded) when the binary has no byte reader.
  *
@@ -120,8 +120,8 @@ export async function listBrowserWorkspaceFiles(): Promise<WorkspaceFileEntry[]>
  */
 export async function readBrowserWorkspaceFile(path: string): Promise<Uint8Array> {
   const shell = resolveActiveShell();
-  const root = workspaceRootOf(shell);
-  const abs = resolveWorkspacePath(path, root, (p) => !shell.listDir(p).error);
+  const root = projectFolderOf(shell);
+  const abs = resolveProjectFolderPath(path, root, (p) => !shell.listDir(p).error);
 
   if (isRuntimePath(abs, root)) {
     throw new Error(`the in-browser file API will not read a runtime path: ${path}`);

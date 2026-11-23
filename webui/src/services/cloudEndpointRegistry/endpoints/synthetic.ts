@@ -106,8 +106,8 @@ export const syntheticEndpoints: CloudEndpoint[] = [
     category: 'synthetic',
     // NOTE: This response intentionally omits is_project, needs_workspace_selection,
     // suggested_projects, and recent_workspaces. The consuming code (workspaceApi.ts
-    // toWorkspaceResponse) defaults these to false/[] via nullish coalescing.
-    // In cloud mode, workspace selection is not needed — the WASM shell owns the
+    // toProjectFolderResponse) defaults these to false/[] via nullish coalescing.
+    // In cloud mode, project folder selection is not needed — the WASM shell owns the
     // virtual filesystem root, so needs_workspace_selection is effectively false.
     syntheticResponse: { message: 'ok', workspace_root: '/workspace', daemon_root: '/workspace' },
     description: 'Workspace info (cloud mode: WASM shell owns workspace, virtual FS root)',

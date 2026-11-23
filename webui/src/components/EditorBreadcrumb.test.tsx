@@ -30,7 +30,7 @@ function renderBreadcrumb(
 ) {
   const {
     filePath = 'src/components/App.tsx',
-    workspaceRoot,
+    workspaceRoot: projectFolder,
     showFileName,
     onNavigate,
     symbols,
@@ -42,7 +42,7 @@ function renderBreadcrumb(
     root.render(
       <EditorBreadcrumb
         filePath={filePath}
-        workspaceRoot={workspaceRoot}
+        workspaceRoot={projectFolder}
         showFileName={showFileName}
         onNavigate={onNavigate}
         symbols={symbols}

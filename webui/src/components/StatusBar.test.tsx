@@ -101,8 +101,8 @@ function queryByText(parent: HTMLElement, text: string) {
 
 // StatusBar reads its capability flags through the host. The default host is
 // the LOCAL shape: git support on (the assertions below expect a git branch
-// surface), workspace-switching on, and a local terminal — so the workspace
-// indicator derives from workspacePath (not the repo slug) and a missing
+// surface), workspace-switching on, and a local terminal — so the project folder
+// indicator derives from projectFolderPath (not the repo slug) and a missing
 // branch reads as "No Git" from the git bar, matching the local build. Flip
 // tests override the host to exercise the hosted branches.
 const localStatusBarHost = makeTestHost({ git: true, workspaceSwitching: true, localTerminal: true });
@@ -421,11 +421,11 @@ describe('StatusBar', () => {
       expect(indicator?.textContent).toContain('myproject');
     });
 
-    // Host capability flips the workspace indicator's data source. A
-    // workspace-switching shell derives the name from workspacePath (the local
-    // build's behavior); a hosted shell with no workspace switching derives it
+    // Host capability flips the project folder indicator's data source. A
+    // workspace-switching shell derives the name from projectFolderPath (the local
+    // build's behavior); a hosted shell with no project folder switching derives it
     // from the active repository URL. Without a repo URL and without a
-    // workspacePath, the hosted shell hides the indicator entirely.
+    // projectFolderPath, the hosted shell hides the indicator entirely.
     test('hosted shell with no workspace switching and no repo: indicator hidden', async () => {
       await act(async () => {
         renderStatusBar(<StatusBar />, makeTestHost({ git: true, workspaceSwitching: false, localTerminal: false }));
@@ -446,7 +446,7 @@ describe('StatusBar', () => {
       expect(indicator?.getAttribute('aria-label')).toContain('Workspace:');
     });
 
-    // An embedding host's workspace root is a container path such as
+    // An embedding host's project folder is a container path such as
     // `/workspace`; the project name it passes labels the indicator instead.
     test('a host project name labels the indicator instead of the root basename', async () => {
       await act(async () => {
@@ -483,7 +483,7 @@ describe('StatusBar', () => {
       const handleClick = vi.fn();
 
       await act(async () => {
-        renderStatusBar(<StatusBar workspacePath="/some/path" onWorkspaceClick={handleClick} />);
+        renderStatusBar(<StatusBar workspacePath="/some/path" onProjectFolderClick={handleClick} />);
       });
 
       const indicator = container.querySelector('.statusbar-item-workspace');

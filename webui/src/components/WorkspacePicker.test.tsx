@@ -1,7 +1,7 @@
 /**
- * WorkspacePicker tests — UX hardening pass.
+ * ProjectFolderPicker tests — UX hardening pass.
  *
- * Switching a workspace is a user-initiated action that can fail. The picker
+ * Switching a project folder is a user-initiated action that can fail. The picker
  * must (a) show progress and lock the other rows while a switch is in flight,
  * and (b) surface a failure inline at the top of the body instead of leaving
  * an unhandled promise rejection.
@@ -9,13 +9,13 @@
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import WorkspacePicker from './WorkspacePicker';
+import ProjectFolderPicker from './WorkspacePicker';
 
 const PROPS = {
   daemonRoot: '/home/user/.sprout',
-  currentWorkspace: '/home/user',
+  currentProjectFolder: '/home/user',
   suggestedProjects: [{ path: '/home/user/work/nearby-app', name: 'nearby-app', markers: ['go.mod'] }],
-  recentWorkspaces: [
+  recentProjectFolders: [
     {
       path: '/home/user/work/api',
       name: 'api',
@@ -30,7 +30,7 @@ const PROPS = {
 describe('WorkspacePicker', () => {
   it('calls onSelect with the chosen path', () => {
     const onSelect = vi.fn();
-    render(<WorkspacePicker {...PROPS} onSelect={onSelect} />);
+    render(<ProjectFolderPicker {...PROPS} onSelect={onSelect} />);
 
     fireEvent.click(screen.getByText('api'));
     expect(onSelect).toHaveBeenCalledWith('/home/user/work/api');
@@ -39,7 +39,7 @@ describe('WorkspacePicker', () => {
   it('disables every row and shows a spinner on the in-flight one', () => {
     let resolveSwitch: (v: void) => void = () => {};
     const onSelect = vi.fn(() => new Promise<void>((r) => (resolveSwitch = r)));
-    render(<WorkspacePicker {...PROPS} onSelect={onSelect} />);
+    render(<ProjectFolderPicker {...PROPS} onSelect={onSelect} />);
 
     fireEvent.click(screen.getByText('api'));
 
@@ -58,7 +58,7 @@ describe('WorkspacePicker', () => {
   it('ignores extra taps while a switch is in flight', async () => {
     let resolveSwitch: (v: void) => void = () => {};
     const onSelect = vi.fn(() => new Promise<void>((r) => (resolveSwitch = r)));
-    render(<WorkspacePicker {...PROPS} onSelect={onSelect} />);
+    render(<ProjectFolderPicker {...PROPS} onSelect={onSelect} />);
 
     fireEvent.click(screen.getByText('api'));
     fireEvent.click(screen.getByText('nearby-app'));
@@ -69,7 +69,7 @@ describe('WorkspacePicker', () => {
 
   it('surfaces a failed switch as an inline error at the top of the body', async () => {
     const onSelect = vi.fn().mockRejectedValue(new Error('Error: permission denied\n    at setWorkspace'));
-    render(<WorkspacePicker {...PROPS} onSelect={onSelect} />);
+    render(<ProjectFolderPicker {...PROPS} onSelect={onSelect} />);
 
     fireEvent.click(screen.getByText('api'));
 
@@ -89,7 +89,7 @@ describe('WorkspacePicker', () => {
 
   it('falls back to a human message when the rejection carries no message', async () => {
     const onSelect = vi.fn().mockRejectedValue(undefined);
-    render(<WorkspacePicker {...PROPS} onSelect={onSelect} />);
+    render(<ProjectFolderPicker {...PROPS} onSelect={onSelect} />);
 
     fireEvent.click(screen.getByText('api'));
 
@@ -98,7 +98,7 @@ describe('WorkspacePicker', () => {
 
   it('re-enables rows after a failed switch so the user can retry', async () => {
     const onSelect = vi.fn().mockRejectedValue(new Error('boom'));
-    render(<WorkspacePicker {...PROPS} onSelect={onSelect} />);
+    render(<ProjectFolderPicker {...PROPS} onSelect={onSelect} />);
 
     fireEvent.click(screen.getByText('api'));
     await screen.findByRole('alert');

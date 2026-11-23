@@ -1,5 +1,5 @@
 /**
- * The startup repository import for the in-browser agent's workspace.
+ * The startup repository import for the in-browser agent's project folder.
  *
  * The cloud adapter can be installed from two places: the bootstrap (the
  * hosted build's entry, whose repo is the bootstrap's or the `?repo=` deep
@@ -8,7 +8,7 @@
  *
  * - a repo is imported once per page, not on every mount, host change or
  *   reconnect (a failed import may be retried by a later caller);
- * - a host project repo, once claimed by a mounted workspace, wins: the
+ * - a host project repo, once claimed by a mounted project folder, wins: the
  *   bootstrap's own startup repo is not imported over it.
  */
 
@@ -19,7 +19,7 @@ type RestoreResult = Awaited<ReturnType<CloudAdapter['restoreRepo']>>;
 /** Repos whose import has started (or finished) on this page. */
 const started = new Map<string, Promise<RestoreResult>>();
 
-/** The repo a mounted workspace's host named, which outranks the bootstrap's. */
+/** The repo a mounted project folder's host named, which outranks the bootstrap's. */
 let hostProjectRepo: string | null = null;
 
 /** The adapter the host project repo was last imported through, for a retry. */
@@ -27,7 +27,7 @@ let hostAdapter: Pick<CloudAdapter, 'restoreRepo'> | null = null;
 
 /**
  * Where the host's project repo stands: opening, open, or failed with the
- * reason. Null when no mounted workspace names a project repo.
+ * reason. Null when no mounted project folder names a project repo.
  */
 export type HostProjectRepoStatus = {
   repo: string;
@@ -57,7 +57,7 @@ export function subscribeHostProjectRepoStatus(listener: () => void): () => void
 }
 
 /**
- * Record that a mounted workspace's host names this project repo. Called
+ * Record that a mounted project folder's host names this project repo. Called
  * synchronously before either adapter install finishes, so a bootstrap import
  * that lands afterwards sees the claim.
  */
@@ -66,7 +66,7 @@ export function claimHostProjectRepo(repoUrl: string): void {
   if (hostStatus?.repo !== repoUrl) setHostStatus({ repo: repoUrl, state: 'opening' });
 }
 
-/** Release the host project repo claim (the workspace that made it unmounted). */
+/** Release the host project repo claim (the project folder that made it unmounted). */
 export function releaseHostProjectRepo(): void {
   hostProjectRepo = null;
   hostAdapter = null;
@@ -79,7 +79,7 @@ export function retryHostProjectRepo(): void {
 }
 
 /**
- * Import a repo into the in-browser workspace through `adapter`, unless it is
+ * Import a repo into the in-browser project folder through `adapter`, unless it is
  * already importing or imported. With `source: 'bootstrap'`, a different repo
  * claimed by a host project is left alone.
  *

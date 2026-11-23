@@ -13,7 +13,7 @@ vi.mock('./workspaceFs/workspaceGit', async (importOriginal) => ({
   cloneRepo: mocks.cloneRepo,
 }));
 
-import { cloneIntoWorkspace, GIT_REPO_CHANGED_EVENT } from './workspaceClone';
+import { cloneIntoProjectFolder, GIT_REPO_CHANGED_EVENT } from './workspaceClone';
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -27,7 +27,7 @@ describe('cloneIntoWorkspace', () => {
     const announced = vi.fn();
     window.addEventListener(GIT_REPO_CHANGED_EVENT, announced);
 
-    const result = await cloneIntoWorkspace('octocat/Hello-World', { token: 't' });
+    const result = await cloneIntoProjectFolder('octocat/Hello-World', { token: 't' });
 
     window.removeEventListener(GIT_REPO_CHANGED_EVENT, announced);
     expect(mocks.gitClone).toHaveBeenCalledWith('octocat/Hello-World', { token: 't' });
@@ -39,7 +39,7 @@ describe('cloneIntoWorkspace', () => {
   it('uses the workspaceFs clone elsewhere', async () => {
     const cloned = { repo: 'o/n', dir: 'repos/o/n', entries: 1, defaultBranch: 'main' };
     mocks.cloneRepo.mockResolvedValue(cloned);
-    await expect(cloneIntoWorkspace('o/n')).resolves.toBe(cloned);
+    await expect(cloneIntoProjectFolder('o/n')).resolves.toBe(cloned);
     expect(mocks.gitClone).not.toHaveBeenCalled();
   });
 });

@@ -86,7 +86,7 @@ interface PaletteResult {
   symbolLine?: number;
   symbolKind?: string;
   scopePath?: string;
-  /** When set, the symbol lives in another file (workspace LSP result). */
+  /** When set, the symbol lives in another file (project folder LSP result). */
   symbolFilePath?: string;
   /** Stable unique key for React rendering */
   key: string;
@@ -140,14 +140,14 @@ export interface CommandPaletteProps {
   /** True while the host is indexing files (or otherwise warming up data).
    *  Surfaces a spinner so the user knows results may be temporarily empty. */
   isLoading?: boolean;
-  /** The workspace's absolute path. File rows show their folder relative to
+  /** The project folder's absolute path. File rows show their folder relative to
    *  it (nothing for a file at the root) instead of the full path. */
   workspaceRoot?: string;
 }
 
-function relativeDirectory(filePath: string, workspaceRoot?: string): string {
+function relativeDirectory(filePath: string, projectFolder?: string): string {
   const path = filePath.replace(/\\/g, '/');
-  const root = (workspaceRoot ?? '').replace(/\\/g, '/').replace(/\/+$/, '');
+  const root = (projectFolder ?? '').replace(/\\/g, '/').replace(/\/+$/, '');
   const rel = root && path.startsWith(root + '/') ? path.slice(root.length + 1) : path;
   const slash = rel.lastIndexOf('/');
   return slash <= 0 ? '' : rel.slice(0, slash);
@@ -168,7 +168,7 @@ function CommandPalette({
   onOpenFileInNewPane,
   recentFiles,
   isLoading = false,
-  workspaceRoot,
+  workspaceRoot: projectFolder,
 }: CommandPaletteProps): JSX.Element | null {
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<PaletteMode>(initialMode);
@@ -321,7 +321,7 @@ function CommandPalette({
         const recents = recentFiles ?? [];
         // Decreasing score so most-recent stays on top after the group sort.
         recents.forEach((file, i) => {
-          const dir = relativeDirectory(file.path, workspaceRoot);
+          const dir = relativeDirectory(file.path, projectFolder);
           items.push({
             kind: 'file',
             filePath: file.path,
@@ -334,7 +334,7 @@ function CommandPalette({
         });
       } else if (fileResults.length > 0) {
         for (const file of fileResults) {
-          const dir = relativeDirectory(file.path, workspaceRoot);
+          const dir = relativeDirectory(file.path, projectFolder);
           const pathScore = fuzzyScore(q, file.path);
           if (pathScore.score < 0.3) continue;
           const nameScore = fuzzyScore(q, file.name);
@@ -357,7 +357,7 @@ function CommandPalette({
     // matches (debounced + race-safe in the effect above) so the user can
     // jump to a symbol in any indexed file.
     if (searchMode === 'all' || searchMode === 'symbols') {
-      // Track local (active-buffer) symbol identity so workspace results
+      // Track local (active-buffer) symbol identity so project folder results
       // can dedupe — the same symbol shouldn't appear twice.
       const localKeys = new Set<string>();
       if (onSearchSymbols) {
@@ -405,7 +405,7 @@ function CommandPalette({
           items.push({
             kind: 'symbol',
             highlightedLabel: highlightMatches(sym.name, symScore.matches),
-            // Discount workspace results slightly so local-buffer symbols
+            // Discount project folder results slightly so local-buffer symbols
             // rank above them when the user is editing a file.
             score: symScore.score * 0.95,
             symbolLine: sym.line,
@@ -444,7 +444,7 @@ function CommandPalette({
       }
     }
     return out;
-  }, [searchQuery, searchMode, commands, fileResults, recentFiles, onSearchSymbols, workspaceSymbols, workspaceRoot]);
+  }, [searchQuery, searchMode, commands, fileResults, recentFiles, onSearchSymbols, workspaceSymbols, projectFolder]);
 
   // Remember which item the user has selected (by its stable key).
   useEffect(() => {

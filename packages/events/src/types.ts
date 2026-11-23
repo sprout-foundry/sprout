@@ -82,7 +82,7 @@ export interface ErrorData {
   subagent_depth?: number;
 }
 
-/** A warning that the hosting platform is about to stop the workspace. */
+/** A warning that the hosting platform is about to stop the project folder. */
 export interface WorkspaceStoppingData {
   /** Why: idle, max_runtime, credits, drain, user, txn_finish. */
   reason: string;

@@ -3,19 +3,19 @@ import { useCallback, useEffect, useState } from 'react';
 import { useHostCapabilities } from '../host';
 import type { WorkspaceInfo } from '../hooks/useWorkspace';
 import { ApiService, type Starter } from '../services/api';
-import { createWorkspaceNative, pickWorkspaceNative } from '../services/nativeFs';
-import { setWorkspaceGateOpen } from '../services/workspaceGate';
-import { refreshWorkspace } from '../services/workspaceStore';
-import { consentToHomeWorkspace } from '../services/workspaceSync';
-import WorkspaceBrowser from './WorkspaceBrowser';
-import WorkspacePicker from './WorkspacePicker';
+import { createProjectFolderNative, pickProjectFolderNative } from '../services/nativeFs';
+import { setProjectFolderGateOpen } from '../services/workspaceGate';
+import { refreshProjectFolder } from '../services/workspaceStore';
+import { consentToHomeProjectFolder } from '../services/workspaceSync';
+import ProjectFolderBrowser from './WorkspaceBrowser';
+import ProjectFolderPicker from './WorkspacePicker';
 import './WorkspaceGateModal.css';
 
 /**
- * WorkspaceGateModal — a full-screen blocking overlay (SP-130) shown when
- * the resolved workspace root is the user's home directory without consent.
+ * ProjectFolderGateModal — a full-screen blocking overlay (SP-130) shown when
+ * the resolved project folder is the user's home directory without consent.
  *
- * Unlike WelcomeTab's inline WorkspacePicker (shown for a generic
+ * Unlike WelcomeTab's inline ProjectFolderPicker (shown for a generic
  * non-project directory), this modal *blocks* the editor/chat/files until
  * the user either selects a project folder or explicitly consents to the
  * home directory.
@@ -33,23 +33,23 @@ import './WorkspaceGateModal.css';
  * The overlay sits above the app's toast layer, so every failure surfaces
  * as an inline error here — a toast would be invisible behind the scrim.
  */
-interface WorkspaceGateModalProps {
-  workspaceInfo: WorkspaceInfo;
-  onSelectWorkspace: (path: string) => void;
+interface ProjectFolderGateModalProps {
+  projectFolderInfo: WorkspaceInfo;
+  onSelectProjectFolder: (path: string) => void;
   onConsentHome: () => void;
 }
 
-/** Friendly copy for the bridge createWorkspace error codes. */
+/** Friendly copy for the bridge createProjectFolder error codes. */
 const CREATE_ERROR_COPY: Record<string, string> = {
   invalidName: 'That name can’t be used for a folder. Try letters, numbers, spaces, and dashes.',
   alreadyExists: 'A folder with that name already exists. Pick a different name.',
 };
 
-function WorkspaceGateModal({
-  workspaceInfo,
-  onSelectWorkspace,
+function ProjectFolderGateModal({
+  projectFolderInfo,
+  onSelectProjectFolder,
   onConsentHome,
-}: WorkspaceGateModalProps): JSX.Element | null {
+}: ProjectFolderGateModalProps): JSX.Element | null {
   const { folderPicker: supportsFolderPicker, workspaceSwitching: supportsWorkspaceSwitching } = useHostCapabilities();
   // Browsing happens inside the modal. Delegating to the chrome's location
   // switcher (as this used to) opened that popover *behind* the gate — it sits
@@ -81,7 +81,7 @@ function WorkspaceGateModal({
       setPending(kind);
       try {
         // The callers are async but not awaited here on purpose: a resolved
-        // setWorkspace triggers a page reload, so post-success cleanup is moot.
+        // setProjectFolder triggers a page reload, so post-success cleanup is moot.
         // Only the failure path matters, and it is captured below.
         Promise.resolve(action()).catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err);
@@ -98,8 +98,8 @@ function WorkspaceGateModal({
 
   useEffect(() => {
     if (!supportsWorkspaceSwitching) return undefined;
-    setWorkspaceGateOpen(true);
-    return () => setWorkspaceGateOpen(false);
+    setProjectFolderGateOpen(true);
+    return () => setProjectFolderGateOpen(false);
   }, []);
 
   // Studio create form: load the embedded starter catalogue
@@ -123,7 +123,7 @@ function WorkspaceGateModal({
     };
   }, [creating]);
 
-  // Cloud mode (and any mode without workspace switching) is never gated.
+  // Cloud mode (and any mode without project folder switching) is never gated.
   if (!supportsWorkspaceSwitching) return null;
 
   // Studio variant — native folder picker + project create instead of the
@@ -149,16 +149,16 @@ function WorkspaceGateModal({
               onSubmit={(e) => {
                 e.preventDefault();
                 run('create', async () => {
-                  const result = await createWorkspaceNative(newName);
+                  const result = await createProjectFolderNative(newName);
                   if (result.ok) {
                     // A starter was picked: the bridge created the folder and
-                    // made it the workspace root, so the new project's
-                    // absolute path is the current workspace root (GET
+                    // made it the project folder, so the new project's
+                    // absolute path is the current project folder (GET
                     // /api/workspace → workspace_root). Instantiate the
                     // starter there. "Blank" skips this step, leaving the
                     // create flow byte-identical to a plain folder create.
                     if (selectedStarter !== '') {
-                      const ws = await refreshWorkspace({ force: true });
+                      const ws = await refreshProjectFolder({ force: true });
                       await ApiService.getInstance().instantiateStarter({
                         starter: selectedStarter,
                         path: ws.workspace_root,
@@ -254,7 +254,7 @@ function WorkspaceGateModal({
                 type="button"
                 onClick={() =>
                   run('pick', async () => {
-                    const result = await pickWorkspaceNative();
+                    const result = await pickProjectFolderNative();
                     if (result.ok) {
                       window.location.reload();
                       return;
@@ -307,9 +307,9 @@ function WorkspaceGateModal({
               type="button"
               onClick={() =>
                 // Same path as the desktop variant's consent handler in
-                // AppContent: re-read the workspace, then POST
+                // AppContent: re-read the project folder, then POST
                 // /api/workspace with consent_home: true if still needed.
-                run('consent', () => consentToHomeWorkspace())
+                run('consent', () => consentToHomeProjectFolder())
               }
               disabled={pending !== null}
               data-testid="workspace-gate-home-btn"
@@ -350,18 +350,18 @@ function WorkspaceGateModal({
         </div>
 
         {browsing ? (
-          <WorkspaceBrowser
-            initialPath={workspaceInfo.workspace_root || workspaceInfo.daemon_root}
-            onSelect={(path) => run('select', () => onSelectWorkspace(path))}
+          <ProjectFolderBrowser
+            initialPath={projectFolderInfo.workspace_root || projectFolderInfo.daemon_root}
+            onSelect={(path) => run('select', () => onSelectProjectFolder(path))}
             onCancel={() => setBrowsing(false)}
           />
         ) : (
-          <WorkspacePicker
-            daemonRoot={workspaceInfo.daemon_root}
-            currentWorkspace={workspaceInfo.workspace_root}
-            suggestedProjects={workspaceInfo.suggested_projects}
-            recentWorkspaces={workspaceInfo.recent_workspaces}
-            onSelect={(path) => run('select', () => onSelectWorkspace(path))}
+          <ProjectFolderPicker
+            daemonRoot={projectFolderInfo.daemon_root}
+            currentProjectFolder={projectFolderInfo.workspace_root}
+            suggestedProjects={projectFolderInfo.suggested_projects}
+            recentProjectFolders={projectFolderInfo.recent_workspaces}
+            onSelect={(path) => run('select', () => onSelectProjectFolder(path))}
             onBrowse={() => setBrowsing(true)}
           />
         )}
@@ -399,4 +399,4 @@ function WorkspaceGateModal({
   );
 }
 
-export default WorkspaceGateModal;
+export default ProjectFolderGateModal;

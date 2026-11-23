@@ -2,7 +2,7 @@ import { Terminal, GitBranch, MessageSquare, Zap, BookOpen, Settings, Command, X
 import { copy } from '../config/copy';
 import { useHostCapabilities } from '../host';
 import { useWorkspace } from '../hooks/useWorkspace';
-import WorkspacePicker from './WorkspacePicker';
+import ProjectFolderPicker from './WorkspacePicker';
 import './WelcomeTab.css';
 
 /** Mac users see ⌘; everyone else sees Ctrl. Mirrors HotkeyContext logic. */
@@ -23,14 +23,14 @@ interface WelcomeTabProps {
 
 /* ── Workspace Picker View ────────────────────────────────────────── */
 
-function WorkspacePickerView({
-  workspaceInfo,
+function ProjectFolderPickerView({
+  projectFolderInfo,
   homeDir,
-  setWorkspace,
+  setProjectFolder,
 }: {
-  workspaceInfo: ReturnType<typeof useWorkspace>['workspaceInfo'];
+  projectFolderInfo: ReturnType<typeof useWorkspace>['projectFolderInfo'];
   homeDir: string;
-  setWorkspace: (path: string) => Promise<void>;
+  setProjectFolder: (path: string) => Promise<void>;
 }): JSX.Element {
   const { workspaceSwitching: supportsWorkspaceSwitching } = useHostCapabilities();
   const handleBrowse = () => {
@@ -49,12 +49,12 @@ function WorkspacePickerView({
   }
 
   return (
-    <WorkspacePicker
-      daemonRoot={workspaceInfo.daemon_root}
-      currentWorkspace={workspaceInfo.workspace_root}
-      suggestedProjects={workspaceInfo.suggested_projects}
-      recentWorkspaces={workspaceInfo.recent_workspaces}
-      onSelect={setWorkspace}
+    <ProjectFolderPicker
+      daemonRoot={projectFolderInfo.daemon_root}
+      currentProjectFolder={projectFolderInfo.workspace_root}
+      suggestedProjects={projectFolderInfo.suggested_projects}
+      recentProjectFolders={projectFolderInfo.recent_workspaces}
+      onSelect={setProjectFolder}
       onBrowse={handleBrowse}
     />
   );
@@ -194,13 +194,17 @@ function WelcomeContent({
 /* ── WelcomeTab Root Component ─────────────────────────────────────── */
 
 function WelcomeTab(props: WelcomeTabProps): JSX.Element {
-  const { workspaceInfo, homeDir, isLoading, setWorkspace } = useWorkspace();
+  const { projectFolderInfo, homeDir, isLoading, setProjectFolder } = useWorkspace();
 
-  // When workspace selection is needed (not a project), show the picker
-  if (!isLoading && workspaceInfo.needs_workspace_selection) {
+  // When project folder selection is needed (not a project), show the picker
+  if (!isLoading && projectFolderInfo.needs_workspace_selection) {
     return (
       <div className="welcome-tab" data-testid="editor-welcome-tab">
-        <WorkspacePickerView workspaceInfo={workspaceInfo} homeDir={homeDir} setWorkspace={setWorkspace} />
+        <ProjectFolderPickerView
+          projectFolderInfo={projectFolderInfo}
+          homeDir={homeDir}
+          setProjectFolder={setProjectFolder}
+        />
       </div>
     );
   }

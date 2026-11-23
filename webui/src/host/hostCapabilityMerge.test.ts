@@ -7,7 +7,7 @@
  * shell reports to the webui through the installed adapter. The selected host
  * is the local host, whose own defaults leave `folderPicker` off; the entry
  * overlays the adapter's declared flags onto the host's capabilities so the
- * studio workspace gate (WorkspaceGateModal's studio variant) renders again.
+ * studio project folder gate (ProjectFolderGateModal's studio variant) renders again.
  *
  * These tests exercise the seam the entry uses — `applyHostCapabilities` +
  * `upsertActiveHostCapabilities` — and assert the resulting host capabilities
@@ -56,7 +56,7 @@ describe('host shell capabilities are restored through the host', () => {
     const { applyHostCapabilities } = await import('./applyHostCapabilities');
     const before = snapshotCaps(localHost);
     try {
-      // The plain local build: folderPicker off, workspaceSwitching on.
+      // The plain local build: folderPicker off, projectFolderSwitching on.
       expect(localHost.capabilities.folderPicker).toBe(false);
       expect(localHost.capabilities.workspaceSwitching).toBe(true);
 
@@ -98,7 +98,7 @@ describe('host shell capabilities are restored through the host', () => {
     try {
       // A plain local build installs no adapter, so the entry's
       // applyHostCapabilities(host, null) is a no-op and the host keeps its
-      // own defaults: folderPicker off, workspaceSwitching on.
+      // own defaults: folderPicker off, projectFolderSwitching on.
       applyHostCapabilities(localHost, null);
       expect(localHost.capabilities.folderPicker).toBe(false);
       expect(localHost.capabilities.workspaceSwitching).toBe(true);
@@ -214,7 +214,7 @@ describe('host shell capabilities are restored through the host', () => {
     const { applyHostCapabilities } = await import('./applyHostCapabilities');
     const before = snapshotCaps(cloudHost);
     try {
-      // The cloud host's own flags: no workspace switching, no folder picker.
+      // The cloud host's own flags: no project folder switching, no folder picker.
       expect(cloudHost.capabilities.workspaceSwitching).toBe(false);
       expect(cloudHost.capabilities.folderPicker).toBe(false);
 

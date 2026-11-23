@@ -31,7 +31,7 @@ import {
   handleWasmLocal,
   handleWasmEditDecision,
   handleWasmShellApprovalDecision,
-  handleWasmWorkspaceInfo,
+  handleWasmProjectFolderInfo,
   trackFileWrite,
 } from './cloudWasmHandlers';
 import { gitCorsProxy } from './gitCorsProxy';
@@ -53,7 +53,7 @@ export interface CloudAdapterConfig {
   egressProxy?: string;
   /**
    * The repository to import at startup, when the host names one (its
-   * project's `repoUrl`). A host that mounts a workspace already knows the
+   * project's `repoUrl`). A host that mounts a project folder already knows the
    * project, so the repo does not have to arrive as a `?repo=` URL parameter;
    * absent, the adapter falls back to the query parameter as the hosted build
    * does today.
@@ -164,7 +164,7 @@ export class CloudAdapter implements APIAdapter {
    * The repository this adapter should import at startup: the host-named
    * project repo when the config carries one, else the `?repo=` query
    * parameter (the hosted build's shareable deep link). The host's project is
-   * the source of truth for a host that mounts a workspace, so it wins.
+   * the source of truth for a host that mounts a project folder, so it wins.
    */
   getStartupRepo(): string | null {
     return this.config.repoUrl || CloudAdapter.getRepoFromQuery();
@@ -296,7 +296,7 @@ export class CloudAdapter implements APIAdapter {
   }
 
   /**
-   * Open a repository in the workspace, with browser git set up for it
+   * Open a repository in the project folder, with browser git set up for it
    * (repoGitImport.ts): cloned through the host's git proxy when there is
    * one, else its files imported and committed as a snapshot.
    */
@@ -309,7 +309,7 @@ export class CloudAdapter implements APIAdapter {
   }
 
   /**
-   * Seed the workspace with a repository's files, without git. Cache hit:
+   * Seed the project folder with a repository's files, without git. Cache hit:
    * writes the persisted manifest straight into the WASM VFS — no network,
    * no server clone. Cache miss: falls back to the network import (which
    * persists its result on success).
@@ -472,11 +472,11 @@ export class CloudAdapter implements APIAdapter {
     }
 
     // ── Workspace root (from the shell once it is up) ──────────────
-    // The file routes resolve paths against the shell's workspace root, so
+    // The file routes resolve paths against the shell's project folder, so
     // that is the root reported; before the shell is up the synthetic
     // answer below reports the same default.
     if (urlPath === '/api/workspace' && method === 'GET' && !nativeFs && this.wasmShell) {
-      return handleWasmWorkspaceInfo(this.wasmShell);
+      return handleWasmProjectFolderInfo(this.wasmShell);
     }
 
     // ── Synthetic response interception ────────────────────────────

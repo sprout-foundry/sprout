@@ -5,7 +5,7 @@
 //   - Save As on an untitled buffer must resolve the typed path against the
 //     WORKSPACE root, not the process cwd / user home
 //   - Save As must adopt the real path so the tab stops reading "Untitled"
-//     and the file shows up in the workspace tree
+//     and the file shows up in the project folder tree
 import { showThemedPrompt } from '@sprout/ui';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -61,9 +61,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   latestContext = undefined;
   mockCheckFilesModified.mockResolvedValue({ modified: [] });
-  // The workspace root is what a typed Save As path resolves against; seed
-  // it the way boot does (layout restore / workspace fetch).
-  getLSPClientService().setWorkspaceRoot('/w');
+  // The project folder is what a typed Save As path resolves against; seed
+  // it the way boot does (layout restore / project folder fetch).
+  getLSPClientService().setProjectFolder('/w');
   localStorage.setItem('sprout-welcome-dismissed', 'true');
   localStorage.removeItem('sprout.editor.layoutState');
 });

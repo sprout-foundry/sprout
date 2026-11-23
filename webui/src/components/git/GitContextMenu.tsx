@@ -21,7 +21,7 @@ export interface GitContextMenuProps {
 
 function GitContextMenu({
   contextMenu,
-  workspaceRoot,
+  workspaceRoot: projectFolder,
   onPreviewFile,
   onOpenFile,
   onStageFile,
@@ -68,11 +68,11 @@ function GitContextMenu({
           >
             Copy relative path
           </button>
-          {workspaceRoot && (
+          {projectFolder && (
             <button
               className="context-menu-item"
               onClick={() => {
-                copyToClipboard(`${workspaceRoot.replace(/\/+$/, '')}/${contextMenu.file.path}`);
+                copyToClipboard(`${projectFolder.replace(/\/+$/, '')}/${contextMenu.file.path}`);
                 onClose();
               }}
             >

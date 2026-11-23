@@ -431,7 +431,7 @@ export interface GitCloneOptions {
 
 export async function gitClone(url: string, opts?: GitCloneOptions) {
   const fs = getFs().promises;
-  // The previous repository's files leave the workspace with it, so two
+  // The previous repository's files leave the project folder with it, so two
   // repositories never mix in one tree.
   const previousFiles = await workTreePaths();
   if (previousFiles.length > 0) await bridge()?.deleteVfsFiles?.(previousFiles);

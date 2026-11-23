@@ -16,14 +16,14 @@ import {
   isRuntimePath,
   joinVfsPath,
   normalizeVfsPath as normalizePath,
-  resolveWorkspacePath,
+  resolveProjectFolderPath,
   RUNTIME_DIRS,
   trackFileWrite as trackWrite,
   untrackFileWrite as untrackWrite,
-  workspaceRootOf,
+  projectFolderOf,
 } from './vfsFiles';
 import type { WasmDirEntry, WasmShell } from './wasmShell';
-import { workspaceCwdContextLine } from './workspaceCwd';
+import { projectFolderCwdContextLine } from './workspaceCwd';
 
 // Global event dispatcher — set by the webui's event system so WASM
 // agent events flow into the same React state as WebSocket events.
@@ -116,7 +116,7 @@ export function handleWasmLocal(
         if (!api || typeof api.designStatus !== 'function') {
           return jsonOk({ exists: false });
         }
-        const raw = api.designStatus(workspaceRootOf(shell));
+        const raw = api.designStatus(projectFolderOf(shell));
         try {
           return jsonOk(JSON.parse(raw));
         } catch {
@@ -204,7 +204,7 @@ export {
   normalizeVfsPath as normalizePath,
   trackFileWrite,
   untrackFileWrite,
-  workspaceRootOf,
+  projectFolderOf,
 } from './vfsFiles';
 
 /**
@@ -258,41 +258,43 @@ function writePlatformProviderConfig(shell: WasmShell, config: ReturnType<typeof
 const stopRequested = new Set<string>();
 
 /**
- * Hidden from the workspace's listings: runtime state, and a directory that
+ * Hidden from the project folder's listings: runtime state, and a directory that
  * only holds it (/home).
  */
-function hiddenFromWorkspace(shell: WasmShell, absPath: string, root: string): boolean {
+function hiddenFromProjectFolder(shell: WasmShell, absPath: string, root: string): boolean {
   if (isRuntimePath(absPath, root)) return true;
   const prefix = absPath === '/' ? '/' : `${absPath}/`;
   if (!RUNTIME_DIRS.some((dir) => dir.startsWith(prefix) && !(root === dir || root.startsWith(`${dir}/`)))) {
     return false;
   }
   const listing = shell.listDir(absPath);
-  return !listing.error && listing.entries.every((e) => hiddenFromWorkspace(shell, joinVfsPath(absPath, e.name), root));
+  return (
+    !listing.error && listing.entries.every((e) => hiddenFromProjectFolder(shell, joinVfsPath(absPath, e.name), root))
+  );
 }
 
 // ── Individual wasm-local route handlers ─────────────────────────
 
 /**
  * The absolute VFS path a file API request names, resolved against the
- * shell's workspace root (see resolveWorkspacePath). Every file route goes
+ * shell's project folder (see resolveProjectFolderPath). Every file route goes
  * through here, so listings, reads, writes and tree operations address the
  * files the agent and its shell work on.
  */
-function workspacePathOf(shell: WasmShell, raw: string): string {
-  return resolveWorkspacePath(raw, workspaceRootOf(shell), (p) => !shell.listDir(p).error);
+function projectFolderPathOf(shell: WasmShell, raw: string): string {
+  return resolveProjectFolderPath(raw, projectFolderOf(shell), (p) => !shell.listDir(p).error);
 }
 
 /**
- * GET /api/workspace — the workspace root the file routes resolve against,
+ * GET /api/workspace — the project folder the file routes resolve against,
  * in the daemon's shape.
  */
-export function handleWasmWorkspaceInfo(shell: WasmShell): Response {
-  const root = normalizePath(workspaceRootOf(shell) || '/');
+export function handleWasmProjectFolderInfo(shell: WasmShell): Response {
+  const root = normalizePath(projectFolderOf(shell) || '/');
   return jsonOk({ message: 'ok', workspace_root: root, daemon_root: root });
 }
 
-/** Path relative to the shell's CWD (the browser workspace root). */
+/** Path relative to the shell's CWD (the browser project folder). */
 function vfsRelative(absPath: string, rootDir: string): string {
   if (rootDir === '/') return absPath.replace(/^\/+/, '');
   const prefix = `${rootDir}/`;
@@ -315,7 +317,7 @@ function singleLevelFileEntries(
 ): Array<Record<string, unknown>> {
   return entries
     .filter((e) => !(e.type === 'dir' && e.name === '.git'))
-    .filter((e) => !hiddenFromWorkspace(shell, joinVfsPath(dir, e.name), rootDir))
+    .filter((e) => !hiddenFromProjectFolder(shell, joinVfsPath(dir, e.name), rootDir))
     .map((e) => {
       const absPath = joinVfsPath(dir, e.name);
       return {
@@ -337,12 +339,12 @@ function singleLevelFileEntries(
  */
 function groupManifestChildren(dir: string, rootDir?: string): Array<{ name: string; path: string; isDir: boolean }> {
   const underDir = (p: string) => (dir === '/' ? p.startsWith('/') : p.startsWith(`${dir}/`) || p === dir);
-  const workspacePaths = Array.from(snapshot()).filter((p) => rootDir === undefined || !isRuntimePath(p, rootDir));
+  const projectFolderPaths = Array.from(snapshot()).filter((p) => rootDir === undefined || !isRuntimePath(p, rootDir));
   let base = dir;
-  let paths = workspacePaths.filter(underDir);
-  if (paths.length === 0 && workspacePaths.length > 0) {
+  let paths = projectFolderPaths.filter(underDir);
+  if (paths.length === 0 && projectFolderPaths.length > 0) {
     base = '/';
-    paths = workspacePaths;
+    paths = projectFolderPaths;
   }
   if (paths.length === 0) return [];
 
@@ -374,8 +376,8 @@ function groupManifestChildren(dir: string, rootDir?: string): Array<{ name: str
  * the top level — folders vanished.
  */
 function handleWasmFileList(shell: WasmShell, fullUrl?: string): Response {
-  const root = workspaceRootOf(shell);
-  const dir = workspacePathOf(shell, (fullUrl && getQueryParam(fullUrl, 'path')) || '');
+  const root = projectFolderOf(shell);
+  const dir = projectFolderPathOf(shell, (fullUrl && getQueryParam(fullUrl, 'path')) || '');
   const rootDir = normalizePath(root);
 
   // Try listDir first; fall back to the manifest.
@@ -468,7 +470,7 @@ const WASM_SKIP_DIRS = new Set([
 ]);
 
 /**
- * GET /api/file-index — the workspace's whole quick-open index in ONE
+ * GET /api/file-index — the project folder's whole quick-open index in ONE
  * response. Uses the WASM binary's bulk walkFiles export (one JS→WASM
  * crossing) instead of a per-directory listDir crawl; falls back to
  * serially walking via /api/browse semantics on older binaries that don't
@@ -476,7 +478,7 @@ const WASM_SKIP_DIRS = new Set([
  * Expected: { files: [{name, path, type}], truncated, file_count, dir_count }
  */
 function handleWasmFileIndex(shell: WasmShell, _fullUrl: string): Response {
-  const root = workspaceRootOf(shell) || '/';
+  const root = projectFolderOf(shell) || '/';
   if (typeof shell.walkFiles === 'function') {
     const json = shell.walkFiles('/');
     try {
@@ -538,7 +540,7 @@ function handleWasmFileIndex(shell: WasmShell, _fullUrl: string): Response {
         truncated = true;
         return;
       }
-      files.push({ name: entry.name, path: toWorkspaceRelative(entry.path, root), type: 'file' });
+      files.push({ name: entry.name, path: toProjectFolderRelative(entry.path, root), type: 'file' });
     }
   };
   visit('/', 0);
@@ -554,7 +556,7 @@ function handleWasmFileIndex(shell: WasmShell, _fullUrl: string): Response {
 }
 
 /** Convert an absolute VFS path to workspace-relative slash path (or '' root). */
-function toWorkspaceRelative(path: string, root: string): string {
+function toProjectFolderRelative(path: string, root: string): string {
   const normRoot = root.endsWith('/') && root !== '/' ? root.slice(0, -1) : root;
   if (root === '/' || path === normRoot) return path.replace(/^\/+/, '');
   return path.startsWith(normRoot + '/') ? path.slice(normRoot.length + 1) : path;
@@ -601,7 +603,7 @@ function handleWasmFile(shell: WasmShell, method: string, fullUrl: string, bodyS
   if (!path) {
     return jsonError('Missing path parameter', 400);
   }
-  const safePath = workspacePathOf(shell, path);
+  const safePath = projectFolderPathOf(shell, path);
 
   if (method === 'GET') {
     const binaryMime = binaryMimeType(safePath);
@@ -676,7 +678,7 @@ function handleWasmCreate(shell: WasmShell, bodyStr?: string): Response {
   const isDir = !!(parsed?.directory || parsed?.is_directory);
   if (!path) return jsonError('Missing path', 400);
 
-  const safePath = workspacePathOf(shell, path);
+  const safePath = projectFolderPathOf(shell, path);
 
   if (isDir) {
     const result = shell.executeCommand(`mkdir -p ${shellEscapeArg(safePath)}`);
@@ -715,7 +717,7 @@ function handleWasmDelete(shell: WasmShell, bodyStr?: string): Response {
   const path = parsed?.path as string | undefined;
   if (!path) return jsonError('Missing path', 400);
 
-  const safePath = workspacePathOf(shell, path);
+  const safePath = projectFolderPathOf(shell, path);
   const err = shell.deleteFile(safePath);
   if (err) {
     // If file delete fails, try rm via command (handles directories)
@@ -740,8 +742,8 @@ function handleWasmRename(shell: WasmShell, bodyStr?: string): Response {
   const newPath = (parsed?.new_path ?? parsed?.newPath) as string | undefined;
   if (!oldPath || !newPath) return jsonError('Missing old_path or new_path', 400);
 
-  const safeOld = workspacePathOf(shell, oldPath);
-  const safeNew = workspacePathOf(shell, newPath);
+  const safeOld = projectFolderPathOf(shell, oldPath);
+  const safeNew = projectFolderPathOf(shell, newPath);
   const result = shell.executeCommand(`mv ${shellEscapeArg(safeOld)} ${shellEscapeArg(safeNew)}`);
   if (result.exitCode !== 0) {
     return jsonError(result.stderr || 'rename failed', 500);
@@ -767,7 +769,7 @@ function handleWasmSearch(shell: WasmShell, fullUrl: string): Response {
 
   if (!query) return jsonOk({ results: [], total_matches: 0, total_files: 0, truncated: false, query: '' });
 
-  const cwd = workspaceRootOf(shell);
+  const cwd = projectFolderOf(shell);
   // The daemon's semantics: a plain query is literal text (-F), a regex query
   // an extended regex (-E); whole word wraps either in word boundaries (-w).
   // `-e` keeps a query that starts with '-' from reading as an option.
@@ -844,11 +846,11 @@ function searchHighlighter(
 }
 
 /**
- * A replace target as a workspace path: relative paths (the search results'
- * form) resolve against the workspace root, and a path that leaves the
- * workspace is refused, as the daemon refuses it.
+ * A replace target as a project folder path: relative paths (the search results'
+ * form) resolve against the project folder, and a path that leaves the
+ * project folder is refused, as the daemon refuses it.
  */
-function workspaceFilePath(root: string, file: string): string | null {
+function projectFolderFilePath(root: string, file: string): string | null {
   const base = sanitizePath(root);
   const resolved = sanitizePath(file.startsWith('/') ? file : `${base}/${file}`);
   if (base === '/') return resolved;
@@ -896,10 +898,10 @@ function handleWasmSearchReplace(shell: WasmShell, bodyStr?: string): Response {
     return jsonError(`Invalid search pattern: ${err instanceof Error ? err.message : String(err)}`, 400);
   }
 
-  const root = workspaceRootOf(shell);
+  const root = projectFolderOf(shell);
   const targets: Array<{ file: string; path: string }> = [];
   for (const file of files) {
-    const path = workspaceFilePath(root, file);
+    const path = projectFolderFilePath(root, file);
     if (!path) return jsonError(`File outside workspace: ${file}`, 400);
     targets.push({ file, path });
   }
@@ -1372,10 +1374,10 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
 
   // Working directory context (services/workspaceCwd.ts): when a repo is
   // selected in the Files panel, tell the agent up front so it stops
-  // exploring from the workspace top. Appended to the string handed to the
+  // exploring from the project folder top. Appended to the string handed to the
   // model ONLY — `query` (and thus query_started / chat history / the UI)
   // keeps the user's original message untouched.
-  const cwdNote = workspaceCwdContextLine();
+  const cwdNote = projectFolderCwdContextLine();
   const agentQuery = cwdNote ? `${query}\n\n[${cwdNote}]` : query;
 
   // Dispatch helper: wraps events in the { type, data } envelope that

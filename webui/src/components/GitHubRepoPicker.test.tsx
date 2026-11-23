@@ -27,7 +27,7 @@ const { mockCloneRepo, mockConfirm } = vi.hoisted(() => ({
 }));
 
 vi.mock('../services/workspaceClone', () => ({
-  cloneIntoWorkspace: (...args: unknown[]) => mockCloneRepo(...args),
+  cloneIntoProjectFolder: (...args: unknown[]) => mockCloneRepo(...args),
 }));
 
 vi.mock('./ThemedDialog', () => ({

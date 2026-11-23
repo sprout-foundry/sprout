@@ -109,10 +109,10 @@ vi.mock('../services/fileAccess', () => ({
   readFileWithConsent: vi.fn(),
 }));
 
-// EditorTabs fetches the workspace root (for Copy Absolute Path).
-const mockGetWorkspace = vi.fn().mockResolvedValue({ workspace_root: '/repo', daemon_root: '/repo' });
+// EditorTabs fetches the project folder (for Copy Absolute Path).
+const mockGetProjectFolder = vi.fn().mockResolvedValue({ workspace_root: '/repo', daemon_root: '/repo' });
 vi.mock('../services/api/apiService', () => ({
-  ApiService: { getInstance: () => ({ getWorkspace: mockGetWorkspace }) },
+  ApiService: { getInstance: () => ({ getProjectFolder: mockGetProjectFolder }) },
 }));
 
 vi.mock('../services/notificationBus', () => ({

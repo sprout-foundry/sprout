@@ -123,7 +123,7 @@ func TestSetClientProjectFolder_ClearsCurrentQuery(t *testing.T) {
 		t.Fatal(err)
 	}
 	server.daemonRoot = daemonRoot
-	server.SetProjectFolder(daemonRoot)
+	_, _ = server.SetProjectFolder(daemonRoot)
 
 	clientID := "chrome-tab-1"
 

@@ -662,7 +662,7 @@ func TestHandlePutProjectFolderSettings_ModelWithoutProvider(t *testing.T) {
 
 	// Pre-populate project folder config with last_used_provider so model mapping has context
 	projectFolderConfigPath := filepath.Join(projectFolder, ".sprout", configuration.ProjectFolderConfigFileName)
-	os.MkdirAll(filepath.Dir(projectFolderConfigPath), 0700)
+	_ = os.MkdirAll(filepath.Dir(projectFolderConfigPath), 0700)
 	existingCfg := configuration.Config{
 		LastUsedProvider: "openai",
 		Version:          "2.0",

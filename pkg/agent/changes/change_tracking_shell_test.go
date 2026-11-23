@@ -674,7 +674,7 @@ func TestTrackShellTurn_NonDestructiveBuildRollup(t *testing.T) {
 	}
 
 	// The rollup must also teach the walker to skip the fat dir on the
-	// next walk (addAutoSkipDir from emitWithBulkRollup).
+	// next walk (addAutoSkipDirLocked from emitWithBulkRollup).
 	if !tracker.autoSkipDirs[buildDir] {
 		t.Errorf("build dir %q not learned as auto-skip after rollup; autoSkipDirs=%v", buildDir, tracker.autoSkipDirs)
 	}

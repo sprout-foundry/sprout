@@ -36,7 +36,7 @@ func TestSetClientProjectFolderShutsDownOutgoingAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.SetProjectFolder(daemonRoot)
+	_, _ = ws.SetProjectFolder(daemonRoot)
 
 	const clientID = "teardown-window"
 	if _, err := ws.setClientProjectFolder(clientID, first); err != nil {

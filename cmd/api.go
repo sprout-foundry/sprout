@@ -58,7 +58,7 @@ fails (the report is printed to stdout, the failure line to stderr), and 2
 on a usage error.
 
 Mutating endpoints are never probed: the suite is read-only by design, so it
-is safe to run against a live workspace.`,
+is safe to run against a live project folder.`,
 	RunE: runAPIConformance,
 }
 

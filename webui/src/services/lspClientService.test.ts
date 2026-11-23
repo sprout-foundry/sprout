@@ -48,7 +48,7 @@ import {
   resolveEditorFilePath,
   LSPClientService,
 } from './lspClientService';
-import { __resetWorkspaceCwdForTests } from './workspaceCwd';
+import { __resetProjectFolderCwdForTests } from './workspaceCwd';
 
 // ── getFileURI tests ──────────────────────────────────────────────────
 
@@ -82,7 +82,7 @@ describe('getFileURI', () => {
 
 describe('resolveEditorFilePath', () => {
   afterEach(() => {
-    LSPClientService.getInstance().setWorkspaceRoot('');
+    LSPClientService.getInstance().setProjectFolder('');
   });
 
   it('passes through absolute paths unchanged', () => {
@@ -98,24 +98,24 @@ describe('resolveEditorFilePath', () => {
   });
 
   it('resolves relative paths against the workspace root', () => {
-    LSPClientService.getInstance().setWorkspaceRoot('/home/user/project');
+    LSPClientService.getInstance().setProjectFolder('/home/user/project');
     expect(resolveEditorFilePath('src/App.tsx')).toBe('/home/user/project/src/App.tsx');
   });
 
   it('resolves relative paths when workspace root has trailing slash', () => {
-    LSPClientService.getInstance().setWorkspaceRoot('/home/user/project/');
+    LSPClientService.getInstance().setProjectFolder('/home/user/project/');
     expect(resolveEditorFilePath('src/App.tsx')).toBe('/home/user/project/src/App.tsx');
   });
 
   it('resolves cwd-relative paths against the session cwd then workspace root', () => {
-    LSPClientService.getInstance().setWorkspaceRoot('/home/user/project');
-    __resetWorkspaceCwdForTests();
+    LSPClientService.getInstance().setProjectFolder('/home/user/project');
+    __resetProjectFolderCwdForTests();
     window.localStorage.setItem('sprout-workspace-cwd', 'repos/owner/name');
     try {
       expect(resolveEditorFilePath('src/index.ts')).toBe('/home/user/project/repos/owner/name/src/index.ts');
     } finally {
       window.localStorage.removeItem('sprout-workspace-cwd');
-      __resetWorkspaceCwdForTests();
+      __resetProjectFolderCwdForTests();
     }
   });
 
@@ -126,16 +126,16 @@ describe('resolveEditorFilePath', () => {
 
 describe('getFileURI with relative paths', () => {
   afterEach(() => {
-    LSPClientService.getInstance().setWorkspaceRoot('');
+    LSPClientService.getInstance().setProjectFolder('');
   });
 
   it('produces a URI at the real on-disk location for a relative path', () => {
-    LSPClientService.getInstance().setWorkspaceRoot('/home/user/project');
+    LSPClientService.getInstance().setProjectFolder('/home/user/project');
     expect(getFileURI('src/App.tsx')).toBe('file:///home/user/project/src/App.tsx');
   });
 
   it('never produces a filesystem-root URI for a relative path', () => {
-    LSPClientService.getInstance().setWorkspaceRoot('/home/user/project');
+    LSPClientService.getInstance().setProjectFolder('/home/user/project');
     const uri = getFileURI('src/App.tsx');
     // The old bug: 'src/App.tsx' → 'file:///src/App.tsx' (nonexistent location,
     // breaks module resolution for every import).

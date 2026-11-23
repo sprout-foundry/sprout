@@ -1,10 +1,10 @@
 /**
  * The empty chat's state, per agent backend.
  *
- * The "open a repository" panel is for a workspace with no checkout: the
+ * The "open a repository" panel is for a project folder with no checkout: the
  * in-browser agent's, whose files arrive by cloning `?repo=`. A daemon backend
  * already has the project's checkout, so the panel would offer to clone a
- * repository into a workspace that has one — it renders the ordinary welcome
+ * repository into a project folder that has one — it renders the ordinary welcome
  * state instead.
  */
 import { act, fireEvent, render, screen } from '@testing-library/react';

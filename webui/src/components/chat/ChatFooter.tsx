@@ -8,7 +8,7 @@ interface ChatFooterProps {
   isProcessing: boolean;
   filteredToolExecutions: ToolExecution[];
   lastError: string | null;
-  /** SP-142 §3 busy notice — see ChatProps.workspaceBusy. */
+  /** SP-142 §3 busy notice — see ChatProps.projectFolderBusy. */
   workspaceBusy?: { runningChatId: string; runningChatName: string } | null;
   onSendAnyway?: (message: string) => void;
   onDismissBusy?: () => void;
@@ -24,7 +24,7 @@ export function ChatFooter({
   isProcessing,
   filteredToolExecutions,
   lastError,
-  workspaceBusy,
+  workspaceBusy: projectFolderBusy,
   onSendAnyway,
   onDismissBusy,
   pendingDraft,
@@ -85,7 +85,7 @@ export function ChatFooter({
     );
   }
 
-  if (workspaceBusy) {
+  if (projectFolderBusy) {
     elements.push(
       <div key="workspace-busy" className="workspace-busy-indicator" data-testid="workspace-busy-notice">
         <span className="workspace-busy-icon">
@@ -93,8 +93,8 @@ export function ChatFooter({
         </span>
         <span className="workspace-busy-text">
           {onSendAnyway
-            ? `Another chat (${workspaceBusy.runningChatName}) is working in this workspace — send anyway queues after it.`
-            : `Another chat (${workspaceBusy.runningChatName}) is working in this workspace — your message is queued and sends when it finishes.`}
+            ? `Another chat (${projectFolderBusy.runningChatName}) is working in this project folder — send anyway queues after it.`
+            : `Another chat (${projectFolderBusy.runningChatName}) is working in this project folder — your message is queued and sends when it finishes.`}
         </span>
         {onSendAnyway && pendingDraft?.trim() ? (
           <button

@@ -2,7 +2,7 @@ package tools
 
 // trust_repo.go — repository facts the trust question is decided on: which
 // repository a path belongs to, and whether that repository is the
-// workspace's own under another checkout (a linked worktree).
+// project folder's own under another checkout (a linked worktree).
 
 import (
 	"os"
@@ -73,7 +73,7 @@ func canonicalDir(p string) string {
 }
 
 // sameRepository reports whether two checkouts are the same repository — the
-// workspace and one of its own worktrees (a /task worktree under .sprout/,
+// project folder and one of its own worktrees (a /task worktree under .sprout/,
 // or a worktree checked out elsewhere). Code there is ours by construction.
 func sameRepository(a, b string) bool {
 	ca, cb := gitCommonDir(a), gitCommonDir(b)

@@ -1,7 +1,7 @@
 package agent
 
-// workspace_sync_ops.go — the workspace sync-op apply layer: the SyncOp
-// / SyncOpResult types, the workspace-path resolution (resolveWorkspacePath),
+// workspace_sync_ops.go — the project folder sync-op apply layer: the SyncOp
+// / SyncOpResult types, the project-folder-path resolution (resolveProjectFolderPath),
 // and the Agent apply / batch / status methods (ApplySyncOp,
 // applySyncOpInternal, ApplySyncOpBatch, GetSyncStatus). Split out of
 // workspace_sync.go.
@@ -18,10 +18,10 @@ import (
 )
 
 // SyncOp represents a single file operation sent from the browser to the
-// container as part of the workspace sync protocol.
+// container as part of the project folder sync protocol.
 type SyncOp struct {
 	OpType     string `json:"op_type"`     // "write", "delete", or "rename"
-	Path       string `json:"path"`        // Target file path (relative to workspace root)
+	Path       string `json:"path"`        // Target file path (relative to project folder)
 	Content    string `json:"content"`     // For write ops: the file content
 	NewPath    string `json:"new_path"`    // For rename ops: the destination path
 	BrowserSeq int64  `json:"browser_seq"` // Monotonically increasing browser-side seq number
@@ -36,20 +36,20 @@ type SyncOpResult struct {
 	Error        string `json:"error,omitempty"` // Error message if not accepted
 }
 
-// resolveWorkspacePath joins workspaceRoot with relPath, resolves symlinks,
-// and verifies the result is within workspaceRoot. Returns an error if
+// resolveProjectFolderPath joins projectFolder with relPath, resolves symlinks,
+// and verifies the result is within projectFolder. Returns an error if
 // path traversal is attempted.
-func resolveWorkspacePath(workspaceRoot, relPath string) (string, error) {
+func resolveProjectFolderPath(projectFolder, relPath string) (string, error) {
 	if relPath == "" {
 		return "", agenterrors.NewValidation("relative path must not be empty", nil)
 	}
 
-	absRoot, err := filepath.Abs(workspaceRoot)
+	absRoot, err := filepath.Abs(projectFolder)
 	if err != nil {
-		return "", agenterrors.Wrap(err, "resolve workspace root")
+		return "", agenterrors.Wrap(err, "resolve project folder")
 	}
 
-	// Resolve symlinks in workspace root for consistent path resolution and
+	// Resolve symlinks in project folder for consistent path resolution and
 	// comparison. Without this, on platforms where /tmp → /private/tmp,
 	// paths joined against absRoot would fail the Rel() check against
 	// the symlink-resolved path.
@@ -84,10 +84,10 @@ func resolveWorkspacePath(workspaceRoot, relPath string) (string, error) {
 		resolved = evaluated
 	}
 
-	// Verify the resolved path is within the workspace root
+	// Verify the resolved path is within the project folder
 	rel, err := filepath.Rel(resolvedRoot, resolved)
 	if err != nil || strings.HasPrefix(rel, "..") {
-		return "", agenterrors.NewValidation(fmt.Sprintf("path traversal attempted: %q is outside workspace root %q", resolved, resolvedRoot), nil)
+		return "", agenterrors.NewValidation(fmt.Sprintf("path traversal attempted: %q is outside project folder %q", resolved, resolvedRoot), nil)
 	}
 
 	return resolved, nil
@@ -97,10 +97,10 @@ func resolveWorkspacePath(workspaceRoot, relPath string) (string, error) {
 // prevent TOCTOU races between the stat/check/apply phases.
 var applySyncMu sync.Mutex
 
-// ApplySyncOp applies a single SyncOp to the workspace filesystem.
+// ApplySyncOp applies a single SyncOp to the project folder filesystem.
 // It validates the operation, checks for conflicts with container-side
 // changes, applies the change, and updates the file metadata.
-func (a *Agent) ApplySyncOp(op SyncOp, workspaceRoot string) SyncOpResult {
+func (a *Agent) ApplySyncOp(op SyncOp, projectFolder string) SyncOpResult {
 	if a == nil {
 		return SyncOpResult{
 			Accepted: false,
@@ -109,14 +109,14 @@ func (a *Agent) ApplySyncOp(op SyncOp, workspaceRoot string) SyncOpResult {
 	}
 	applySyncMu.Lock()
 	defer applySyncMu.Unlock()
-	return a.applySyncOpInternal(op, workspaceRoot)
+	return a.applySyncOpInternal(op, projectFolder)
 }
 
 // applySyncOpInternal is the unlocked core of ApplySyncOp. It contains all
 // the validation, conflict detection, and filesystem work. Callers are
 // responsible for holding applySyncMu (ApplySyncOp does this individually,
 // ApplySyncOpBatch holds it across the whole batch).
-func (a *Agent) applySyncOpInternal(op SyncOp, workspaceRoot string) SyncOpResult {
+func (a *Agent) applySyncOpInternal(op SyncOp, projectFolder string) SyncOpResult {
 
 	// 1. Validate op type
 	switch op.OpType {
@@ -137,7 +137,7 @@ func (a *Agent) applySyncOpInternal(op SyncOp, workspaceRoot string) SyncOpResul
 	}
 
 	// 3. Resolve file path with traversal protection
-	resolvedPath, err := resolveWorkspacePath(workspaceRoot, op.Path)
+	resolvedPath, err := resolveProjectFolderPath(projectFolder, op.Path)
 	if err != nil {
 		return SyncOpResult{
 			Accepted: false,
@@ -200,7 +200,7 @@ func (a *Agent) applySyncOpInternal(op SyncOp, workspaceRoot string) SyncOpResul
 			}
 		}
 		// Remove metadata for deleted file
-		a.fileMetadata.set(op.Path, WorkspaceFileMetadata{})
+		a.fileMetadata.set(op.Path, ProjectFolderFileMetadata{})
 		return SyncOpResult{
 			Accepted:     true,
 			ContainerSeq: 0,
@@ -214,7 +214,7 @@ func (a *Agent) applySyncOpInternal(op SyncOp, workspaceRoot string) SyncOpResul
 				Error:        "new_path must not be empty for rename operation",
 			}
 		}
-		resolvedNewPath, err := resolveWorkspacePath(workspaceRoot, op.NewPath)
+		resolvedNewPath, err := resolveProjectFolderPath(projectFolder, op.NewPath)
 		if err != nil {
 			return SyncOpResult{
 				Accepted:     false,
@@ -239,8 +239,8 @@ func (a *Agent) applySyncOpInternal(op SyncOp, workspaceRoot string) SyncOpResul
 			}
 		}
 		// Move metadata from old path to new path
-		a.fileMetadata.set(op.Path, WorkspaceFileMetadata{}) // clear old
-		op.Path = op.NewPath                                 // update key for subsequent metadata update
+		a.fileMetadata.set(op.Path, ProjectFolderFileMetadata{}) // clear old
+		op.Path = op.NewPath                                     // update key for subsequent metadata update
 	}
 
 	// 7. Update metadata
@@ -258,7 +258,7 @@ func (a *Agent) applySyncOpInternal(op SyncOp, workspaceRoot string) SyncOpResul
 
 // ApplySyncOpBatch applies a slice of SyncOps in order, collecting results.
 // Stops on the first conflict, returning Accepted=false for remaining ops.
-func (a *Agent) ApplySyncOpBatch(ops []SyncOp, workspaceRoot string) []SyncOpResult {
+func (a *Agent) ApplySyncOpBatch(ops []SyncOp, projectFolder string) []SyncOpResult {
 	if a == nil {
 		results := make([]SyncOpResult, len(ops))
 		for i := range results {
@@ -275,7 +275,7 @@ func (a *Agent) ApplySyncOpBatch(ops []SyncOp, workspaceRoot string) []SyncOpRes
 	results := make([]SyncOpResult, 0, len(ops))
 
 	for _, op := range ops {
-		result := a.applySyncOpInternal(op, workspaceRoot)
+		result := a.applySyncOpInternal(op, projectFolder)
 		results = append(results, result)
 		if !result.Accepted {
 			// Remaining ops get Accepted=false
@@ -292,9 +292,9 @@ func (a *Agent) ApplySyncOpBatch(ops []SyncOp, workspaceRoot string) []SyncOpRes
 	return results
 }
 
-// GetSyncStatus returns a map of path → WorkspaceFileMetadata for all
-// currently tracked files in the workspace metadata store.
-func (a *Agent) GetSyncStatus() map[string]WorkspaceFileMetadata {
+// GetSyncStatus returns a map of path → ProjectFolderFileMetadata for all
+// currently tracked files in the project folder metadata store.
+func (a *Agent) GetSyncStatus() map[string]ProjectFolderFileMetadata {
 	if a == nil {
 		return nil
 	}
@@ -310,7 +310,7 @@ func (a *Agent) GetSyncStatus() map[string]WorkspaceFileMetadata {
 	store.mu.RLock()
 	defer store.mu.RUnlock()
 
-	result := make(map[string]WorkspaceFileMetadata, len(store.m))
+	result := make(map[string]ProjectFolderFileMetadata, len(store.m))
 	for path, md := range store.m {
 		result[path] = md
 	}

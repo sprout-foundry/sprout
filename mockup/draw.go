@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"strings"
 	"time"
 
@@ -66,6 +67,30 @@ type Request struct {
 	// Content is the current first look's content file: the fields the
 	// person set keep their text through this draw.
 	Content *Content
+	// Avoid are the choices of the person's recent first looks: the draw
+	// picks a different kit, composition and font unless the idea clearly
+	// calls for one of them.
+	Avoid []kit.Choice
+	// Fresh redraws the current mockup in a different look on purpose (a
+	// different kit, palette, composition and font), keeping its text,
+	// screens and behaviour.
+	Fresh bool
+	// Direction is a design direction the draw leans toward when it suits
+	// the idea; empty picks one at random, so ideas alike do not all come
+	// out alike.
+	Direction string
+}
+
+// Directions are the design directions a draw leans toward, one at random.
+var Directions = []string{
+	"bold and graphic: strong colour, big confident type",
+	"quiet and elegant: space, fine lines, restraint",
+	"warm and handmade: earthy colour, friendly serif type",
+	"playful and bright: rounded shapes, cheerful colour",
+	"editorial: a magazine feel, large serif headlines",
+	"modern and crisp: clean sans type, precise layout",
+	"retro: print-poster type, thick outlines",
+	"natural and calm: soft organic shapes, gentle colour",
 }
 
 // Result is a finished draw.
@@ -112,14 +137,29 @@ func Draw(ctx context.Context, stream StreamText, req Request, publish func(even
 		current = StripContent(kit.Strip(req.Saved))
 	}
 	d.saved = req.Content
+	d.steer = steerRequest(req.Avoid, req.Fresh, current)
+	if req.Look == nil && req.Root == "" {
+		direction := req.Direction
+		if direction == "" {
+			direction = Directions[rand.IntN(len(Directions))]
+		}
+		d.steer += "\n\nFor this one, lean toward a " + direction + " look, where it suits the idea."
+		if comps := nudgeCompositions(); len(comps) > 0 {
+			d.steer += " Consider a `" + comps[rand.IntN(len(comps))] + "` first screen if the kit you choose offers it."
+		}
+		d.steer += " Name only a kit, palette, composition and font from the lists.\n"
+	}
 	note := ChangeNote(req.Change, req.Part)
+	if req.Fresh && current != "" && note == "" {
+		note = freshNote
+	}
 	if req.Plan == nil && (current == "" || note == "") {
 		return Result{}, ErrNothingToDraw
 	}
 	ctx, cancel := context.WithTimeout(ctx, Timeout)
 	defer cancel()
 
-	if current != "" && note != "" {
+	if current != "" && note != "" && !req.Fresh {
 		if source, ok := d.edit(ctx, current, note); ok {
 			return d.finish(source, "edit"), nil
 		}
@@ -162,6 +202,8 @@ type draw struct {
 	started   bool
 	look      *kit.Look
 	lookNotes string
+	// steer is what the draw steers away from (steerRequest).
+	steer string
 }
 
 func (d *draw) emit(event string, data map[string]any) {
@@ -196,7 +238,7 @@ func (d *draw) whole(ctx context.Context, plan []byte, current, note string) (Re
 	d.start("whole")
 	var seq int
 	streamer := kit.Streamer{Look: d.look}
-	text, err := d.stream(ctx, charter(), wholeRequest(plan, current, note)+lookRequest(d.look, d.lookNotes, false), func(chunk string) {
+	text, err := d.stream(ctx, charter(), wholeRequest(plan, current, note)+lookRequest(d.look, d.lookNotes, false)+d.steer, func(chunk string) {
 		seq++
 		d.emit(EventChunk, map[string]any{"seq": seq, "chunk": streamer.Feed(chunk)})
 	})
@@ -232,4 +274,63 @@ func (d *draw) fail(reason string) error {
 		d.emit(EventError, map[string]any{"message": reason})
 	}
 	return errors.New(reason)
+}
+
+// freshNote is the change a different look on purpose asks for.
+const freshNote = "Draw this in a different look: another kit, palette, first-screen composition and heading font than it has now. Keep every text and its data-c attribute, the same screens and the same behaviour."
+
+// steerRequest tells the draw what to steer away from: the person's recent
+// looks, and, for a different look on purpose, the current one. It names the
+// kits, palettes and compositions to leave out this time.
+func steerRequest(avoid []kit.Choice, fresh bool, current string) string {
+	if fresh && current != "" {
+		avoid = append([]kit.Choice{kit.ChoiceOf(current)}, avoid...)
+	}
+	if len(avoid) > 4 {
+		avoid = avoid[:4]
+	}
+	var kits, palettes, comps []string
+	add := func(list *[]string, v string) {
+		if v == "" {
+			return
+		}
+		for _, x := range *list {
+			if x == v {
+				return
+			}
+		}
+		*list = append(*list, v)
+	}
+	for _, c := range avoid {
+		add(&kits, c.Kit)
+		add(&palettes, strings.TrimSuffix(strings.TrimSuffix(c.Palette, "-soft"), "-dark"))
+		add(&comps, c.Composition)
+	}
+	if len(kits) == 0 {
+		return ""
+	}
+	out := "\n\nThis person's recent first looks used these, so this one must look different: use a kit other than " + strings.Join(kits, ", ")
+	if len(palettes) > 0 {
+		out += "; a palette other than " + strings.Join(palettes, ", ")
+	}
+	if len(comps) > 0 {
+		out += "; a first-screen composition other than " + strings.Join(comps, ", ")
+	}
+	if fresh {
+		return out + ".\n"
+	}
+	return out + " — unless the idea plainly needs one of them.\n"
+}
+
+// nudgeCompositions are the compositions a draw may be nudged toward: all but
+// the art panel, which only ever comes from the drawing choosing it, so a
+// nudge never pulls a first screen away from the business's own content.
+func nudgeCompositions() []string {
+	var out []string
+	for _, id := range kit.CompositionIDs() {
+		if id != "art" {
+			out = append(out, id)
+		}
+	}
+	return out
 }

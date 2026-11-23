@@ -144,7 +144,7 @@ func MergeConfig(base, override *Config) *Config {
 	if override.ContextMode != "" {
 		result.ContextMode = override.ContextMode
 	}
-	// Union-merge ApprovedShellCommands so workspace entries stack on global.
+	// Union-merge ApprovedShellCommands so project folder entries stack on global.
 	if len(override.ApprovedShellCommands) > 0 {
 		seen := make(map[string]struct{}, len(result.ApprovedShellCommands)+len(override.ApprovedShellCommands))
 		merged := make([]string, 0, len(result.ApprovedShellCommands)+len(override.ApprovedShellCommands))
@@ -185,7 +185,7 @@ func MergeConfig(base, override *Config) *Config {
 		result.ApprovedShellCommandPatterns = merged
 	}
 	// Union-merge ApprovedMCPTools (SP-170) for the same reason: a
-	// workspace-layer entry must stack on the global one rather than
+	// project-folder-layer entry must stack on the global one rather than
 	// replace it, or a layered load would silently forget an allowlist
 	// entry and start denying a tool the user already approved.
 	if len(override.ApprovedMCPTools) > 0 {
@@ -266,10 +266,10 @@ func MergeConfig(base, override *Config) *Config {
 		}
 	}
 
-	// Merge AcceptedPersonas (SP-175) per workspace root for the same reason:
+	// Merge AcceptedPersonas (SP-175) per project folder for the same reason:
 	// a layered config adds acceptances instead of discarding them, or an
 	// accepted project persona would ask to be accepted again on every
-	// workspace-layer write.
+	// project-folder-layer write.
 	if len(override.AcceptedPersonas) > 0 {
 		if result.AcceptedPersonas == nil {
 			result.AcceptedPersonas = make(map[string]map[string]string, len(override.AcceptedPersonas))
@@ -323,7 +323,7 @@ func MergeConfig(base, override *Config) *Config {
 	if override.CommitModel != "" {
 		result.CommitModel = override.CommitModel
 	}
-	// Union-merge CommitTrailers so workspace entries stack on global.
+	// Union-merge CommitTrailers so project folder entries stack on global.
 	if len(override.CommitTrailers) > 0 {
 		result.CommitTrailers = mergeStringSlices(result.CommitTrailers, override.CommitTrailers)
 	}
@@ -367,8 +367,8 @@ func MergeConfig(base, override *Config) *Config {
 	if len(override.Shell.UserDangerousPatterns) > 0 {
 		result.Shell.UserDangerousPatterns = append([]ShellPattern{}, override.Shell.UserDangerousPatterns...)
 	}
-	if override.Shell.WorkspaceOverlay.Mode != "" {
-		result.Shell.WorkspaceOverlay = override.Shell.WorkspaceOverlay
+	if override.Shell.ProjectFolderOverlay.Mode != "" {
+		result.Shell.ProjectFolderOverlay = override.Shell.ProjectFolderOverlay
 	}
 
 	// Merge Training configuration.

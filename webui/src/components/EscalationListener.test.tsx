@@ -15,7 +15,7 @@ import { ESCALATION_TRIGGER_EVENT, type EscalationTriggerEvent } from '../hooks/
 import {
   CloudTxnError,
   createTxn,
-  resolveTxnWorkspace,
+  resolveTxnDevSpace,
   RunnerUnavailableError,
   txnFinish,
   txnPull,
@@ -24,7 +24,7 @@ import {
   type TxnManifest,
   type TxnRunResult,
 } from '../services/cloudTxn';
-import { __resetFullWorkspaceForTests } from '../services/fullWorkspace';
+import { __resetDevSpacesForTests } from '../services/cloudDevSpace';
 import { HostProvider } from '../host/HostProvider';
 import { localHost } from '../host/localHost';
 import { makeTestHost } from '../host/testHost';
@@ -45,7 +45,7 @@ vi.mock('../services/cloudTxn', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('../services/cloudTxn');
   return {
     ...actual,
-    resolveTxnWorkspace: vi.fn(),
+    resolveTxnDevSpace: vi.fn(),
     createTxn: vi.fn(),
     txnPush: vi.fn(),
     txnRun: vi.fn(),
@@ -139,7 +139,7 @@ function jsonResponse(body: unknown, init?: { status?: number; headers?: Record<
 
 /** Standard happy-path txn mocks (individual tests override with mockResolvedValueOnce). */
 function mockHappyTxn() {
-  vi.mocked(resolveTxnWorkspace).mockResolvedValue({ workspaceId: 'ws-1', created: false });
+  vi.mocked(resolveTxnDevSpace).mockResolvedValue({ devSpaceId: 'ws-1', created: false });
   vi.mocked(createTxn).mockResolvedValue({ txn_id: 'txn-9', status: 'push' });
   vi.mocked(txnPush).mockResolvedValue({ applied: 2, deleted: 0, skipped: [], status: 'ok' });
   vi.mocked(txnRun).mockResolvedValue(RUN_RESULT);
@@ -181,7 +181,7 @@ const hrefSetter = vi.fn();
 let hrefValue = 'https://app.test.sprout.dev/';
 
 beforeEach(() => {
-  __resetFullWorkspaceForTests();
+  __resetDevSpacesForTests();
   writtenVfs.length = 0;
   deletedVfs.length = 0;
   mockHappyTxn();
@@ -242,7 +242,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
     await flush();
 
     // Nothing has been opened or pushed yet: the run waits for the second click.
-    expect(resolveTxnWorkspace).not.toHaveBeenCalled();
+    expect(resolveTxnDevSpace).not.toHaveBeenCalled();
     expect(createTxn).not.toHaveBeenCalled();
     expect(txnPush).not.toHaveBeenCalled();
 
@@ -303,7 +303,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
 
     await flush();
 
-    expect(resolveTxnWorkspace).toHaveBeenCalledWith('https://github.com/acme/app', { host: 'fly' });
+    expect(resolveTxnDevSpace).toHaveBeenCalledWith('https://github.com/acme/app', { host: 'fly' });
     expect(createTxn).toHaveBeenCalledWith('ws-1');
     expect(txnPush).toHaveBeenCalledWith(
       'ws-1',
@@ -401,12 +401,12 @@ describe('EscalationListener — ETH-2 txn action', () => {
     await flush();
 
     expect(await screen.findByTestId('escalation-toast-txn-error')).toHaveTextContent(
-      'Another command is already running in the cloud workspace — try again shortly.',
+      'Another command is already running in the cloud dev space — try again shortly.',
     );
   });
 
   it('maps a 402 to a credits message', async () => {
-    vi.mocked(resolveTxnWorkspace).mockRejectedValue(new CloudTxnError('Overage spending cap reached.', 402));
+    vi.mocked(resolveTxnDevSpace).mockRejectedValue(new CloudTxnError('Overage spending cap reached.', 402));
     renderListener();
     fireTrigger();
     await clickRunTxn();
@@ -425,7 +425,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
     await flush();
 
     expect(await screen.findByTestId('escalation-toast-txn-error')).toHaveTextContent(
-      'Cloud workspace is unavailable right now — try again shortly.',
+      'The cloud dev space is unavailable right now — try again shortly.',
     );
   });
 
@@ -501,7 +501,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
 
   it('stays dismissed after a phase update (dismiss is authoritative mid-run)', async () => {
     const onPhase: { fn?: (phase: string) => void } = {};
-    vi.mocked(resolveTxnWorkspace).mockResolvedValue({ workspaceId: 'ws-1', created: false });
+    vi.mocked(resolveTxnDevSpace).mockResolvedValue({ devSpaceId: 'ws-1', created: false });
     vi.mocked(createTxn).mockResolvedValue({ txn_id: 'txn-1', status: 'push' });
     vi.mocked(txnPush).mockResolvedValue({ applied: 1, deleted: 0, skipped: [] });
     // Capture the phase callback so we can drive it after dismiss.
@@ -556,7 +556,7 @@ describe('EscalationListener — runner host choice', () => {
 
     await clickRunTxn();
     await flush();
-    expect(resolveTxnWorkspace).toHaveBeenCalledWith('https://github.com/acme/app', {
+    expect(resolveTxnDevSpace).toHaveBeenCalledWith('https://github.com/acme/app', {
       host: 'runner',
       runnerId: 'r-mac',
     });
@@ -571,11 +571,11 @@ describe('EscalationListener — runner host choice', () => {
     expect(screen.getByTestId('escalation-toast-txn')).toHaveTextContent('Run in cloud container');
     await clickRunTxn();
     await flush();
-    expect(resolveTxnWorkspace).toHaveBeenCalledWith('https://github.com/acme/app', { host: 'fly' });
+    expect(resolveTxnDevSpace).toHaveBeenCalledWith('https://github.com/acme/app', { host: 'fly' });
   });
 
   it('explains an unavailable runner and offers the cloud instead', async () => {
-    vi.mocked(resolveTxnWorkspace).mockRejectedValueOnce(new RunnerUnavailableError('r-mac'));
+    vi.mocked(resolveTxnDevSpace).mockRejectedValueOnce(new RunnerUnavailableError('r-mac'));
     render(createElement(HostProvider, null, createElement(EscalationListener)));
     fireTrigger();
     await clickRunTxn();
@@ -586,7 +586,7 @@ describe('EscalationListener — runner host choice', () => {
 
     fireEvent.click(screen.getByTestId('escalation-toast-txn-cloud-fallback'));
     await flush();
-    expect(resolveTxnWorkspace).toHaveBeenLastCalledWith('https://github.com/acme/app', { host: 'fly' });
+    expect(resolveTxnDevSpace).toHaveBeenLastCalledWith('https://github.com/acme/app', { host: 'fly' });
     expect(await screen.findByTestId('escalation-toast-txn-result')).toBeInTheDocument();
   });
 });
@@ -607,11 +607,11 @@ describe('EscalationListener — Mode A/B regressions', () => {
     renderListener();
     fireTrigger({ command: undefined });
 
-    fireEvent.click(screen.getByText('Start Full Workspace'));
+    fireEvent.click(screen.getByText('Start a Dev Space'));
 
     await waitFor(() => expect(hrefSetter).toHaveBeenCalledWith('https://ws-1.fly.dev/auth/exchange?token=tok'));
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST') as [string, RequestInit];
-    expect(post[0]).toMatch(/\/workspace\/txn$/);
+    expect(post[0]).toMatch(/\/dev-space\/txn$/);
     expect(JSON.parse(post[1].body as string)).toEqual({ repo_url: 'https://github.com/acme/app', host: 'cloud' });
   });
 
@@ -624,7 +624,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
     renderListener();
     fireTrigger({ command: undefined });
 
-    fireEvent.click(screen.getByText('Start Full Workspace'));
+    fireEvent.click(screen.getByText('Start a Dev Space'));
 
     await waitFor(() =>
       expect(screen.getByTestId('escalation-toast-workspace-error').textContent).toContain('network down'),
@@ -632,13 +632,13 @@ describe('EscalationListener — Mode A/B regressions', () => {
     expect(hrefSetter).not.toHaveBeenCalled();
   });
 
-  it('hides Start Full Workspace when the deployment has no workspace compute', async () => {
+  it('hides Start a Dev Space when the deployment has no dev space compute', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
         const url = typeof input === 'string' ? input : input.toString();
         // The typed probe: only a definitive available:false hides the CTA.
-        if (url.endsWith('/workspace/availability')) {
+        if (url.endsWith('/dev-space/availability')) {
           return jsonResponse({ available: false });
         }
         return jsonResponse({ error: 'workspaces are not available on this deployment' }, { status: 503 });
@@ -647,7 +647,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
     renderListener();
     fireTrigger({ command: undefined });
     await flush();
-    expect(screen.queryByText('Start Full Workspace')).toBeNull();
+    expect(screen.queryByText('Start a Dev Space')).toBeNull();
   });
 
   it('goes to /?from=editor when the trigger has no repo context', async () => {
@@ -656,7 +656,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
     renderListener();
     fireTrigger({ command: undefined, repoURL: undefined });
 
-    fireEvent.click(screen.getByText('Start Full Workspace'));
+    fireEvent.click(screen.getByText('Start a Dev Space'));
 
     expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'POST')).toBe(false);
     expect(hrefSetter).toHaveBeenCalledWith('/?from=editor');

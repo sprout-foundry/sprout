@@ -98,7 +98,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
   } = useHostCapabilities();
   const host = useHost();
   // In the hosted build "projects" are repositories and the rail's account
-  // menu is the host's; the local daemon uses running workspaces instead.
+  // menu is the host's; the local daemon uses running project folders instead.
   const hosted = supportsInstances;
   const [open, setOpen] = useState<ProjectNavTarget | null>(null);
   const [creating, setCreating] = useState(false);

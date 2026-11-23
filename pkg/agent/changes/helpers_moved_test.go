@@ -48,13 +48,13 @@ func TestResolveAbsPath_AlreadyAbsolute(t *testing.T) {
 	}
 }
 
-// TestResolveAbsPath_UsesWorkspaceRoot resolves relative paths against
-// the workspace root, not the process CWD.
-func TestResolveAbsPath_UsesWorkspaceRoot(t *testing.T) {
+// TestResolveAbsPath_UsesProjectFolder resolves relative paths against
+// the project folder, not the process CWD.
+func TestResolveAbsPath_UsesProjectFolder(t *testing.T) {
 	ws := t.TempDir()
-	ct := NewChangeTracker(stubAgentView{workspaceRoot: ws}, "test instruction")
+	ct := NewChangeTracker(stubAgentView{projectFolder: ws}, "test instruction")
 
-	// CWD is NOT the workspace — normalization must still use ws.
+	// CWD is NOT the project folder — normalization must still use ws.
 	origWd, _ := os.Getwd()
 	defer os.Chdir(origWd)
 	otherDir := t.TempDir()
@@ -65,11 +65,11 @@ func TestResolveAbsPath_UsesWorkspaceRoot(t *testing.T) {
 	resolved := ct.resolveAbsPath("nested/file.go")
 	expected := filepath.Join(ws, "nested", "file.go")
 	if resolved != expected {
-		t.Errorf("expected resolution against workspace root %q, got %q", expected, resolved)
+		t.Errorf("expected resolution against project folder %q, got %q", expected, resolved)
 	}
 }
 
-// TestResolveAbsPath_FallsBackToCwd uses CWD when workspace root is empty.
+// TestResolveAbsPath_FallsBackToCwd uses CWD when project folder is empty.
 func TestResolveAbsPath_FallsBackToCwd(t *testing.T) {
 	ct := NewChangeTracker(nil, "")
 

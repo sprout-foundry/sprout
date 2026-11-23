@@ -21,7 +21,7 @@ type ProjectMarker struct {
 // threshold. Sprout creates it in every directory it runs in — including
 // $HOME — so on its own it means "sprout has been here", not "this is a
 // project". At weight 90 it made the home directory self-certify as a
-// project, which is what let the workspace gate be bypassed. It still counts
+// project, which is what let the project folder gate be bypassed. It still counts
 // as corroborating evidence alongside a real marker.
 var projectMarkers = []ProjectMarker{
 	{".git", 100, true},
@@ -179,7 +179,7 @@ func FindProjectsInDirectory(dir string, maxDepth int) []ProjectInfo {
 	// The protected-name skip applies only to the immediate children of the
 	// user's home directory. A project may legitimately contain a folder named
 	// "Documents"; only the home-level ones are privacy-gated.
-	walkForProjects(dir, maxDepth, 0, &results, isHomeWorkspace(dir))
+	walkForProjects(dir, maxDepth, 0, &results, isHomeProjectFolder(dir))
 	if len(results) > 20 {
 		results = results[:20]
 	}

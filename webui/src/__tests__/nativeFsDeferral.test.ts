@@ -10,16 +10,16 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
   resolveNativeFsGate,
-  normalizeWorkspacePath,
-  workspaceErrorStatus,
+  normalizeProjectFolderPath,
+  projectFolderErrorStatus,
   WORKSPACE_ERROR_STATUS,
   hasSproutStudioFsBridge,
   detectSproutStudio,
-  mapWorkspaceListing,
-  workspaceListDepth,
+  mapProjectFolderListing,
+  projectFolderListDepth,
   sortNativeFileInfo,
-  readWorkspaceResponse,
-  writeWorkspaceResponse,
+  readProjectFolderResponse,
+  writeProjectFolderResponse,
   __resetNativeFsGateForTests,
 } from '../services/nativeFs';
 
@@ -89,23 +89,23 @@ describe('resolveNativeFsGate (pure)', () => {
 
 describe('normalizeWorkspacePath (pure)', () => {
   it('strips leading ./ and / and normalizes backslashes', () => {
-    expect(normalizeWorkspacePath('./src/main.go')).toBe('src/main.go');
-    expect(normalizeWorkspacePath('/src/main.go')).toBe('src/main.go');
-    expect(normalizeWorkspacePath('.\\src\\main.go')).toBe('src/main.go');
+    expect(normalizeProjectFolderPath('./src/main.go')).toBe('src/main.go');
+    expect(normalizeProjectFolderPath('/src/main.go')).toBe('src/main.go');
+    expect(normalizeProjectFolderPath('.\\src\\main.go')).toBe('src/main.go');
   });
 
   it('keeps a plain relative path intact', () => {
-    expect(normalizeWorkspacePath('src/main.go')).toBe('src/main.go');
+    expect(normalizeProjectFolderPath('src/main.go')).toBe('src/main.go');
   });
 
   it('rejects .. segments', () => {
-    expect(() => normalizeWorkspacePath('a/../../etc/passwd')).toThrow();
-    expect(() => normalizeWorkspacePath('../x')).toThrow();
+    expect(() => normalizeProjectFolderPath('a/../../etc/passwd')).toThrow();
+    expect(() => normalizeProjectFolderPath('../x')).toThrow();
   });
 
   it('rejects the empty path', () => {
-    expect(() => normalizeWorkspacePath('')).toThrow();
-    expect(() => normalizeWorkspacePath('/')).toThrow();
+    expect(() => normalizeProjectFolderPath('')).toThrow();
+    expect(() => normalizeProjectFolderPath('/')).toThrow();
   });
 });
 
@@ -121,9 +121,9 @@ describe('workspace error → status mapping (pure)', () => {
   });
 
   it('falls back to 500 for unknown / missing codes', () => {
-    expect(workspaceErrorStatus('bogus')).toBe(500);
-    expect(workspaceErrorStatus(undefined)).toBe(500);
-    expect(workspaceErrorStatus('')).toBe(500);
+    expect(projectFolderErrorStatus('bogus')).toBe(500);
+    expect(projectFolderErrorStatus(undefined)).toBe(500);
+    expect(projectFolderErrorStatus('')).toBe(500);
   });
 });
 
@@ -143,10 +143,10 @@ describe('bridge structural detection', () => {
 
 describe('listWorkspace → file-tree mapping (pure)', () => {
   it('computes maxDepth relative to the requested path', () => {
-    expect(workspaceListDepth('.')).toBe(1);
-    expect(workspaceListDepth('')).toBe(1);
-    expect(workspaceListDepth('src')).toBe(2);
-    expect(workspaceListDepth('a/b/c')).toBe(4);
+    expect(projectFolderListDepth('.')).toBe(1);
+    expect(projectFolderListDepth('')).toBe(1);
+    expect(projectFolderListDepth('src')).toBe(2);
+    expect(projectFolderListDepth('a/b/c')).toBe(4);
   });
 
   it('lists direct children of the root and maps + sorts them', () => {
@@ -158,7 +158,7 @@ describe('listWorkspace → file-tree mapping (pure)', () => {
         { path: 'z.md', size: 1, isDir: false },
       ],
     };
-    const items = mapWorkspaceListing(result, '.');
+    const items = mapProjectFolderListing(result, '.');
     // dirs first, then by name.
     expect(items.map((i) => i.name)).toEqual(['a', 'b.txt', 'z.md']);
     expect(items[0].isDir).toBe(true);
@@ -178,14 +178,14 @@ describe('listWorkspace → file-tree mapping (pure)', () => {
         { path: 'other.go', size: 1, isDir: false },
       ],
     };
-    const items = mapWorkspaceListing(result, 'src');
+    const items = mapProjectFolderListing(result, 'src');
     // Only direct children of src/ (depth 2, prefix src/).
     expect(items.map((i) => i.name)).toEqual(['sub', 'main.go']);
   });
 
   it('returns [] on a non-ok / malformed result', () => {
-    expect(mapWorkspaceListing({ ok: false, error: 'workspaceNotSet' }, '.')).toEqual([]);
-    expect(mapWorkspaceListing(null, '.')).toEqual([]);
+    expect(mapProjectFolderListing({ ok: false, error: 'workspaceNotSet' }, '.')).toEqual([]);
+    expect(mapProjectFolderListing(null, '.')).toEqual([]);
   });
 
   it('sortNativeFileInfo puts dirs first and honors ignored', () => {
@@ -200,19 +200,19 @@ describe('listWorkspace → file-tree mapping (pure)', () => {
 
 describe('bridge-result → Response mapping', () => {
   it('maps an error result to the documented status + JSON body', async () => {
-    const res = readWorkspaceResponse({ ok: false, error: 'notFound' });
+    const res = readProjectFolderResponse({ ok: false, error: 'notFound' });
     expect(res.status).toBe(404);
     expect(res.ok).toBe(false);
     expect(await res.json()).toEqual({ ok: false, error: 'notFound' });
 
-    const bad = readWorkspaceResponse({ ok: false, error: 'notInWorkspace' });
+    const bad = readProjectFolderResponse({ ok: false, error: 'notInWorkspace' });
     expect(bad.status).toBe(400);
-    const notSet = readWorkspaceResponse({ ok: false, error: 'workspaceNotSet' });
+    const notSet = readProjectFolderResponse({ ok: false, error: 'workspaceNotSet' });
     expect(notSet.status).toBe(503);
   });
 
   it('maps a utf-8 text read to a 200 Response', async () => {
-    const res = readWorkspaceResponse({ ok: true, path: 'a.txt', content: 'hello' });
+    const res = readProjectFolderResponse({ ok: true, path: 'a.txt', content: 'hello' });
     expect(res.status).toBe(200);
     expect(res.ok).toBe(true);
     expect(await res.text()).toBe('hello');
@@ -220,18 +220,18 @@ describe('bridge-result → Response mapping', () => {
 
   it('maps a base64 binary read to an octet-stream Response', async () => {
     const b64 = Buffer.from([1, 2, 3, 250]).toString('base64');
-    const res = readWorkspaceResponse({ ok: true, path: 'bin', contentBase64: b64 });
+    const res = readProjectFolderResponse({ ok: true, path: 'bin', contentBase64: b64 });
     expect(res.status).toBe(200);
     const buf = await res.arrayBuffer();
     expect(new Uint8Array(buf)).toEqual(new Uint8Array([1, 2, 3, 250]));
   });
 
   it('maps a write success to a 200 JSON Response and an error to its status', async () => {
-    const ok = writeWorkspaceResponse({ ok: true, path: 'a.txt' });
+    const ok = writeProjectFolderResponse({ ok: true, path: 'a.txt' });
     expect(ok.status).toBe(200);
     expect(await ok.json()).toEqual({ ok: true, path: 'a.txt' });
 
-    const fail = writeWorkspaceResponse({ ok: false, error: 'userCancelled' });
+    const fail = writeProjectFolderResponse({ ok: false, error: 'userCancelled' });
     expect(fail.status).toBe(409);
   });
 
@@ -239,7 +239,7 @@ describe('bridge-result → Response mapping', () => {
     // In a node env `atob` (a Node 18+ global) throws a DOMException on
     // malformed input, so the decode guard degrades to the documented
     // ioFailed (500) error Response instead of throwing out to consumers.
-    const res = readWorkspaceResponse({
+    const res = readProjectFolderResponse({
       ok: true,
       path: 'bin',
       contentBase64: '!!!not-base64!!!',

@@ -4,7 +4,7 @@ package tools
 // contributes to, so the trust question is not asked about their own code.
 //
 // The trust question exists because a clone may be someone else's work. But
-// the common case in a developer's workspace is the opposite: a clone of a
+// the common case in a developer's project folder is the opposite: a clone of a
 // repository they own, or one they have push access to through an
 // organization. Asking about those wastes a prompt and, worse, invites the
 // wrong answer — framing your own code as untrusted data makes the model
@@ -79,7 +79,7 @@ type cachedOwnership struct {
 }
 
 // defaultTrustGitHub is the process-wide client. Its cache is what makes the
-// per-read check cheap: a workspace full of files from one clone resolves the
+// per-read check cheap: a project folder full of files from one clone resolves the
 // origin once.
 var defaultTrustGitHub = &trustGitHubClient{
 	apiBase: trustGitHubAPIBase,
@@ -256,7 +256,7 @@ func gitOriginURL(absPath string) (string, bool) {
 // the remote parsing without a real repository.
 var trustRunGit = func(ctx context.Context, dir string, args ...string) ([]byte, error) {
 	full := append([]string{"-C", dir}, args...)
-	return exec.CommandContext(ctx, "git", full...).Output() //nolint:gosec // G204: args are fixed literals; dir is the resolved workspace path
+	return exec.CommandContext(ctx, "git", full...).Output() //nolint:gosec // G204: args are fixed literals; dir is the resolved project folder path
 }
 
 // parseGitHubRemote extracts owner and repo from a git remote URL. It accepts

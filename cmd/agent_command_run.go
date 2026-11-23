@@ -176,7 +176,7 @@ func runAgentCommand(cmd *cobra.Command, args []string) (err error) {
 		return errors.New("flag --session-id and --last-session are mutually exclusive")
 	}
 	if agentLastSession || strings.TrimSpace(agentSessionID) != "" {
-		workingDir := chatAgent.GetWorkspaceRoot()
+		workingDir := chatAgent.GetProjectFolder()
 		if workingDir == "" {
 			wd, err := os.Getwd()
 			if err != nil {

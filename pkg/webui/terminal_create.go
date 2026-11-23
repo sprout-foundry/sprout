@@ -193,8 +193,8 @@ func (tm *TerminalManager) createUnixSession(sessionID, shellOverride string) (*
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, shell, shellArgs...)
-	if strings.TrimSpace(tm.workspaceRoot) != "" {
-		cmd.Dir = tm.workspaceRoot
+	if strings.TrimSpace(tm.projectFolder) != "" {
+		cmd.Dir = tm.projectFolder
 	}
 
 	defaultSize := &pty.Winsize{Rows: 24, Cols: 80}

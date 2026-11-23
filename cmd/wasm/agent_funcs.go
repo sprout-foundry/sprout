@@ -398,7 +398,7 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 
 		// The agent is cached across turns; a host-side changeDir between
 		// turns (studio: picking another repo) must reach its tool paths.
-		ag.SetWorkspaceRoot(workspaceRoot)
+		ag.SetProjectFolder(projectFolder)
 
 		response, err := ag.ProcessQuery(query)
 		chatAgentsMu.Lock()

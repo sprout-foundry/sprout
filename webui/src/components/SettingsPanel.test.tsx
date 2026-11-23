@@ -255,10 +255,10 @@ describe('SECTION_GROUPS rendering', () => {
     expect(agentBadge?.textContent?.trim()).toBe('session');
     expect(agentBadge?.classList.contains('scope-session')).toBe(true);
 
-    // Workspace → workspace
-    const workspaceBadge = sections[1].querySelector('.settings-scope-badge');
-    expect(workspaceBadge?.textContent?.trim()).toBe('workspace');
-    expect(workspaceBadge?.classList.contains('scope-workspace')).toBe(true);
+    // Workspace → project folder
+    const projectFolderBadge = sections[1].querySelector('.settings-scope-badge');
+    expect(projectFolderBadge?.textContent?.trim()).toBe('project folder');
+    expect(projectFolderBadge?.classList.contains('scope-project-folder')).toBe(true);
 
     // Environment → global
     const envBadge = sections[2].querySelector('.settings-scope-badge');
@@ -366,15 +366,15 @@ describe('localStorage persistence', () => {
     });
 
     const updated = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
-    expect(updated.expanded).toContain('workspace');
+    expect(updated.expanded).toContain('project_folder');
   });
 
   it('restores expanded sections from localStorage on mount', () => {
-    // Pre-populate localStorage with workspace expanded
+    // Pre-populate localStorage with project folder expanded
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
-        expanded: ['workspace'],
+        expanded: ['project_folder'],
         activeSubsection: 'workspace-mcp',
       }),
     );
@@ -515,7 +515,7 @@ describe('host capabilities gate the MCP and local-model subsections', () => {
   const expandAllSectionsOnOpen = () =>
     localStorage.setItem(
       'sprout.settingsPanel.state.v1',
-      JSON.stringify({ expanded: ['agent', 'workspace', 'environment', 'editor', 'experimental'] }),
+      JSON.stringify({ expanded: ['agent', 'project_folder', 'environment', 'editor', 'experimental'] }),
     );
 
   it('hides both when the host declares neither, even with a local terminal', () => {

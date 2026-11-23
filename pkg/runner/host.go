@@ -16,14 +16,14 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/runner/sandbox"
 )
 
-// HostLauncher runs a workspace's daemon directly on this machine, with its
+// HostLauncher runs a dev space's daemon directly on this machine, with its
 // toolchains. Sandboxed is native mode (the OS sandbox confines it);
 // unsandboxed is bare-metal mode (it runs with the user's full access).
 type HostLauncher struct {
 	Sandboxed bool
 	// Writable are extra paths native mode may write (toolchain caches).
 	Writable []string
-	// SproutBin is the binary that serves the workspace daemon.
+	// SproutBin is the binary that serves the dev space daemon.
 	SproutBin string
 
 	mu    sync.Mutex
@@ -40,41 +40,41 @@ type hostProc struct {
 // cancellation before it is killed.
 const stopGrace = 10 * time.Second
 
-func (l *HostLauncher) Start(ctx context.Context, task WorkspaceTask) (*Workspace, error) {
+func (l *HostLauncher) Start(ctx context.Context, task DevSpaceTask) (*DevSpace, error) {
 	localDir := ""
-	if task.WorkspaceDir != "" {
-		// A local-directory workspace runs in place: the user's real
-		// files are the workspace root, so there is nothing to clone.
+	if task.DevSpaceDir != "" {
+		// A local-directory dev space runs in place: the user's real
+		// files are the dev space root, so there is nothing to clone.
 		// Runner.start checked the allowlist and refused a task naming
 		// both a repo and a directory before reaching the launcher; the
 		// repo check is repeated here so a direct caller can never clone
 		// into the user's directory.
 		if task.RepoURL != "" {
-			return nil, fmt.Errorf("start task names both a repo (%s) and a local directory (%s)", task.RepoURL, task.WorkspaceDir)
+			return nil, fmt.Errorf("start task names both a repo (%s) and a local directory (%s)", task.RepoURL, task.DevSpaceDir)
 		}
-		localDir = task.WorkspaceDir
+		localDir = task.DevSpaceDir
 	}
-	dir, err := workspaceDir(task.WorkspaceID)
+	dir, err := devSpaceDir(task.DevSpaceID)
 	if err != nil {
 		return nil, err
 	}
 	tmp := filepath.Join(dir, "tmp")
 	for _, d := range []string{dir, tmp, filepath.Join(dir, "config"), filepath.Join(dir, "state")} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
-			return nil, fmt.Errorf("creating workspace dirs: %w", err)
+			return nil, fmt.Errorf("creating dev space dirs: %w", err)
 		}
 	}
 	repo := localDir
 	switch {
 	case localDir != "":
-		// Local-directory workspace: the user's directory is the root.
+		// Local-directory dev space: the user's directory is the root.
 	case IsGatewayProvider(task.LLMProvider) && strings.TrimSpace(task.RepoURL) == "":
-		// A gateway workspace with no repo runs in an empty runner-owned
+		// A gateway dev space with no repo runs in an empty runner-owned
 		// directory. (With a repo, the gateway is only where the agent's
-		// models come from: the repo is cloned as for any workspace.)
+		// models come from: the repo is cloned as for any dev space.)
 		repo = filepath.Join(dir, "repo")
 		if err := os.MkdirAll(repo, 0o700); err != nil {
-			return nil, fmt.Errorf("creating workspace dir: %w", err)
+			return nil, fmt.Errorf("creating dev space dir: %w", err)
 		}
 	default:
 		repo = filepath.Join(dir, "repo")
@@ -83,7 +83,7 @@ func (l *HostLauncher) Start(ctx context.Context, task WorkspaceTask) (*Workspac
 		}
 	}
 	if IsGatewayProvider(task.LLMProvider) {
-		// Wire the workspace's provider config to the platform gateway
+		// Wire the dev space's provider config to the platform gateway
 		// before the daemon starts, so its model picker lists the
 		// gateway's models and its agent calls the gateway's /v1 with
 		// the gateway key (SPROUT_GATEWAY_KEY, set in env).
@@ -116,7 +116,7 @@ func (l *HostLauncher) Start(ctx context.Context, task WorkspaceTask) (*Workspac
 	if err := cmd.Start(); err != nil {
 		cancel()
 		_ = logFile.Close()
-		return nil, fmt.Errorf("starting workspace daemon: %w", err)
+		return nil, fmt.Errorf("starting dev space daemon: %w", err)
 	}
 	p := &hostProc{cmd: cmd, cancel: cancel, done: make(chan struct{})}
 	go func() {
@@ -124,17 +124,17 @@ func (l *HostLauncher) Start(ctx context.Context, task WorkspaceTask) (*Workspac
 		_ = logFile.Close()
 		close(p.done)
 	}()
-	l.track(task.WorkspaceID, p)
+	l.track(task.DevSpaceID, p)
 
 	if err := waitReady(ctx, port); err != nil {
-		l.stopProc(task.WorkspaceID)
+		l.stopProc(task.DevSpaceID)
 		return nil, fmt.Errorf("%w (log: %s)", err, filepath.Join(dir, "daemon.log"))
 	}
-	return &Workspace{ID: task.WorkspaceID, Port: port, Handle: strconv.Itoa(cmd.Process.Pid)}, nil
+	return &DevSpace{ID: task.DevSpaceID, Port: port, Handle: strconv.Itoa(cmd.Process.Pid)}, nil
 }
 
 // command builds the daemon command. workDir is the directory commands run
-// in — the clone, or the user's local directory for a path-backed workspace
+// in — the clone, or the user's local directory for a path-backed dev space
 // (which native mode therefore adds to the sandbox's writable set).
 func (l *HostLauncher) command(ctx context.Context, workDir, dir, tmp string, port int) (*exec.Cmd, error) {
 	bin := l.SproutBin
@@ -157,9 +157,9 @@ func (l *HostLauncher) command(ctx context.Context, workDir, dir, tmp string, po
 		WorkDir: workDir,
 		TempDir: tmp,
 		// The daemon writes its config, state and daemon.log in the
-		// workspace's runner-owned metadata directory, which is a
+		// dev space's runner-owned metadata directory, which is a
 		// sibling of (not inside) the clone and may be nowhere near a
-		// local-directory workspace.
+		// local-directory dev space.
 		Writable:     append(append([]string{}, l.Writable...), dir),
 		DenyRead:     append(sandbox.DefaultDenyRead(home), hostCredentialDirs()...),
 		AllowNetwork: true,
@@ -181,8 +181,8 @@ func hostCredentialDirs() []string {
 
 // env is the daemon's environment. Bare metal inherits the user's; native
 // starts from a minimal set so the user's own secrets in the runner's
-// environment don't leak into workspaces.
-func (l *HostLauncher) env(task WorkspaceTask, dir, tmp string) []string {
+// environment don't leak into dev spaces.
+func (l *HostLauncher) env(task DevSpaceTask, dir, tmp string) []string {
 	var env []string
 	if l.Sandboxed {
 		for _, name := range []string{"PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "TERM", "DEVELOPER_DIR"} {
@@ -197,13 +197,13 @@ func (l *HostLauncher) env(task WorkspaceTask, dir, tmp string) []string {
 			}
 		}
 	}
-	for k, v := range workspaceEnv(task) {
+	for k, v := range devSpaceEnv(task) {
 		env = append(env, k+"="+v)
 	}
 	if l.Sandboxed {
 		// The sandbox keeps ~/.npm read-only (writing a shared host cache
-		// from a workspace is a poisoning route), so npm caches per
-		// workspace instead.
+		// from a dev space is a poisoning route), so npm caches per
+		// dev space instead.
 		env = append(env, "npm_config_cache="+filepath.Join(tmp, "npm-cache"))
 	}
 	return append(env,
@@ -217,7 +217,7 @@ func (l *HostLauncher) env(task WorkspaceTask, dir, tmp string) []string {
 // cloneIfMissing clones the repo on first start and wires a credential
 // helper that reads the token from the daemon's environment at push time, so
 // the token is never written to the clone.
-func cloneIfMissing(ctx context.Context, repo string, task WorkspaceTask) error {
+func cloneIfMissing(ctx context.Context, repo string, task DevSpaceTask) error {
 	if _, err := os.Stat(filepath.Join(repo, ".git")); err == nil {
 		return nil
 	}
@@ -268,16 +268,16 @@ func (l *HostLauncher) stopProc(id string) {
 	}
 }
 
-func (l *HostLauncher) Stop(_ context.Context, ws *Workspace) error {
+func (l *HostLauncher) Stop(_ context.Context, ws *DevSpace) error {
 	if ws != nil {
 		l.stopProc(ws.ID)
 	}
 	return nil
 }
 
-func (l *HostLauncher) Destroy(_ context.Context, workspaceID string, _ *Workspace) error {
-	l.stopProc(workspaceID)
-	dir, err := workspaceDir(workspaceID)
+func (l *HostLauncher) Destroy(_ context.Context, devSpaceID string, _ *DevSpace) error {
+	l.stopProc(devSpaceID)
+	dir, err := devSpaceDir(devSpaceID)
 	if err != nil {
 		return err
 	}
@@ -286,7 +286,7 @@ func (l *HostLauncher) Destroy(_ context.Context, workspaceID string, _ *Workspa
 
 // allowFileRepos lets tests clone local fixtures. The platform only sends
 // https URLs; a file: URL would copy a repository from this machine into a
-// workspace the platform can pull from.
+// dev space the platform can pull from.
 var allowFileRepos = false
 
 func cloneableRepoURL(raw string) bool {

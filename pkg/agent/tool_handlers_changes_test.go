@@ -55,7 +55,7 @@ func TestHandleListChanges_ReportsRecoverabilityAccurately(t *testing.T) {
 		{FilePath: "/work/del.go", Operation: "delete", ToolCall: "shell_command", OriginalCode: "lost work"},
 		// Path-only sentinel (binary / oversized) → not recoverable.
 		{FilePath: "/work/blob.bin", Operation: "delete", ToolCall: "shell_command", OriginalCode: "[CONTENT NOT CAPTURED: binary]"},
-		// Redacted (outside workspace) → not recoverable.
+		// Redacted (outside project folder) → not recoverable.
 		{FilePath: "/external/secret", Operation: "edit", ToolCall: "shell_command", OriginalCode: RedactedContentMarker},
 	}, "test")
 

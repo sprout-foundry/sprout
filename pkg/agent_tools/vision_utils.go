@@ -47,16 +47,16 @@ func limitVisionOutputText(text string) (string, bool, int) {
 // Persistence Helpers
 // ============================================================================
 
-// persistVisionFullTextWithRoot persists full vision text to a file rooted at workspaceRoot.
-// If workspaceRoot is empty, it falls back to os.Getwd() for the CWD-based output dir.
-// The relative path for display also uses workspaceRoot (or os.Getwd() as fallback).
-func persistVisionFullTextWithRoot(sourcePath, fullText, workspaceRoot string) (string, error) {
+// persistVisionFullTextWithRoot persists full vision text to a file rooted at projectFolder.
+// If projectFolder is empty, it falls back to os.Getwd() for the CWD-based output dir.
+// The relative path for display also uses projectFolder (or os.Getwd() as fallback).
+func persistVisionFullTextWithRoot(sourcePath, fullText, projectFolder string) (string, error) {
 	fullText = strings.TrimSpace(fullText)
 	if fullText == "" {
 		return "", fmt.Errorf("full text is empty")
 	}
 
-	dir := resolveVisionOutputDirectoryWithRoot(workspaceRoot)
+	dir := resolveVisionOutputDirectoryWithRoot(projectFolder)
 	if dir == "" {
 		return "", fmt.Errorf("vision output directory unavailable")
 	}
@@ -77,7 +77,7 @@ func persistVisionFullTextWithRoot(sourcePath, fullText, workspaceRoot string) (
 		return "", fmt.Errorf("write full vision output: %w", err)
 	}
 
-	wd := workspaceRoot
+	wd := projectFolder
 	if wd == "" {
 		var err error
 		wd, err = os.Getwd()
@@ -103,8 +103,8 @@ func persistVisionFullText(sourcePath, fullText string) (string, error) {
 }
 
 // resolveVisionOutputDirectoryWithRoot resolves the vision output directory using the given
-// workspace root. If workspaceRoot is empty, it falls back to os.Getwd().
-func resolveVisionOutputDirectoryWithRoot(workspaceRoot string) string {
+// project folder. If projectFolder is empty, it falls back to os.Getwd().
+func resolveVisionOutputDirectoryWithRoot(projectFolder string) string {
 	raw := strings.TrimSpace(configuration.GetEnvSimple("RESOURCE_DIRECTORY"))
 	if raw == "" {
 		raw = ".sprout_ocr_outputs"
@@ -116,7 +116,7 @@ func resolveVisionOutputDirectoryWithRoot(workspaceRoot string) string {
 		}
 		cleaned = strings.TrimLeft(cleaned, `/\`)
 	}
-	wd := workspaceRoot
+	wd := projectFolder
 	if wd == "" {
 		var err error
 		wd, err = os.Getwd()

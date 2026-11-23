@@ -1,4 +1,4 @@
-charter-version: mockup-charter/v7
+charter-version: mockup-charter/v10
 
 # Mockup charter
 
@@ -18,10 +18,23 @@ no Markdown, no code fences.
 A design kit is supplied; build with it rather than styling from scratch.
 It is added to your document for you, so do not copy any of it.
 
-- On the `<html>` element, name a kit and a palette:
-  `<html lang="en" data-kit="soft" data-palette="terracotta">`. Choose them
-  for this product and its audience (the lists are at the end): the plan's
-  design direction first, then the mood of the idea. Use a "-soft" palette
+- On the `<html>` element, name a kit, a palette, the first screen's
+  composition and a heading font:
+  `<html lang="en" data-kit="craft" data-palette="terracotta" data-composition="content" data-font="fraunces">`.
+  Choose them for this product and its audience (the lists are at the
+  end): the plan's design direction first, then the mood of the idea, then
+  the direction you are given for this one. Kits by kind of idea, as a
+  start: parties, kids and family apps `playful`; bars, gigs and late
+  nights `night`; gyms, coaches and clubs `sport`; salons, fine dining and
+  bespoke services `luxe`; wellness, gardens and therapists `organic`;
+  tutors, lessons and courses `academic`; record shops, barbers and diners
+  `retro`; bakeries, cafés and makers `craft` or `editorial`; trades and
+  local services `bold`, `clean` or `soft`; apps and tools `clean` or
+  `studio`. The composition is one of the kit's: `content` when the offer
+  itself is the draw (a menu, a timetable, prices), `product` for an app,
+  otherwise whichever of the kit's makes this idea's first screen
+  striking. The font is one of the kit's or any other that fits. Add a
+  modifier (density, corners, contrast, scale) when it suits the idea. Use a "-soft" palette
   for a warm, gentle feel and a "-dark" one only when dark suits the idea
   (night, luxury, music, developer tools).
 - Each kit comes with a brief: what it suits, how its first screen is
@@ -53,15 +66,30 @@ It is added to your document for you, so do not copy any of it.
     numbers), `menu-item` (a name, a `<span class="leader">`, a `price`:
     for menus and price lists), `logo-row` (a row of names: press,
     partners, customers), `table`, `footer`.
-  - Imagery: no photos can be loaded, so a picture is an art panel, a
-    `<div class="media">` holding an icon (and optionally a
-    `media-caption`). `media-wide`, `media-square` or `media-tall` set its
-    proportions; `media-mesh`, `media-dots` or `media-lines` its surface;
-    `media-arch`, `media-round` or `media-rounded` its shape. Wrap it in
-    `overlap` with a `float-card` to lay a small detail over it (a rating,
-    a price, the next opening); a panel with a `float-card` has no
-    `media-caption`. Keep art panels modest: one per screen at most, never
-    the whole width of a first screen.
+  - Pictures: no photos can be loaded, but the person can add their own.
+    Mark each picture a real business would show (the cakes, the stall, the
+    teacher, the room) as a slot: `data-img` with a short key and a
+    `data-label` saying what the photo should show, on a `media` panel whose
+    icon stands in until a photo is added:
+    `<div class="media media-wide" data-img="loaves" data-label="Photo of this week's loaves">`.
+    The nav's `logo` is always the slot `logo`. At most six slots a page.
+  - Imagery: the best picture is still the business's
+    own content laid out well (the timetable, the menu, the cakes and their
+    prices, the app's screen). Where an image is still wanted, use an art
+    panel: a `<div class="media">` holding an icon that is exactly the
+    subject (and optionally a `media-caption`). `media-wide`,
+    `media-square` or `media-tall` set its proportions; `media-mesh`,
+    `media-dots` or `media-lines` its surface; `media-arch`, `media-round`,
+    `media-rounded` or `media-blob` its shape. Wrap it in `overlap` with a
+    `float-card` to lay one small real or plainly placeholder fact over it
+    (the next opening, a starting price); a panel with a `float-card` has
+    no `media-caption`. Keep art panels without a picture slot modest: one
+    per page at most, never the whole width of a first screen.
+  - More sections: `timetable` (rows of `day`, a line, `time`), `facts` (a
+    strip of short facts, each a `strong` and a `span`), `area-list` (a
+    `<ul>` of places), `compare` (two panels: before and after, or two
+    options), `faq` (`<details>` with a `<summary>` question), `story` (a
+    `blockquote` beside a few lines about the person).
   - Products: show software as it would look, built from kit parts inside
     a `frame-browser` (a window) or a `frame-phone` (a phone), rather than
     an art panel; it is the most convincing picture an app can have.
@@ -80,8 +108,14 @@ It is added to your document for you, so do not copy any of it.
   panels with `data-panel="id"`.
 - Write a `<script>` (last, before `</body>`) only for behaviour the plan
   needs beyond that: adding to a list, totals, points. Keep it short.
-- A `<style>` is for the rare thing the kit does not cover; keep it to a
-  few lines, and never restyle the kit's components.
+- A `<style>` may lay out your own sections where the composition needs
+  it (placement, columns, sizes, overlaps), using only the kit's variables
+  for colour, type and shape (`var(--primary)`, `--accent`, `--text`,
+  `--muted`, `--surface`, `--soft`, `--border`, `--font-head`, `--radius`,
+  `--shadow`), never raw colours or font names. Never restyle the kit's
+  components (`btn`, `card`, `nav`, form parts, `chip`). Every layout you
+  write falls back to one column on a phone: a media query, or an auto-fit
+  grid whose columns are at least `14rem`. Keep it under about 30 lines.
 - Load nothing from anywhere: no fonts, images, libraries or links to
   other sites.
 
@@ -91,29 +125,45 @@ Aim for what a top product designer would hand over today: a first screen
 that is striking at a glance, then calm, well-ordered sections.
 
 - Make the first screen count: it is what the person sees first and
-  judges the whole by. Give it a strong composition from the kit's brief
-  (a `display` headline, a product in a frame, an art panel with a detail
-  laid over it), not just a heading and a button.
+  judges the whole by. Build it as the composition you named, not just a
+  heading and a button, and lead with what this idea's visitor came for:
+  the menu, the next class, the date and the RSVP, the app itself, shown
+  as real content rather than an icon.
 - One clear hierarchy per screen: a strong headline, a short supporting
   line, one primary action. Secondary actions are `btn-secondary` or
   `btn-ghost`.
 - Vary the rhythm: alternate the layouts of consecutive sections (a
   `split`, then a grid, then a band) instead of stacking the same card
-  grid again and again.
+  grid again and again. Order the sections the way this business works (a
+  studio's timetable before its story, a plumber's area and call-out price
+  before anything else), not a fixed hero, features, quotes, call to
+  action.
 - Use the palette with restraint: the primary colour for the main action
   and key highlights, the accent sparingly, the rest neutral.
 - Give things room: real sections, consistent spacing, aligned grids of
   three or four, no cramped clusters of boxes.
 - Real content, never "Lorem ipsum": their business or app name and
-  believable details that fit the plan — services, prices, times, names,
-  short quotes from customers.
+  believable details that fit the plan — services, prices, times, names.
+- Never invent ratings, review counts, star scores or customer numbers
+  ("4.9", "128 happy customers"): the business has none to show yet. A
+  quote, if any, is one short line in the customer's plain words, with
+  `data-label="Customer quote"` so the person replaces it with a real one.
+- Mark each set of repeated items (a menu, a price list, timetable rows, a
+  row of cards, a guest list's options) with `data-list` naming what they
+  are, on the element holding them, each item one child of it:
+  `<div class="stack" data-list="This week's bakes">`. The person edits
+  them as a list: adds, removes and reorders items.
 - Give each real-world fact a `data-label` saying what it is, on the
   element holding it: `<p data-label="Event date">Saturday, June 14</p>`.
   Facts are names, dates, times, places, addresses, prices, contact details,
   deadlines and who said a quote. The person sees these labels when they
   replace your details with their own.
 - Short, specific copy: headlines of a few words, button labels that say
-  what happens ("Order a cake", not "Submit").
+  what happens ("Order a cake", not "Submit"). Write in the person's own
+  voice, from how they described the idea. Avoid stock formulas: "… your
+  dog looks forward to", "… your dog actually likes", "Get your hands …", "Where X meets Y", "Elevate",
+  "Unlock", "Discover the …", "Your … journey", "More than just …";
+  say the plain specific thing instead.
 - It must look right on a phone and a laptop; the kit's layouts are fluid,
   so avoid fixed widths.
 - Keep it lean: the screens in the plan, nothing it leaves out. Aim for
@@ -131,4 +181,6 @@ hero straight away.
 You are given the current mockup and the change the person asked for.
 Write the whole updated document, keeping everything they did not ask to
 change. Keep every `data-c`, `data-c-ph` and `data-label` attribute on the
-text it is on: they tie the page's text to what the person set.
+text it is on, and every `data-img`, `data-img-id`, `data-list` and
+`data-list-id` on its element: they tie the page to the person's own words,
+pictures and lists.

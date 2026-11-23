@@ -1,11 +1,11 @@
 /**
  * agentEscalation.ts — lets the agent's shell commands run in a remote
- * workspace (the user's runner or the cloud) when the in-browser shell can't.
+ * project folder (the user's runner or the cloud) when the in-browser shell can't.
  *
  * The WASM executor (cmd/wasm/shell_executor.go) calls
  * globalThis.__sproutEscalate.run(command) when an agent command exits 127.
  * This module decides, per the user's policy, whether to run it in one of the
- * user's workspaces — on their own runner or in the cloud (runTxnCommand:
+ * user's project folders — on their own runner or in the cloud (runTxnCommand:
  * push browser files, run, pull results back) — and answers with the real
  * result, or explains why it didn't run, so the model can adapt instead of
  * seeing "command not found".
@@ -68,7 +68,7 @@ export function setEscalationPolicy(policy: EscalationPolicy): void {
 }
 
 export interface EscalationBridgeOptions {
-  /** Repository the browser workspace was imported from; required to pick a workspace. */
+  /** Repository the browser project folder was imported from; required to pick a project folder. */
   repoURL?: string;
   /**
    * Ask the user whether to run this command outside the browser. Answering
@@ -100,7 +100,7 @@ function normalizeAnswer(answer: ConsentDecision | ConsentAnswer): ConsentAnswer
 }
 
 function whereFor(host: EscalationHost): string {
-  return host.kind === 'runner' ? `on ${hostDisplayName(host)}` : 'in the cloud workspace';
+  return host.kind === 'runner' ? `on ${hostDisplayName(host)}` : 'in the cloud dev space';
 }
 
 function toResult(outcome: TxnCommandOutcome, host: EscalationHost): EscalationResult {
@@ -133,12 +133,12 @@ export async function escalateCommand(command: string, opts: EscalationBridgeOpt
     return {
       ran: false,
       message:
-        'Running this needs a cloud workspace, which is tied to a repository. Open the project from a GitHub repository to enable it.',
+        'Running this needs a cloud dev space, which is tied to a repository. Open the project from a GitHub repository to enable it.',
     };
   }
   const policy = getEscalationPolicy();
   if (policy === 'never') {
-    return { ran: false, message: 'The user has turned off running agent commands in the cloud workspace.' };
+    return { ran: false, message: 'The user has turned off running agent commands in the cloud dev space.' };
   }
 
   let host: EscalationHost;
@@ -146,7 +146,7 @@ export async function escalateCommand(command: string, opts: EscalationBridgeOpt
   if (policy === 'ask') {
     const answer = normalizeAnswer(await opts.requestConsent(command));
     if (answer.decision === 'deny') {
-      return { ran: false, message: 'The user declined to run this command in the cloud workspace.' };
+      return { ran: false, message: 'The user declined to run this command in the cloud dev space.' };
     }
     host = applyApproval(repoURL, answer);
     prompted = true;

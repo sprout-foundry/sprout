@@ -37,7 +37,7 @@ import {
   handleSessionDisplaced,
   handleSessionTerminated,
   handleTodoUpdate,
-  handleWorkspaceStopping,
+  handleDevSpaceStopping,
 } from './wsHandlers/chat';
 import {
   handleCompactCompleted,
@@ -46,8 +46,8 @@ import {
   handleMetricsUpdate,
   handleProviderNoCredential,
   handleRateLimited,
-  handleWorkspaceChanged,
-  handleWorkspacePatch,
+  handleProjectFolderChanged,
+  handleProjectFolderPatch,
 } from './wsHandlers/session';
 import {
   handleQueryCompleted,
@@ -350,7 +350,7 @@ export function useWebSocketEventHandler({
             ? isRunEndingError(eventData, true)
             : event.type === 'query_completed' && !(Number.isFinite(bgSubagentDepth) && bgSubagentDepth > 0);
         setState((prev) => {
-          // The chat holding the workspace finished: release the chat whose
+          // The chat holding the project folder finished: release the chat whose
           // send was held back behind it (its queue drains next).
           const releaseBusy =
             endsBackgroundRun && prev.workspaceBusy?.runningChatId === eventChatId ? { workspaceBusy: null } : {};
@@ -497,8 +497,8 @@ export function useWebSocketEventHandler({
           return handleError(ctx);
         case 'metrics_update':
           return handleMetricsUpdate(ctx);
-        case 'workspace_changed':
-          return handleWorkspaceChanged(ctx);
+        case 'project_folder_changed':
+          return handleProjectFolderChanged(ctx);
         case 'security_approval_request':
           return handleSecurityApprovalRequest(ctx);
         case 'security_prompt_request':
@@ -535,12 +535,12 @@ export function useWebSocketEventHandler({
           return handleDelegateClarificationRequested(ctx);
         case 'delegate_clarification_responded':
           return handleDelegateClarificationResponded(ctx);
-        case 'workspace_patch':
-          return handleWorkspacePatch(ctx);
+        case 'project_folder_patch':
+          return handleProjectFolderPatch(ctx);
         case 'session_displaced':
           return handleSessionDisplaced(ctx);
-        case 'workspace_stopping':
-          return handleWorkspaceStopping(ctx);
+        case 'dev_space_stopping':
+          return handleDevSpaceStopping(ctx);
         default:
           const logEntry = createLogEntry(event);
           logEntry.level = 'warning';

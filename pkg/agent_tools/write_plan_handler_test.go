@@ -127,7 +127,7 @@ func TestWritePlanHandlerConformance_ValidPlanWritesBothFiles(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	h := &writePlanHandler{}
-	env := ToolEnv{WorkspaceRoot: dir}
+	env := ToolEnv{ProjectFolder: dir}
 
 	res, err := h.Execute(context.Background(), env, map[string]any{"plan": wphValidPlan})
 	if err != nil {
@@ -185,7 +185,7 @@ func TestWritePlanHandlerConformance_EditingBumpsRevisionAgain(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	h := &writePlanHandler{}
-	env := ToolEnv{WorkspaceRoot: dir}
+	env := ToolEnv{ProjectFolder: dir}
 
 	if res, err := h.Execute(context.Background(), env, map[string]any{"plan": wphValidPlan}); err != nil || res.IsError {
 		t.Fatalf("first write failed: %v / %s", err, res.Output)
@@ -246,7 +246,7 @@ func TestWritePlanHandlerConformance_InvalidPlanRejectedNamesEveryProblem(t *tes
 	t.Parallel()
 	dir := t.TempDir()
 	h := &writePlanHandler{}
-	env := ToolEnv{WorkspaceRoot: dir}
+	env := ToolEnv{ProjectFolder: dir}
 
 	res, err := h.Execute(context.Background(), env, map[string]any{"plan": wphInvalidPlan})
 	if err != nil {
@@ -278,7 +278,7 @@ func TestWritePlanHandlerConformance_RejectedWriteLeavesExistingPlanUntouched(t 
 	t.Parallel()
 	dir := t.TempDir()
 	h := &writePlanHandler{}
-	env := ToolEnv{WorkspaceRoot: dir}
+	env := ToolEnv{ProjectFolder: dir}
 
 	if res, err := h.Execute(context.Background(), env, map[string]any{"plan": wphValidPlan}); err != nil || res.IsError {
 		t.Fatalf("first write failed: %v / %s", err, res.Output)
@@ -347,7 +347,7 @@ func TestWritePlanHandlerConformance_InteractionKindRules(t *testing.T) {
 	}
 }
 
-func TestWritePlanHandlerConformance_NoWorkspaceRoot(t *testing.T) {
+func TestWritePlanHandlerConformance_NoProjectFolder(t *testing.T) {
 	t.Parallel()
 	h := &writePlanHandler{}
 
@@ -355,15 +355,15 @@ func TestWritePlanHandlerConformance_NoWorkspaceRoot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute returned a Go error: %v", err)
 	}
-	if !res.IsError || !strings.Contains(res.Output, "no workspace root") {
-		t.Errorf("without a workspace root the write must be refused, got: %s (IsError=%v)", res.Output, res.IsError)
+	if !res.IsError || !strings.Contains(res.Output, "no project folder") {
+		t.Errorf("without a project folder the write must be refused, got: %s (IsError=%v)", res.Output, res.IsError)
 	}
 }
 
 func TestWritePlanHandlerConformance_NonObjectPlanArgument(t *testing.T) {
 	t.Parallel()
 	h := &writePlanHandler{}
-	env := ToolEnv{WorkspaceRoot: t.TempDir()}
+	env := ToolEnv{ProjectFolder: t.TempDir()}
 
 	res, err := h.Execute(context.Background(), env, map[string]any{"plan": "not an object"})
 	if err != nil {
@@ -382,7 +382,7 @@ func TestWritePlanHandlerConformance_NonObjectPlanArgument(t *testing.T) {
 func executeWithPlan(t *testing.T, h *writePlanHandler, root string, planDoc map[string]any) (res ToolResult) {
 	t.Helper()
 	var err error
-	res, err = h.Execute(context.Background(), ToolEnv{WorkspaceRoot: root}, map[string]any{"plan": planDoc})
+	res, err = h.Execute(context.Background(), ToolEnv{ProjectFolder: root}, map[string]any{"plan": planDoc})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}

@@ -17,7 +17,7 @@ import (
 // the editable merge view.
 func TestGitDiffFileContents(t *testing.T) {
 	repo := createTempGitRepo(t)
-	server := &ReactWebServer{workspaceRoot: repo}
+	server := &ReactWebServer{projectFolder: repo}
 
 	// Modified tracked file: original = HEAD version, modified = worktree.
 	writeFile(t, filepath.Join(repo, "notes.txt"), "line one\nline two\nchanged\n")
@@ -58,7 +58,7 @@ func TestHandleAPIGitDiffReturnsFullContents(t *testing.T) {
 	repo := createTempGitRepo(t)
 	writeFile(t, filepath.Join(repo, "notes.txt"), "line one\nline two\n")
 
-	server := &ReactWebServer{workspaceRoot: repo}
+	server := &ReactWebServer{projectFolder: repo}
 	req := httptest.NewRequest(http.MethodGet, "/api/git/diff?path=notes.txt", nil)
 	w := httptest.NewRecorder()
 
@@ -103,7 +103,7 @@ func TestGitCommitFileContents(t *testing.T) {
 	}
 	hash := strings.TrimSpace(string(hashOut))
 
-	server := &ReactWebServer{workspaceRoot: repo}
+	server := &ReactWebServer{projectFolder: repo}
 
 	orig, mod, truncated := server.gitCommitFileContents(repo, hash, "notes.txt")
 	if truncated {
@@ -137,7 +137,7 @@ func TestGitCommitFileContents(t *testing.T) {
 // omitted with contents_truncated=true. Applies to both sides.
 func TestGitDiffFileContentsTruncationBoundary(t *testing.T) {
 	repo := createTempGitRepo(t)
-	server := &ReactWebServer{workspaceRoot: repo}
+	server := &ReactWebServer{projectFolder: repo}
 
 	// Text content that contains no NUL bytes (binary heuristic off).
 	exactlyCap := strings.Repeat("a", maxDiffFileContentBytes)
@@ -172,7 +172,7 @@ func TestGitDiffFileContentsTruncationBoundary(t *testing.T) {
 // succeeds — the diff text remains authoritative for display.
 func TestGitDiffFileContentsBinary(t *testing.T) {
 	repo := createTempGitRepo(t)
-	server := &ReactWebServer{workspaceRoot: repo}
+	server := &ReactWebServer{projectFolder: repo}
 
 	// Small binary worktree file (NUL bytes early — git's heuristic).
 	binary := append([]byte("PNG\x00\x01\x02"), make([]byte, 64)...)
@@ -222,7 +222,7 @@ func TestGitCommitFileContentsBinary(t *testing.T) {
 	}
 	hash := strings.TrimSpace(string(hashOut))
 
-	server := &ReactWebServer{workspaceRoot: repo}
+	server := &ReactWebServer{projectFolder: repo}
 	orig, mod, truncated := server.gitCommitFileContents(repo, hash, "img.bin")
 	if !truncated {
 		t.Fatal("binary commit file must set truncated")

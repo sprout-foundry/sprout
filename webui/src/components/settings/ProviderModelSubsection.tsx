@@ -2,7 +2,7 @@ import { SkeletonText } from '@sprout/ui';
 import { useState } from 'react';
 import type { ProviderOption } from '../../services/api';
 
-export type SettingsScope = 'session' | 'workspace' | 'global';
+export type SettingsScope = 'session' | 'project_folder' | 'global';
 
 export interface ProviderModelSubsectionProps {
   /** Section heading displayed above the controls */
@@ -117,7 +117,12 @@ export default function ProviderModelSubsection({
             >
               <option value="">
                 Default (inherit from{' '}
-                {scope === 'session' ? 'workspace or global' : scope === 'workspace' ? 'global' : 'provider default'})
+                {scope === 'session'
+                  ? 'project folder or global'
+                  : scope === 'project_folder'
+                    ? 'global'
+                    : 'provider default'}
+                )
               </option>
               {providers.map((p) => (
                 <option key={p.id} value={p.id}>

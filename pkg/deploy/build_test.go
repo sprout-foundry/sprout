@@ -88,11 +88,11 @@ var previewOK = Confirmation{}
 // Happy path
 // ---------------------------------------------------------------------------
 
-// TestBuildAndDeploy_BuildsInWorkspaceThenUploads is the acceptance anchor:
+// TestBuildAndDeploy_BuildsInProjectFolderThenUploads is the acceptance anchor:
 // with a passing verification over an unchanged tree, the manifest's build
 // command runs in the project root, and the target receives the built output
 // directory.
-func TestBuildAndDeploy_BuildsInWorkspaceThenUploads(t *testing.T) {
+func TestBuildAndDeploy_BuildsInProjectFolderThenUploads(t *testing.T) {
 	root := t.TempDir()
 	req := buildReq(root)
 
@@ -105,7 +105,7 @@ func TestBuildAndDeploy_BuildsInWorkspaceThenUploads(t *testing.T) {
 	got, err := d.BuildAndDeploy(context.Background(), req, passingSnapshot("tree-at-verification"), previewOK)
 	require.NoError(t, err)
 
-	// The build ran once, in the workspace, with the manifest's command.
+	// The build ran once, in the project folder, with the manifest's command.
 	assert.Equal(t, 1, runner.calls, "build runs exactly once")
 	assert.Equal(t, root, runner.lastDir, "build runs in the project root, not the target")
 	assert.Equal(t, "npm run build", runner.lastCmd, "build uses the manifest's command")

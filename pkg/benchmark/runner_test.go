@@ -7,7 +7,7 @@
 // record-and-continue behavior (one bad setup never aborts the suite).
 //
 // The harness mirrors the verification fixture tests (pkg/agent/
-// verification_hook_test.go): a scripted model, a real workspace copy
+// verification_hook_test.go): a scripted model, a real project folder copy
 // (the embedded fixture starter), and real shell execution of the
 // deterministic build command that ShapeCopy writes into the copy's
 // .sprout/starter.json. The copy's manifest wins over the configuration
@@ -159,7 +159,7 @@ func scriptedFactory(t *testing.T, mgr *configuration.Manager, withWrite bool, c
 			return nil, fmt.Errorf("harness: build scripted agent: %w", err)
 		}
 		ag.SetMaxIterations(10)
-		ag.SetWorkspaceRoot(runDir)
+		ag.SetProjectFolder(runDir)
 		return ag, nil
 	}
 }

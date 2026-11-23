@@ -22,7 +22,7 @@ import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useTabDragReorder } from '../hooks/useTabDragReorder';
 import { readFileWithConsent } from '../services/fileAccess';
 import { notificationBus } from '../services/notificationBus';
-import { useWorkspaceRoot } from '../services/workspaceStore';
+import { useProjectFolder } from '../services/workspaceStore';
 import { type EditorBuffer } from '../types/editor';
 import { isSharedMode } from '../utils/sharedMode';
 import { catchIfAsync, getBufferIcon, getChatId, getFileIcon, getFileIconColor } from './editorTabIcons';
@@ -110,7 +110,7 @@ function EditorTabs({
   // Workspace root backs Copy Absolute Path on the tab menu. Until it is
   // known the item falls back to the stored path (the editor context menu
   // behaves the same way).
-  const workspaceRoot = useWorkspaceRoot();
+  const projectFolder = useProjectFolder();
 
   const handleCopyRelativePath = useCallback((buffer: EditorBuffer) => {
     const path = buffer.file?.path;
@@ -124,13 +124,13 @@ function EditorTabs({
     (buffer: EditorBuffer) => {
       const path = buffer.file?.path;
       if (!path) return;
-      const root = workspaceRoot.replace(/\/+$/, '');
+      const root = projectFolder.replace(/\/+$/, '');
       const absolute = path.startsWith('/') || !root ? path : `${root}/${path}`;
       void navigator.clipboard?.writeText(absolute).catch(() => {
         notificationBus.notify('error', 'Editor', 'Failed to copy path', 3000);
       });
     },
-    [workspaceRoot],
+    [projectFolder],
   );
 
   const handleRevealInFileTree = useCallback((buffer: EditorBuffer) => {

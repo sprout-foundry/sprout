@@ -26,7 +26,7 @@ vi.mock('../services/notificationBus', () => ({ notificationBus: { notify: vi.fn
 
 function busyError() {
   return Object.assign(new Error('busy'), {
-    code: 'workspace_busy',
+    code: 'project_folder_busy',
     runningChatId: 'chat-a',
     runningChatName: 'Chat A',
   });
@@ -66,7 +66,7 @@ function setup() {
   };
 }
 
-describe('send held back by another chat (workspace_busy)', () => {
+describe('send held back by another chat (project_folder_busy)', () => {
   it('queues the message for its chat and holds it until the running chat finishes', async () => {
     apiDouble.sendQuery.mockRejectedValueOnce(busyError()).mockResolvedValue(undefined);
     const h = setup();

@@ -106,9 +106,9 @@ func (c *CommitCommand) SetAgentError(err error) {
 
 // Execute runs the commit command
 func (c *CommitCommand) Execute(args []string, chatAgent *agent.Agent) error {
-	// Set git working directory from agent workspace root
+	// Set git working directory from agent project folder
 	if chatAgent != nil {
-		SetGitDir(chatAgent.GetWorkspaceRoot())
+		SetGitDir(chatAgent.GetProjectFolder())
 	} else {
 		SetGitDir("")
 	}
@@ -403,7 +403,7 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 
 	// Resolve the commit trailers: the commit.trailers defaults (the
 	// config's list plus the repository's AGENTS.md "Commit Trailers"
-	// section, workspace-aware through the agent's layered config) with
+	// section, project-folder-aware through the agent's layered config) with
 	// the explicit --trailer flags added on top.
 	trailerCfg := cfg
 	if chatAgent != nil {
@@ -413,7 +413,7 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	}
 	trailerDir := currentGitDir()
 	if trailerDir == "" {
-		// Agentless CLI path (no workspace root): the process CWD is where
+		// Agentless CLI path (no project folder): the process CWD is where
 		// the user ran sprout commit — the repository.
 		if wd, err := os.Getwd(); err == nil {
 			trailerDir = wd
@@ -522,7 +522,7 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	if !c.allowSecrets && chatAgent != nil && chatAgent.GetElevationGate() != nil {
 		gate := chatAgent.GetElevationGate()
 		logger := utils.GetLogger(false)
-		securityResult := gitops.CheckStagedFilesForSecurityCredentials(logger, chatAgent.GetWorkspaceRoot())
+		securityResult := gitops.CheckStagedFilesForSecurityCredentials(logger, chatAgent.GetProjectFolder())
 		if securityResult.HasConcerns && len(securityResult.Concerns) > 0 {
 			action, err := gate.Evaluate(securityResult.Concerns, "commit")
 			if err != nil {

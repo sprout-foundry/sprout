@@ -82,7 +82,7 @@ func (c *Config) overrides(path string, value bool) bool {
 }
 
 // mergeExplicitKeys unions the provenance of two layers into the merged result,
-// so a three-layer merge (global → workspace → session) keeps the presence
+// so a three-layer merge (global → project folder → session) keeps the presence
 // information from every layer it folded in.
 func (c *Config) mergeExplicitKeys(from *Config) {
 	if from == nil || len(from.explicitKeys) == 0 {

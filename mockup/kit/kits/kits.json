@@ -1,9 +1,406 @@
 {
- "clean": {"about": "A modern product: a calm, credible layout that lets the content lead.", "vars": {"--font-head": "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif", "--font-body": "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif", "--radius": "14px", "--radius-sm": "10px", "--radius-btn": "10px", "--shadow": "0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05)", "--shadow-lg": "0 14px 40px rgba(0,0,0,.10)", "--shadow-btn": "0 1px 2px rgba(0,0,0,.08)", "--head-weight": "750"}, "brief": "Hero: `split` with a short headline, a `lead` and two buttons beside a `frame-browser` or `frame-phone` showing the product's main screen built from real kit parts. Below it, a `logo-row` or three `stat`s, then features as a `grid-3` of `card`s with `icon-badge`s, a `steps` row for how it works, one `quote`, and a closing call to action in `section-soft`. Neutral surfaces with the primary colour only on actions and small highlights; consistent card heights; generous gaps. Avoid: more than one coloured section per screen, centred text in long paragraphs.", "css": ".eyebrow{color:var(--muted)}"},
- "soft": {"about": "Warm and friendly: rounded, approachable, for local services, families, wellness and community.", "vars": {"--font-head": "ui-rounded,'SF Pro Rounded','Nunito','Segoe UI',system-ui,sans-serif", "--font-body": "ui-rounded,'SF Pro Rounded','Nunito','Segoe UI',system-ui,sans-serif", "--radius": "24px", "--radius-sm": "16px", "--radius-btn": "999px", "--shadow": "0 10px 30px rgba(0,0,0,.06)", "--shadow-lg": "0 18px 44px rgba(0,0,0,.10)", "--shadow-btn": "0 6px 16px color-mix(in srgb,var(--primary) 30%,transparent)", "--card-border": "0px", "--head-weight": "800"}, "brief": "Hero: `split` with the headline and a pill button beside a `media media-mesh media-arch` (or `media-round`) art panel with a `float-card` overlapping it (a rating, the next opening, a price). Sections alternate `section` and `section-soft`; features sit in borderless `card`s with `icon-badge`s; quotes have `avatar`s. Big radii, tinted surfaces, `chip`s for choices, cheerful but specific copy. Avoid: hard lines and dense tables; dark sections.", "css": ".card{background:var(--soft)}.section-soft .card{background:var(--surface)}.icon-badge{border-radius:50%}.badge{background:var(--surface);box-shadow:var(--shadow)}"},
- "editorial": {"about": "Magazine-like: serif headlines, long measure, white space, for writers, studios, restaurants and portfolios.", "vars": {"--font-head": "'Iowan Old Style','Palatino Linotype',Palatino,Georgia,'Times New Roman',serif", "--font-body": "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif", "--radius": "4px", "--radius-sm": "3px", "--radius-btn": "2px", "--shadow": "none", "--shadow-lg": "0 10px 30px rgba(0,0,0,.08)", "--shadow-btn": "none", "--head-weight": "600", "--head-tracking": "-.02em", "--h1": "3.8rem", "--section": "6.5rem"}, "brief": "Hero: a left-aligned `display` headline over a `lead`, with a `kicker` above and a `rule` below, then a `media-wide` art panel (`media-lines` or `media-mesh`) spanning the container. Content runs in `grid-2` columns with numbered `kicker`s (01, 02…), `menu-item` lists with leaders for menus or price lists, and one large `quote`. Thin rules between sections, small uppercase labels, restrained colour (ink and one accent). Avoid: icon badges in grids, shadows, pill buttons.", "css": ".eyebrow,.kicker{color:var(--muted)}h2{padding-top:1rem;border-top:1px solid var(--text)}.card{box-shadow:none}.quote{font-size:1.7rem;font-style:italic}"},
- "bold": {"about": "Confident and high-contrast: oversized type and colour blocks, for launches, fitness, events and creative brands.", "vars": {"--font-head": "ui-sans-serif,'Helvetica Neue','Arial Black',system-ui,sans-serif", "--font-body": "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif", "--radius": "18px", "--radius-sm": "12px", "--radius-btn": "12px", "--shadow": "0 0 0 1px var(--border)", "--shadow-lg": "0 20px 50px rgba(0,0,0,.18)", "--shadow-btn": "0 10px 24px color-mix(in srgb,var(--primary) 35%,transparent)", "--head-weight": "900", "--head-tracking": "-.035em", "--h1": "4.4rem", "--h2": "2.8rem"}, "brief": "Hero: a `section section-dark` band (the whole first screen dark) with a left-aligned `display` headline of three to six words, one word in `text-accent`, a `lead`, a big `btn-lg` and a `btn-secondary`; below the headline, a row of three `stat`s or a `bento` of class or feature tiles. Then a `section section-primary` band with a short statement or huge `stat`s, a `bento` of features (one `tall`, one `span-4`), a timetable or list in plain `table` or `list` form, and a `section-dark` closing call to action. Choose a palette whose primary colour is itself vivid (red, orange, electric blue, magenta), never one whose primary is a grey or brown with the colour only in the accent (such as charcoal-ember, graphite-lime, storm-grey, onyx-pearl). Tight tracking, heavy weights, strong contrast between sections, short punchy copy. Avoid: large gradient art panels, many small cards, muted pastel combinations, long paragraphs.", "css": ".eyebrow{background:var(--primary);color:var(--on-primary);padding:.2rem .55rem;border-radius:4px}.stat{font-size:3.4rem}"},
- "minimal": {"about": "Quiet and airy: hairlines, space and restraint, for premium products, architecture, consultancies and luxury.", "vars": {"--font-head": "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif", "--font-body": "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif", "--radius": "8px", "--radius-sm": "6px", "--radius-btn": "6px", "--shadow": "none", "--shadow-lg": "0 8px 24px rgba(0,0,0,.06)", "--shadow-btn": "none", "--head-weight": "600", "--section": "7rem", "--hero": "8rem"}, "brief": "Hero: a centred `display` (or `h1`) with a one-line `lead` and a single `btn-secondary`, lots of space, then a `media-wide` art panel (`media-dots` or `media-lines`). Content is `grid-3` without cards, separated by `rule`s, `kicker` numbers and short lines of text; one `quote` without an avatar. Monochrome first; the primary colour appears once or twice per screen; hairline borders. Avoid: icon badges, gradients, shadows, more than one button per section.", "css": ".eyebrow{color:var(--muted);letter-spacing:.2em}.btn-primary{box-shadow:none}.card{border-color:var(--border);box-shadow:none}"},
- "studio": {"about": "A sharp tech product or startup: gradients, glass and a product shot, the look of a modern software launch.", "vars": {"--font-head": "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif", "--font-body": "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif", "--radius": "16px", "--radius-sm": "10px", "--radius-btn": "10px", "--shadow": "0 1px 0 rgba(255,255,255,.04) inset,0 10px 30px rgba(0,0,0,.08)", "--shadow-lg": "0 30px 80px rgba(0,0,0,.22)", "--shadow-btn": "0 8px 24px color-mix(in srgb,var(--primary) 35%,transparent)", "--head-weight": "700", "--head-tracking": "-.03em", "--h1": "4rem", "--display": "5.2rem"}, "brief": "Hero: centred `glow` with a `badge` above a `display` headline (key words in `text-gradient`), a `lead`, two buttons, then a `frame-browser` holding a believable product screen (a `topbar`, a `table` or `stat`s, a chart drawn with `media-dots`). Follow with a `logo-row`, a `bento` of `glass` tiles with icons and one-line benefits, `steps`, pricing `card`s with the middle one highlighted, and a `section-dark` call to action. Dark palettes suit it well; tight headings, small precise labels, product UI as the hero image. Avoid: warm handmade touches, serif type, photo placeholders where a product screen would do.", "css": "h1,h2,.display{letter-spacing:-.035em}.card{border-color:color-mix(in srgb,var(--border) 70%,transparent)}.badge{background:color-mix(in srgb,var(--primary) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--primary) 30%,transparent)}"},
- "craft": {"about": "Handmade and local: warm serif headings and menu-board details, for bakeries, cafes, makers, farms and small shops.", "vars": {"--font-head": "'Iowan Old Style','Palatino Linotype',Palatino,Georgia,'Times New Roman',serif", "--font-body": "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif", "--radius": "12px", "--radius-sm": "8px", "--radius-btn": "999px", "--shadow": "0 2px 0 color-mix(in srgb,var(--border) 70%,transparent)", "--shadow-lg": "0 16px 40px rgba(0,0,0,.10)", "--shadow-btn": "none", "--head-weight": "600", "--head-tracking": "-.01em", "--h1": "3.6rem", "--display": "4.6rem"}, "brief": "Hero: `split` with an `eyebrow` (the neighbourhood or since-year), a serif headline and a `lead`, beside a `media media-arch` art panel with a `float-card` (today's special, opening hours). Use `menu-item` rows with leaders for products and prices, `chip`s for categories, a `table` of opening hours, quotes from regulars, and a visit-us section with the address. Cream and earthy palettes, small-caps labels, stamp-like `badge`s, friendly specific copy (names, days, prices). Avoid: tech product frames, gradients, bento grids.", "css": ".eyebrow{font-family:var(--font-head);font-style:italic;text-transform:none;letter-spacing:0;font-size:1.05rem}.badge{background:transparent;border:1.5px dashed var(--primary)}.card{box-shadow:none}"}
+ "clean": {
+  "about": "A modern product: a calm, credible layout that lets the content lead.",
+  "vars": {
+   "--font-head": "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif",
+   "--font-body": "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif",
+   "--radius": "14px",
+   "--radius-sm": "10px",
+   "--radius-btn": "10px",
+   "--shadow": "0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05)",
+   "--shadow-lg": "0 14px 40px rgba(0,0,0,.10)",
+   "--shadow-btn": "0 1px 2px rgba(0,0,0,.08)",
+   "--head-weight": "750"
+  },
+  "brief": "Below the first screen: a `logo-row` or three `stat`s, features as a `grid-3` of `card`s with `icon-badge`s, a `steps` row for how it works, and a closing call to action in `section-soft`. Neutral surfaces with the primary colour only on actions and small highlights; consistent card heights; generous gaps. Avoid: more than one coloured section per screen, centred text in long paragraphs.",
+  "css": ".eyebrow{color:var(--muted)}",
+  "compositions": [
+   "product",
+   "type",
+   "content",
+   "centered"
+  ],
+  "fonts": [
+   "outfit",
+   "space-grotesk",
+   "bricolage-grotesque"
+  ]
+ },
+ "soft": {
+  "about": "Warm and friendly: rounded, approachable, for local services, families, wellness and community.",
+  "vars": {
+   "--font-head": "ui-rounded,'SF Pro Rounded','Nunito','Segoe UI',system-ui,sans-serif",
+   "--font-body": "ui-rounded,'SF Pro Rounded','Nunito','Segoe UI',system-ui,sans-serif",
+   "--radius": "24px",
+   "--radius-sm": "16px",
+   "--radius-btn": "999px",
+   "--shadow": "0 10px 30px rgba(0,0,0,.06)",
+   "--shadow-lg": "0 18px 44px rgba(0,0,0,.10)",
+   "--shadow-btn": "0 6px 16px color-mix(in srgb,var(--primary) 30%,transparent)",
+   "--card-border": "0px",
+   "--head-weight": "800"
+  },
+  "brief": "Sections alternate `section` and `section-soft`; features sit in borderless `card`s with `icon-badge`s. Big radii, tinted surfaces, `chip`s for choices, cheerful but specific copy. Avoid: hard lines and dense tables; dark sections.",
+  "css": ".card{background:var(--soft)}.section-soft .card{background:var(--surface)}.icon-badge{border-radius:50%}.badge{background:var(--surface);box-shadow:var(--shadow)}",
+  "compositions": [
+   "content",
+   "tiles",
+   "centered",
+   "type",
+   "art"
+  ],
+  "fonts": [
+   "nunito",
+   "baloo-2",
+   "fraunces"
+  ]
+ },
+ "editorial": {
+  "about": "Magazine-like: serif headlines, long measure, white space, for writers, studios, restaurants and portfolios.",
+  "vars": {
+   "--font-head": "'Iowan Old Style','Palatino Linotype',Palatino,Georgia,'Times New Roman',serif",
+   "--font-body": "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif",
+   "--radius": "4px",
+   "--radius-sm": "3px",
+   "--radius-btn": "2px",
+   "--shadow": "none",
+   "--shadow-lg": "0 10px 30px rgba(0,0,0,.08)",
+   "--shadow-btn": "none",
+   "--head-weight": "600",
+   "--head-tracking": "-.02em",
+   "--h1": "3.8rem",
+   "--section": "6.5rem"
+  },
+  "brief": "Content runs in `grid-2` columns with numbered `kicker`s (01, 02…), `menu-item` lists with leaders for menus or price lists, and one large `quote` or a `story`. Thin rules between sections, small uppercase labels, restrained colour (ink and one accent). Avoid: icon badges in grids, shadows, pill buttons.",
+  "css": ".eyebrow,.kicker{color:var(--muted)}h2{padding-top:1rem;border-top:1px solid var(--text)}.card{box-shadow:none}.quote{font-size:1.7rem;font-style:italic}",
+  "compositions": [
+   "poster",
+   "type",
+   "content",
+   "art"
+  ],
+  "fonts": [
+   "instrument-serif",
+   "fraunces",
+   "cormorant-garamond"
+  ]
+ },
+ "bold": {
+  "about": "Confident and high-contrast: oversized type and colour blocks, for launches, fitness, events and creative brands.",
+  "vars": {
+   "--font-head": "ui-sans-serif,'Helvetica Neue','Arial Black',system-ui,sans-serif",
+   "--font-body": "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif",
+   "--radius": "18px",
+   "--radius-sm": "12px",
+   "--radius-btn": "12px",
+   "--shadow": "0 0 0 1px var(--border)",
+   "--shadow-lg": "0 20px 50px rgba(0,0,0,.18)",
+   "--shadow-btn": "0 10px 24px color-mix(in srgb,var(--primary) 35%,transparent)",
+   "--head-weight": "900",
+   "--head-tracking": "-.035em",
+   "--h1": "4.4rem",
+   "--h2": "2.8rem"
+  },
+  "brief": "A `section section-primary` band with a short statement or huge `stat`s, a `bento` of features (one `tall`, one `span-4`), a `timetable` or list in plain form, and a `section-dark` closing call to action. Choose a palette whose primary colour is itself vivid (red, orange, electric blue, magenta), never one whose primary is a grey or brown with the colour only in the accent. Tight tracking, heavy weights, strong contrast between sections, short punchy copy. Avoid: large gradient art panels, many small cards, muted pastels, long paragraphs.",
+  "css": ".eyebrow{background:var(--primary);color:var(--on-primary);padding:.2rem .55rem;border-radius:4px}.stat{font-size:3.4rem}",
+  "compositions": [
+   "band",
+   "type",
+   "tiles"
+  ],
+  "fonts": [
+   "archivo-black",
+   "anton",
+   "unbounded"
+  ]
+ },
+ "minimal": {
+  "about": "Quiet and airy: hairlines, space and restraint, for premium products, architecture, consultancies and luxury.",
+  "vars": {
+   "--font-head": "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif",
+   "--font-body": "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif",
+   "--radius": "8px",
+   "--radius-sm": "6px",
+   "--radius-btn": "6px",
+   "--shadow": "none",
+   "--shadow-lg": "0 8px 24px rgba(0,0,0,.06)",
+   "--shadow-btn": "none",
+   "--head-weight": "600",
+   "--section": "7rem",
+   "--hero": "8rem"
+  },
+  "brief": "Content is `grid-3` without cards, separated by `rule`s, `kicker` numbers and short lines of text. Monochrome first; the primary colour appears once or twice per screen; hairline borders. Avoid: icon badges, gradients, shadows, more than one button per section.",
+  "css": ".eyebrow{color:var(--muted);letter-spacing:.2em}.btn-primary{box-shadow:none}.card{border-color:var(--border);box-shadow:none}",
+  "compositions": [
+   "type",
+   "centered",
+   "poster",
+   "art"
+  ],
+  "fonts": [
+   "instrument-serif",
+   "outfit",
+   "bodoni-moda"
+  ]
+ },
+ "studio": {
+  "about": "A sharp tech product or startup: gradients, glass and a product shot, the look of a modern software launch.",
+  "vars": {
+   "--font-head": "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif",
+   "--font-body": "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif",
+   "--radius": "16px",
+   "--radius-sm": "10px",
+   "--radius-btn": "10px",
+   "--shadow": "0 1px 0 rgba(255,255,255,.04) inset,0 10px 30px rgba(0,0,0,.08)",
+   "--shadow-lg": "0 30px 80px rgba(0,0,0,.22)",
+   "--shadow-btn": "0 8px 24px color-mix(in srgb,var(--primary) 35%,transparent)",
+   "--head-weight": "700",
+   "--head-tracking": "-.03em",
+   "--h1": "4rem",
+   "--display": "5.2rem"
+  },
+  "brief": "Follow with a `logo-row`, a `bento` of `glass` tiles with icons and one-line benefits, `steps`, pricing `card`s with the middle one highlighted, and a `section-dark` call to action. Dark palettes suit it well; tight headings, small precise labels, product UI as the picture. Avoid: warm handmade touches, serif type, art panels where a product screen would do.",
+  "css": "h1,h2,.display{letter-spacing:-.035em}.card{border-color:color-mix(in srgb,var(--border) 70%,transparent)}.badge{background:color-mix(in srgb,var(--primary) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--primary) 30%,transparent)}",
+  "compositions": [
+   "product",
+   "centered",
+   "tiles"
+  ],
+  "fonts": [
+   "space-grotesk",
+   "syne",
+   "outfit"
+  ]
+ },
+ "craft": {
+  "about": "Handmade and local: warm serif headings and menu-board details, for bakeries, cafes, makers, farms and small shops.",
+  "vars": {
+   "--font-head": "'Iowan Old Style','Palatino Linotype',Palatino,Georgia,'Times New Roman',serif",
+   "--font-body": "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif",
+   "--radius": "12px",
+   "--radius-sm": "8px",
+   "--radius-btn": "999px",
+   "--shadow": "0 2px 0 color-mix(in srgb,var(--border) 70%,transparent)",
+   "--shadow-lg": "0 16px 40px rgba(0,0,0,.10)",
+   "--shadow-btn": "none",
+   "--head-weight": "600",
+   "--head-tracking": "-.01em",
+   "--h1": "3.6rem",
+   "--display": "4.6rem"
+  },
+  "brief": "Use `menu-item` rows with leaders for products and prices, `chip`s for categories, a `timetable` or `table` of opening hours, an `area-list` or visit-us section with the address. Cream and earthy palettes, small-caps labels, stamp-like `badge`s, friendly specific copy (names, days, prices). Avoid: tech product frames, gradients, bento grids.",
+  "css": ".eyebrow{font-family:var(--font-head);font-style:italic;text-transform:none;letter-spacing:0;font-size:1.05rem}.badge{background:transparent;border:1.5px dashed var(--primary)}.card{box-shadow:none}",
+  "compositions": [
+   "content",
+   "poster",
+   "band",
+   "art"
+  ],
+  "fonts": [
+   "fraunces",
+   "young-serif",
+   "instrument-serif"
+  ]
+ },
+ "playful": {
+  "about": "Bright and playful: chunky shapes, thick outlines and bouncy colour, for kids' parties, games, family apps, toy shops and clubs.",
+  "brief": "Cards and buttons carry a thick outline and a solid offset shadow; `chip`s and `badge`s in the accent; numbered `steps` with big numerals; sections can switch background colours boldly. Short, warm, exclamation-free copy. Avoid: hairlines, muted greys, long paragraphs.",
+  "compositions": [
+   "tiles",
+   "band",
+   "centered",
+   "art"
+  ],
+  "fonts": [
+   "baloo-2",
+   "unbounded",
+   "nunito"
+  ],
+  "vars": {
+   "--font-head": "ui-rounded,'SF Pro Rounded',system-ui,sans-serif",
+   "--font-body": "ui-rounded,'SF Pro Rounded','Nunito',system-ui,sans-serif",
+   "--radius": "20px",
+   "--radius-sm": "14px",
+   "--radius-btn": "999px",
+   "--shadow": "4px 4px 0 var(--text)",
+   "--shadow-lg": "6px 6px 0 var(--text)",
+   "--shadow-btn": "3px 3px 0 var(--text)",
+   "--card-border": "2px",
+   "--btn-border": "2px",
+   "--head-weight": "800"
+  },
+  "css": ".card,.btn{border-color:var(--text)}.btn-secondary{background:var(--accent);color:var(--on-accent)}.icon-badge{border:2px solid var(--text);border-radius:50%}.chip{border:2px solid var(--text)}"
+ },
+ "luxe": {
+  "about": "Luxurious and still: high-contrast serif headings, generous space and fine lines, for salons, fine dining, jewellery, hotels and bespoke services.",
+  "brief": "Wide letter-spaced small labels, hairline `rule`s, `menu-item` price lists, a single `quote`, and an appointment form with few fields. Dark palettes or cream with one deep colour; the primary colour as a fine accent only. Avoid: icon badges, bright colours, chunky buttons, more than one call to action per screen.",
+  "compositions": [
+   "poster",
+   "type",
+   "art",
+   "content"
+  ],
+  "fonts": [
+   "gloock",
+   "bodoni-moda",
+   "cormorant-garamond"
+  ],
+  "vars": {
+   "--font-head": "Didot,'Bodoni 72',Georgia,serif",
+   "--font-body": "ui-sans-serif,system-ui,sans-serif",
+   "--radius": "2px",
+   "--radius-sm": "2px",
+   "--radius-btn": "0px",
+   "--shadow": "none",
+   "--shadow-lg": "0 20px 60px rgba(0,0,0,.12)",
+   "--shadow-btn": "none",
+   "--head-weight": "400",
+   "--head-tracking": "0",
+   "--display-tracking": "-.01em",
+   "--section": "7rem"
+  },
+  "css": ".eyebrow{letter-spacing:.32em;color:var(--muted);font-weight:500}.btn{text-transform:uppercase;letter-spacing:.18em;font-size:.8rem}.card{border-color:var(--border);box-shadow:none}"
+ },
+ "organic": {
+  "about": "Natural and calm: soft organic shapes and earthy colour, for wellness, gardening, farms, florists, therapists and eco products.",
+  "brief": "Blob-shaped panels (`media-blob`), leafy greens, sand and clay tones, `check-list`s, a `story` section about the person, an `area-list` for where they work, gentle `faq`. Copy speaks plainly and kindly. Avoid: hard edges, neon, dense grids, dark sections.",
+  "compositions": [
+   "content",
+   "art",
+   "centered",
+   "type"
+  ],
+  "fonts": [
+   "fraunces",
+   "young-serif",
+   "nunito"
+  ],
+  "vars": {
+   "--font-head": "Georgia,serif",
+   "--font-body": "ui-sans-serif,system-ui,sans-serif",
+   "--radius": "28px",
+   "--radius-sm": "18px",
+   "--radius-btn": "999px",
+   "--shadow": "0 12px 34px rgba(0,0,0,.06)",
+   "--shadow-lg": "0 22px 50px rgba(0,0,0,.10)",
+   "--shadow-btn": "none",
+   "--card-border": "0px",
+   "--head-weight": "600"
+  },
+  "css": ".card{background:var(--soft)}.section-soft .card{background:var(--surface)}"
+ },
+ "retro": {
+  "about": "Retro print: thick borders, offset shadows and poster type, for record shops, barbers, diners, vintage stores and gigs.",
+  "brief": "Everything has a solid 2–3px outline and a hard offset shadow; `badge`s look like stickers; prices in big type; a `timetable` for gigs or opening hours; colour-blocked `section-primary` bands. Copy with personality. Avoid: gradients, glass, soft shadows, hairlines.",
+  "compositions": [
+   "band",
+   "poster",
+   "tiles",
+   "content"
+  ],
+  "fonts": [
+   "archivo-black",
+   "unbounded",
+   "anton"
+  ],
+  "vars": {
+   "--font-head": "'Arial Black',system-ui,sans-serif",
+   "--font-body": "ui-sans-serif,system-ui,sans-serif",
+   "--radius": "6px",
+   "--radius-sm": "4px",
+   "--radius-btn": "6px",
+   "--shadow": "5px 5px 0 var(--text)",
+   "--shadow-lg": "8px 8px 0 var(--text)",
+   "--shadow-btn": "4px 4px 0 var(--text)",
+   "--card-border": "3px",
+   "--btn-border": "3px",
+   "--head-weight": "900",
+   "--head-tracking": "-.02em"
+  },
+  "css": ".card,.btn,.badge{border-color:var(--text)}.badge{border:2px solid var(--text);background:var(--accent);color:var(--on-accent);transform:rotate(-2deg)}.eyebrow{background:var(--text);color:var(--bg);padding:.2rem .55rem}"
+ },
+ "sport": {
+  "about": "Athletic and fast: tall condensed capitals, slanted energy and strong colour, for gyms, coaches, sports clubs, races and outdoor adventures.",
+  "brief": "Headlines in uppercase condensed type; a `timetable` of sessions; big `stat`s (distances, times, sessions a week); `section-dark` and `section-primary` bands; a sign-up form with few fields. Copy is short and direct. Avoid: serif type, pastel palettes, rounded pill shapes, art panels.",
+  "compositions": [
+   "band",
+   "type",
+   "tiles",
+   "content"
+  ],
+  "fonts": [
+   "anton",
+   "bebas-neue",
+   "archivo-black"
+  ],
+  "vars": {
+   "--font-head": "Impact,'Arial Narrow',sans-serif",
+   "--font-body": "ui-sans-serif,system-ui,sans-serif",
+   "--radius": "4px",
+   "--radius-sm": "3px",
+   "--radius-btn": "3px",
+   "--shadow": "none",
+   "--shadow-lg": "0 18px 44px rgba(0,0,0,.18)",
+   "--shadow-btn": "none",
+   "--head-weight": "400",
+   "--head-tracking": ".01em",
+   "--display-tracking": ".005em"
+  },
+  "css": "h1,h2,.display,.stat{text-transform:uppercase}.display{font-style:italic}.btn{text-transform:uppercase;letter-spacing:.06em}.eyebrow{font-style:italic}"
+ },
+ "night": {
+  "about": "Night-time and electric: dark backgrounds, glowing accents and wide type, for bars, DJs, clubs, gaming, events and late-night venues.",
+  "brief": "Always a \"-dark\" palette; `glow` behind the first screen; `timetable` of nights or line-ups; `glass` tiles; prices and dates in the accent. Short, atmospheric copy. Avoid: light sections, serif type, soft pastel cards.",
+  "compositions": [
+   "band",
+   "centered",
+   "tiles",
+   "product"
+  ],
+  "fonts": [
+   "unbounded",
+   "syne",
+   "space-grotesk"
+  ],
+  "vars": {
+   "--font-head": "ui-sans-serif,system-ui,sans-serif",
+   "--font-body": "ui-sans-serif,system-ui,sans-serif",
+   "--radius": "14px",
+   "--radius-sm": "10px",
+   "--radius-btn": "10px",
+   "--shadow": "0 0 0 1px color-mix(in srgb,var(--primary) 30%,transparent)",
+   "--shadow-lg": "0 0 40px color-mix(in srgb,var(--primary) 30%,transparent)",
+   "--shadow-btn": "0 0 24px color-mix(in srgb,var(--primary) 45%,transparent)",
+   "--head-weight": "700",
+   "--head-tracking": "-.02em"
+  },
+  "css": ".text-accent{text-shadow:0 0 18px color-mix(in srgb,var(--primary) 55%,transparent)}.card{background:color-mix(in srgb,var(--surface) 80%,transparent)}"
+ },
+ "academic": {
+  "about": "Scholarly and organised: serif headings, clear structure and quiet colour, for tutors, schools, courses, research groups and libraries.",
+  "brief": "A clear `timetable` or course list, `steps` for how it works, `faq`, a `story` about the teacher, small `badge`s for levels, tables where things compare. Navy, forest, burgundy or ink palettes with cream. Copy is precise and reassuring. Avoid: neon, playful shapes, heavy shadows.",
+  "compositions": [
+   "content",
+   "type",
+   "poster",
+   "centered"
+  ],
+  "fonts": [
+   "young-serif",
+   "cormorant-garamond",
+   "instrument-serif"
+  ],
+  "vars": {
+   "--font-head": "'Iowan Old Style','Palatino Linotype',Georgia,serif",
+   "--font-body": "ui-sans-serif,system-ui,sans-serif",
+   "--radius": "6px",
+   "--radius-sm": "4px",
+   "--radius-btn": "4px",
+   "--shadow": "none",
+   "--shadow-lg": "0 12px 32px rgba(0,0,0,.08)",
+   "--shadow-btn": "none",
+   "--head-weight": "600"
+  },
+  "css": ".eyebrow{font-variant:small-caps;text-transform:none;letter-spacing:.06em;font-size:.95rem}h2{border-bottom:1px solid var(--border);padding-bottom:.4rem}.card{box-shadow:none}"
+ }
 }

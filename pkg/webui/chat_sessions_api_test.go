@@ -495,7 +495,7 @@ func TestResolveChatID(t *testing.T) {
 func TestDeleteAllReturnsRootFromDeletedWorktree(t *testing.T) {
 	p := newProjectTestServer(t)
 	const client = "root-client"
-	if _, err := p.ws.setClientWorkspaceRoot(client, p.project); err != nil {
+	if _, err := p.ws.setClientProjectFolder(client, p.project); err != nil {
 		t.Fatal(err)
 	}
 	p.switchChat(t, client, p.addWorktreeChat(t, client))
@@ -509,6 +509,6 @@ func TestDeleteAllReturnsRootFromDeletedWorktree(t *testing.T) {
 	}
 
 	if root, _ := p.clientRoots(client); root != p.project {
-		t.Errorf("workspace root = %q, want the selected project %q", root, p.project)
+		t.Errorf("project folder = %q, want the selected project %q", root, p.project)
 	}
 }

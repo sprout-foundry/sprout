@@ -28,7 +28,7 @@ func runGoRename(input ToolInput) (ToolResult, error) {
 	posArg := fmt.Sprintf("%s:%d:%d", input.FilePath, pos.Line, pos.Column)
 
 	cmd := exec.Command(goplsPath, "references", "-d", posArg)
-	cmd.Dir = input.WorkspaceRoot
+	cmd.Dir = input.ProjectFolder
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

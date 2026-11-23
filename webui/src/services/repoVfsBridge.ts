@@ -77,7 +77,7 @@ export async function syncRepoToWasmVfs(
  * Copy a single file from the WASM VFS back to the cloned repo (for agent edits).
  */
 export async function syncWasmFileToRepo(repoDir: string, wasmPath: string, content: string): Promise<void> {
-  // Strip the WASM workspace prefix to get the repo-relative path
+  // Strip the WASM project folder prefix to get the repo-relative path
   // Convention: files are at /workspace/repo/<path> in WASM VFS
   const match = wasmPath.match(/^\/workspace\/repo\/(.+)$/);
   const relPath = match ? match[1] : wasmPath.replace(/^\//, '');

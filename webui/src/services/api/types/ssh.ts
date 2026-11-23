@@ -24,7 +24,7 @@ export interface SSHHostEntry {
 export interface SSHSessionEntry {
   key: string;
   host_alias: string;
-  remote_workspace_path: string;
+  remote_project_folder_path: string;
   local_port?: number;
   remote_port: number;
   remote_pid?: number;
@@ -68,13 +68,13 @@ export interface SSHLaunchStatus {
   local_port?: number;
 }
 
-export class SSHWorkspaceOpenError extends Error {
+export class SSHProjectFolderOpenError extends Error {
   step?: string;
   details?: string;
   logPath?: string;
 
   constructor(payload: SSHOpenErrorPayload) {
-    const baseMessage = payload.error || 'Failed to open SSH workspace';
+    const baseMessage = payload.error || 'Failed to open the SSH project folder';
     super(payload.step ? `${baseMessage} (${payload.step})` : baseMessage);
     this.name = 'SSHWorkspaceOpenError';
     this.step = payload.step;

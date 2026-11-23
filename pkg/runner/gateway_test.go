@@ -113,9 +113,9 @@ func TestWriteGatewayProviderFile(t *testing.T) {
 	}
 }
 
-func TestWorkspaceEnvWiresTheGateway(t *testing.T) {
-	env := workspaceEnv(WorkspaceTask{
-		WorkspaceID:    "ws-gw",
+func TestDevSpaceEnvWiresTheGateway(t *testing.T) {
+	env := devSpaceEnv(DevSpaceTask{
+		DevSpaceID:     "ws-gw",
 		TxnSecret:      "s3cret",
 		LLMProvider:    "gateway",
 		LLMKey:         "gw-key-1",
@@ -123,7 +123,7 @@ func TestWorkspaceEnvWiresTheGateway(t *testing.T) {
 		PlatformAPIURL: "https://gw.example.com",
 	})
 	if env[GatewayKeyEnvVar] != "gw-key-1" {
-		t.Errorf("%s = %q, want the workspace-scoped gateway key", GatewayKeyEnvVar, env[GatewayKeyEnvVar])
+		t.Errorf("%s = %q, want the project-folder-scoped gateway key", GatewayKeyEnvVar, env[GatewayKeyEnvVar])
 	}
 	if env["SPROUT_PROVIDER"] != "gateway" {
 		t.Errorf("SPROUT_PROVIDER = %q, want gateway", env["SPROUT_PROVIDER"])
@@ -139,21 +139,21 @@ func TestWorkspaceEnvWiresTheGateway(t *testing.T) {
 	}
 
 	// No model in the task: no SPROUT_MODEL, the picker decides.
-	env = workspaceEnv(WorkspaceTask{WorkspaceID: "ws-gw", LLMProvider: "gateway", LLMKey: "k"})
+	env = devSpaceEnv(DevSpaceTask{DevSpaceID: "ws-gw", LLMProvider: "gateway", LLMKey: "k"})
 	if _, ok := env["SPROUT_MODEL"]; ok {
 		t.Errorf("SPROUT_MODEL must be unset when the task pins no model; got %q", env["SPROUT_MODEL"])
 	}
 
 	// A public provider keeps today's mapping.
-	env = workspaceEnv(WorkspaceTask{WorkspaceID: "ws-o", LLMProvider: "openai", LLMKey: "sk-o"})
+	env = devSpaceEnv(DevSpaceTask{DevSpaceID: "ws-o", LLMProvider: "openai", LLMKey: "sk-o"})
 	if env["OPENAI_API_KEY"] != "sk-o" || env["SPROUT_PROVIDER"] != "" {
 		t.Errorf("public provider mapping changed: OPENAI_API_KEY=%q SPROUT_PROVIDER=%q", env["OPENAI_API_KEY"], env["SPROUT_PROVIDER"])
 	}
 }
 
 func TestReservedEnvStillBlocksGatewaySpoofing(t *testing.T) {
-	env := workspaceEnv(WorkspaceTask{
-		WorkspaceID: "ws-gw",
+	env := devSpaceEnv(DevSpaceTask{
+		DevSpaceID:  "ws-gw",
 		LLMProvider: "gateway",
 		LLMKey:      "real",
 		UserEnv: map[string]string{
@@ -171,7 +171,7 @@ func TestReservedEnvStillBlocksGatewaySpoofing(t *testing.T) {
 }
 
 func TestGatewayProviderFileNotInGlobalConfig(t *testing.T) {
-	// The provider file must live in the dir it was given (the workspace's
+	// The provider file must live in the dir it was given (the dev space's
 	// scoped SPROUT_CONFIG_DIR), never derived from the runner's own config.
 	ws := t.TempDir()
 	other := t.TempDir()
@@ -182,7 +182,7 @@ func TestGatewayProviderFileNotInGlobalConfig(t *testing.T) {
 		t.Errorf("an unrelated config dir must stay untouched (stat err: %v)", err)
 	}
 	if !strings.HasPrefix(filepath.Join(ws, "providers"), ws) {
-		t.Error("provider path must stay inside the workspace config dir")
+		t.Error("provider path must stay inside the project folder config dir")
 	}
 }
 
@@ -199,11 +199,11 @@ func TestRunnerRefusesUnservableGatewayTasks(t *testing.T) {
 		Log:      logDiscard(),
 		// start() is normally reached through Run(), which initializes
 		// these; this test drives start() directly.
-		running: map[string]*Workspace{},
+		running: map[string]*DevSpace{},
 		busy:    map[string]*sync.Mutex{},
 	}
-	start := func(id string, mutate func(*WorkspaceTask)) WorkspaceResult {
-		task := WorkspaceTask{WorkspaceID: id, Action: "start", TxnSecret: "s", LLMProvider: "gateway", LLMKey: "k", PlatformAPIURL: "https://gw.example.com"}
+	start := func(id string, mutate func(*DevSpaceTask)) DevSpaceResult {
+		task := DevSpaceTask{DevSpaceID: id, Action: "start", TxnSecret: "s", LLMProvider: "gateway", LLMKey: "k", PlatformAPIURL: "https://gw.example.com"}
 		mutate(&task)
 		plat.mu.Lock()
 		before := len(plat.results)
@@ -218,7 +218,7 @@ func TestRunnerRefusesUnservableGatewayTasks(t *testing.T) {
 	}
 
 	// Container mode cannot see the host-side provider file: refuse.
-	if res := start("gw-container", func(tk *WorkspaceTask) { tk.WorkspaceID = "gw-container"; r.State.Mode = ModeContainer }); res.Status != "failed" {
+	if res := start("gw-container", func(tk *DevSpaceTask) { tk.DevSpaceID = "gw-container"; r.State.Mode = ModeContainer }); res.Status != "failed" {
 		t.Errorf("a container-mode runner must refuse gateway tasks; got %+v", res)
 	}
 	launcher.mu.Lock()
@@ -229,19 +229,19 @@ func TestRunnerRefusesUnservableGatewayTasks(t *testing.T) {
 	r.State.Mode = ModeNative
 
 	// No key: refuse.
-	if res := start("gw-nokey", func(tk *WorkspaceTask) { tk.LLMKey = "" }); res.Status != "failed" {
+	if res := start("gw-nokey", func(tk *DevSpaceTask) { tk.LLMKey = "" }); res.Status != "failed" {
 		t.Errorf("a key-less gateway task must be refused; got %+v", res)
 	}
 
 	// A repo on a gateway task starts: the gateway is where the agent's
 	// models come from, the repo is what it works on (the platform sends the
-	// gateway on ordinary repo workspaces).
-	if res := start("gw-repo", func(tk *WorkspaceTask) { tk.RepoURL = "https://github.com/o/r" }); res.Status != "running" {
+	// gateway on ordinary repo dev spaces).
+	if res := start("gw-repo", func(tk *DevSpaceTask) { tk.RepoURL = "https://github.com/o/r" }); res.Status != "running" {
 		t.Errorf("a gateway task naming a repo must start; got %+v", res)
 	}
 
 	// A well-formed gateway task starts.
-	if res := start("gw-ok", func(*WorkspaceTask) {}); res.Status != "running" {
+	if res := start("gw-ok", func(*DevSpaceTask) {}); res.Status != "running" {
 		t.Errorf("a well-formed gateway task must start; got %+v", res)
 	}
 }

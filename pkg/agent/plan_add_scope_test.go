@@ -81,12 +81,12 @@ func pasWritePlanFile(t *testing.T, root, content string) {
 	}
 }
 
-// pasAgent wires client into a fresh agent whose workspace root is a
+// pasAgent wires client into a fresh agent whose project folder is a
 // project directory (the .sprout/ plan files land under it). It mirrors the
 // agent setup from plan_structured_e2e_test.go: the full context profile
 // keeps the plan tools on the roster; SkipPrompt keeps the turn from ever
 // blocking on an interactive prompt (stdin is closed in tests).
-func pasAgent(t *testing.T, client api.ClientInterface, workspaceRoot string) *Agent {
+func pasAgent(t *testing.T, client api.ClientInterface, projectFolder string) *Agent {
 	t.Helper()
 
 	mgr, cleanup := configuration.NewTestManager(t)
@@ -105,7 +105,7 @@ func pasAgent(t *testing.T, client api.ClientInterface, workspaceRoot string) *A
 	}
 	t.Cleanup(ag.Shutdown)
 	ag.SetMaxIterations(10)
-	ag.SetWorkspaceRoot(workspaceRoot)
+	ag.SetProjectFolder(projectFolder)
 	return ag
 }
 

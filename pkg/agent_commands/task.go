@@ -43,7 +43,7 @@ func (c *TaskCommand) Usage() string {
 		"/task merge <id>      Merge a finished task's branch into the current",
 		"                      branch (--no-ff) and remove its worktree.",
 		"",
-		"The branch name follows the workspace's AGENTS.md conventions, chosen",
+		"The branch name follows the project folder's AGENTS.md conventions, chosen",
 		"by one call to the default model. Tasks run non-interactively, so a",
 		"task that needs a decision fails instead of waiting for an answer.",
 		"",

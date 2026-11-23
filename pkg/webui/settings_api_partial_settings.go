@@ -301,7 +301,7 @@ func applySubagentSettings(cfg *configuration.Config, patch map[string]interface
 		}
 	}
 	// SubagentTypes — personas are catalog-fixed. Older clients (and
-	// round-trip GET→PUT flows like "copy global to workspace") may still
+	// round-trip GET→PUT flows like "copy global to project folder") may still
 	// include this field; we accept-and-ignore so existing payloads don't
 	// 400. Use 'disabled_personas' to hide a persona or 'default_subagent_persona'
 	// to redirect default spawns.

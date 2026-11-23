@@ -220,7 +220,7 @@ func TestSuggestServersFileNotDirectory(t *testing.T) {
 	result := SuggestServers(filePath)
 
 	if result != nil {
-		t.Errorf("expected nil when workspaceRoot is a file, got %d suggestions", len(result))
+		t.Errorf("expected nil when projectFolder is a file, got %d suggestions", len(result))
 	}
 }
 

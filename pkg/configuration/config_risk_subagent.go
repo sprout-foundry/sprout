@@ -45,7 +45,7 @@ const (
 	RiskProfileReadonly RiskProfile = "readonly"
 
 	// RiskProfileCautious — most operations prompt the user. Suitable
-	// for sensitive workspaces or unfamiliar agents. Low-risk reads
+	// for sensitive project folders or unfamiliar agents. Low-risk reads
 	// auto-approve; everything else gets routed to a prompt.
 	RiskProfileCautious RiskProfile = "cautious"
 
@@ -56,7 +56,7 @@ const (
 
 	// RiskProfilePermissive — high trust. Almost everything passes
 	// without prompting; only truly destructive patterns route to a
-	// prompt. Use when the agent is well-trusted and the workspace
+	// prompt. Use when the agent is well-trusted and the project folder
 	// is recoverable (clean checkout, throwaway dir).
 	RiskProfilePermissive RiskProfile = "permissive"
 

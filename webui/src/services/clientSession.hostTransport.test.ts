@@ -29,16 +29,16 @@ function hostWithApiBase(apiBaseURL: string) {
 }
 
 /**
- * The platform host once a project's workspace is running: the platform's own
- * base and socket on the transport, the daemon behind its workspace proxy.
+ * The platform host once a project's project folder is running: the platform's own
+ * base and socket on the transport, the daemon behind its project folder proxy.
  */
-function platformDaemonHost(daemonBase = '/workspace/ws-1/proxy') {
+function platformDaemonHost(daemonBase = '/dev-space/ws-1/proxy') {
   return {
     transport: {
       apiBaseURL: 'https://platform.test',
       wsURL: 'wss://platform.test/ws',
       authMode: 'bearer',
-      agent: { kind: 'daemon', apiBaseURL: daemonBase, wsURL: 'wss://platform.test/workspace/ws-1/proxy/ws' },
+      agent: { kind: 'daemon', apiBaseURL: daemonBase, wsURL: 'wss://platform.test/dev-space/ws-1/proxy/ws' },
     },
   };
 }
@@ -99,10 +99,10 @@ describe('clientFetch host transport', () => {
   describe('daemon agent backend', () => {
     it("prefixes /api/query with the daemon backend's base, not the host's", async () => {
       // The platform's transport base is the platform, which does not serve the
-      // workspace's query route; the daemon's proxy base is where it lives.
+      // project folder's query route; the daemon's proxy base is where it lives.
       activeHostRef.value = platformDaemonHost();
       await clientFetch('/api/query', { method: 'POST' });
-      expect(fetchMock).toHaveBeenCalledWith('/workspace/ws-1/proxy/api/query', expect.anything());
+      expect(fetchMock).toHaveBeenCalledWith('/dev-space/ws-1/proxy/api/query', expect.anything());
     });
 
     it('leaves an absolute host-store URL alone (the host owns its own store)', async () => {
@@ -138,10 +138,10 @@ describe('clientFetch with a daemon agent backend', () => {
 
   it("prefixes /api/query with the daemon backend's base, not the host's", async () => {
     // The platform's transport base is the platform, which does not serve the
-    // workspace's query route; the daemon's proxy base is where it lives.
+    // project folder's query route; the daemon's proxy base is where it lives.
     activeHostRef.value = platformDaemonHost();
     await clientFetch('/api/query', { method: 'POST' });
-    expect(fetchMock).toHaveBeenCalledWith('/workspace/ws-1/proxy/api/query', expect.anything());
+    expect(fetchMock).toHaveBeenCalledWith('/dev-space/ws-1/proxy/api/query', expect.anything());
   });
 
   it('leaves an absolute host-store URL alone (the host owns its own store)', async () => {

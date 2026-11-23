@@ -94,8 +94,8 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSet(w http.ResponseWriter,
 		ws.mutex.RLock()
 		daemonRoot := ws.daemonRoot
 		ws.mutex.RUnlock()
-		if !isWithinWorkspace(absPath, daemonRoot) && absPath != daemonRoot {
-			writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within workspace boundary")
+		if !isWithinProjectFolder(absPath, daemonRoot) && absPath != daemonRoot {
+			writeJSONErr(w, http.StatusBadRequest, "path_outside_project_folder", "Worktree path must stay within project folder boundary")
 			return
 		}
 
@@ -123,16 +123,16 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSet(w http.ResponseWriter,
 	}
 
 	// When clearing a worktree from the active chat, if the client's
-	// workspace root was pointing at that worktree, return it to the
-	// project so subsequent file operations use the main workspace.
-	didResetWorkspace := false
+	// project folder was pointing at that worktree, return it to the
+	// project so subsequent file operations use the main project folder.
+	didResetProjectFolder := false
 	resetRoot := ""
-	if req.WorktreePath == "" && oldWorktreePath != "" && chatID == ctx.DefaultChatID && ctx.WorkspaceRoot == oldWorktreePath {
+	if req.WorktreePath == "" && oldWorktreePath != "" && chatID == ctx.DefaultChatID && ctx.ProjectFolder == oldWorktreePath {
 		resetRoot = ctx.projectRootOr(ws.daemonRoot)
 		if _, changed := ws.setClientActiveRootLocked(clientID, ctx, resetRoot); changed {
 			ctx.Agent = nil
 			ctx.Terminal = nil
-			didResetWorkspace = true
+			didResetProjectFolder = true
 		}
 	}
 
@@ -143,8 +143,8 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSet(w http.ResponseWriter,
 
 	ws.log().Info("set chat session worktree", slog.String("worktree_path", req.WorktreePath), slog.String("chat_id", chatID))
 
-	if didResetWorkspace {
-		ws.publishWorkspaceChanged(clientID, oldWorktreePath, resetRoot, "worktree_clear")
+	if didResetProjectFolder {
+		ws.publishProjectFolderChanged(clientID, oldWorktreePath, resetRoot, "worktree_clear")
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -156,7 +156,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSet(w http.ResponseWriter,
 }
 
 // handleAPIChatSessionWorktreeSwitch handles POST /api/chat-session/{chatID}/worktree/switch
-// Switches the active workspace to the specified worktree path for the current client.
+// Switches the active project folder to the specified worktree path for the current client.
 func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodPost) {
 		return
@@ -197,8 +197,8 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 	ws.mutex.RLock()
 	daemonRoot := ws.daemonRoot
 	ws.mutex.RUnlock()
-	if !isWithinWorkspace(absPath, daemonRoot) && absPath != daemonRoot {
-		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within workspace boundary")
+	if !isWithinProjectFolder(absPath, daemonRoot) && absPath != daemonRoot {
+		writeJSONErr(w, http.StatusBadRequest, "path_outside_project_folder", "Worktree path must stay within project folder boundary")
 		return
 	}
 
@@ -210,7 +210,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 
 	clientID := ws.resolveClientID(r)
 
-	// Set the worktree for the chat session and switch workspace root atomically.
+	// Set the worktree for the chat session and switch project folder atomically.
 	ws.mutex.Lock()
 	ctx := ws.getOrCreateClientContextLocked(clientID)
 	ctx.ensureDefaultChatSession()
@@ -221,10 +221,10 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 		return
 	}
 
-	// Capture the previous workspace root before switching.
-	previousWorkspaceRoot := ctx.WorkspaceRoot
+	// Capture the previous project folder before switching.
+	previousProjectFolder := ctx.ProjectFolder
 
-	// Switch workspace root directly — do NOT call setClientWorkspaceRoot
+	// Switch project folder directly — do NOT call setClientProjectFolder
 	// because it nukes all chat sessions (including the one we just updated).
 	ws.setClientActiveRootLocked(clientID, ctx, absPath)
 	// Clear transient state (agent, terminals) like handleAPIGitWorktreeCheckout does.
@@ -236,15 +236,15 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 	ws.mutex.Unlock()
 
 	if cs == nil {
-		writeJSONErr(w, http.StatusInternalServerError, "chat_session_not_found", "Chat session not found after workspace switch")
+		writeJSONErr(w, http.StatusInternalServerError, "chat_session_not_found", "Chat session not found after project folder switch")
 		return
 	}
 
-	// Publish event so frontend can update workspace state.
-	ws.publishClientEvent(clientID, events.EventTypeWorkspaceChanged, map[string]interface{}{
+	// Publish event so frontend can update project folder state.
+	ws.publishClientEvent(clientID, events.EventTypeProjectFolderChanged, map[string]interface{}{
 		"daemon_root":             ws.GetDaemonRoot(),
-		"workspace_root":          absPath,
-		"previous_workspace_root": previousWorkspaceRoot,
+		"project_folder":          absPath,
+		"previous_project_folder": previousProjectFolder,
 		"source":                  "worktree_switch",
 	})
 
@@ -261,7 +261,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 // validateGitWorktree checks if a path is a valid git repository or worktree.
 func (ws *ReactWebServer) validateGitWorktree(path string) error {
 	// Check if .git exists (either as file or directory)
-	checkCmd := ws.gitCommandForWorkspace(path, "rev-parse", "--git-dir")
+	checkCmd := ws.gitCommandForProjectFolder(path, "rev-parse", "--git-dir")
 	if err := checkCmd.Run(); err != nil {
 		return fmt.Errorf("path is not a git repository or worktree")
 	}
@@ -306,7 +306,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktree(w http.ResponseWriter, r 
 
 // handleAPIChatSessionCreateInWorktree handles POST /api/chat-sessions/create-in-worktree
 // Creates a git worktree, creates a new chat session, associates the worktree with the chat,
-// and optionally switches the workspace to the worktree.
+// and optionally switches the project folder to the worktree.
 func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodPost) {
 		return
@@ -314,10 +314,10 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
 	var req struct {
-		Branch              string `json:"branch"`
-		BaseRef             string `json:"base_ref,omitempty"`
-		Name                string `json:"name,omitempty"`
-		AutoSwitchWorkspace bool   `json:"auto_switch_workspace,omitempty"`
+		Branch                  string `json:"branch"`
+		BaseRef                 string `json:"base_ref,omitempty"`
+		Name                    string `json:"name,omitempty"`
+		AutoSwitchProjectFolder bool   `json:"auto_switch_project_folder,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -334,10 +334,10 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 	}
 
 	clientID := ws.resolveClientID(r)
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 
 	// Validate branch name using git's own validation
-	validateCmd := ws.gitCommandForWorkspace(workspaceRoot, "check-ref-format", "--branch", req.Branch)
+	validateCmd := ws.gitCommandForProjectFolder(projectFolder, "check-ref-format", "--branch", req.Branch)
 	if output, err := validateCmd.CombinedOutput(); err != nil {
 		writeJSONErr(w, http.StatusBadRequest, "invalid_branch_name", fmt.Sprintf("Invalid branch name: %s", strings.TrimSpace(string(output))))
 		return
@@ -347,7 +347,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 	sanitizedBranch := strings.ReplaceAll(req.Branch, "/", "-")
 	// Only allow alphanumeric, hyphens, underscores, and dots in the path component
 	safeBranch := sanitizePathComponent(sanitizedBranch)
-	worktreePath := filepath.Join(filepath.Dir(workspaceRoot), safeBranch+"-worktree")
+	worktreePath := filepath.Join(filepath.Dir(projectFolder), safeBranch+"-worktree")
 	var err error
 	worktreePath, err = filepathAbsEval(worktreePath)
 	if err != nil {
@@ -359,8 +359,8 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 	ws.mutex.RLock()
 	daemonRoot := ws.daemonRoot
 	ws.mutex.RUnlock()
-	if !isWithinWorkspace(worktreePath, daemonRoot) && worktreePath != daemonRoot {
-		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within workspace boundary")
+	if !isWithinProjectFolder(worktreePath, daemonRoot) && worktreePath != daemonRoot {
+		writeJSONErr(w, http.StatusBadRequest, "path_outside_project_folder", "Worktree path must stay within project folder boundary")
 		return
 	}
 
@@ -382,14 +382,14 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 		args = append(args, "-b", req.Branch, worktreePath)
 	}
 
-	cmd := ws.gitCommandForWorkspace(workspaceRoot, args...)
+	cmd := ws.gitCommandForProjectFolder(projectFolder, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Check if the error is due to branch already existing
 		outputStr := strings.TrimSpace(string(output))
 		if strings.Contains(outputStr, "already exists") || strings.Contains(outputStr, "ref already exists") {
 			// Clean up any partial worktree directory that may have been created
-			if removeErr := ws.gitCommandForWorkspace(workspaceRoot, "worktree", "remove", "--force", worktreePath).Run(); removeErr != nil {
+			if removeErr := ws.gitCommandForProjectFolder(projectFolder, "worktree", "remove", "--force", worktreePath).Run(); removeErr != nil {
 				// Also try to remove the directory if git worktree remove failed
 				_ = os.RemoveAll(worktreePath)
 			}
@@ -422,7 +422,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 	if _, ok := ctx.ChatSessions[chatID]; ok {
 		ws.mutex.Unlock()
 		// Clean up the orphan worktree that was created before the conflict
-		if removeErr := ws.gitCommandForWorkspace(workspaceRoot, "worktree", "remove", "--force", worktreePath).Run(); removeErr != nil {
+		if removeErr := ws.gitCommandForProjectFolder(projectFolder, "worktree", "remove", "--force", worktreePath).Run(); removeErr != nil {
 			ws.log().Warn("failed to clean up orphan worktree", slog.String("worktree_path", worktreePath), slog.Any("err", removeErr))
 		}
 		writeJSON(w, http.StatusConflict, map[string]interface{}{
@@ -438,29 +438,29 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 	ctx.markChatCreated(chatID)
 	cs.setWorktreePath(worktreePath)
 
-	// Optionally switch the workspace root to the worktree.
-	// We update WorkspaceRoot directly instead of calling setClientWorkspaceRoot
-	// because setClientWorkspaceRoot resets all chat sessions, which would
+	// Optionally switch the project folder to the worktree.
+	// We update ProjectFolder directly instead of calling setClientProjectFolder
+	// because setClientProjectFolder resets all chat sessions, which would
 	// destroy the session we just created.
-	previousWorkspaceRoot := ctx.WorkspaceRoot
-	if req.AutoSwitchWorkspace {
+	previousProjectFolder := ctx.ProjectFolder
+	if req.AutoSwitchProjectFolder {
 		ws.setClientActiveRootLocked(clientID, ctx, worktreePath)
-		// Clear transient state (agent, terminals) like other workspace-switch handlers.
+		// Clear transient state (agent, terminals) like other project-folder-switch handlers.
 		ctx.Agent = nil
 		ctx.Terminal = nil
 	}
 
 	// Capture response data while still holding the lock
 	chatSession := cs.chatSessionWithMessages()
-	newWorkspaceRoot := ctx.WorkspaceRoot
+	newProjectFolder := ctx.ProjectFolder
 	ws.mutex.Unlock()
 
-	// Notify frontend of workspace change if auto-switched.
-	if req.AutoSwitchWorkspace {
-		ws.publishClientEvent(clientID, events.EventTypeWorkspaceChanged, map[string]interface{}{
+	// Notify frontend of project folder change if auto-switched.
+	if req.AutoSwitchProjectFolder {
+		ws.publishClientEvent(clientID, events.EventTypeProjectFolderChanged, map[string]interface{}{
 			"daemon_root":             ws.GetDaemonRoot(),
-			"workspace_root":          worktreePath,
-			"previous_workspace_root": previousWorkspaceRoot,
+			"project_folder":          worktreePath,
+			"previous_project_folder": previousProjectFolder,
 			"source":                  "worktree_switch",
 		})
 	}
@@ -476,7 +476,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 		"chat_session":   chatSession,
 		"worktree_path":  worktreePath,
 		"branch":         req.Branch,
-		"workspace_root": newWorkspaceRoot,
+		"project_folder": newProjectFolder,
 	})
 }
 

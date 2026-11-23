@@ -5,7 +5,7 @@ package webui
 // instances_api_ssh.go — the SSH host/session launch endpoints, split out
 // of instances_api.go. The handlers (hosts, open, launch-status, browse,
 // sessions, session-delete) and the .ssh/config parser (parseSSHConfigFile)
-// form the SSH-workspace-launch API surface; the shared SSH DTOs stay in
+// form the SSH-project-folder-launch API surface; the shared SSH DTOs stay in
 // instances_api.go.
 import (
 	"bufio"
@@ -68,14 +68,14 @@ func (ws *ReactWebServer) handleAPISSHOpen(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Normalise the path here (mirrors launchSSHWorkspace) so we can return
+	// Normalise the path here (mirrors launchSSHProjectFolder) so we can return
 	// the canonical session_key to the caller before launch starts.
-	remoteWorkspacePath := strings.TrimSpace(req.RemoteWorkspacePath)
-	if remoteWorkspacePath == "" {
-		remoteWorkspacePath = "$HOME"
+	remoteProjectFolderPath := strings.TrimSpace(req.RemoteProjectFolderPath)
+	if remoteProjectFolderPath == "" {
+		remoteProjectFolderPath = "$HOME"
 	}
-	remoteWorkspacePath = normalizeRemoteWorkspacePath(remoteWorkspacePath)
-	sessionKey := hostAlias + "::" + remoteWorkspacePath
+	remoteProjectFolderPath = normalizeRemoteProjectFolderPath(remoteProjectFolderPath)
+	sessionKey := hostAlias + "::" + remoteProjectFolderPath
 
 	// The remote daemon works with the provider this client is using here.
 	provider, model := ws.activeProviderModel(ws.resolveClientID(r))
@@ -88,11 +88,11 @@ func (ws *ReactWebServer) handleAPISSHOpen(w http.ResponseWriter, r *http.Reques
 	// Fire-and-forget: the launch runs in the background.  The caller polls
 	// /api/instances/ssh-launch-status for progress and the final proxy URL.
 	utils.SafeGo(ws.log(), "fire-and-forget SSH launch", func() {
-		_, _ = ws.launchSSHWorkspace(req)
+		_, _ = ws.launchSSHProjectFolder(req)
 	})
 
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{
-		"message":     "ssh workspace launch started",
+		"message":     "ssh project folder launch started",
 		"session_key": sessionKey,
 	})
 }
@@ -109,13 +109,13 @@ func (ws *ReactWebServer) handleAPISSHLaunchStatus(w http.ResponseWriter, r *htt
 		return
 	}
 
-	remoteWorkspacePath := strings.TrimSpace(r.URL.Query().Get("remote_workspace_path"))
-	if remoteWorkspacePath == "" {
-		remoteWorkspacePath = "$HOME"
+	remoteProjectFolderPath := strings.TrimSpace(r.URL.Query().Get("remote_project_folder_path"))
+	if remoteProjectFolderPath == "" {
+		remoteProjectFolderPath = "$HOME"
 	}
-	remoteWorkspacePath = normalizeRemoteWorkspacePath(remoteWorkspacePath)
+	remoteProjectFolderPath = normalizeRemoteProjectFolderPath(remoteProjectFolderPath)
 
-	status := ws.getSSHLaunchStatus(hostAlias + "::" + remoteWorkspacePath)
+	status := ws.getSSHLaunchStatus(hostAlias + "::" + remoteProjectFolderPath)
 	if status == nil {
 		writeSSHJSONError(w, http.StatusNotFound, sshLaunchErrorDTO{Error: "No SSH launch status available"})
 		return

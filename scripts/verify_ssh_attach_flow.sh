@@ -231,18 +231,18 @@ echo
 
 echo "==> Testing backend API commands"
 
-# /api/workspace — should return daemon_root and workspace_root
-workspace_json="$(curl -fsS "http://127.0.0.1:${LOCAL_PORT}/api/workspace")"
+# /api/project-folder — should return daemon_root and project_folder
+workspace_json="$(curl -fsS "http://127.0.0.1:${LOCAL_PORT}/api/project-folder")"
 if [[ -z "$workspace_json" ]]; then
-  echo "error: /api/workspace returned empty response" >&2
+  echo "error: /api/project-folder returned empty response" >&2
   exit 1
 fi
-workspace_root="$(echo "$workspace_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("workspace_root",""))')"
-if [[ -z "$workspace_root" ]]; then
-  echo "error: /api/workspace did not return workspace_root; got: $workspace_json" >&2
+project_folder="$(echo "$workspace_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("project_folder",""))')"
+if [[ -z "$project_folder" ]]; then
+  echo "error: /api/project-folder did not return project_folder; got: $workspace_json" >&2
   exit 1
 fi
-echo "    workspace_root: $workspace_root"
+echo "    project_folder: $project_folder"
 
 # /api/stats — should return basic stats without error
 stats_json="$(curl -fsS "http://127.0.0.1:${LOCAL_PORT}/api/stats")"
@@ -323,14 +323,14 @@ if [[ "$proxy_health_status" != "ok" ]]; then
 fi
 echo "    proxy /health: status=ok"
 
-# 5. /api/workspace proxied — must return workspace_root.
-proxy_ws_json="$(curl -fsS "${proxy_base}/api/workspace")"
-proxy_ws_root="$(echo "$proxy_ws_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("workspace_root",""))' 2>/dev/null || true)"
+# 5. /api/project-folder proxied — must return project_folder.
+proxy_ws_json="$(curl -fsS "${proxy_base}/api/project-folder")"
+proxy_ws_root="$(echo "$proxy_ws_json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("project_folder",""))' 2>/dev/null || true)"
 if [[ -z "$proxy_ws_root" ]]; then
-  echo "error: ${proxy_base}/api/workspace did not return workspace_root; got: $proxy_ws_json" >&2
+  echo "error: ${proxy_base}/api/project-folder did not return project_folder; got: $proxy_ws_json" >&2
   exit 1
 fi
-echo "    proxy /api/workspace: workspace_root=${proxy_ws_root}"
+echo "    proxy /api/workspace: project_folder=${proxy_ws_root}"
 
 # 6. /api/stats proxied — basic sanity.
 proxy_stats="$(curl -o /dev/null -fsS -w "%{http_code}" "${proxy_base}/api/stats")"

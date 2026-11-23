@@ -49,7 +49,7 @@ func (a *Agent) refuseStarterManifestWrite(path string) error {
 // pathResolvesToStarterManifest reports whether a model-supplied path
 // resolves to the project's starter manifest. The model's path may be
 // relative, and the write path resolves relative paths against the
-// workspace root (or the process cwd when the context carries no workspace
+// project folder (or the process cwd when the context carries no project folder
 // root). We compare the cleaned absolute path against the manifest path
 // under every base the write could use, so the guard never misses a manifest
 // write because of a path-resolution mismatch (an absolute path is compared
@@ -62,7 +62,7 @@ func pathResolvesToStarterManifest(a *Agent, path string) bool {
 
 	// The bases a relative model path could be resolved against.
 	bases := map[string]struct{}{}
-	if root := a.GetWorkspaceRoot(); root != "" {
+	if root := a.GetProjectFolder(); root != "" {
 		bases[root] = struct{}{}
 	}
 	if cwd, err := os.Getwd(); err == nil && cwd != "" {

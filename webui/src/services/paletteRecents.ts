@@ -2,14 +2,14 @@
  * Workspace-scoped recents for the command palette's quick-open.
  *
  * The v1 storage keyed one browser-global list by absolute paths, so files
- * from the previous folder stayed in the palette after a workspace switch —
- * and clicking one opened a path in the wrong workspace. v2 keys the list
- * per workspace root and stores workspace-relative paths; a stale entry
- * from another workspace can never surface because it is simply not in
- * this workspace's bucket.
+ * from the previous folder stayed in the palette after a project folder switch —
+ * and clicking one opened a path in the wrong project folder. v2 keys the list
+ * per project folder and stores workspace-relative paths; a stale entry
+ * from another project folder can never surface because it is simply not in
+ * this project folder's bucket.
  *
  * Shape: { version: 2, roots: { [root]: { name, path, type }[] } }
- * Only the current workspace's bucket is read and written; buckets are
+ * Only the current project folder's bucket is read and written; buckets are
  * capped both per-root and globally so the key cannot grow unbounded.
  */
 
@@ -60,48 +60,48 @@ function capRoots(store: StoredShape): StoredShape {
   return next;
 }
 
-/** Read this workspace's recents, most-recent first. */
-export function loadRecentFiles(workspaceRoot: string, storage: Storage = window.localStorage): RecentFileEntry[] {
-  if (!workspaceRoot) return [];
+/** Read this project folder's recents, most-recent first. */
+export function loadRecentFiles(projectFolder: string, storage: Storage = window.localStorage): RecentFileEntry[] {
+  if (!projectFolder) return [];
   const store = readStore(storage);
-  const list = store.roots[workspaceRoot];
+  const list = store.roots[projectFolder];
   if (!Array.isArray(list)) return [];
   return list.slice(0, RECENT_FILES_LIMIT);
 }
 
-/** Record a file open: move it to the front of this workspace's bucket. */
+/** Record a file open: move it to the front of this project folder's bucket. */
 export function recordRecentFile(
-  workspaceRoot: string,
+  projectFolder: string,
   file: RecentFileEntry,
   storage: Storage = window.localStorage,
 ): RecentFileEntry[] {
-  if (!workspaceRoot) return [];
+  if (!projectFolder) return [];
   const store = readStore(storage);
-  const prev = Array.isArray(store.roots[workspaceRoot]) ? store.roots[workspaceRoot] : [];
+  const prev = Array.isArray(store.roots[projectFolder]) ? store.roots[projectFolder] : [];
   const next = [file, ...prev.filter((f) => f.path !== file.path)].slice(0, RECENT_FILES_LIMIT);
-  store.roots[workspaceRoot] = next;
+  store.roots[projectFolder] = next;
   writeStore(storage, capRoots(store));
   return next;
 }
 
 /** Remove entries whose paths no longer exist in the given set of known paths. */
 export function pruneRecentFiles(
-  workspaceRoot: string,
+  projectFolder: string,
   isKnown: (path: string) => boolean,
   storage: Storage = window.localStorage,
 ): RecentFileEntry[] {
-  if (!workspaceRoot) return [];
+  if (!projectFolder) return [];
   const store = readStore(storage);
-  const list = store.roots[workspaceRoot];
+  const list = store.roots[projectFolder];
   if (!Array.isArray(list)) return [];
   const next = list.filter((f) => isKnown(f.path));
   if (next.length === list.length) return list;
-  store.roots[workspaceRoot] = next;
+  store.roots[projectFolder] = next;
   writeStore(storage, capRoots(store));
   return next;
 }
 
-/** Test hook: drop every workspace's recents. */
+/** Test hook: drop every project folder's recents. */
 export function clearRecentFiles(storage: Storage = window.localStorage): void {
   try {
     storage.removeItem(STORAGE_KEY);

@@ -8,7 +8,7 @@
 // against constructed *verify.Result values. The exit mapping is pinned
 // against the real exit-code function (exitCodeFor). The acceptance
 // cases drive the real RunAgent direct-mode path with a scripted model
-// and a real workspace fixture whose manifest build command runs
+// and a real project folder fixture whose manifest build command runs
 // through the default executor (sh -c), mirroring the pkg/agent
 // turn-end hook fixtures:
 //
@@ -178,7 +178,7 @@ func vaWriteStarterManifest(t *testing.T, root, buildCommand string) {
 	}
 }
 
-// vaAgent wires a scripted client into a fresh agent whose workspace
+// vaAgent wires a scripted client into a fresh agent whose project folder
 // root is the given project directory. ver (nil = unset, the
 // default-off path) sets the verification section; full context mode
 // keeps the file tools on the roster; SkipPrompt keeps the turn from
@@ -211,12 +211,12 @@ func vaAgent(t *testing.T, client *agent.ScriptedClient, root string, ver *confi
 	}
 	t.Cleanup(func() { ag.Shutdown() })
 	ag.SetMaxIterations(10)
-	ag.SetWorkspaceRoot(root)
+	ag.SetProjectFolder(root)
 	return ag
 }
 
 // vaWriteToolCall is the scripted tool call that changes a file in the
-// workspace (so the change tracker records the turn's change and the
+// project folder (so the change tracker records the turn's change and the
 // turn-end hook's gate opens): write_file on a new file under the
 // project root.
 func vaWriteToolCall(t *testing.T, root, path string) *agent.ScriptedResponse {

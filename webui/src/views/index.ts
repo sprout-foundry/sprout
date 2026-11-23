@@ -244,7 +244,7 @@ export type { WorkspaceShellProps } from '../workspaces/shell';
 // The escalation seam: when an agent command cannot run in the browser (exit
 // 127, a git push the browser can't do, the VFS quota), the WASM shell calls
 // `globalThis.__sproutEscalate.run(command)`, and the work runs instead in the
-// user's cloud workspace or on one of their runners (open → push browser
+// user's cloud dev space or on one of their runners (open → push browser
 // deltas → run → pull results back), with the user's consent. Two pieces make
 // that work, and Sprout's own app root mounts both (`webui/src/App.tsx`):
 //

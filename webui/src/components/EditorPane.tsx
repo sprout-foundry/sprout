@@ -49,7 +49,7 @@ import {
   type CMViewAPI,
   type CMViewKeymaps,
   type CMViewSettings,
-  type OpenWorkspaceBufferFn,
+  type OpenProjectFolderBufferFn,
 } from '../hooks/useCMView';
 
 const NARROW_EDITOR_WIDTH = 560;
@@ -203,14 +203,14 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
   // openWorkspaceBuffer from EditorManagerContext is itself a stable callback
   // across renders, but we still wire it through a ref because the CM
-  // extensions builder reads `openWorkspaceBufferRef.current.getOpenWorkspaceBuffer()`
+  // extensions builder reads `openWorkspaceBufferRef.current.getOpenProjectFolderBuffer()`
   // inside handlers that fire after mount (e.g., when LSP client opens a
   // file from `textDocument/definition`). Without a render-time `.current`
   // assignment, a stale value from the first render would persist. The
   // legacy code used `useRef(openWorkspaceBuffer)` which silently *never*
   // updated; that's the bug we're fixing here.
-  const openWorkspaceBufferRef = useRef<OpenWorkspaceBufferFn>(openWorkspaceBuffer);
-  openWorkspaceBufferRef.current = openWorkspaceBuffer;
+  const openProjectFolderBufferRef = useRef<OpenProjectFolderBufferFn>(openWorkspaceBuffer);
+  openProjectFolderBufferRef.current = openWorkspaceBuffer;
 
   const { semanticHandlerRefs, buildKeymaps } = useEditorKeymaps(hotkeys, viewRef, bufferRef);
 
@@ -309,7 +309,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         const fileName = fp.split('/').pop() || fp;
         const dotIndex = fileName.lastIndexOf('.');
         const ext = dotIndex >= 0 ? fileName.slice(dotIndex) : undefined;
-        openWorkspaceBufferRef.current({ kind: 'file', path: fp, title: fileName, ext });
+        openProjectFolderBufferRef.current({ kind: 'file', path: fp, title: fileName, ext });
         return null;
       };
       setGlobalDisplayFileCallback(cb);
@@ -361,7 +361,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     bufferRef,
     languageId: resolvedLanguage.languageId,
     handleSaveRef,
-    openWorkspaceBufferRef,
+    openProjectFolderBufferRef,
     onUpdateRef,
     settingsRef,
     keymapsRef,

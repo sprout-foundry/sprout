@@ -38,7 +38,7 @@ const planScopeStatusPending = "pending"
 // It is called from prepareQueryRun once per turn, so the summary always
 // reflects the plan as it is on disk at the start of the turn.
 func (a *Agent) planContextSummary() string {
-	root := a.currentWorkspaceRoot()
+	root := a.currentProjectFolder()
 	if root == "" {
 		return ""
 	}

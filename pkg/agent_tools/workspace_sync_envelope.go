@@ -1,13 +1,13 @@
 // Package tools provides the interface-based tool system for the Sprout AI agent.
 //
-// This file defines the WebSocket envelope types for the browser-primary workspace
-// sync protocol. The envelope is the wire format for all workspace sync messages
+// This file defines the WebSocket envelope types for the browser-primary project folder
+// sync protocol. The envelope is the wire format for all project folder sync messages
 // between the browser and container.
-// See roadmap/SP-046-workspace-sync-model.md for the full specification.
+// See roadmap/SP-046-project-folder-sync-model.md for the full specification.
 
 package tools
 
-// WebSocket envelope type constants for workspace sync protocol.
+// WebSocket envelope type constants for project folder sync protocol.
 const (
 	// EnvelopeTypePatchIn is the type for browser→container patches (user edits).
 	// The browser sends this when the user makes an edit in the OPFS-backed editor.
@@ -23,7 +23,7 @@ const (
 	EnvelopeTypeHeartbeat = "workspace.heartbeat"
 )
 
-// SyncEnvelope wraps a workspace sync message for transport over WebSocket.
+// SyncEnvelope wraps a project folder sync message for transport over WebSocket.
 //
 // @ts-generated — consumed by the frontend to generate a TypeScript interface.
 type SyncEnvelope struct {
@@ -48,7 +48,7 @@ type SyncEnvelope struct {
 //
 // @ts-generated — consumed by the frontend to generate a TypeScript interface.
 type PatchInPayload struct {
-	// Path is the workspace-relative file path (e.g. "pkg/foo/bar.go").
+	// Path is the project-folder-relative file path (e.g. "pkg/foo/bar.go").
 	Path string `json:"path"`
 
 	// Content is the full file content after the browser edit.

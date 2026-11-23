@@ -12,7 +12,7 @@
 // attaches when the total cap is what ended the loop.
 //
 // The fixture follows verification_hook_test.go: a scripted model, a real
-// workspace, and the default shell executor (sh -c), so the tests skip
+// project folder, and the default shell executor (sh -c), so the tests skip
 // where sh is absent.
 
 package agent

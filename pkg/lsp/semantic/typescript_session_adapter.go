@@ -15,14 +15,14 @@ import (
 
 // workerReadTimeout bounds how long Run waits for a response line from the
 // worker. A worker that stalls (e.g. a wedged LanguageService) is killed and
-// recycled instead of blocking every subsequent request for that workspace.
+// recycled instead of blocking every subsequent request for that project folder.
 //
-// 30s was too tight for the FIRST request on a large TypeScript workspace:
+// 30s was too tight for the FIRST request on a large TypeScript project folder:
 // the initial LanguageService program build routinely exceeds it, the worker
 // gets killed mid-build, and every retry restarts the build and dies again —
 // the "diagnostics never finish" symptom. 120s still bounds a truly wedged
 // worker while letting a slow-but-progressing first build complete; the
-// per-workspace session cache makes the cost one-time.
+// per-project-folder session cache makes the cost one-time.
 const workerReadTimeout = 120 * time.Second
 
 // workerReadResult is the outcome of a single line-based read from the
@@ -42,11 +42,11 @@ type typeScriptSessionAdapter struct {
 	stderr bytes.Buffer
 }
 
-// NewTypeScriptSessionPool creates a reusable per-workspace adapter pool for
+// NewTypeScriptSessionPool creates a reusable per-project-folder adapter pool for
 // TypeScript-family languages backed by a persistent Node worker process.
 func NewTypeScriptSessionPool(idleTTL time.Duration) *SessionPool {
-	return NewSessionPool(func(workspaceRoot string) (SessionAdapter, error) {
-		_ = workspaceRoot
+	return NewSessionPool(func(projectFolder string) (SessionAdapter, error) {
+		_ = projectFolder
 		return &typeScriptSessionAdapter{}, nil
 	}, idleTTL)
 }
@@ -64,7 +64,7 @@ func (a *typeScriptSessionAdapter) Run(input ToolInput) (ToolResult, error) {
 		return ToolResult{}, fmt.Errorf("typescript session closed")
 	}
 
-	if err := a.ensureWorkerLocked(input.WorkspaceRoot); err != nil {
+	if err := a.ensureWorkerLocked(input.ProjectFolder); err != nil {
 		return ToolResult{}, err
 	}
 
@@ -80,7 +80,7 @@ func (a *typeScriptSessionAdapter) Run(input ToolInput) (ToolResult, error) {
 
 	// Read the response line with a watchdog. The read itself is unbounded, so
 	// without a timeout a hung worker would hold a.mu — and thus block every
-	// request for this workspace — forever. Capture the reader in a local so
+	// request for this project folder — forever. Capture the reader in a local so
 	// the goroutine never touches adapter state after a reset.
 	reader := a.stdout
 	resultCh := make(chan workerReadResult, 1)
@@ -142,13 +142,13 @@ func (a *typeScriptSessionAdapter) Close() error {
 	return nil
 }
 
-func (a *typeScriptSessionAdapter) ensureWorkerLocked(workspaceRoot string) error {
+func (a *typeScriptSessionAdapter) ensureWorkerLocked(projectFolder string) error {
 	if a.cmd != nil && a.cmd.Process != nil && a.cmd.ProcessState == nil {
 		return nil
 	}
 
 	cmd := exec.Command("node", "-e", typeScriptNodeWorkerScript)
-	cmd.Dir = workspaceRoot
+	cmd.Dir = projectFolder
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

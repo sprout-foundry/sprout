@@ -95,14 +95,14 @@ func TestIsInTmpPathRequiresRootTmp(t *testing.T) {
 }
 
 // "/etc/passwd" is rooted but not filepath.IsAbs on Windows; it must resolve
-// to the drive root, never to <workspace>\etc\passwd.
-func TestSafeResolveAbsRootedPathLeavesWorkspace(t *testing.T) {
+// to the drive root, never to <project folder>\etc\passwd.
+func TestSafeResolveAbsRootedPathLeavesProjectFolder(t *testing.T) {
 	ws := t.TempDir()
-	got, err := SafeResolveAbs(WithWorkspaceRoot(context.Background(), ws), "/etc/passwd")
+	got, err := SafeResolveAbs(WithProjectFolder(context.Background(), ws), "/etc/passwd")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if isUnderPrefix(got, ws) {
-		t.Errorf("SafeResolveAbs(/etc/passwd) = %q, resolved inside workspace %q", got, ws)
+		t.Errorf("SafeResolveAbs(/etc/passwd) = %q, resolved inside project folder %q", got, ws)
 	}
 }

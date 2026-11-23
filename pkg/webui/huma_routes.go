@@ -30,7 +30,7 @@ func registerHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodGet,
 		Path:        "/api/config",
 		Summary:     "Current server configuration",
-		Description: "Reports the server's port, daemon and workspace roots, agent metadata, and enabled features.",
+		Description: "Reports the server's port, daemon and project folders, agent metadata, and enabled features.",
 		Tags:        []string{"settings"},
 	}, ws.humaGetConfig)
 
@@ -332,7 +332,7 @@ func registerHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodPost,
 		Path:        "/api/chat-session/",
 		Summary:     "Set or switch a chat session's worktree.",
-		Description: "Sets the worktree path for the chat session at the /api/chat-session/{chatId}/worktree shape, or switches the active workspace to it at the /api/chat-session/{chatId}/worktree/switch shape. Only the switch and set branches accept POST.",
+		Description: "Sets the worktree path for the chat session at the /api/chat-session/{chatId}/worktree shape, or switches the active project folder to it at the /api/chat-session/{chatId}/worktree/switch shape. Only the switch and set branches accept POST.",
 		Tags:        []string{"conversation/query"},
 	}, ws.chatSessionWorktreeHumaHandler)
 
@@ -347,7 +347,7 @@ func registerHumaOperations(api huma.API, ws *ReactWebServer) {
 	registerSettingsMiscHumaOperations(api, ws)
 
 	// ---- workspace/instances family ----------------
-	registerWorkspaceHumaOperations(api, ws)
+	registerProjectFolderHumaOperations(api, ws)
 
 	// ---- terminal family ----------------
 	registerTerminalHumaOperations(api, ws)

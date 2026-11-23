@@ -20,15 +20,15 @@ import (
 type PathTier = approvals.PathTier
 
 const (
-	PathTierUnknown   = approvals.PathTierUnknown
-	PathTierWorkspace = approvals.PathTierWorkspace
-	PathTierExternal  = approvals.PathTierExternal
-	PathTierSensitive = approvals.PathTierSensitive
+	PathTierUnknown       = approvals.PathTierUnknown
+	PathTierProjectFolder = approvals.PathTierProjectFolder
+	PathTierExternal      = approvals.PathTierExternal
+	PathTierSensitive     = approvals.PathTierSensitive
 )
 
 // ClassifyPathAccess decides which approval tier a path falls into.
-func ClassifyPathAccess(path, workspaceRoot, homeDir, cwd string) PathTier {
-	return approvals.ClassifyPathAccess(path, workspaceRoot, homeDir, cwd)
+func ClassifyPathAccess(path, projectFolder, homeDir, cwd string) PathTier {
+	return approvals.ClassifyPathAccess(path, projectFolder, homeDir, cwd)
 }
 
 // normalizePath cleans a path for prefix comparison (case-insensitive on

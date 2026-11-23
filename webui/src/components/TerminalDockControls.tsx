@@ -2,7 +2,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 
 /**
  * The docked terminal's expand/collapse controls, shared by the app's
- * viewport-docked terminal and a composed workspace's in-flow one.
+ * viewport-docked terminal and a composed project folder's in-flow one.
  */
 
 export interface TerminalCollapsedStripProps {

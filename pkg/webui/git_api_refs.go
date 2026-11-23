@@ -36,8 +36,8 @@ func (ws *ReactWebServer) handleAPIGitCommit(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Check if there are staged changes
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	cmd := ws.gitCommandForWorkspace(workspaceRoot, "diff", "--cached", "--quiet")
+	projectFolder := ws.getProjectFolderForRequest(r)
+	cmd := ws.gitCommandForProjectFolder(projectFolder, "diff", "--cached", "--quiet")
 	if err := cmd.Run(); err != nil {
 		// Exit code 1 means there ARE differences (staged changes)
 		// Exit code 0 means no differences
@@ -48,7 +48,7 @@ func (ws *ReactWebServer) handleAPIGitCommit(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Opt-in Assisted-by trailer naming the session agent's model: the
-	// web UI commits work that agent made in this workspace.
+	// web UI commits work that agent made in this project folder.
 	message := req.Message
 	if agentInst, err := ws.getClientAgent(ws.resolveClientID(r)); err == nil && agentInst != nil {
 		message = agentInst.AttributeCommitMessage(message)
@@ -56,13 +56,13 @@ func (ws *ReactWebServer) handleAPIGitCommit(w http.ResponseWriter, r *http.Requ
 		if cm := agentInst.GetConfigManager(); cm != nil {
 			cfg = cm.GetConfig()
 		}
-		if trailers := gitops.DefaultCommitTrailers(cfg, workspaceRoot); len(trailers) > 0 {
+		if trailers := gitops.DefaultCommitTrailers(cfg, projectFolder); len(trailers) > 0 {
 			message = gitops.AppendTrailers(message, trailers...)
 		}
 	}
 
 	// Create the commit
-	cmd = ws.gitCommandForWorkspace(workspaceRoot, "commit", "-m", message)
+	cmd = ws.gitCommandForProjectFolder(projectFolder, "commit", "-m", message)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_create_commit", fmt.Sprintf("Failed to create commit: %v\nOutput: %s", err, string(output)))
@@ -93,14 +93,14 @@ func (ws *ReactWebServer) handleAPIGitCommitMessage(w http.ResponseWriter, r *ht
 	}
 
 	// Verify staged changes exist (exit code 1 means there are staged changes).
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "diff", "--cached", "--quiet", "--exit-code")
+	projectFolder := ws.getProjectFolderForRequest(r)
+	checkCmd := ws.gitCommandForProjectFolder(projectFolder, "diff", "--cached", "--quiet", "--exit-code")
 	if err := checkCmd.Run(); err == nil {
 		writeJSONErr(w, http.StatusBadRequest, "no_staged_changes", "No staged changes to generate commit message")
 		return
 	}
 
-	diffCmd := ws.gitCommandForWorkspace(workspaceRoot, "diff", "--staged")
+	diffCmd := ws.gitCommandForProjectFolder(projectFolder, "diff", "--staged")
 	diffOutput, err := diffCmd.CombinedOutput()
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_get_staged_diff", fmt.Sprintf("Failed to get staged diff: %v", err))
@@ -133,7 +133,7 @@ func (ws *ReactWebServer) handleAPIGitCommitMessage(w http.ResponseWriter, r *ht
 
 	// Match /commit flow: detect branch and staged file actions.
 	var branch string
-	branchOutput, err := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--abbrev-ref", "HEAD").CombinedOutput()
+	branchOutput, err := ws.gitCommandForProjectFolder(projectFolder, "rev-parse", "--abbrev-ref", "HEAD").CombinedOutput()
 	if err != nil {
 		// Initial commit: HEAD doesn't exist yet, use empty branch.
 		branch = ""
@@ -141,7 +141,7 @@ func (ws *ReactWebServer) handleAPIGitCommitMessage(w http.ResponseWriter, r *ht
 		branch = strings.TrimSpace(string(branchOutput))
 	}
 
-	stagedFilesOutput, err := ws.gitCommandForWorkspace(workspaceRoot, "diff", "--cached", "--name-status").CombinedOutput()
+	stagedFilesOutput, err := ws.gitCommandForProjectFolder(projectFolder, "diff", "--cached", "--name-status").CombinedOutput()
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_get_staged_file_status", fmt.Sprintf("Failed to get staged file status: %v", err))
 		return
@@ -213,7 +213,7 @@ func (ws *ReactWebServer) handleAPIGitRevert(w http.ResponseWriter, r *http.Requ
 		writeJSONErr(w, http.StatusBadRequest, "invalid_commit_hash", "Invalid commit hash")
 		return
 	}
-	if _, err := gitOutputStringForWorkspace(ws, ws.getWorkspaceRootForRequest(r), "revert", "--no-edit", req.Commit); err != nil {
+	if _, err := gitOutputStringForProjectFolder(ws, ws.getProjectFolderForRequest(r), "revert", "--no-edit", req.Commit); err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_revert_commit", fmt.Sprintf("Failed to revert commit: %v", err))
 		return
 	}

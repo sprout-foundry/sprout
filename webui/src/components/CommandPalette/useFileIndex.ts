@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ApiService } from '../../services/api';
 import { clientFetch } from '../../services/clientSession';
-import { ensureWorkspace, getWorkspaceRoot } from '../../services/workspaceStore';
+import { ensureProjectFolder, getWorkspaceRoot } from '../../services/workspaceStore';
 import { debugLog, type useLog } from '../../utils/log';
 import type { FileResult } from './CommandPalette';
 import { MAX_INDEXED_FILES, MAX_INDEXED_DIRECTORIES, SKIP_DIRECTORIES, MAX_DIRECTORY_DEPTH } from './constants';
@@ -18,7 +18,7 @@ interface UseFileIndexOptions {
   log: ReturnType<typeof useLog>;
 }
 
-// Files only change when the workspace does, so we cache the index result and
+// Files only change when the project folder does, so we cache the index result and
 // invalidate it after this TTL so users picking up new files don't need to
 // reload the page. 60s is short enough to feel fresh, long enough to skip
 // redundant work during rapid palette opens.
@@ -32,13 +32,13 @@ interface FileIndexResponse {
 }
 
 /**
- * Fetch the whole workspace index in ONE request. The daemon's
+ * Fetch the whole project folder index in ONE request. The daemon's
  * /api/file-index walks the tree server-side; in cloud mode the same route
  * is served by the WASM shell's bulk walkFiles export. One round-trip
  * replaces the previous crawl of up to 3000 serial /api/browse calls.
  *
  * Rows arrive workspace-relative (small payload, no root duplicated per
- * row); they are joined with the response's workspace root here so the
+ * row); they are joined with the response's project folder here so the
  * result matches the absolute-path shape the /api/browse crawl produced —
  * buffers and readFileWithConsent expect absolute paths.
  */
@@ -107,10 +107,10 @@ function useFileIndex(options: UseFileIndexOptions): UseFileIndexResult {
   const { apiService, isOpen, log } = options;
 
   const [allFiles, setAllFiles] = useState<FileResult[]>([]);
-  const [workspaceRoot, setWorkspaceRoot] = useState('');
+  const [projectFolder, setProjectFolder] = useState('');
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
-  // Cache fingerprint: skip re-indexing if the workspace root matches and
-  // the index is still fresh. Reset on workspace change.
+  // Cache fingerprint: skip re-indexing if the project folder matches and
+  // the index is still fresh. Reset on project folder change.
   const lastIndexedAtRef = useRef<number>(0);
   const lastIndexedRootRef = useRef<string>('');
 
@@ -119,24 +119,24 @@ function useFileIndex(options: UseFileIndexOptions): UseFileIndexResult {
     let cancelled = false;
 
     const run = async () => {
-      // Resolve workspace root first so we can decide whether the cache is
+      // Resolve project folder first so we can decide whether the cache is
       // still valid for it.
       let resolvedRoot = '';
       let needsSelection = false;
       try {
-        const workspace = await ensureWorkspace();
+        const projectFolder = await ensureProjectFolder();
         if (cancelled) return;
-        resolvedRoot = String(workspace.workspace_root || '').trim();
-        needsSelection = Boolean(workspace.needs_workspace_selection);
-        setWorkspaceRoot(resolvedRoot);
+        resolvedRoot = String(projectFolder.project_folder || '').trim();
+        needsSelection = Boolean(projectFolder.needs_project_folder_selection);
+        setProjectFolder(resolvedRoot);
       } catch (err) {
         // Index against the last known root rather than none.
         resolvedRoot = getWorkspaceRoot();
-        if (!cancelled) setWorkspaceRoot(resolvedRoot);
+        if (!cancelled) setProjectFolder(resolvedRoot);
         debugLog('[FileIndex] Failed to fetch workspace root:', err);
       }
 
-      // Workspace gate: when the daemon's resolved workspace is the home
+      // Workspace gate: when the daemon's resolved project folder is the home
       // directory awaiting selection, crawling it would walk TCC-protected
       // folders (Documents, Music, …) — and the server refuses those
       // listings anyway. Show an empty index.
@@ -188,7 +188,7 @@ function useFileIndex(options: UseFileIndexOptions): UseFileIndexResult {
     };
   }, [apiService, isOpen, log]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { allFiles, workspaceRoot, isLoadingFiles };
+  return { allFiles, workspaceRoot: projectFolder, isLoadingFiles };
 }
 
 export default useFileIndex;

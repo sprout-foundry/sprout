@@ -260,7 +260,7 @@ func TestGitRepoAutoDetect_GitRepoFound(t *testing.T) {
 		t.Error("expected isolatedConfig to be set to true after successful detection")
 	}
 
-	// The .sprout directory is prepared for the workspace.
+	// The .sprout directory is prepared for the project folder.
 	sproutDir := filepath.Join(dir, ".sprout")
 	info, err := os.Stat(sproutDir)
 	if err != nil {

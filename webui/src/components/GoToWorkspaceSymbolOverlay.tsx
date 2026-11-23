@@ -87,7 +87,7 @@ function GoToWorkspaceSymbolOverlay({
     }
   }, [visible]);
 
-  // ── Fetch workspace symbols from API ────────────────────────────────
+  // ── Fetch project folder symbols from API ────────────────────────────────
 
   const fetchSymbols = useCallback(async (searchQuery: string) => {
     const requestId = ++requestIdRef.current;

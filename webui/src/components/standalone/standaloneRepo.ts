@@ -3,7 +3,7 @@
  *
  * Mirrors the tiny part of services/activeRepo.ts the embedded pages
  * need: record the repo the host opened the page with, so escalation
- * workspace resolution has its URL. NOT the full app's module — that one
+ * project folder resolution has its URL. NOT the full app's module — that one
  * pulls React (useSyncExternalStore) and the recent-repos/repo-import
  * persistence chain into the standalone bundles; the pages have no repo
  * UI, so a session-scoped value plus localStorage mirror is everything.
@@ -17,7 +17,7 @@ const LAST_REPO_KEY = 'sprout-last-repo';
 
 let activeRepoURL: string | null = null;
 
-/** The repo URL escalation resolves workspaces against (null when none). */
+/** The repo URL escalation resolves project folders against (null when none). */
 export function getStandaloneRepoURL(): string | null {
   return activeRepoURL;
 }

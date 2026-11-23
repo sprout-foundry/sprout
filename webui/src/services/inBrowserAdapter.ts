@@ -3,8 +3,8 @@
  * ops and the in-browser (WASM) agent query.
  *
  * Two independent installers exist — the page bootstrap and a composed
- * workspace's backend wiring — so either can be the live singleton when a host
- * swaps in a running workspace's daemon backend. "Retire it" is therefore one
+ * project folder's backend wiring — so either can be the live singleton when a host
+ * swaps in a running project folder's daemon backend. "Retire it" is therefore one
  * operation keyed on the adapter's type (the CloudAdapter), not on who
  * installed it: an adapter of another kind belongs to the host and stays.
  */

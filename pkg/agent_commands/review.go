@@ -122,9 +122,9 @@ func (c *ReviewDeepCommand) Execute(args []string, chatAgent *agent.Agent) error
 }
 
 func runReviewCommand(commandName string, deepReview bool, args []string, chatAgent *agent.Agent, goCtx context.Context) error {
-	// Set git working directory from agent workspace root
+	// Set git working directory from agent project folder
 	if chatAgent != nil {
-		SetGitDir(chatAgent.GetWorkspaceRoot())
+		SetGitDir(chatAgent.GetProjectFolder())
 	} else {
 		SetGitDir("")
 	}
@@ -253,11 +253,11 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 		AgentClient: agentClient,
 		GoCtx:       goCtx, // cancellation context
 	}
-	workspaceRoot := ""
+	projectFolder := ""
 	if chatAgent != nil {
-		workspaceRoot = chatAgent.GetWorkspaceRoot()
+		projectFolder = chatAgent.GetProjectFolder()
 	}
-	codereview.BuildStagedContext(goCtx, workspaceRoot, stagedDiff).Apply(reviewCtx)
+	codereview.BuildStagedContext(goCtx, projectFolder, stagedDiff).Apply(reviewCtx)
 
 	// Add file summaries to context if available
 	if len(optimizedDiff.FileSummaries) > 0 {

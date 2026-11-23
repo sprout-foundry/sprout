@@ -3,7 +3,7 @@
  *
  * When the browser IDE (Mode C) hits a hard browser limit — git push, VFS
  * quota, long-running command — the work can be handed off to the platform as
- * a cloud task instead of forcing the user into a full workspace (Mode B).
+ * a cloud task instead of forcing the user into a dev space (Mode B).
  * The platform surface is intentionally small:
  *
  *   POST /api/tasks       → 201 `{ task_id, status }` + `X-Remaining-Task-Credits`

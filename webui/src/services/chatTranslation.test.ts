@@ -93,12 +93,12 @@ describe('translateRequestBody — chat translation edge cases (SP-015-R7)', () 
     expect(result.model).toBe('gpt-4');
   });
 
-  it('passes through workspace_root when present', () => {
+  it('passes through project_folder when present', () => {
     const result = translateRequestBody('/api/query', {
       query: 'hello',
-      workspace_root: '/home/user/project',
+      project_folder: '/home/user/project',
     });
-    expect(result.workspace_root).toBe('/home/user/project');
+    expect(result.project_folder).toBe('/home/user/project');
   });
 
   it('passes through system_prompt when present', () => {
@@ -115,7 +115,7 @@ describe('translateRequestBody — chat translation edge cases (SP-015-R7)', () 
     // see translateRequestBody in cloudProxyRoutes.ts.
     expect(result.provider).toBe('platform');
     expect(result.model).toBeUndefined();
-    expect(result.workspace_root).toBeUndefined();
+    expect(result.project_folder).toBeUndefined();
     expect(result.system_prompt).toBeUndefined();
     expect(result.chat_id).toBeUndefined();
   });
@@ -157,7 +157,7 @@ describe('translateRequestBody — chat translation edge cases (SP-015-R7)', () 
       chat_id: 'chat-123',
       provider: 'anthropic',
       model: 'claude-3-opus',
-      workspace_root: '/workspace',
+      project_folder: '/workspace',
       system_prompt: 'You are a coding assistant',
     });
 
@@ -167,7 +167,7 @@ describe('translateRequestBody — chat translation edge cases (SP-015-R7)', () 
       provider: 'anthropic',
       model: 'claude-3-opus',
       chat_id: 'chat-123',
-      workspace_root: '/workspace',
+      project_folder: '/workspace',
       system_prompt: 'You are a coding assistant',
     });
   });

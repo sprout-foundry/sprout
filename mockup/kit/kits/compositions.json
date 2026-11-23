@@ -1,0 +1,34 @@
+[
+ {
+  "id": "type",
+  "about": "Type-led, no picture: a left-aligned `display` headline of a few words spanning most of the width, a `lead`, the main action and one secondary; under it one row of three short real facts (`stat`s, or `chip`s for the offer)."
+ },
+ {
+  "id": "content",
+  "about": "The business's own content as the picture: a `split` with the headline and action on one side and, on the other, a `card` holding what the person actually offers: the `timetable`, the menu or price list (`menu-item`s), the next dates, or the booking or order form itself (`field`s). Prefer this whenever the plan has content to show."
+ },
+ {
+  "id": "product",
+  "about": "The product itself: the headline above or beside a `frame-browser` or `frame-phone` showing the app's main screen built from kit parts (a `topbar`, a `list` or `table`, `stat`s). For apps and tools."
+ },
+ {
+  "id": "band",
+  "about": "A full-bleed colour band: the first screen is a `section section-primary` (or `section-dark`) with a large headline and the action; directly under it, on the page background, a `facts` strip of three or four real facts (hours, area, starting price, next date)."
+ },
+ {
+  "id": "tiles",
+  "about": "Tiles: a `bento` where the headline and action fill the wide first tile and the others each hold one real fact or part of the offer (the next class, a price, the area covered), at most one of them a small `media` art tile."
+ },
+ {
+  "id": "centered",
+  "about": "Centred: a centred `display` headline, `lead` and actions, then directly below one row of the real offer: three `card`s, a `menu-item` list or `chip`s."
+ },
+ {
+  "id": "poster",
+  "about": "A poster: an oversized headline set over two or three lines on the left, with a numbered index (`kicker` 01, 02, 03 and a line each) of what is offered on the right, separated by `rule`s."
+ },
+ {
+  "id": "art",
+  "about": "An art panel: a `split` with the headline beside a `media` panel whose surface and shape suit the idea (`media-dots`, `media-lines` or `media-mesh`; `media-rounded`, `media-round`, `media-blob` or `media-arch`) and an icon that is exactly the subject (a pot for pottery, never a fork). At most one `float-card` over it, holding a real or plainly placeholder fact (the next opening, a starting price), never a rating or review count."
+ }
+]

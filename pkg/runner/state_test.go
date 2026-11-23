@@ -18,12 +18,12 @@ func setVersion(t *testing.T, v string) {
 
 func TestDefaultImageFollowsTheRunnerRelease(t *testing.T) {
 	for version, want := range map[string]string{
-		"v0.26.1":        WorkspaceImageRepo + ":v0.26.1",
-		"v1.10.0":        WorkspaceImageRepo + ":v1.10.0",
-		"dev":            WorkspaceImageRepo + ":latest",
-		"dev-abc1234":    WorkspaceImageRepo + ":latest",
-		"v0.27.0-beta.1": WorkspaceImageRepo + ":latest",
-		"":               WorkspaceImageRepo + ":latest",
+		"v0.26.1":        DevSpaceImageRepo + ":v0.26.1",
+		"v1.10.0":        DevSpaceImageRepo + ":v1.10.0",
+		"dev":            DevSpaceImageRepo + ":latest",
+		"dev-abc1234":    DevSpaceImageRepo + ":latest",
+		"v0.27.0-beta.1": DevSpaceImageRepo + ":latest",
+		"":               DevSpaceImageRepo + ":latest",
 	} {
 		setVersion(t, version)
 		if got := DefaultImage(); got != want {
@@ -55,7 +55,7 @@ func TestLoadStateDefaultsToTheReleaseImage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Image != WorkspaceImageRepo+":v0.26.1" {
+	if st.Image != DevSpaceImageRepo+":v0.26.1" {
 		t.Errorf("fresh runner image = %q", st.Image)
 	}
 }
@@ -67,7 +67,7 @@ func TestLoadStateMigratesOnlyTheOldDefaultImage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Image != WorkspaceImageRepo+":v0.26.1" {
+	if st.Image != DevSpaceImageRepo+":v0.26.1" {
 		t.Fatalf("old default not migrated: %q", st.Image)
 	}
 	if err := st.Save(); err != nil {
@@ -80,14 +80,14 @@ func TestLoadStateMigratesOnlyTheOldDefaultImage(t *testing.T) {
 
 	// An upgraded runner moves to its own release's image.
 	setVersion(t, "v0.27.0")
-	if st, err = LoadState(); err != nil || st.Image != WorkspaceImageRepo+":v0.27.0" {
+	if st, err = LoadState(); err != nil || st.Image != DevSpaceImageRepo+":v0.27.0" {
 		t.Errorf("after upgrade image = %q, err = %v", st.Image, err)
 	}
 
 	for _, chosen := range []string{
 		"ghcr.io/sprout-foundry/sprout:v0.25.0",
 		"registry.example/team/sprout:1",
-		WorkspaceImageRepo + ":v0.26.1",
+		DevSpaceImageRepo + ":v0.26.1",
 	} {
 		writeState(t, `{"runner_id":"r1","mode":"container","image":"`+chosen+`"}`)
 		st, err := LoadState()

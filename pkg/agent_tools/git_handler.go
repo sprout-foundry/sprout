@@ -27,7 +27,7 @@ func (h *gitHandler) Definition() ToolDefinition {
 		Parameters: []ParameterDef{
 			{Name: "operation", Type: "string", Required: true, Description: "Git operation: commit, push, pull, fetch, add, rm, mv, reset, rebase, merge, checkout, branch_delete, tag, clean, stash, am, apply, cherry_pick, revert, restore"},
 			{Name: "args", Type: "string", Description: "Args to pass to the git command"},
-			{Name: "repo_dir", Type: "string", Description: "Directory to run git operations in: a subdirectory of the workspace, or a git worktree of the workspace repository even when checked out outside the workspace root (worktrees of the same repo share one .git dir and are allowed). Defaults to workspace root if omitted."},
+			{Name: "repo_dir", Type: "string", Description: "Directory to run git operations in: a subdirectory of the project folder, or a git worktree of the project folder repository even when checked out outside the project folder (worktrees of the same repo share one .git dir and are allowed). Defaults to project folder if omitted."},
 		},
 	}
 }
@@ -53,10 +53,10 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 	argsStr, _ := extractString(args, "args")
 	repoDir, _ := extractString(args, "repo_dir")
 
-	// Determine the effective working directory: repo_dir overrides WorkspaceRoot.
-	effectiveDir := env.WorkspaceRoot
+	// Determine the effective working directory: repo_dir overrides ProjectFolder.
+	effectiveDir := env.ProjectFolder
 	if repoDir != "" {
-		resolvedDir, err := ValidateRepoDir(repoDir, env.WorkspaceRoot)
+		resolvedDir, err := ValidateRepoDir(repoDir, env.ProjectFolder)
 		if err != nil {
 			return ToolResult{Output: fmt.Sprintf("Invalid repo_dir: %v", err), IsError: true}, nil
 		}
@@ -69,7 +69,7 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 	// os.Getwd() which is the package source dir during tests —
 	// creating nested .git repos that corrupt the ChangeTracker.
 	if effectiveDir != "" {
-		ctx = filesystem.WithWorkspaceRoot(ctx, effectiveDir)
+		ctx = filesystem.WithProjectFolder(ctx, effectiveDir)
 	}
 
 	// Validate args against the dangerous-args blocklist before any further
@@ -277,39 +277,39 @@ func (h *gitHandler) SafeForParallel() bool  { return false }
 func (h *gitHandler) Interactive() bool      { return false }
 
 // validateRepoDir validates that repoDir resolves to a path the git tools
-// may operate on: within the workspace root, OR a git worktree of the same
-// repository that backs the workspace (every linked worktree shares one
+// may operate on: within the project folder, OR a git worktree of the same
+// repository that backs the project folder (every linked worktree shares one
 // common git dir, so the shared-.git check admits exactly that family —
-// including worktrees that live outside the workspace, e.g. <repo>-bugfix
+// including worktrees that live outside the project folder, e.g. <repo>-bugfix
 // as a sibling of <repo>). Returns the absolute resolved path, or an error
 // if the path is invalid or escapes both checks.
 //
-// ValidateRepoDir resolves repoDir against workspaceRoot and admits it only
-// when it is inside the workspace or a worktree of the workspace repository.
+// ValidateRepoDir resolves repoDir against projectFolder and admits it only
+// when it is inside the project folder or a worktree of the project folder repository.
 //
-// The shared-repository branch exists because git worktrees of the workspace
-// repo legitimately live outside the workspace root, and refusing them
+// The shared-repository branch exists because git worktrees of the project folder
+// repo legitimately live outside the project folder, and refusing them
 // forced agents onto raw shell git for exactly the sanctioned
-// commit/review workflows. An unrelated repository outside the workspace is
+// commit/review workflows. An unrelated repository outside the project folder is
 // still refused.
-func ValidateRepoDir(repoDir, workspaceRoot string) (string, error) {
-	if workspaceRoot == "" {
-		return "", agenterrors.NewConfig("workspace root is not set", nil)
+func ValidateRepoDir(repoDir, projectFolder string) (string, error) {
+	if projectFolder == "" {
+		return "", agenterrors.NewConfig("project folder is not set", nil)
 	}
 
-	// Resolve workspace root to absolute path.
-	absWorkspace, err := filepath.Abs(workspaceRoot)
+	// Resolve project folder to absolute path.
+	absProjectFolder, err := filepath.Abs(projectFolder)
 	if err != nil {
-		return "", agenterrors.NewAgent("git", "resolve workspace root", err)
+		return "", agenterrors.NewAgent("git", "resolve project folder", err)
 	}
 
-	// Resolve repoDir: if relative, join to workspace root; if absolute, use as-is.
+	// Resolve repoDir: if relative, join to project folder; if absolute, use as-is.
 	cleanDir := filepath.Clean(repoDir)
 	var absRepoDir string
 	if filepath.IsAbs(cleanDir) {
 		absRepoDir = cleanDir
 	} else {
-		absRepoDir = filepath.Join(absWorkspace, cleanDir)
+		absRepoDir = filepath.Join(absProjectFolder, cleanDir)
 	}
 
 	// Normalize to absolute.
@@ -318,11 +318,11 @@ func ValidateRepoDir(repoDir, workspaceRoot string) (string, error) {
 		return "", agenterrors.NewAgent("git", "resolve repo_dir", err)
 	}
 
-	// Check the resolved path is within the workspace root; if not, admit
-	// a linked worktree of the workspace's own repository.
-	if !pathWithin(absRepoDir, absWorkspace) {
-		if !sameCommonGitDir(absRepoDir, absWorkspace) {
-			return "", agenterrors.NewPermission(fmt.Sprintf("repo_dir %q resolves outside workspace root %q (and is not a git worktree of the workspace repository)", repoDir, workspaceRoot), nil)
+	// Check the resolved path is within the project folder; if not, admit
+	// a linked worktree of the project folder's own repository.
+	if !pathWithin(absRepoDir, absProjectFolder) {
+		if !sameCommonGitDir(absRepoDir, absProjectFolder) {
+			return "", agenterrors.NewPermission(fmt.Sprintf("repo_dir %q resolves outside project folder %q (and is not a git worktree of the project folder repository)", repoDir, projectFolder), nil)
 		}
 	}
 

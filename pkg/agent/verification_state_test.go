@@ -8,7 +8,7 @@
 // new repair-round count), the attempts-map copy contract, the passing
 // mirror case, and the unchanged LastVerificationResult behavior. The
 // fixture mirrors verification_hook_test.go (scripted model, real
-// workspace, real shell execution of the manifest's build command).
+// project folder, real shell execution of the manifest's build command).
 
 package agent
 

@@ -2,13 +2,13 @@
 
 // huma_workspace.go holds the Huma operations and their thin handlers for the
 // workspace/instances family: the /api/workspace* and /api/instances* routes
-// (registered via registerWorkspaceHumaOperations from registerHumaOperations
+// (registered via registerProjectFolderHumaOperations from registerHumaOperations
 // in huma_routes.go).
 //
 // Each handler drives the existing plain handler through the live ResponseWriter
 // and returns a no-op writtenResponseOutput, so the response bytes are
-// unchanged and no behavior changes. /api/workspace is a multi-method route
-// (GET reads the active workspace, POST sets it) and /api/terminal-style
+// unchanged and no behavior changes. /api/project-folder is a multi-method route
+// (GET reads the active project folder, POST sets it) and /api/terminal-style
 // per-method gates are enforced by registering one Huma operation per method.
 package webui
 
@@ -19,71 +19,71 @@ import (
 	huma "github.com/danielgtaylor/huma/v2"
 )
 
-// registerWorkspaceHumaOperations registers the workspace/instances-family
+// registerProjectFolderHumaOperations registers the workspace/instances-family
 // Huma operations.
-func registerWorkspaceHumaOperations(api huma.API, ws *ReactWebServer) {
+func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 	huma.Register(api, huma.Operation{
 		OperationID: "workspaceGet",
 		Method:      http.MethodGet,
-		Path:        "/api/workspace",
-		Summary:     "Report the client's active workspace.",
-		Description: "Reports the requesting client's active workspace root, whether it is a recognized project directory, and recent-workspace metadata.",
+		Path:        "/api/project-folder",
+		Summary:     "Report the client's active project folder.",
+		Description: "Reports the requesting client's active project folder, whether it is a recognized project directory, and recent-project-folder metadata.",
 		Tags:        []string{"workspace/instances"},
-	}, ws.workspaceGetHumaHandler)
+	}, ws.projectFolderGetHumaHandler)
 
 	huma.Register(api, huma.Operation{
 		OperationID: "workspaceSet",
 		Method:      http.MethodPost,
-		Path:        "/api/workspace",
-		Summary:     "Set the client's active workspace.",
-		Description: "Sets the requesting client's active workspace root to the `path` in the body. The path must resolve within the daemon root.",
+		Path:        "/api/project-folder",
+		Summary:     "Set the client's active project folder.",
+		Description: "Sets the requesting client's active project folder to the `path` in the body. The path must resolve within the daemon root.",
 		Tags:        []string{"workspace/instances"},
-	}, ws.workspaceSetHumaHandler)
+	}, ws.projectFolderSetHumaHandler)
 
 	huma.Register(api, huma.Operation{
 		OperationID: "workspaceBrowse",
 		Method:      http.MethodGet,
-		Path:        "/api/workspace/browse",
+		Path:        "/api/project-folder/browse",
 		Summary:     "Browse directories under the daemon root.",
-		Description: "Lists the directories under the daemon root (the parent of the active workspace) so the client can pick a new workspace. Defaults to the daemon root when `path` is omitted.",
+		Description: "Lists the directories under the daemon root (the parent of the active project folder) so the client can pick a new project folder. Defaults to the daemon root when `path` is omitted.",
 		Tags:        []string{"workspace/instances"},
-	}, ws.workspaceBrowseHumaHandler)
+	}, ws.projectFolderBrowseHumaHandler)
 
 	huma.Register(api, huma.Operation{
 		OperationID: "workspaceSymbols",
 		Method:      http.MethodGet,
 		Path:        "/api/workspace/symbols",
-		Summary:     "List workspace symbols.",
-		Description: "Returns the workspace's indexed symbols, optionally filtered by `query`. Falls back to building the index on a cache miss.",
+		Summary:     "List project folder symbols.",
+		Description: "Returns the project folder's indexed symbols, optionally filtered by `query`. Falls back to building the index on a cache miss.",
 		Tags:        []string{"workspace/instances"},
 	}, ws.workspaceSymbolsHumaHandler)
 
 	huma.Register(api, huma.Operation{
 		OperationID: "workspaceProjects",
 		Method:      http.MethodGet,
-		Path:        "/api/workspace/projects",
+		Path:        "/api/project-folder/projects",
 		Summary:     "List known projects.",
-		Description: "Lists the recent projects known to the client (the workspace picker) with their last-used ordering.",
+		Description: "Lists the recent projects known to the client (the project folder picker) with their last-used ordering.",
 		Tags:        []string{"workspace/instances"},
-	}, ws.workspaceProjectsHumaHandler)
+	}, ws.projectFolderProjectsHumaHandler)
 
 	huma.Register(api, huma.Operation{
 		OperationID: "workspaceSync",
 		Method:      http.MethodPost,
-		Path:        "/api/workspace/sync",
-		Summary:     "Synchronize the workspace tree.",
-		Description: "Applies the pending file-sync operations for the workspace (the SP-046 workspace-sync surface).",
+		Path:        "/api/project-folder/sync",
+		Summary:     "Synchronize the project folder tree.",
+		Description: "Applies the pending file-sync operations for the project folder (the SP-046 workspace-sync surface).",
 		Tags:        []string{"workspace/instances"},
-	}, ws.workspaceSyncHumaHandler)
+	}, ws.projectFolderSyncHumaHandler)
 
 	huma.Register(api, huma.Operation{
 		OperationID: "workspaceTakeover",
 		Method:      http.MethodPost,
-		Path:        "/api/workspace/takeover",
-		Summary:     "Take over a workspace from another device.",
-		Description: "Marks the requesting client as the active owner of the workspace, superseding the previous owner.",
+		Path:        "/api/project-folder/takeover",
+		Summary:     "Take over a project folder from another device.",
+		Description: "Marks the requesting client as the active owner of the project folder, superseding the previous owner.",
 		Tags:        []string{"workspace/instances"},
-	}, ws.workspaceTakeoverHumaHandler)
+	}, ws.projectFolderTakeoverHumaHandler)
 
 	huma.Register(api, huma.Operation{
 		OperationID: "instancesList",
@@ -135,7 +135,7 @@ func registerWorkspaceHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodPost,
 		Path:        "/api/instances/ssh-browse",
 		Summary:     "Browse the remote host's directories over SSH.",
-		Description: "Lists the directories on the remote host over the SSH session so the client can pick a remote workspace.",
+		Description: "Lists the directories on the remote host over the SSH session so the client can pick a remote project folder.",
 		Tags:        []string{"workspace/instances"},
 	}, ws.sshBrowseHumaHandler)
 
@@ -158,21 +158,21 @@ func registerWorkspaceHumaOperations(api huma.API, ws *ReactWebServer) {
 	}, ws.sshCloseHumaHandler)
 }
 
-// workspaceGetHumaHandler is the Huma handler for GET /api/workspace.
-func (ws *ReactWebServer) workspaceGetHumaHandler(ctx context.Context, in *humaRequestInput) (*writtenResponseOutput, error) {
-	ws.handleAPIWorkspace(in.Resp, in.Req)
+// projectFolderGetHumaHandler is the Huma handler for GET /api/workspace.
+func (ws *ReactWebServer) projectFolderGetHumaHandler(ctx context.Context, in *humaRequestInput) (*writtenResponseOutput, error) {
+	ws.handleAPIProjectFolder(in.Resp, in.Req)
 	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
 }
 
-// workspaceSetHumaHandler is the Huma handler for POST /api/workspace.
-func (ws *ReactWebServer) workspaceSetHumaHandler(ctx context.Context, in *humaRequestInput) (*writtenResponseOutput, error) {
-	ws.handleAPIWorkspace(in.Resp, in.Req)
+// projectFolderSetHumaHandler is the Huma handler for POST /api/workspace.
+func (ws *ReactWebServer) projectFolderSetHumaHandler(ctx context.Context, in *humaRequestInput) (*writtenResponseOutput, error) {
+	ws.handleAPIProjectFolder(in.Resp, in.Req)
 	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
 }
 
-// workspaceBrowseHumaHandler is the Huma handler for GET /api/workspace/browse.
-func (ws *ReactWebServer) workspaceBrowseHumaHandler(ctx context.Context, in *humaRequestInput) (*writtenResponseOutput, error) {
-	ws.handleAPIWorkspaceBrowse(in.Resp, in.Req)
+// projectFolderBrowseHumaHandler is the Huma handler for GET /api/project-folder/browse.
+func (ws *ReactWebServer) projectFolderBrowseHumaHandler(ctx context.Context, in *humaRequestInput) (*writtenResponseOutput, error) {
+	ws.handleAPIProjectFolderBrowse(in.Resp, in.Req)
 	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
 }
 
@@ -182,21 +182,21 @@ func (ws *ReactWebServer) workspaceSymbolsHumaHandler(ctx context.Context, in *h
 	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
 }
 
-// workspaceProjectsHumaHandler is the Huma handler for GET /api/workspace/projects.
-func (ws *ReactWebServer) workspaceProjectsHumaHandler(ctx context.Context, in *humaRequestInput) (*writtenResponseOutput, error) {
-	ws.handleAPIWorkspaceProjects(in.Resp, in.Req)
+// projectFolderProjectsHumaHandler is the Huma handler for GET /api/project-folder/projects.
+func (ws *ReactWebServer) projectFolderProjectsHumaHandler(ctx context.Context, in *humaRequestInput) (*writtenResponseOutput, error) {
+	ws.handleAPIProjectFolderProjects(in.Resp, in.Req)
 	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
 }
 
-// workspaceSyncHumaHandler is the Huma handler for POST /api/workspace/sync.
-func (ws *ReactWebServer) workspaceSyncHumaHandler(ctx context.Context, in *humaRequestInput) (*writtenResponseOutput, error) {
-	ws.handleAPIWorkspaceSync(in.Resp, in.Req)
+// projectFolderSyncHumaHandler is the Huma handler for POST /api/project-folder/sync.
+func (ws *ReactWebServer) projectFolderSyncHumaHandler(ctx context.Context, in *humaRequestInput) (*writtenResponseOutput, error) {
+	ws.handleAPIProjectFolderSync(in.Resp, in.Req)
 	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
 }
 
-// workspaceTakeoverHumaHandler is the Huma handler for POST /api/workspace/takeover.
-func (ws *ReactWebServer) workspaceTakeoverHumaHandler(ctx context.Context, in *humaRequestInput) (*writtenResponseOutput, error) {
-	ws.handleAPIWorkspaceTakeover(in.Resp, in.Req)
+// projectFolderTakeoverHumaHandler is the Huma handler for POST /api/project-folder/takeover.
+func (ws *ReactWebServer) projectFolderTakeoverHumaHandler(ctx context.Context, in *humaRequestInput) (*writtenResponseOutput, error) {
+	ws.handleAPIProjectFolderTakeover(in.Resp, in.Req)
 	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
 }
 

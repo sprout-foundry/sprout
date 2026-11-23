@@ -62,7 +62,7 @@ export interface WorkspaceFileEntry {
 
 /**
  * The narrow `window.SproutStudio` subset the webui uses for FS deferral.
- * The workspace helpers never reject — validation failures and timeouts
+ * The project folder helpers never reject — validation failures and timeouts
  * resolve `{ ok: false, error: "<code>" }` (see bridge-protocol.md §10.1).
  */
 export type SproutStudioFsBridge = {
@@ -85,18 +85,18 @@ export type SproutStudioFsBridge = {
 export type SproutStudioWorkspaceBridge = {
   /** Presents the system folder picker; persists the chosen root. */
   pickWorkspace(): Promise<{ ok: true; rootName: string } | { ok: false; error: string }>;
-  /** Creates a fresh project folder and makes it the workspace root. */
+  /** Creates a fresh project folder and makes it the project folder. */
   createWorkspace(
     name: string,
   ): Promise<{ ok: true; rootName: string } | { ok: false; error: 'invalidName' | 'alreadyExists' | string }>;
 };
 
-/** Result shape of the two workspace ops above (discriminated on `ok`). */
-export type NativeWorkspaceResult = { ok: true; rootName: string } | { ok: false; error: string };
+/** Result shape of the two project folder ops above (discriminated on `ok`). */
+export type NativeProjectFolderResult = { ok: true; rootName: string } | { ok: false; error: string };
 
 /**
- * Type guard: is `obj` a usable studio workspace bridge? Checks that both
- * workspace op methods are functions. Pure and synchronous; safe to call
+ * Type guard: is `obj` a usable studio project folder bridge? Checks that both
+ * project folder op methods are functions. Pure and synchronous; safe to call
  * with `null`, `undefined`, or a plain object. Deliberately narrower than
  * `hasSproutStudioFsBridge` — the gate must not render the studio variant
  * against a bridge that only implements the file ops.
@@ -139,7 +139,7 @@ export function detectSproutStudio(): SproutStudioFsBridge | null {
 // ── Gate decision (pure) + cached resolver ────────────────────────────────────
 
 export interface NativeFsGateDecision {
-  /** True only when the webui defers workspace FS ops to the shell. */
+  /** True only when the webui defers project folder FS ops to the shell. */
   active: boolean;
   /** Human-readable reason for the decision (for logging/tests). */
   reason: string;
@@ -238,7 +238,7 @@ export function __resetNativeFsGateForTests(): void {
  * Pure and synchronous. Throws an `Error` on an invalid path; returns the
  * normalized string otherwise.
  */
-export function normalizeWorkspacePath(input: string): string {
+export function normalizeProjectFolderPath(input: string): string {
   if (typeof input !== 'string' || input.length === 0) {
     throw new Error('normalizeWorkspacePath: path must be a non-empty string');
   }
@@ -262,19 +262,19 @@ export function normalizeWorkspacePath(input: string): string {
 // ── Bridge-result → Response mapping ──────────────────────────────────────────
 
 /**
- * Error-code → HTTP-status table for the files-channel workspace ops
+ * Error-code → HTTP-status table for the files-channel project folder ops
  * (bridge-protocol.md §10.1). Exported as a pure constant + a pure lookup
  * so it is unit-testable without jsdom. `ioFailed` and any unknown code map
  * to 500.
  *
  *   - notFound        → 404  (target or a parent does not exist)
  *   - invalidParams   → 400  (missing/empty path, bad payload)
- *   - notInWorkspace  → 400  (path fails the workspace safety rules)
+ *   - notInWorkspace  → 400  (path fails the project folder safety rules)
  *   - isDirectory     → 400  (the op targeted a directory)
  *   - userCancelled   → 409  (the pending native op was cancelled by the user;
  *                              not a hard error, but we must still return a
  *                              non-2xx so callers see it failed)
- *   - workspaceNotSet → 503  (no workspace picked/restored)
+ *   - workspaceNotSet → 503  (no project folder picked/restored)
  *   - ioFailed / unknown → 500
  */
 export const WORKSPACE_ERROR_STATUS: Readonly<Record<string, number>> = {
@@ -288,7 +288,7 @@ export const WORKSPACE_ERROR_STATUS: Readonly<Record<string, number>> = {
 };
 
 /** Pure lookup: error code → HTTP status. Unknown/`ioFailed` → 500. */
-export function workspaceErrorStatus(error: string | undefined): number {
+export function projectFolderErrorStatus(error: string | undefined): number {
   if (error !== undefined && error !== '') {
     const mapped = WORKSPACE_ERROR_STATUS[error];
     if (mapped !== undefined) return mapped;
@@ -333,13 +333,13 @@ function errorJsonResponse(error: string, status: number): Response {
  * Consumers rely on the standard `Response` interface (`.ok`, `.text()`,
  * `.blob()`, `.status`, `.statusText`).
  */
-export function readWorkspaceResponse(result: unknown): Response {
+export function readProjectFolderResponse(result: unknown): Response {
   const r = result as
     | { ok: true; path: string; content?: string; contentBase64?: string }
     | { ok: false; error: string };
   if (r && (r as { ok?: boolean }).ok === false) {
     const err = (r as { ok: false; error: string }).error;
-    return errorJsonResponse(err, workspaceErrorStatus(err));
+    return errorJsonResponse(err, projectFolderErrorStatus(err));
   }
   const success = r as { ok: true; path: string; content?: string; contentBase64?: string };
   if (typeof success.contentBase64 === 'string' && success.contentBase64.length > 0) {
@@ -369,7 +369,7 @@ export function readWorkspaceResponse(result: unknown): Response {
 
 // ── listWorkspace → file-tree mapping (pure) ─────────────────────────────────
 //
-// The `files` channel's `listWorkspace(maxDepth)` lists the workspace ROOT
+// The `files` channel's `listWorkspace(maxDepth)` lists the project folder ROOT
 // only (no sub-directory arg) and returns `{path, size, isDir}` per entry
 // (no `modified`, no `gitStatus`). To list the direct children of an
 // arbitrary requested directory, we (a) request a depth deep enough to reach
@@ -385,13 +385,13 @@ function segmentCount(p: string): number {
  * `requestedPath` are visible. "maxDepth = 1 relative to the requested path":
  * root (`.`/`''`) → 1; a depth-N directory → N + 1. Pure.
  */
-export function workspaceListDepth(requestedPath: string): number {
-  // Root forms ('.', '', '/') list the direct children of the workspace root.
-  // (normalizeWorkspacePath rejects '' and '/', so handle them explicitly.)
+export function projectFolderListDepth(requestedPath: string): number {
+  // Root forms ('.', '', '/') list the direct children of the project folder.
+  // (normalizeProjectFolderPath rejects '' and '/', so handle them explicitly.)
   if (requestedPath === '.' || requestedPath === '' || requestedPath === '/') {
     return 1;
   }
-  return segmentCount(normalizeWorkspacePath(requestedPath)) + 1;
+  return segmentCount(normalizeProjectFolderPath(requestedPath)) + 1;
 }
 
 export interface NativeFileInfo {
@@ -440,15 +440,15 @@ export function sortNativeFileInfo(items: NativeFileInfo[]): NativeFileInfo[] {
  *
  * The result is returned already sorted (dirs first, then by name).
  */
-export function mapWorkspaceListing(result: unknown, requestedPath: string): NativeFileInfo[] {
+export function mapProjectFolderListing(result: unknown, requestedPath: string): NativeFileInfo[] {
   const r = result as { ok?: boolean; files?: WorkspaceFileEntry[]; error?: string };
   if (!r || r.ok !== true || !Array.isArray(r.files)) {
     return [];
   }
   const normalized =
-    requestedPath === '.' || requestedPath === '' || normalizeWorkspacePath(requestedPath) === '.'
+    requestedPath === '.' || requestedPath === '' || normalizeProjectFolderPath(requestedPath) === '.'
       ? ''
-      : normalizeWorkspacePath(requestedPath);
+      : normalizeProjectFolderPath(requestedPath);
   const baseDepth = normalized === '' ? 0 : segmentCount(normalized);
   const childDepth = baseDepth + 1;
 
@@ -481,11 +481,11 @@ export function mapWorkspaceListing(result: unknown, requestedPath: string): Nat
 }
 
 /** Map a `writeWorkspaceFile` result to a synthesized `Response`. */
-export function writeWorkspaceResponse(result: unknown): Response {
+export function writeProjectFolderResponse(result: unknown): Response {
   const r = result as { ok: true; path: string } | { ok: false; error: string };
   if (r && (r as { ok?: boolean }).ok === false) {
     const err = (r as { ok: false; error: string }).error;
-    return errorJsonResponse(err, workspaceErrorStatus(err));
+    return errorJsonResponse(err, projectFolderErrorStatus(err));
   }
   const success = r as { ok: true; path: string };
   return new Response(JSON.stringify({ ok: true, path: success.path }), {
@@ -497,11 +497,11 @@ export function writeWorkspaceResponse(result: unknown): Response {
 // ── High-level accessors (used by the nativeFsStubs/fileAccess stub) ─────────
 
 /**
- * Read a workspace file through the bridge and synthesize a `Response`.
+ * Read a project folder file through the bridge and synthesize a `Response`.
  * `path` must already be normalized (call `normalizeWorkspacePath` first).
  * The bridge never rejects; a transport failure is surfaced as a 500.
  */
-export async function nativeReadWorkspaceFile(path: string): Promise<Response> {
+export async function nativeReadProjectFolderFile(path: string): Promise<Response> {
   const bridge = detectSproutStudio();
   if (!bridge) {
     throw new Error('nativeReadWorkspaceFile: no SproutStudio bridge available (Track R --native-fs)');
@@ -514,14 +514,14 @@ export async function nativeReadWorkspaceFile(path: string): Promise<Response> {
     // itself is broken. Surface as ioFailed (500) rather than crashing.
     return errorJsonResponse('ioFailed', 500);
   }
-  return readWorkspaceResponse(result);
+  return readProjectFolderResponse(result);
 }
 
 /**
- * Write a workspace file through the bridge and synthesize a `Response`.
+ * Write a project folder file through the bridge and synthesize a `Response`.
  * `path` must already be normalized; `content` is a utf-8 text string.
  */
-export async function nativeWriteWorkspaceFile(path: string, content: string): Promise<Response> {
+export async function nativeWriteProjectFolderFile(path: string, content: string): Promise<Response> {
   const bridge = detectSproutStudio();
   if (!bridge) {
     throw new Error('nativeWriteWorkspaceFile: no SproutStudio bridge available (Track R --native-fs)');
@@ -532,19 +532,19 @@ export async function nativeWriteWorkspaceFile(path: string, content: string): P
   } catch {
     return errorJsonResponse('ioFailed', 500);
   }
-  return writeWorkspaceResponse(result);
+  return writeProjectFolderResponse(result);
 }
 
 // ── Workspace-gate studio helpers (bridge files channel, §10.1) ──────────────
 //
-// Used by WorkspaceGateModal's studio variant (native folder picker +
+// Used by ProjectFolderGateModal's studio variant (native folder picker +
 // new-project create). Like the bridge helpers above, these NEVER reject:
 // a hard transport throw resolves the `ioFailed` result instead of crashing
 // the modal, and the caller inspects `ok`/`error` directly (no synthesized
 // `Response` — the gate renders inline UI, it does not consume Responses).
 
 /** Reusable bridge-result coercion: `{ok:true,rootName}` or a failed result. */
-function workspaceResult(result: unknown): NativeWorkspaceResult {
+function projectFolderResult(result: unknown): NativeProjectFolderResult {
   const r = result as { ok?: boolean; rootName?: unknown; error?: unknown };
   if (r && r.ok === true) {
     return { ok: true, rootName: typeof r.rootName === 'string' ? r.rootName : '' };
@@ -553,29 +553,29 @@ function workspaceResult(result: unknown): NativeWorkspaceResult {
 }
 
 /**
- * Present the native folder picker and persist the chosen workspace root.
+ * Present the native folder picker and persist the chosen project folder.
  * Resolves `{ ok: true, rootName }` on a pick, `{ ok: false, error: 'userCancelled' }`
  * when the user dismisses the picker, and `ioFailed` on transport failure.
  */
-export async function pickWorkspaceNative(): Promise<NativeWorkspaceResult> {
+export async function pickProjectFolderNative(): Promise<NativeProjectFolderResult> {
   const bridge = detectSproutStudio();
   const workspaceBridge = hasSproutStudioWorkspaceBridge(bridge) ? bridge : null;
   if (!workspaceBridge) {
     return { ok: false, error: 'ioFailed' };
   }
   try {
-    return workspaceResult(await workspaceBridge.pickWorkspace());
+    return projectFolderResult(await workspaceBridge.pickWorkspace());
   } catch {
     return { ok: false, error: 'ioFailed' };
   }
 }
 
 /**
- * Create a new project folder through the bridge and make it the workspace
+ * Create a new project folder through the bridge and make it the project folder
  * root. The shell validates the name; `invalidName` / `alreadyExists` (and
  * any other code) surface verbatim so the gate can map them to friendly copy.
  */
-export async function createWorkspaceNative(name: string): Promise<NativeWorkspaceResult> {
+export async function createProjectFolderNative(name: string): Promise<NativeProjectFolderResult> {
   const bridge = detectSproutStudio();
   const workspaceBridge = hasSproutStudioWorkspaceBridge(bridge) ? bridge : null;
   if (!workspaceBridge) {
@@ -586,7 +586,7 @@ export async function createWorkspaceNative(name: string): Promise<NativeWorkspa
     return { ok: false, error: 'invalidName' };
   }
   try {
-    return workspaceResult(await workspaceBridge.createWorkspace(trimmed));
+    return projectFolderResult(await workspaceBridge.createWorkspace(trimmed));
   } catch {
     return { ok: false, error: 'ioFailed' };
   }

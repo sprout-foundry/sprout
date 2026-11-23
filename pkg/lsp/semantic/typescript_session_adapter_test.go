@@ -114,7 +114,7 @@ func TestTypeScriptSessionAdapterWorkerRoundTrip(t *testing.T) {
 			Method:        "diagnostics",
 			Content:       "const x = 1;\n",
 			FilePath:      filepath.Join(dir, "a.ts"),
-			WorkspaceRoot: dir,
+			ProjectFolder: dir,
 		})
 	}()
 

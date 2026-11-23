@@ -38,8 +38,8 @@ import type { ToolExecution, ViewType } from '../types/app';
 import type { WorkspaceModeId } from '../workspaces/registry';
 import type { WorkspaceShellProps } from '../workspaces/shell';
 import { useOpenInEditorRequests } from './SproutWorkspaceUnits';
-import { useWorkspaceGitState } from './useWorkspaceGitState';
-import type { WorkspaceGitState } from './useWorkspaceGitState';
+import { useProjectFolderGitState } from './useWorkspaceGitState';
+import type { ProjectFolderGitState } from './useWorkspaceGitState';
 import { useWorkspaceChat, useWorkspaceChatProps } from './WorkspaceChatContext';
 import { WorkspaceDockedTerminal, useToggleTerminalCommand } from './WorkspaceDockedTerminal';
 import { useWorkspaceEditor } from './WorkspaceEditorContext';
@@ -120,7 +120,7 @@ export function ComposedSpaceShell(props: ComposedSpaceShellProps): JSX.Element 
 function GitBackedSpaceShell(props: ComposedSpaceShellProps): JSX.Element {
   const { openFile } = useWorkspaceEditor();
   const onOpenFile = useCallback((path: string) => void openFile(path), [openFile]);
-  const git = useWorkspaceGitState({ onOpenFile });
+  const git = useProjectFolderGitState({ onOpenFile });
   return <SpaceShellLayout {...props} git={git} />;
 }
 
@@ -129,10 +129,10 @@ function SpaceShellLayout({
   spaceId,
   chatOverrides,
   hasMockup,
-  workspaceRoot,
+  workspaceRoot: projectFolder,
   projectName,
   git,
-}: ComposedSpaceShellProps & { git: WorkspaceGitState | null }): JSX.Element {
+}: ComposedSpaceShellProps & { git: ProjectFolderGitState | null }): JSX.Element {
   const { state, chat } = useWorkspaceChat();
   const { buffers, activeBufferId, openWorkspaceBuffer } = useEditorManager();
   const { openFile, activeFile } = useWorkspaceEditor();
@@ -295,7 +295,7 @@ function SpaceShellLayout({
   );
 
   const mockupPresence = useMockupPresenceProbe();
-  const resolvedRoot = git?.workspace.workspaceRoot || workspaceRoot || '';
+  const resolvedRoot = git?.workspace.workspaceRoot || projectFolder || '';
 
   return (
     <>

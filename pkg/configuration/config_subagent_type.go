@@ -137,7 +137,7 @@ type SubagentType struct {
 	// persona is allowed to do. Use HasCapability to query.
 	Capabilities []string `json:"capabilities,omitempty"`
 	// WritePaths confines the persona to writing under these
-	// workspace-relative directories and enforces AllowedTools at execution.
+	// project-folder-relative directories and enforces AllowedTools at execution.
 	// See personas.Definition.WritePaths; empty means unconfined.
 	WritePaths []string `json:"write_paths,omitempty"`
 	// HostTools names tools the host provides at run time rather than the

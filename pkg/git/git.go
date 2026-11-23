@@ -282,7 +282,7 @@ type FileCommitInfo struct {
 
 // FileCommitState inspects filePath in the repository that contains it.
 // The repository is found from the file's own directory, not the process
-// CWD: the two differ whenever sprout runs outside the workspace (daemon,
+// CWD: the two differ whenever sprout runs outside the project folder (daemon,
 // WebUI), and resolving from the CWD silently reported every file as
 // uncommitted there — disabling the guards that keep a revert from undoing
 // committed work.
@@ -373,12 +373,12 @@ func CommittedFilePaths(workDir string) (map[string]bool, error) {
 		return nil, nil
 	}
 
-	// The workDir itself may be a symlink — the workspace walker records
+	// The workDir itself may be a symlink — the project folder walker records
 	// paths using the original (pre-symlink) workDir, while git resolves
 	// symlinks and reports the real path. We must build absolute paths
 	// in BOTH forms so the caller can match regardless of which form the
 	// walker used. This mirrors the symlink resolution strategy in
-	// GetFileGitPath and the agent's isOutsideWorkspace helper.
+	// GetFileGitPath and the agent's isOutsideProjectFolder helper.
 	rootResolved := root
 	if evaled, e := filepath.EvalSymlinks(root); e == nil {
 		rootResolved = evaled
@@ -412,7 +412,7 @@ func CommittedFilePaths(workDir string) (map[string]bool, error) {
 	// Committed-clean = tracked AND NOT in the diff set. Resolve each
 	// repo-relative path to absolute filesystem paths in BOTH the raw
 	// git-root form and the symlink-resolved form, so callers using
-	// either representation of the workspace can match.
+	// either representation of the project folder can match.
 	committed := make(map[string]bool)
 	for _, p := range strings.Split(string(trackedOut), "\x00") {
 		if p == "" {
@@ -426,7 +426,7 @@ func CommittedFilePaths(workDir string) (map[string]bool, error) {
 			committed[filepath.Join(rootResolved, p)] = true
 		}
 		// Also add paths using the original workDir as prefix, which may
-		// be a symlink that the workspace walker used un-resolved (e.g.,
+		// be a symlink that the project folder walker used un-resolved (e.g.,
 		// macOS /var → /private/var). Without this, the caller's pending
 		// change paths won't match the committed set.
 		absWork, _ := filepath.Abs(workDir)

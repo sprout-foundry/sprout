@@ -43,34 +43,34 @@ func TestApprovedShellCommandsEmptyOmitted(t *testing.T) {
 	}
 }
 
-// TestApprovedShellCommandsMerge_Union confirms workspace-layer entries
+// TestApprovedShellCommandsMerge_Union confirms project-folder-layer entries
 // add to (not replace) the global-layer list, with de-dup.
 func TestApprovedShellCommandsMerge_Union(t *testing.T) {
 	tmpRoot := t.TempDir()
 	globalDir := filepath.Join(tmpRoot, "global")
-	workspaceDir := filepath.Join(tmpRoot, "workspace", ".sprout")
+	projectFolderDir := filepath.Join(tmpRoot, "workspace", ".sprout")
 	if err := os.MkdirAll(globalDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+	if err := os.MkdirAll(projectFolderDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	global := Config{ApprovedShellCommands: []string{"rm -rf /tmp/build", "kubectl delete pod foo"}}
-	workspace := Config{ApprovedShellCommands: []string{"kubectl delete pod foo", "git push --force"}}
+	projectFolder := Config{ApprovedShellCommands: []string{"kubectl delete pod foo", "git push --force"}}
 
 	globalData, _ := json.Marshal(global)
-	workspaceData, _ := json.Marshal(workspace)
+	projectFolderData, _ := json.Marshal(projectFolder)
 	globalPath := filepath.Join(globalDir, "config.json")
-	workspacePath := filepath.Join(workspaceDir, "config.json")
+	projectFolderPath := filepath.Join(projectFolderDir, "config.json")
 	if err := os.WriteFile(globalPath, globalData, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(workspacePath, workspaceData, 0o644); err != nil {
+	if err := os.WriteFile(projectFolderPath, projectFolderData, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	merged, err := LoadConfigWithLayers(globalPath, workspacePath, "", globalDir)
+	merged, err := LoadConfigWithLayers(globalPath, projectFolderPath, "", globalDir)
 	if err != nil {
 		t.Fatalf("LoadConfigWithLayers: %v", err)
 	}
@@ -96,34 +96,34 @@ func TestApprovedShellCommandsMerge_Union(t *testing.T) {
 
 // TestApprovedShellCommandPatternsMerge_Union mirrors the
 // ApprovedShellCommands merge test for the pattern list added in the
-// ApprovedShellCommandPatterns extension. Verifies workspace-layer
+// ApprovedShellCommandPatterns extension. Verifies project-folder-layer
 // patterns are unioned with (not replaced by) global-layer patterns.
 func TestApprovedShellCommandPatternsMerge_Union(t *testing.T) {
 	tmpRoot := t.TempDir()
 	globalDir := filepath.Join(tmpRoot, "global")
-	workspaceDir := filepath.Join(tmpRoot, "workspace", ".sprout")
+	projectFolderDir := filepath.Join(tmpRoot, "workspace", ".sprout")
 	if err := os.MkdirAll(globalDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+	if err := os.MkdirAll(projectFolderDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	global := Config{ApprovedShellCommandPatterns: []string{"rm -rf /tmp/*", "go test *"}}
-	workspace := Config{ApprovedShellCommandPatterns: []string{"go test *", "git push --force *"}}
+	projectFolder := Config{ApprovedShellCommandPatterns: []string{"go test *", "git push --force *"}}
 
 	globalData, _ := json.Marshal(global)
-	workspaceData, _ := json.Marshal(workspace)
+	projectFolderData, _ := json.Marshal(projectFolder)
 	globalPath := filepath.Join(globalDir, "config.json")
-	workspacePath := filepath.Join(workspaceDir, "config.json")
+	projectFolderPath := filepath.Join(projectFolderDir, "config.json")
 	if err := os.WriteFile(globalPath, globalData, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(workspacePath, workspaceData, 0o644); err != nil {
+	if err := os.WriteFile(projectFolderPath, projectFolderData, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	merged, err := LoadConfigWithLayers(globalPath, workspacePath, "", globalDir)
+	merged, err := LoadConfigWithLayers(globalPath, projectFolderPath, "", globalDir)
 	if err != nil {
 		t.Fatalf("LoadConfigWithLayers: %v", err)
 	}

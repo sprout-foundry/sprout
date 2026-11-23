@@ -10,7 +10,7 @@ package semantic
 
 // typeScriptAnalyzerSessionScript holds the session-management half of the
 // TypeScript analyzer core script: severity normalization, line-offset
-// helpers, and the per-workspace ts.LanguageService cache.
+// helpers, and the per-project-folder ts.LanguageService cache.
 const typeScriptAnalyzerSessionScript = `
 function normalizeSeverity(cat, ts) {
   if (cat === ts.DiagnosticCategory.Error) return 'error';

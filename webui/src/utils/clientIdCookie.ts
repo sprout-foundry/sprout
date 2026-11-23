@@ -2,7 +2,7 @@
  * clientIdCookie — persist and recover the per-tab WebUI client ID via cookie.
  *
  * The WebUI uses a per-tab `client_id` (UUID) to isolate server-side context
- * (workspace, agent session, terminal sessions, WebSocket events) between
+ * (project folder, agent session, terminal sessions, WebSocket events) between
  * browser tabs. The server already sets a `sprout_client_id` cookie on every
  * response (see pkg/webui/client_context.go:24, `clientIDCookieName`); this
  * module centralises cookie read/write on the client side so:

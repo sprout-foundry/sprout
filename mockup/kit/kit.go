@@ -11,7 +11,8 @@
 package kit
 
 import (
-	_ "embed"
+	"embed"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -31,6 +32,12 @@ var baseCSS string
 //go:embed kits/kits.json
 var kitsFile []byte
 
+//go:embed kits/compositions.json
+var compositionsFile []byte
+
+//go:embed fonts/fonts.json fonts/*.woff2 fonts/LICENSE
+var fontsFS embed.FS
+
 //go:embed runtime.js
 var runtimeJS string
 
@@ -41,13 +48,31 @@ type Palette struct {
 	Colors map[string]string `json:"colors"`
 }
 
-// Kit is one look of the component stylesheet: what it suits, how a page in
-// it is composed (the brief), its variables and its own rules.
+// Kit is one look of the component stylesheet: what it suits, how its pages
+// are built (the brief), the first-screen compositions it suits, the heading
+// fonts that suit it, its variables and its own rules.
 type Kit struct {
-	About string            `json:"about"`
-	Brief string            `json:"brief"`
-	Vars  map[string]string `json:"vars"`
-	CSS   string            `json:"css"`
+	About        string            `json:"about"`
+	Brief        string            `json:"brief"`
+	Compositions []string          `json:"compositions"`
+	Fonts        []string          `json:"fonts"`
+	Vars         map[string]string `json:"vars"`
+	CSS          string            `json:"css"`
+}
+
+// Composition is a way to build a page's first screen.
+type Composition struct {
+	ID    string `json:"id"`
+	About string `json:"about"`
+}
+
+// Font is a heading face a page may name (data-font), embedded when used.
+type Font struct {
+	ID       string `json:"id"`
+	Family   string `json:"family"`
+	About    string `json:"about"`
+	Fallback string `json:"fallback"`
+	File     string `json:"file"`
 }
 
 var (
@@ -57,6 +82,11 @@ var (
 	paletteBy  map[string]Palette
 	kits       map[string]Kit
 	kitNames   []string
+	comps      []Composition
+	compBy     map[string]Composition
+	fonts      []Font
+	fontBy     map[string]Font
+	fontFiles  map[string][]byte
 )
 
 func init() {
@@ -67,15 +97,132 @@ func init() {
 	mustJSON(iconsFile, &ic)
 	icons, iconSource = ic.Icons, ic.Source
 	mustJSON(palettesFile, &palettes)
-	paletteBy = make(map[string]Palette, len(palettes))
-	for _, p := range palettes {
-		paletteBy[p.ID] = p
-	}
 	mustJSON(kitsFile, &kits)
+	mustJSON(compositionsFile, &comps)
+	raw, err := fontsFS.ReadFile("fonts/fonts.json")
+	if err != nil {
+		panic(fmt.Sprintf("mockupkit: %v", err))
+	}
+	mustJSON(raw, &fonts)
+	fontFiles = map[string][]byte{}
+	for _, f := range fonts {
+		b, err := fontsFS.ReadFile("fonts/" + f.File)
+		if err != nil {
+			panic(fmt.Sprintf("mockupkit: font %s: %v", f.ID, err))
+		}
+		fontFiles[f.ID] = b
+	}
+	reindex()
+}
+
+// reindex rebuilds the lookups after the kits, compositions or fonts change.
+func reindex() {
+	kitNames = kitNames[:0]
 	for k := range kits {
 		kitNames = append(kitNames, k)
 	}
 	sort.Strings(kitNames)
+	compBy = make(map[string]Composition, len(comps))
+	for _, c := range comps {
+		compBy[c.ID] = c
+	}
+	fontBy = make(map[string]Font, len(fonts))
+	for _, f := range fonts {
+		fontBy[f.ID] = f
+	}
+	paletteBy = make(map[string]Palette, len(palettes))
+	for _, p := range palettes {
+		paletteBy[p.ID] = p
+	}
+}
+
+// Extension adds kits, compositions, fonts and palettes to the built-in ones,
+// or replaces those with the same name, so a host can tune its mockups'
+// variety without a new release of this package.
+type Extension struct {
+	Kits         map[string]Kit
+	Compositions []Composition
+	Palettes     []Palette
+	// Fonts are the faces to add; FontFiles holds each one's woff2 by ID.
+	Fonts     []Font
+	FontFiles map[string][]byte
+}
+
+// Extend applies an extension. Call it once at start-up, before any mockup
+// is drawn or assembled; it is not safe alongside them.
+func Extend(e Extension) error {
+	for _, f := range e.Fonts {
+		if len(e.FontFiles[f.ID]) == 0 && len(fontFiles[f.ID]) == 0 {
+			return fmt.Errorf("mockupkit: font %q has no file", f.ID)
+		}
+	}
+	known := map[string]bool{}
+	for _, c := range comps {
+		known[c.ID] = true
+	}
+	for _, c := range e.Compositions {
+		known[c.ID] = true
+	}
+	for name, k := range e.Kits {
+		for _, c := range k.Compositions {
+			if !known[c] {
+				return fmt.Errorf("mockupkit: kit %q names unknown composition %q", name, c)
+			}
+		}
+	}
+	for name, k := range e.Kits {
+		kits[name] = k
+	}
+	comps = mergeBy(comps, e.Compositions, func(c Composition) string { return c.ID })
+	palettes = mergeBy(palettes, e.Palettes, func(p Palette) string { return p.ID })
+	fonts = mergeBy(fonts, e.Fonts, func(f Font) string { return f.ID })
+	for id, b := range e.FontFiles {
+		fontFiles[id] = b
+	}
+	reindex()
+	return nil
+}
+
+func mergeBy[T any](have, add []T, id func(T) string) []T {
+	at := map[string]int{}
+	for i, x := range have {
+		at[id(x)] = i
+	}
+	for _, x := range add {
+		if i, ok := at[id(x)]; ok {
+			have[i] = x
+		} else {
+			at[id(x)] = len(have)
+			have = append(have, x)
+		}
+	}
+	return have
+}
+
+// FontLicense is the licence and notices of the built-in heading fonts (SIL
+// Open Font License 1.1), to ship alongside a face a build uses.
+func FontLicense() string {
+	b, _ := fontsFS.ReadFile("fonts/LICENSE")
+	return string(b)
+}
+
+// CompositionIDs lists the first-screen compositions.
+func CompositionIDs() []string {
+	ids := make([]string, len(comps))
+	for i, c := range comps {
+		ids[i] = c.ID
+	}
+	return ids
+}
+
+// FontFile is a heading face's woff2 and description, for a build that
+// ships the face its mockup used.
+func FontFile(id string) (Font, []byte, bool) {
+	f, ok := fontBy[id]
+	if !ok {
+		return Font{}, nil, false
+	}
+	return f, fontFiles[id], true
 }
 
 func mustJSON(b []byte, v any) {
@@ -98,15 +245,19 @@ const (
 
 var (
 	htmlTagRe  = regexp.MustCompile(`(?is)<html\b[^>]*>`)
-	attrRe     = regexp.MustCompile(`(?i)\bdata-(kit|palette)\s*=\s*["']([^"']*)["']`)
+	attrRe     = regexp.MustCompile(`(?i)\bdata-(kit|palette|composition|font)\s*=\s*["']([^"']*)["']`)
 	bodyOpenRe = regexp.MustCompile(`(?is)<body\b[^>]*>`)
 	iconRefRe  = regexp.MustCompile(`#i-([a-z0-9-]+)`)
 	blockRe    = regexp.MustCompile(`(?s)` + regexp.QuoteMeta(blockStart) + `.*?` + regexp.QuoteMeta(blockEnd))
 )
 
-// Choice is the kit and palette a document asks for.
+// Choice is the kit, palette, first-screen composition and heading font a
+// document asks for.
 type Choice struct {
 	Kit, Palette string
+	// Composition and Font are empty when the document names none (or an
+	// unknown one).
+	Composition, Font string
 	// Look is the project's own look, for a document that names the
 	// project palette and carries one (look.go).
 	Look *Look
@@ -127,6 +278,14 @@ func ChoiceOf(doc string) Choice {
 				c.Uses = true
 				if _, ok := kits[v]; ok {
 					c.Kit = v
+				}
+			case "composition":
+				if _, ok := compBy[v]; ok {
+					c.Composition = v
+				}
+			case "font":
+				if _, ok := fontBy[v]; ok {
+					c.Font = v
 				}
 			case "palette":
 				c.Uses = true
@@ -169,6 +328,12 @@ func Block(c Choice, iconNames []string) string {
 	for k, v := range kit.Vars {
 		vars[k] = v
 	}
+	// A product's own look keeps its own type: no bundled face over it.
+	font, hasFont := fontBy[c.Font]
+	hasFont = hasFont && c.Look == nil
+	if hasFont {
+		vars["--font-head"] = fmt.Sprintf("%q,%s", font.Family, font.Fallback)
+	}
 	// The project's look goes over both: its colours, type and corners.
 	if c.Look != nil {
 		for k, v := range lookVars(*c.Look) {
@@ -184,6 +349,10 @@ func Block(c Choice, iconNames []string) string {
 		fmt.Fprintf(&b, "%s:%s;", k, vars[k])
 	}
 	b.WriteString("}\n")
+	if hasFont {
+		fmt.Fprintf(&b, "@font-face{font-family:%q;src:url(data:font/woff2;base64,%s) format(\"woff2\");font-display:swap}\n",
+			font.Family, base64.StdEncoding.EncodeToString(fontFiles[font.ID]))
+	}
 	b.WriteString(baseCSS)
 	if strings.HasSuffix(c.Palette, "-dark") || (c.Look != nil && c.Look.Dark) {
 		// The page is already dark: a dark band is a slightly lifted surface
@@ -301,10 +470,20 @@ func (s *Streamer) Feed(chunk string) string {
 // mood, and the icon names.
 func Catalog() string {
 	var b strings.Builder
-	b.WriteString("Kits (data-kit), each with what it suits and how to compose a page in it:\n")
+	b.WriteString("Kits (data-kit), each with what it suits, the first-screen compositions it suits, the heading fonts that suit it, and how its pages are built:\n")
 	for _, k := range kitNames {
-		fmt.Fprintf(&b, "- %s: %s %s\n", k, kits[k].About, kits[k].Brief)
+		kt := kits[k]
+		fmt.Fprintf(&b, "- %s: %s Compositions: %s. Fonts: %s. %s\n", k, kt.About, strings.Join(kt.Compositions, ", "), strings.Join(kt.Fonts, ", "), kt.Brief)
 	}
+	b.WriteString("\nFirst-screen compositions (data-composition):\n")
+	for _, c := range comps {
+		fmt.Fprintf(&b, "- %s: %s\n", c.ID, c.About)
+	}
+	b.WriteString("\nHeading fonts (data-font), embedded for you:\n")
+	for _, f := range fonts {
+		fmt.Fprintf(&b, "- %s: %s\n", f.ID, f.About)
+	}
+	b.WriteString("\nModifiers on <html>, each optional: data-density=\"airy|compact\", data-corners=\"sharp|round\", data-contrast=\"high\", data-scale=\"large|small\" (the headline size).\n")
 	b.WriteString("\nPalettes (data-palette), with their mood and colours; \"-soft\" ones have a tinted background, \"-dark\" ones are dark. The primary colour carries the buttons and highlights, so pick a palette whose primary suits the feel (a vivid one for an energetic product, a grey one only for a quiet look):\n")
 	for _, p := range palettes {
 		if strings.HasSuffix(p.ID, "-soft") || strings.HasSuffix(p.ID, "-dark") {

@@ -14,20 +14,20 @@ import (
 
 // Configurable constants for performance limits
 const (
-	// BuildWorkspaceTimeout is the absolute maximum time for workspace structure building
-	BuildWorkspaceTimeout = 30 * time.Second
+	// BuildProjectFolderTimeout is the absolute maximum time for project folder structure building
+	BuildProjectFolderTimeout = 30 * time.Second
 
-	// CacheDuration is how long workspace structure results are cached
+	// CacheDuration is how long project folder structure results are cached
 	CacheDuration = 5 * time.Minute
 
 	// ProgressEmitInterval controls how often progress events are emitted during file walk
 	ProgressEmitInterval = 1000 // emit every N files
 
-	// MaxDepth limits directory traversal depth in BuildWorkspaceStructure
+	// MaxDepth limits directory traversal depth in BuildProjectFolderStructure
 	MaxDepth = 20
 
-	// LargeWorkspaceThreshold is the file count above which limits apply
-	LargeWorkspaceThreshold = 1000
+	// LargeProjectFolderThreshold is the file count above which limits apply
+	LargeProjectFolderThreshold = 1000
 )
 
 // FileDiscovery provides common file discovery and analysis functionality
@@ -35,14 +35,14 @@ type FileDiscovery struct {
 	config *configuration.Config
 	logger *utils.Logger
 
-	// cache for workspace structure results
+	// cache for project folder structure results
 	cacheMu  sync.RWMutex
 	cacheMap map[string]*cacheEntry
 }
 
-// cacheEntry holds a cached workspace structure result
+// cacheEntry holds a cached project folder structure result
 type cacheEntry struct {
-	data      *WorkspaceInfo
+	data      *ProjectFolderInfo
 	modTime   time.Time
 	createdAt time.Time
 }
@@ -66,8 +66,8 @@ type FileResult struct {
 	MatchedFiles int
 }
 
-// WorkspaceInfo represents workspace information
-type WorkspaceInfo struct {
+// ProjectFolderInfo represents project folder information
+type ProjectFolderInfo struct {
 	ProjectType string
 	AllFiles    []string
 	FilesByDir  map[string][]string
@@ -123,17 +123,17 @@ func (fd *FileDiscovery) discoverWithShell(userIntent string, options *Discovery
 		return nil
 	}
 
-	// Build workspace info for shell commands
-	workspaceInfo := &WorkspaceInfo{
+	// Build project folder info for shell commands
+	projectFolderInfo := &ProjectFolderInfo{
 		ProjectType: "other",
 		RootDir:     options.RootPath,
 	}
-	if workspaceInfo.RootDir == "" {
-		workspaceInfo.RootDir, _ = filepath.Abs(".")
+	if projectFolderInfo.RootDir == "" {
+		projectFolderInfo.RootDir, _ = filepath.Abs(".")
 	}
 
 	joined := strings.Join(terms, " ")
-	found := fd.findFilesUsingShellCommands(joined, workspaceInfo)
+	found := fd.findFilesUsingShellCommands(joined, projectFolderInfo)
 
 	result := fd.applyFiltersAndLimits(found, options)
 	result.TotalFiles = len(found)

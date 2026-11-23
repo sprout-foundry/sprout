@@ -49,7 +49,7 @@ type RuntimeConfig struct {
 	// multi-chat UI and show "coupled with terminal" messaging.
 	SharedMode bool `json:"sharedMode"`
 
-	// Sync is the ETH-1 sync-on-resume git snapshot for the workspace:
+	// Sync is the ETH-1 sync-on-resume git snapshot for the project folder:
 	// branch, dirty files, ahead/behind and last commit at boot. It is
 	// computed with the pull DISABLED — bootstrap must never mutate the
 	// repo — so pull.result is always "not_attempted" here. nil (rendered
@@ -61,9 +61,9 @@ type RuntimeConfig struct {
 	// web UI, so the editor's account-surface exits (the "← Dashboard"
 	// back-link, escalation "View task on platform" links, avatar-menu
 	// exits) can build absolute URLs instead of self-looping into this
-	// daemon's own SPA on a Fly workspace (Mode B). Sourced from the
+	// daemon's own SPA on a Fly project folder (Mode B). Sourced from the
 	// SPROUT_PLATFORM_URL env var (injected by the operator or the
-	// workspace launch config); empty string means the field is omitted
+	// project folder launch config); empty string means the field is omitted
 	// (same pattern as other optional fields), and the editor keeps its
 	// current relative-exit behavior.
 	PlatformURL string `json:"platformURL,omitempty"`
@@ -75,10 +75,10 @@ type RuntimeConfig struct {
 	// (GitHub unreachable in-browser). See webui/src/types/runtimeConfig.ts.
 	EgressProxy string `json:"egressProxy,omitempty"`
 
-	// RepoURL is the repository the workspace should open, when the host
+	// RepoURL is the repository the project folder should open, when the host
 	// names one (a host's project repoUrl). Sourced from the SPROUT_REPO_URL
 	// env var; empty string omits the field, and the editor falls back to the
-	// ?repo= query parameter. A host that mounts a workspace supplies the repo
+	// ?repo= query parameter. A host that mounts a project folder supplies the repo
 	// through its own transport, so this is the daemon-side equivalent for a
 	// host that drives the bootstrap instead.
 	RepoURL string `json:"repoUrl,omitempty"`
@@ -107,9 +107,9 @@ func (ws *ReactWebServer) handleAPIBootstrap(w http.ResponseWriter, r *http.Requ
 	}
 	// appMode is always "local" from this binary. The launchd/systemd
 	// "service mode" is still a self-hosted local install — the daemon
-	// has a real workspace ($HOME) and the user reaches it via
+	// has a real project folder ($HOME) and the user reaches it via
 	// localhost. Conflating it with "cloud" caused the frontend's
-	// CloudAdapter to short-circuit /api/workspace with the synthetic
+	// CloudAdapter to short-circuit /api/project-folder with the synthetic
 	// /home/user response (cloudEndpointRegistry/endpoints/synthetic.ts)
 	// instead of calling the real local daemon. Managed cloud
 	// deployments override via VITE_SPROUT_MODE at build time
@@ -130,7 +130,7 @@ func (ws *ReactWebServer) handleAPIBootstrap(w http.ResponseWriter, r *http.Requ
 		BuildVersion: buildinfo.Version,
 		Update:       updatePayload(),
 		SharedMode:   ws.IsSharedMode(),
-		Sync:         computeBootstrapSync(r.Context(), ws.getWorkspaceRootForRequest(r)),
+		Sync:         computeBootstrapSync(r.Context(), ws.getProjectFolderForRequest(r)),
 		// The contract version this build serves (the source of truth in
 		// contract.go); the frontend negotiates against its own pin.
 		ContractVersion: ContractVersion,
@@ -142,7 +142,7 @@ func (ws *ReactWebServer) handleAPIBootstrap(w http.ResponseWriter, r *http.Requ
 		// GitHub traffic. Empty (env unset) → the omitempty tag drops it and
 		// the agent keeps the two-origin restriction.
 		EgressProxy: os.Getenv("SPROUT_EGRESS_PROXY"),
-		// Repository the workspace should open, when the host names one.
+		// Repository the project folder should open, when the host names one.
 		// Empty (env unset) → the omitempty tag drops it and the editor falls
 		// back to the ?repo= query parameter.
 		RepoURL: os.Getenv("SPROUT_REPO_URL"),
@@ -166,11 +166,11 @@ func updatePayload() *UpdateInfo {
 // disabled (bootstrap never mutates the repo). Any failure — including the
 // budget expiring — returns nil, which renders as "sync": null; bootstrap
 // itself must never fail because of it.
-func computeBootstrapSync(ctx context.Context, workspaceRoot string) *gitops.SyncReport {
+func computeBootstrapSync(ctx context.Context, projectFolder string) *gitops.SyncReport {
 	budgetCtx, cancel := context.WithTimeout(ctx, bootstrapSyncBudget)
 	defer cancel()
 
-	report, err := gitops.RunSync(budgetCtx, workspaceRoot, false)
+	report, err := gitops.RunSync(budgetCtx, projectFolder, false)
 	if err != nil {
 		return nil
 	}

@@ -138,7 +138,8 @@ const fetchSpy = vi.fn(async (input: unknown) => {
   if (url.includes('/api/git/')) return json({ message: 'success' });
   if (url.includes('/api/files')) return json(FILES);
   if (url.includes('/api/search')) return json(SEARCH_RESULT);
-  if (url.includes('/api/workspace')) return json({ workspace_root: '/work/widgets', daemon_root: '/work/widgets' });
+  if (url.includes('/api/project-folder'))
+    return json({ project_folder: '/work/widgets', daemon_root: '/work/widgets' });
   return json({});
 });
 
@@ -165,9 +166,9 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function mount(workspaceHost: SproutHost, space: 'code' | 'design' = 'code') {
-  setActiveHost(workspaceHost);
-  return render(<SproutWorkspace project={PROJECT} space={space} host={workspaceHost} />);
+function mount(projectFolderHost: SproutHost, space: 'code' | 'design' = 'code') {
+  setActiveHost(projectFolderHost);
+  return render(<SproutWorkspace project={PROJECT} space={space} host={projectFolderHost} />);
 }
 
 function tabPaths(): string[] {

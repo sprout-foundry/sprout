@@ -10,7 +10,7 @@ import (
 // isRootedPath reports whether p names a location independent of the
 // working directory. On Windows "/etc/passwd" and "\x" are not IsAbs (they
 // lack a drive) yet still resolve against the current drive's root, so
-// treating them as relative would place them inside the workspace.
+// treating them as relative would place them inside the project folder.
 func isRootedPath(p string) bool {
 	return filepath.IsAbs(p) || strings.HasPrefix(p, "/") || strings.HasPrefix(p, `\`)
 }

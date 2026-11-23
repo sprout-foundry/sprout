@@ -26,7 +26,7 @@ import { useWorkspaceKeyDown } from '../contexts/HotkeyContext';
 import { SIDEBAR_DEFAULT_WIDTH, clampSidebarWidth } from '../hooks/useSidebarState';
 import { useCommandHandler } from '../services/commandHandlers';
 import { useWorkspaceFileTree } from './useWorkspaceFileTree';
-import type { WorkspaceGitState } from './useWorkspaceGitState';
+import type { ProjectFolderGitState } from './useWorkspaceGitState';
 import { WorkspaceFileTreeView } from './WorkspaceFileTreeView';
 import { WorkspaceGitStatusPanel } from './WorkspaceGitView';
 import { WorkspaceSearchView } from './WorkspaceSearchView';
@@ -47,7 +47,7 @@ export interface WorkspaceSidebarProps {
   onCollapsedChange: (collapsed: boolean) => void;
   conversations: ProjectNavConversations;
   /** The git state, or null when the host has no git (no Source control entry). */
-  git: WorkspaceGitState | null;
+  git: ProjectFolderGitState | null;
   /** The workspace's absolute root, for the tree's absolute-path copies. */
   workspaceRoot?: string;
   /** The path of the file the editor shows, selected in the tree. */
@@ -64,7 +64,7 @@ export function WorkspaceSidebar({
   onCollapsedChange,
   conversations,
   git,
-  workspaceRoot,
+  workspaceRoot: projectFolder,
   selectedFile,
   onOpenFile,
   onToggleTerminal,
@@ -181,7 +181,7 @@ export function WorkspaceSidebar({
                       id={open.id}
                       git={git}
                       treeRef={treeRef}
-                      workspaceRoot={workspaceRoot}
+                      workspaceRoot={projectFolder}
                       selectedFile={selectedFile}
                       onOpenFile={onOpenFile}
                     />
@@ -209,12 +209,12 @@ function SidebarSection({
   id,
   git,
   treeRef,
-  workspaceRoot,
+  workspaceRoot: projectFolder,
   selectedFile,
   onOpenFile,
 }: {
   id: string;
-  git: WorkspaceGitState | null;
+  git: ProjectFolderGitState | null;
   treeRef: React.RefObject<FileTreeHandle>;
   workspaceRoot?: string;
   selectedFile?: string;
@@ -225,7 +225,7 @@ function SidebarSection({
     content = (
       <FilesSection
         treeRef={treeRef}
-        workspaceRoot={workspaceRoot}
+        workspaceRoot={projectFolder}
         selectedFile={selectedFile}
         onOpenFile={onOpenFile}
       />
@@ -240,7 +240,7 @@ function SidebarSection({
 
 function FilesSection({
   treeRef,
-  workspaceRoot,
+  workspaceRoot: projectFolder,
   selectedFile,
   onOpenFile,
 }: {
@@ -255,6 +255,6 @@ function FilesSection({
     },
     [onOpenFile],
   );
-  const tree = useWorkspaceFileTree({ onFileSelect, selectedFile, workspaceRoot });
+  const tree = useWorkspaceFileTree({ onFileSelect, selectedFile, workspaceRoot: projectFolder });
   return <WorkspaceFileTreeView ref={treeRef} {...tree} />;
 }

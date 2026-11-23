@@ -75,8 +75,8 @@ describe('getPathDisplayName', () => {
       expect(getPathDisplayName('/')).toBe('/');
     });
 
-    it('returns "No workspace" for empty path', () => {
-      expect(getPathDisplayName('')).toBe('No workspace');
+    it('returns "No project folder" for empty path', () => {
+      expect(getPathDisplayName('')).toBe('No project folder');
     });
   });
 

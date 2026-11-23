@@ -7,7 +7,7 @@ import type { FilesResponse, CreateItemResponse, DeleteItemResponse, RenameItemR
 export async function getFiles(fetchFn: typeof fetch): Promise<FilesResponse> {
   const response = await fetchFn('/api/files');
   if (!response.ok) {
-    // The code tells expected refusals (no workspace chosen yet) from failures.
+    // The code tells expected refusals (no project folder chosen yet) from failures.
     const body = (await response.json().catch(() => ({}))) as { code?: string };
     throw Object.assign(new Error('Failed to fetch files'), { code: body.code });
   }

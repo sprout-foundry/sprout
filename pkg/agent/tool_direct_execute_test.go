@@ -22,7 +22,7 @@ func TestExecuteToolByName_Success(t *testing.T) {
 	defer a.Shutdown()
 
 	workDir := t.TempDir()
-	a.SetWorkspaceRoot(workDir)
+	a.SetProjectFolder(workDir)
 
 	filePath := filepath.Join(workDir, "hello.txt")
 	require.NoError(t, os.WriteFile(filePath, []byte("hello from tool"), 0o644))

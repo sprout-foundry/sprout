@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-// Modes a runner executes workspaces in (SP-159 §159c).
+// Modes a runner executes dev spaces in (SP-159 §159c).
 const (
 	ModeContainer = "container"
 	ModeNative    = "native"
@@ -57,7 +57,7 @@ type Heartbeat struct {
 	RunnerVersion string   `json:"runner_version"`
 	Toolchains    []string `json:"toolchains,omitempty"`
 	// LocalDirs are the user-named directories (see `sprout runner start
-	// --dir`) this runner serves workspaces in place. A start task naming
+	// --dir`) this runner serves dev spaces in place. A start task naming
 	// one of them runs against the user's real files, no clone.
 	LocalDirs []string `json:"local_dirs,omitempty"`
 	// Capabilities is the optional start-task features this runner serves.
@@ -103,35 +103,35 @@ const (
 	// directories in local_dirs.
 	CapabilityLocalDirs = "local_dirs"
 	// CapabilityGateway: the runner wires llm_provider "gateway" tasks to
-	// the platform gateway (gateway_url) with the workspace key.
+	// the platform gateway (gateway_url) with the dev space key.
 	CapabilityGateway = "gateway"
-	// CapabilityTaskErrors: failed workspace results carry an error reason.
+	// CapabilityTaskErrors: failed dev space results carry an error reason.
 	CapabilityTaskErrors = "task_errors"
 )
 
-// WorkspaceTask is a start/stop/destroy instruction for one workspace.
+// DevSpaceTask is a start/stop/destroy instruction for one dev space.
 // Secrets arrive over the runner-key-authenticated channel and are never
 // written to disk by the runner.
-type WorkspaceTask struct {
-	WorkspaceID string `json:"workspace_id"`
-	UserID      string `json:"user_id"`
-	RepoURL     string `json:"repo_url"`
-	// WorkspaceDir, when set, names an allowlisted local directory the
-	// workspace runs in place: no clone, the directory is the workspace
+type DevSpaceTask struct {
+	DevSpaceID string `json:"dev_space_id"`
+	UserID     string `json:"user_id"`
+	RepoURL    string `json:"repo_url"`
+	// DevSpaceDir, when set, names an allowlisted local directory the
+	// dev space runs in place: no clone, the directory is the dev space
 	// root and the runner writes the user's real files there. The runner
 	// refuses any path it was not explicitly configured to serve.
-	WorkspaceDir string `json:"workspace_dir,omitempty"`
-	Action       string `json:"action"`
-	ContainerID  string `json:"container_id"`
-	TxnSecret    string `json:"txn_secret,omitempty"`
-	GitToken     string `json:"git_token,omitempty"`
+	DevSpaceDir string `json:"dev_space_dir,omitempty"`
+	Action      string `json:"action"`
+	ContainerID string `json:"container_id"`
+	TxnSecret   string `json:"txn_secret,omitempty"`
+	GitToken    string `json:"git_token,omitempty"`
 	// GitUsername is the HTTPS username GitToken goes with on the repo's
 	// host. Empty keeps the runner's own guess (x-access-token on GitHub,
 	// oauth2 elsewhere), which not every host accepts.
 	GitUsername string `json:"git_username,omitempty"`
 	LLMProvider string `json:"llm_provider,omitempty"`
 	LLMKey      string `json:"llm_key,omitempty"`
-	// Model names the model the workspace starts on (SPROUT_MODEL), for
+	// Model names the model the dev space starts on (SPROUT_MODEL), for
 	// any provider. The platform decides what to send, e.g. the user's
 	// last-used model; empty leaves the daemon's normal default for the
 	// provider.
@@ -144,9 +144,9 @@ type WorkspaceTask struct {
 	GatewayURL string `json:"gateway_url,omitempty"`
 }
 
-// WorkspaceResult reports a started (or failed) workspace.
-type WorkspaceResult struct {
-	WorkspaceID   string `json:"workspace_id"`
+// DevSpaceResult reports a started (or failed) dev space.
+type DevSpaceResult struct {
+	DevSpaceID    string `json:"dev_space_id"`
 	ContainerID   string `json:"container_id"`
 	Port          int    `json:"port"`
 	ConnectionURL string `json:"connection_url,omitempty"`
@@ -232,24 +232,24 @@ func (c *Client) SendHeartbeat(ctx context.Context, hb Heartbeat) error {
 	return c.expectOK(ctx, http.MethodPost, "/runners/"+c.Creds.RunnerID+"/heartbeat", hb, nil, "heartbeat")
 }
 
-// PollWorkspaceTasks fetches pending workspace instructions.
-func (c *Client) PollWorkspaceTasks(ctx context.Context) ([]WorkspaceTask, error) {
-	var out []WorkspaceTask
-	if err := c.expectOK(ctx, http.MethodGet, "/runners/"+c.Creds.RunnerID+"/workspace-tasks", nil, &out, "polling workspace tasks"); err != nil {
+// PollDevSpaceTasks fetches pending dev space instructions.
+func (c *Client) PollDevSpaceTasks(ctx context.Context) ([]DevSpaceTask, error) {
+	var out []DevSpaceTask
+	if err := c.expectOK(ctx, http.MethodGet, "/runners/"+c.Creds.RunnerID+"/dev-space-tasks", nil, &out, "polling dev space tasks"); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// SubmitWorkspaceResult reports a workspace start outcome.
-func (c *Client) SubmitWorkspaceResult(ctx context.Context, r WorkspaceResult) error {
-	return c.expectOK(ctx, http.MethodPost, "/runners/"+c.Creds.RunnerID+"/workspace-result", r, nil, "workspace result")
+// SubmitDevSpaceResult reports a dev space start outcome.
+func (c *Client) SubmitDevSpaceResult(ctx context.Context, r DevSpaceResult) error {
+	return c.expectOK(ctx, http.MethodPost, "/runners/"+c.Creds.RunnerID+"/dev-space-result", r, nil, "dev space result")
 }
 
-// UpdateWorkspaceStatus reports a workspace's status change.
-func (c *Client) UpdateWorkspaceStatus(ctx context.Context, workspaceID, status string) error {
-	return c.expectOK(ctx, http.MethodPost, "/runners/"+c.Creds.RunnerID+"/workspace/"+workspaceID+"/status",
-		map[string]string{"status": status}, nil, "workspace status")
+// UpdateDevSpaceStatus reports a dev space's status change.
+func (c *Client) UpdateDevSpaceStatus(ctx context.Context, devSpaceID, status string) error {
+	return c.expectOK(ctx, http.MethodPost, "/runners/"+c.Creds.RunnerID+"/dev-space/"+devSpaceID+"/status",
+		map[string]string{"status": status}, nil, "dev space status")
 }
 
 func (c *Client) expectOK(ctx context.Context, method, path string, body, out any, what string) error {

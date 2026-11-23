@@ -168,7 +168,7 @@ var deployCmd = &cobra.Command{
 The project's .sprout/deploy.json names where it ships (target and project
 name) and, optionally, a build output directory; the build command comes
 from the starter manifest .sprout/starter.json. The build runs in the
-workspace and the target only ever receives the built output.
+project folder and the target only ever receives the built output.
 
 By default a preview deployment is made (with its own per-deployment URL).
 A production deployment is always gated on explicit confirmation: pass

@@ -771,7 +771,7 @@
   color: var(--accent-primary);
 }
 
-.sidebar .scope-workspace {
+.sidebar .scope-project-folder {
   background: color-mix(in srgb, var(--accent-success) 15%, transparent);
   color: var(--accent-success);
 }

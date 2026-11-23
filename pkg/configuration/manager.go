@@ -17,8 +17,8 @@ type Manager struct {
 	lastSaved *Config // Track last saved state, not initial snapshot
 	loaded    bool    // Track if config has been loaded
 	configDir string  // Explicit config directory for saves (empty = use env/default)
-	// configFileName is the file written inside configDir. Workspace-layer
-	// managers write WorkspaceConfigFileName; everything else writes
+	// configFileName is the file written inside configDir. Project-folder-layer
+	// managers write ProjectFolderConfigFileName; everything else writes
 	// ConfigFileName. Empty means ConfigFileName.
 	configFileName string
 }
@@ -188,14 +188,14 @@ func NewManagerWithDir(configDir string) (*Manager, error) {
 
 // NewManagerWithLayers creates a configuration manager using layered config.
 // globalDir is the directory containing global config (~/.config/sprout/).
-// workspaceDir is the directory containing workspace config ({workspace}/.sprout/).
+// projectFolderDir is the directory containing project folder config ({project folder}/.sprout/).
 // Each layer is optional - missing layers are skipped.
-// Settings writes go to the workspace dir if provided, otherwise global.
-func NewManagerWithLayers(globalDir, workspaceDir string) (*Manager, error) {
+// Settings writes go to the project folder dir if provided, otherwise global.
+func NewManagerWithLayers(globalDir, projectFolderDir string) (*Manager, error) {
 	// Determine which directory should receive save writes
 	saveDir := globalDir
-	if workspaceDir != "" {
-		saveDir = workspaceDir
+	if projectFolderDir != "" {
+		saveDir = projectFolderDir
 	}
 	if saveDir != "" {
 		if err := os.MkdirAll(saveDir, 0700); err != nil {
@@ -203,21 +203,21 @@ func NewManagerWithLayers(globalDir, workspaceDir string) (*Manager, error) {
 		}
 	}
 
-	// Compute file paths. The workspace layer reads workspace.json (falling
+	// Compute file paths. The project folder layer reads workspace.json (falling
 	// back to a legacy config.json), never the same filename the global layer
-	// uses — see WorkspaceConfigFileName.
-	var globalPath, workspacePath string
+	// uses — see ProjectFolderConfigFileName.
+	var globalPath, projectFolderPath string
 	if globalDir != "" {
 		globalPath = filepath.Join(globalDir, ConfigFileName)
 	}
 	saveFileName := ConfigFileName
-	if workspaceDir != "" {
-		workspacePath = ResolveWorkspaceConfigFile(workspaceDir, isHomeDir(filepath.Dir(workspaceDir)))
-		saveFileName = WorkspaceConfigFileName
+	if projectFolderDir != "" {
+		projectFolderPath = ResolveProjectFolderConfigFile(projectFolderDir, isHomeDir(filepath.Dir(projectFolderDir)))
+		saveFileName = ProjectFolderConfigFileName
 	}
 
-	// Load merged config (global + workspace, no session layer)
-	config, err := loadConfigWithLayers(globalPath, workspacePath, "", globalDir, workspaceDir)
+	// Load merged config (global + project folder, no session layer)
+	config, err := loadConfigWithLayers(globalPath, projectFolderPath, "", globalDir, projectFolderDir)
 	if err != nil {
 		return nil, fmt.Errorf("load layered config: %w", err)
 	}

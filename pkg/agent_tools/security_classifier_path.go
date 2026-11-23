@@ -39,7 +39,7 @@ func classifyWriteOperation(args map[string]interface{}) SecurityResult {
 		return SecurityResult{Risk: SecuritySafe, Reasoning: "Writing to temporary directory", Category: RiskCategoryFileWrite}
 	}
 
-	return SecurityResult{Risk: SecuritySafe, Reasoning: "Workspace file operation", Category: RiskCategoryFileWrite}
+	return SecurityResult{Risk: SecuritySafe, Reasoning: "Project folder file operation", Category: RiskCategoryFileWrite}
 }
 
 // hasToken splits s on whitespace and reports whether any resulting token
@@ -196,7 +196,7 @@ func isScreenshotPathAllowed(cleanedPath string) bool {
 		return true
 	}
 
-	// /tmp/sprout/* is always allowed (agent scratch/audit/screenshot workspace)
+	// /tmp/sprout/* is always allowed (agent scratch/audit/screenshot project folder)
 	if strings.HasPrefix(filepath.ToSlash(cleanedPath), "/tmp/sprout") {
 		return true
 	}

@@ -78,7 +78,7 @@ export interface WasmShell {
   getCwd(): string;
   /** The project directory: relative paths given to the shell resolve here. */
   getWorkspaceRoot(): string;
-  /** Make a directory the workspace. */
+  /** Make a directory the project folder. */
   changeDir(dir: string): WasmChangeDirResult;
   /** Write content to a file (synced to IndexedDB). */
   writeFile(path: string, content: string): string; // error or ""
@@ -109,7 +109,7 @@ export interface WasmShell {
     chatId?: string,
     /** JSON [{role, content}] seeding a chat's agent when it is created fresh. */
     history?: string,
-    /** Reserved for a host-declared workspace mode; the agent ignores it. */
+    /** Reserved for a host-declared project folder mode; the agent ignores it. */
     mode?: string,
   ): Promise<{ response: string; provider: string; model: string }>;
   /** Clear a chat's agent history (every chat's when no id is given). */
@@ -124,7 +124,7 @@ export interface WasmShell {
   respondToEditDecision?(requestId: string, approved: boolean, acceptedHunks: string[]): { delivered: boolean };
   /** Deliver a shell approval decision to a pending shell approval request. */
   respondToShellApproval?(requestId: string, decisions: Record<string, boolean>): { delivered: boolean };
-  /** The §6b design status JSON for the workspace root (GET /api/design/status). */
+  /** The §6b design status JSON for the project folder (GET /api/design/status). */
   designStatus?(): string;
   /** Build identity of the running binary (version/commit/date). Null on binaries built before the export existed. */
   getBuildInfo(): { version: string; commit: string; date: string } | null;
@@ -330,7 +330,7 @@ export interface SproutWasmAPI {
   executeCommandAsync?(input: string): Promise<string>;
   autoComplete(input: string): string;
   getCwd(): string;
-  /** Absent in binaries built before the workspace root existed. */
+  /** Absent in binaries built before the project folder existed. */
   getWorkspaceRoot?(): string;
   changeDir(dir: string): string;
   writeFile(path: string, content: string): string;
@@ -373,7 +373,7 @@ export interface SproutWasmAPI {
   extractSymbols?(filePath: string, content: Uint8Array | ArrayBuffer): string;
   supportedLanguages?(): string;
   // ── Design health (cmd/wasm/design_funcs.go) ──
-  /** The §6b design status JSON for the workspace root. Absent in binaries built before the export existed. */
+  /** The §6b design status JSON for the project folder. Absent in binaries built before the export existed. */
   designStatus?(root?: string): string;
   // ── Build identity (cmd/wasm/main.go getBuildInfoFunc) ──
   /** Version/commit/date of the running binary. Absent in binaries built before the export existed. */

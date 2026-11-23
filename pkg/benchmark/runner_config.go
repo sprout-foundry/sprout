@@ -70,7 +70,7 @@ func (r *Runner) configureRun(spec ModelSpec) error {
 // enabled, the spec's model/provider in place). It mirrors the production
 // SDK path (cmd/wasm): a real provider client from pkg/factory plus
 // agent.NewAgentWithClient with the runner's config manager — so the
-// agent sees exactly the run's configuration — with the workspace root
+// agent sees exactly the run's configuration — with the project folder
 // pinned to the run's fresh copy.
 func (r *Runner) defaultAgentFactory(runDir string, spec ModelSpec) (*agent.Agent, error) {
 	if r.ConfigManager == nil {
@@ -92,7 +92,7 @@ func (r *Runner) defaultAgentFactory(runDir string, spec ModelSpec) (*agent.Agen
 	if err != nil {
 		return nil, fmt.Errorf("benchmark: build the headless agent: %w", err)
 	}
-	ag.SetWorkspaceRoot(runDir)
+	ag.SetProjectFolder(runDir)
 	return ag, nil
 }
 

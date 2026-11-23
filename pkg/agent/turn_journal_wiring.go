@@ -27,7 +27,7 @@ func (a *Agent) beginTurnJournal(query string) {
 		sessionID = fmt.Sprintf("session_%d", time.Now().Unix())
 		a.state.SetSessionID(sessionID)
 	}
-	j, err := OpenTurnJournal(sessionID, a.currentWorkspaceRoot())
+	j, err := OpenTurnJournal(sessionID, a.currentProjectFolder())
 	if err != nil {
 		a.Logger().Debug("[WARN] failed to open turn journal: %v\n", err)
 		return
@@ -156,7 +156,7 @@ func (a *Agent) finalizeTurnJournal() {
 	if sessionID == "" {
 		return
 	}
-	if err := RemoveTurnJournal(sessionID, a.currentWorkspaceRoot()); err != nil {
+	if err := RemoveTurnJournal(sessionID, a.currentProjectFolder()); err != nil {
 		a.Logger().Debug("[WARN] failed to remove turn journal: %v\n", err)
 	}
 }

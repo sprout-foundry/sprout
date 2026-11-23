@@ -18,7 +18,7 @@ import (
 // (pkg/agent/approvals/broker.go): non-hard-block, risk != DANGEROUS, and no
 // intent confirmation. It lifts exactly the CAUTION-tier shell prompt.
 //
-// Classification reference (verified against ClassifyToolCallWithWorkspace):
+// Classification reference (verified against ClassifyToolCallWithProjectFolder):
 //   - "printf 'x' > src/added.txt" → CAUTION, ShouldPrompt=true,  IsHardBlock=false
 //   - "chmod 777 /etc/passwd"      → DANGEROUS, ShouldBlock=true, IsHardBlock=false
 //   - "mkfs.ext4 /dev/sda1"        → DANGEROUS, ShouldBlock=true, IsHardBlock=true
@@ -133,7 +133,7 @@ func TestShellHandler_UnsafeShell_HardBlockStillBlocked(t *testing.T) {
 // pkg/agent/unsafe_shell_integration_test.go.
 func requireCautionTier(t *testing.T, dir, cmd string) {
 	t.Helper()
-	sec := ClassifyToolCallWithWorkspace("shell_command", map[string]any{"command": cmd}, dir)
+	sec := ClassifyToolCallWithProjectFolder("shell_command", map[string]any{"command": cmd}, dir)
 	if sec.Risk != SecurityCaution || sec.IsHardBlock || !sec.ShouldPrompt {
 		t.Skipf("classifier returned risk=%s hardBlock=%v prompt=%v for %q — skipping (classifier behavior changed)",
 			sec.Risk, sec.IsHardBlock, sec.ShouldPrompt, cmd)
@@ -145,7 +145,7 @@ func requireCautionTier(t *testing.T, dir, cmd string) {
 // bypass must not cross.
 func requireDangerousNonHardBlock(t *testing.T, dir, cmd string) {
 	t.Helper()
-	sec := ClassifyToolCallWithWorkspace("shell_command", map[string]any{"command": cmd}, dir)
+	sec := ClassifyToolCallWithProjectFolder("shell_command", map[string]any{"command": cmd}, dir)
 	if sec.Risk != SecurityDangerous || sec.IsHardBlock {
 		t.Skipf("classifier returned risk=%s hardBlock=%v for %q — skipping (classifier behavior changed)",
 			sec.Risk, sec.IsHardBlock, cmd)

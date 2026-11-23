@@ -6,9 +6,9 @@
  * (screen switching, tabs, forms) runs inside it, and its styles apply without
  * leaking into the shell. The sandbox allows same-origin so the document can
  * load its own relative assets; that also lets it reach the shell's origin, so
- * a mockup is trusted to the same degree as the code in the workspace.
+ * a mockup is trusted to the same degree as the code in the project folder.
  *
- * It is the preview panel's other body: a workspace with a mockup shows it
+ * It is the preview panel's other body: a project folder with a mockup shows it
  * here instead of a dev server's output, because a mockup is the same kind of
  * thing — a rendered view of the work — and the person wants it beside the
  * code they are writing from it, not in a mode of its own.

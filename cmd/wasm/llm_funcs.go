@@ -22,7 +22,7 @@ func llmJSFuncs() map[string]interface{} {
 	}
 }
 
-// runQuestionFunc runs a read-only Q&A agent against the workspace.
+// runQuestionFunc runs a read-only Q&A agent against the project folder.
 // Inputs:
 //
 //	args[0] (string)  — provider name

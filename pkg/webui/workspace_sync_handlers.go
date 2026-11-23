@@ -2,9 +2,9 @@
 
 // Package webui provides the React web server with embedded assets.
 //
-// This file implements the workspace sync HTTP handler for
-// POST /api/workspace/sync (SP-046).
-// See roadmap/SP-046-workspace-sync-model.md for the full specification.
+// This file implements the project folder sync HTTP handler for
+// POST /api/project-folder/sync (SP-046).
+// See roadmap/SP-046-project-folder-sync-model.md for the full specification.
 
 package webui
 
@@ -19,22 +19,22 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
-// workspaceSyncState is the package-level sync state for the workspace sync
+// projectFolderSyncState is the package-level sync state for the project folder sync
 // protocol. It is initialized once at startup and shared across all
 // ReactWebServer instances. In a multi-tenant future, this would be keyed by
-// user or workspace.
-var workspaceSyncState = agenttools.NewSyncState()
+// user or project folder.
+var projectFolderSyncState = agenttools.NewSyncState()
 
 // activeSessionRegistry is the package-level multi-device session registry for
 // SP-046-5. It tracks which device currently holds an active session.
 var activeSessionRegistry = NewActiveSessionRegistry()
 
-// syncRequest is the JSON body shape for POST /api/workspace/sync.
+// syncRequest is the JSON body shape for POST /api/project-folder/sync.
 type syncRequest struct {
 	// Op is the operation type. Currently only "patch" is supported.
 	Op string `json:"op"`
 
-	// Path is the workspace-relative file path (e.g. "pkg/foo/bar.go").
+	// Path is the project-folder-relative file path (e.g. "pkg/foo/bar.go").
 	Path string `json:"path"`
 
 	// Content is the full file content after the browser edit.
@@ -48,7 +48,7 @@ type syncRequest struct {
 	LastSyncedContainer int64 `json:"last_synced_container"`
 }
 
-// handleAPIWorkspaceSync handles POST /api/workspace/sync.
+// handleAPIProjectFolderSync handles POST /api/project-folder/sync.
 //
 // Accepts a browser→container patch operation: the user edited a file in the
 // browser editor, and this call syncs the change to the server-side state.
@@ -56,7 +56,7 @@ type syncRequest struct {
 // On success (200), returns the updated FileMetadata for the file.
 // On conflict (409), returns an error with the path to the ".theirs" file.
 // On bad request (400), returns an error describing what was wrong.
-func (ws *ReactWebServer) handleAPIWorkspaceSync(w http.ResponseWriter, r *http.Request) {
+func (ws *ReactWebServer) handleAPIProjectFolderSync(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
@@ -75,7 +75,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceSync(w http.ResponseWriter, r *http.
 
 	var req syncRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		ws.log().Warn("invalid workspace sync request", slog.Any("err", err))
+		ws.log().Warn("invalid project folder sync request", slog.Any("err", err))
 		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
@@ -91,9 +91,9 @@ func (ws *ReactWebServer) handleAPIWorkspaceSync(w http.ResponseWriter, r *http.
 	}
 
 	// Apply the browser operation to the sync state.
-	metadata, err := workspaceSyncState.ApplyBrowserOp(req.Path, req.Content)
+	metadata, err := projectFolderSyncState.ApplyBrowserOp(req.Path, req.Content)
 	if err != nil {
-		ws.log().Warn("workspace sync conflict", slog.String("path", req.Path), slog.Any("err", err))
+		ws.log().Warn("project folder sync conflict", slog.String("path", req.Path), slog.Any("err", err))
 		// On conflict, suggest a .theirs path for the browser to surface.
 		theirsPath := req.Path + ".theirs"
 		writeJSON(w, http.StatusConflict, map[string]interface{}{
@@ -106,19 +106,19 @@ func (ws *ReactWebServer) handleAPIWorkspaceSync(w http.ResponseWriter, r *http.
 	writeJSON(w, http.StatusOK, metadata)
 }
 
-// takeoverRequest is the JSON body shape for POST /api/workspace/takeover.
+// takeoverRequest is the JSON body shape for POST /api/project-folder/takeover.
 type takeoverRequest struct {
 	SessionID string `json:"session_id"`
 	DeviceID  string `json:"device_id"`
 }
 
-// handleAPIWorkspaceTakeover handles POST /api/workspace/takeover (SP-046-5).
+// handleAPIProjectFolderTakeover handles POST /api/project-folder/takeover (SP-046-5).
 //
 // A new device requests to take over an existing session. If the session is
 // already active on another device, the old device is swapped out and a
 // workspace.session_moved event is published so the displaced browser can
 // surface the overlay.
-func (ws *ReactWebServer) handleAPIWorkspaceTakeover(w http.ResponseWriter, r *http.Request) {
+func (ws *ReactWebServer) handleAPIProjectFolderTakeover(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
@@ -137,7 +137,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceTakeover(w http.ResponseWriter, r *h
 
 	var req takeoverRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		ws.log().Warn("invalid workspace takeover request", slog.Any("err", err))
+		ws.log().Warn("invalid project folder takeover request", slog.Any("err", err))
 		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
@@ -152,7 +152,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceTakeover(w http.ResponseWriter, r *h
 
 	if oldDevice != "" {
 		// Publish session_moved event so the displaced browser can show the overlay.
-		ws.eventBus.Publish(events.EventTypeWorkspaceSessionMoved, map[string]interface{}{
+		ws.eventBus.Publish(events.EventTypeProjectFolderSessionMoved, map[string]interface{}{
 			"session_id":      req.SessionID,
 			"previous_device": oldDevice,
 			"new_device":      req.DeviceID,

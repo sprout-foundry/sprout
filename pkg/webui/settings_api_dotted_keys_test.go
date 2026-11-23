@@ -35,7 +35,7 @@ func TestDottedSettingKeysAreApplied(t *testing.T) {
 			}
 		}},
 		{`{"computer_use.workspace_allowlist":["/a","/b"]}`, func(t *testing.T, c *configuration.Config) {
-			if c.ComputerUse == nil || len(c.ComputerUse.WorkspaceAllowlist) != 2 {
+			if c.ComputerUse == nil || len(c.ComputerUse.ProjectFolderAllowlist) != 2 {
 				t.Errorf("computer_use.workspace_allowlist did not persist: %+v", c.ComputerUse)
 			}
 		}},
@@ -72,10 +72,10 @@ func TestDottedSettingKeysAreApplied(t *testing.T) {
 func TestDottedWriteDoesNotClobberSiblings(t *testing.T) {
 	cfg := &configuration.Config{
 		ComputerUse: &configuration.ComputerUseConfig{
-			Enabled:             true,
-			MaxActionsPerMinute: 5,
-			WorkspaceAllowlist:  []string{"/a", "/b"},
-			AuditLogDir:         "/tmp/audit",
+			Enabled:                true,
+			MaxActionsPerMinute:    5,
+			ProjectFolderAllowlist: []string{"/a", "/b"},
+			AuditLogDir:            "/tmp/audit",
 		},
 	}
 
@@ -93,8 +93,8 @@ func TestDottedWriteDoesNotClobberSiblings(t *testing.T) {
 	if got.AuditLogDir != "/tmp/audit" {
 		t.Errorf("AuditLogDir = %q, want /tmp/audit", got.AuditLogDir)
 	}
-	if len(got.WorkspaceAllowlist) != 2 {
-		t.Errorf("WorkspaceAllowlist = %v, want 2 entries", got.WorkspaceAllowlist)
+	if len(got.ProjectFolderAllowlist) != 2 {
+		t.Errorf("ProjectFolderAllowlist = %v, want 2 entries", got.ProjectFolderAllowlist)
 	}
 }
 

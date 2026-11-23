@@ -39,7 +39,7 @@ func (ws *ReactWebServer) peekClientAgent(clientID string) *agent.Agent {
 	}
 
 	// The agent exists, so getClientAgent takes its fast path (re-arming
-	// the agent for this client's workspace) rather than building one.
+	// the agent for this client's project folder) rather than building one.
 	agentInst, err := ws.getClientAgent(clientID)
 	if err != nil {
 		return nil

@@ -12,7 +12,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/injection"
 )
 
-// trustTestRoot is a synthetic absolute workspace root. Never a real path:
+// trustTestRoot is a synthetic absolute project folder. Never a real path:
 // test fixtures must not carry a developer's or a user's directory layout.
 const trustTestRoot = "/tmp/sprout-trust-fixture/repo"
 
@@ -239,41 +239,41 @@ func TestParseTrustClass(t *testing.T) {
 	}
 }
 
-// TestTrustWorkspaceRootStripsSproutDir pins the key shape: the store is keyed
+// TestTrustProjectFolderStripsSproutDir pins the key shape: the store is keyed
 // by the repository root, and detectGitRepo reports the .sprout config dir, so
 // taking its value verbatim would key decisions on a path that moves with the
 // config layout.
-func TestTrustWorkspaceRootStripsSproutDir(t *testing.T) {
-	prev := autoDetectedWorkspaceDir
-	t.Cleanup(func() { autoDetectedWorkspaceDir = prev })
+func TestTrustProjectFolderStripsSproutDir(t *testing.T) {
+	prev := autoDetectedProjectFolderDir
+	t.Cleanup(func() { autoDetectedProjectFolderDir = prev })
 
-	autoDetectedWorkspaceDir = "/tmp/sprout-trust-fixture/repo/.sprout"
-	root, err := trustWorkspaceRoot()
+	autoDetectedProjectFolderDir = "/tmp/sprout-trust-fixture/repo/.sprout"
+	root, err := trustProjectFolder()
 	if err != nil {
-		t.Fatalf("trustWorkspaceRoot: %v", err)
+		t.Fatalf("trustProjectFolder: %v", err)
 	}
 	if root != "/tmp/sprout-trust-fixture/repo" {
-		t.Errorf("trustWorkspaceRoot() = %q, want the repo root %q", root, "/tmp/sprout-trust-fixture/repo")
+		t.Errorf("trustProjectFolder() = %q, want the repo root %q", root, "/tmp/sprout-trust-fixture/repo")
 	}
 }
 
-// TestTrustWorkspaceRootFallsBackToCwd covers the outside-a-repo case: with no
+// TestTrustProjectFolderFallsBackToCwd covers the outside-a-repo case: with no
 // auto-detected repo the working directory is the root, and it is never empty
 // (an empty key would pool every directory's decisions together).
-func TestTrustWorkspaceRootFallsBackToCwd(t *testing.T) {
-	prev := autoDetectedWorkspaceDir
-	t.Cleanup(func() { autoDetectedWorkspaceDir = prev })
-	autoDetectedWorkspaceDir = ""
+func TestTrustProjectFolderFallsBackToCwd(t *testing.T) {
+	prev := autoDetectedProjectFolderDir
+	t.Cleanup(func() { autoDetectedProjectFolderDir = prev })
+	autoDetectedProjectFolderDir = ""
 
-	root, err := trustWorkspaceRoot()
+	root, err := trustProjectFolder()
 	if err != nil {
-		t.Fatalf("trustWorkspaceRoot: %v", err)
+		t.Fatalf("trustProjectFolder: %v", err)
 	}
 	if root == "" {
-		t.Fatal("trustWorkspaceRoot() returned an empty root")
+		t.Fatal("trustProjectFolder() returned an empty root")
 	}
 	if !filepath.IsAbs(root) {
-		t.Errorf("trustWorkspaceRoot() = %q, want an absolute path", root)
+		t.Errorf("trustProjectFolder() = %q, want an absolute path", root)
 	}
 }
 

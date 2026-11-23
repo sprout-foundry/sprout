@@ -25,7 +25,7 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
 
       const silent = options?.silent ?? false;
 
-      // Handle virtual workspace buffers (untitled files created via Ctrl+N)
+      // Handle virtual project folder buffers (untitled files created via Ctrl+N)
       if (buffer.file.path.startsWith('__workspace/')) {
         const filePath = await showThemedPrompt('Enter a file path for the new file:', {
           title: 'Save As',

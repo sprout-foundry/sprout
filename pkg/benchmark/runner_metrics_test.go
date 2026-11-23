@@ -74,7 +74,7 @@ func TestRunner_TokensAndCostAreTheConversationTotals(t *testing.T) {
 			return nil, fmt.Errorf("harness: build scripted agent: %w", err)
 		}
 		ag.SetMaxIterations(10)
-		ag.SetWorkspaceRoot(runDir)
+		ag.SetProjectFolder(runDir)
 		built = ag
 		return ag, nil
 	}
@@ -161,7 +161,7 @@ func TestRunner_RunCarriesRoleUsage(t *testing.T) {
 			return nil, fmt.Errorf("harness: build scripted agent: %w", err)
 		}
 		ag.SetMaxIterations(10)
-		ag.SetWorkspaceRoot(runDir)
+		ag.SetProjectFolder(runDir)
 		built = ag
 		return ag, nil
 	}

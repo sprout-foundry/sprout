@@ -296,24 +296,24 @@ func TestReportJSONStable(t *testing.T) {
 	}
 }
 
-// TestRunMutatingGate is the disposable-workspace gate: RunMutating without an
-// explicitly set disposable workspace returns the gate error; with one set it
+// TestRunMutatingGate is the disposable-project-folder gate: RunMutating without an
+// explicitly set disposable project folder returns the gate error; with one set it
 // runs.
 func TestRunMutatingGate(t *testing.T) {
 	spec := cannedSpec()
 
-	noWorkspace := New("http://127.0.0.1:1", spec, WithProbes(cannedProbes()))
-	if _, err := noWorkspace.RunMutating(context.Background()); err == nil {
-		t.Fatal("RunMutating without a disposable workspace returned nil error; want the gate error")
+	noProjectFolder := New("http://127.0.0.1:1", spec, WithProbes(cannedProbes()))
+	if _, err := noProjectFolder.RunMutating(context.Background()); err == nil {
+		t.Fatal("RunMutating without a disposable project folder returned nil error; want the gate error")
 	} else if !strings.Contains(err.Error(), "disposable") {
-		t.Fatalf("RunMutating gate error = %q, want it to mention the disposable workspace", err)
+		t.Fatalf("RunMutating gate error = %q, want it to mention the disposable project folder", err)
 	}
 
-	withWorkspace := New("http://127.0.0.1:1", spec,
-		WithProbes(cannedProbes()), WithDisposableWorkspace(t.TempDir()))
-	rep, err := withWorkspace.RunMutating(context.Background())
+	withProjectFolder := New("http://127.0.0.1:1", spec,
+		WithProbes(cannedProbes()), WithDisposableProjectFolder(t.TempDir()))
+	rep, err := withProjectFolder.RunMutating(context.Background())
 	if err != nil {
-		t.Fatalf("RunMutating with a disposable workspace: %v", err)
+		t.Fatalf("RunMutating with a disposable project folder: %v", err)
 	}
 	// No mutating probes are registered yet: an empty, all-passed report.
 	if !rep.AllPassed() {

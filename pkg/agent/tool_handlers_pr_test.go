@@ -68,8 +68,8 @@ func setupPRHandlerTest(t *testing.T) (*Agent, string, func()) {
 	runGitCmd(t, dir, "add", "feature.txt")
 	runGitCmd(t, dir, "commit", "-m", "Add feature")
 
-	// Set workspace so effectiveCwd() returns this dir.
-	agent.SetWorkspaceRoot(dir)
+	// Set project folder so effectiveCwd() returns this dir.
+	agent.SetProjectFolder(dir)
 
 	// Set orchestrator persona with git-write enabled for basic tests.
 	agent.state.SetActivePersona("orchestrator")
@@ -257,7 +257,7 @@ func TestHandleCreatePullRequest_DefaultRepoDir(t *testing.T) {
 	defer restore()
 	t.Setenv("GH_TOKEN", "")
 
-	// Don't pass repo_dir — should default to agent's workspace root
+	// Don't pass repo_dir — should default to agent's project folder
 	result, err := handleCreatePullRequest(context.Background(), a, map[string]interface{}{
 		"title": "Default dir PR",
 	})

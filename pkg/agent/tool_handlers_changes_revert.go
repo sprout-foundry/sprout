@@ -142,7 +142,7 @@ func selectRevertCandidates(changes []TrackedFileChange, scope, since string) ([
 // revertOne writes the change's OriginalCode back to disk (or removes
 // the file if the change is a create-with-no-original). Returns
 // (action, ok, message). A method on *Agent so it can enforce the
-// workspace boundary check (C1) via a.IsPathOutsideWorkspace and reach
+// project folder boundary check (C1) via a.IsPathOutsideProjectFolder and reach
 // the change tracker via a.GetChangeTracker.
 func (a *Agent) revertOne(ch TrackedFileChange) (string, bool, string) {
 	abs, err := filepath.Abs(ch.FilePath)
@@ -150,12 +150,12 @@ func (a *Agent) revertOne(ch TrackedFileChange) (string, bool, string) {
 		return "", false, fmt.Sprintf("resolve path: %v", err)
 	}
 
-	// C1: Refuse to write to or delete anything outside the workspace
-	// root. Out-of-workspace entries are reported as skipped (not
-	// failures) so a bulk revert still succeeds for the in-workspace
+	// C1: Refuse to write to or delete anything outside the project folder
+	// root. Out-of-project-folder entries are reported as skipped (not
+	// failures) so a bulk revert still succeeds for the in-project-folder
 	// majority without aborting on a single stray path.
-	if a.IsPathOutsideWorkspace(abs) {
-		return "skip", false, "path is outside the workspace — skipped"
+	if a.IsPathOutsideProjectFolder(abs) {
+		return "skip", false, "path is outside the project folder — skipped"
 	}
 
 	// Already at its pre-session state (e.g. a later `git checkout`
@@ -196,7 +196,7 @@ func (a *Agent) revertOne(ch TrackedFileChange) (string, bool, string) {
 	// Past the create branch, an empty original is a genuinely empty file
 	// (existence is recorded explicitly), so it restores as empty.
 	if ch.OriginalCode != "" && !isRecoverableOriginal(ch.OriginalCode) {
-		return "", false, "original content was not captured (binary, oversized, or outside workspace)"
+		return "", false, "original content was not captured (binary, oversized, or outside project folder)"
 	}
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		return "", false, fmt.Sprintf("create parent dir: %v", err)
@@ -315,7 +315,7 @@ func asString(v interface{}) string {
 // isRecoverableOriginal reports whether a TrackedFileChange.OriginalCode
 // value represents real recoverable content. The tracker uses three
 // "non-content" sentinels: empty string (for created files — no
-// original existed), the redacted marker (external workspace), and the
+// original existed), the redacted marker (external project folder), and the
 // "[CONTENT NOT CAPTURED: …]" prefix (shell snapshot filtered out).
 func isRecoverableOriginal(original string) bool {
 	if original == "" {

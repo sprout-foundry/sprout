@@ -43,7 +43,7 @@ func (a *Agent) resourceDirectory() string {
 		return ""
 	}
 
-	return filepath.Join(a.currentWorkspaceRoot(), cleaned)
+	return filepath.Join(a.currentProjectFolder(), cleaned)
 }
 
 func (a *Agent) captureWebText(kind, source, text string) {

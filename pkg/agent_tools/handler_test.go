@@ -547,13 +547,13 @@ func TestToolDefinitionFields(t *testing.T) {
 func TestParameterDefFields(t *testing.T) {
 	t.Parallel()
 	p := ParameterDef{
-		Name:        "workspace_root",
+		Name:        "project_folder",
 		Type:        "string",
 		Required:    true,
-		Description: "The workspace root directory",
+		Description: "The project folder",
 	}
-	if p.Name != "workspace_root" {
-		t.Errorf("Name = %q, want %q", p.Name, "workspace_root")
+	if p.Name != "project_folder" {
+		t.Errorf("Name = %q, want %q", p.Name, "project_folder")
 	}
 	if p.Type != "string" {
 		t.Errorf("Type = %q, want %q", p.Type, "string")
@@ -561,8 +561,8 @@ func TestParameterDefFields(t *testing.T) {
 	if !p.Required {
 		t.Error("Required should be true")
 	}
-	if p.Description != "The workspace root directory" {
-		t.Errorf("Description = %q, want %q", p.Description, "The workspace root directory")
+	if p.Description != "The project folder" {
+		t.Errorf("Description = %q, want %q", p.Description, "The project folder")
 	}
 }
 
@@ -577,14 +577,14 @@ func TestToolEnvFields(t *testing.T) {
 
 	env := ToolEnv{
 		EventBus:        nil, // hard to construct without events package internals
-		WorkspaceRoot:   "/home/user/project",
+		ProjectFolder:   "/home/user/project",
 		OutputWriter:    sw,
 		ApprovalManager: am,
 		MaxTokensFunc:   func() int { return 4096 },
 	}
 
-	if env.WorkspaceRoot != "/home/user/project" {
-		t.Errorf("WorkspaceRoot = %q, want %q", env.WorkspaceRoot, "/home/user/project")
+	if env.ProjectFolder != "/home/user/project" {
+		t.Errorf("ProjectFolder = %q, want %q", env.ProjectFolder, "/home/user/project")
 	}
 	if env.OutputWriter == nil {
 		t.Fatal("OutputWriter should not be nil")

@@ -67,13 +67,13 @@ func handleListChanges(_ context.Context, a *Agent, args map[string]interface{})
 		return `{"revision_id":"","enabled":false,"count":0,"files":[]}`, nil
 	}
 
-	changes := applyChangeFilters(tracker.GetChanges(), args, a.currentWorkspaceRoot())
+	changes := applyChangeFilters(tracker.GetChanges(), args, a.currentProjectFolder())
 
 	if groupBy == "block" {
 		return buildBlockSummary(tracker.GetRevisionID(), changes)
 	}
 
-	return buildFileList(tracker, changes, includeDiff, includePersisted, includeCrossSession, args, a.currentWorkspaceRoot())
+	return buildFileList(tracker, changes, includeDiff, includePersisted, includeCrossSession, args, a.currentProjectFolder())
 }
 
 // handleListChangesPersistedOnly is the include_persisted path when no
@@ -130,7 +130,7 @@ func handleListChangesPersistedOnly(args map[string]interface{}) (string, error)
 
 // buildFileList renders the per-file shape for list_changes. Used both
 // for session-only and session+persisted output.
-func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeDiff, includePersisted, includeCrossSession bool, args map[string]interface{}, workspaceRoot string) (string, error) {
+func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeDiff, includePersisted, includeCrossSession bool, args map[string]interface{}, projectFolder string) (string, error) {
 	type bulkItemEntry struct {
 		Path string `json:"path"`
 		Op   string `json:"op"`
@@ -266,7 +266,7 @@ func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeD
 				if asString(args["tool"]) != "" {
 					continue
 				}
-				if pat := asString(args["path_pattern"]); pat != "" && !pathPatternMatches(pat, ch.Filename, workspaceRoot) {
+				if pat := asString(args["path_pattern"]); pat != "" && !pathPatternMatches(pat, ch.Filename, projectFolder) {
 					continue
 				}
 				entry := fileEntry{
@@ -394,7 +394,7 @@ func buildBlockSummary(revisionID string, changes []TrackedFileChange) (string, 
 // since=<ISO8601 OR duration>, tool=<name>, path_pattern=<glob> args.
 // Returns a copy of the matched subset so callers don't mutate the
 // tracker's internal slice.
-func applyChangeFilters(changes []TrackedFileChange, args map[string]interface{}, workspaceRoot string) []TrackedFileChange {
+func applyChangeFilters(changes []TrackedFileChange, args map[string]interface{}, projectFolder string) []TrackedFileChange {
 	cutoff, _ := parseRecentSince(asString(args["since"]))
 	toolFilter, _ := args["tool"].(string)
 	pattern, _ := args["path_pattern"].(string)
@@ -410,7 +410,7 @@ func applyChangeFilters(changes []TrackedFileChange, args map[string]interface{}
 		if toolFilter != "" && !toolNameMatches(toolFilter, ch.ToolCall) {
 			continue
 		}
-		if pattern != "" && !pathPatternMatches(pattern, ch.FilePath, workspaceRoot) {
+		if pattern != "" && !pathPatternMatches(pattern, ch.FilePath, projectFolder) {
 			continue
 		}
 		out = append(out, ch)
@@ -427,13 +427,13 @@ func toolNameMatches(filter, toolCall string) bool {
 }
 
 // pathPatternMatches matches a glob against a tracked (absolute) path. A
-// pattern with a separator matches the workspace-relative path (e.g.
+// pattern with a separator matches the project-folder-relative path (e.g.
 // "pkg/auth/*.go"); one without matches the base name (e.g. "*.go"); a
 // pattern ending in "/" matches everything under that directory.
-func pathPatternMatches(pattern, path, workspaceRoot string) bool {
+func pathPatternMatches(pattern, path, projectFolder string) bool {
 	rel := path
-	if workspaceRoot != "" {
-		if r, err := filepath.Rel(workspaceRoot, path); err == nil && !strings.HasPrefix(r, "..") {
+	if projectFolder != "" {
+		if r, err := filepath.Rel(projectFolder, path); err == nil && !strings.HasPrefix(r, "..") {
 			rel = r
 		}
 	}

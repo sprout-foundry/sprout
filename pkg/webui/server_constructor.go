@@ -44,18 +44,18 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		}
 	}
 
-	workspaceRoot, err := os.Getwd()
+	projectFolder, err := os.Getwd()
 	if err != nil {
-		workspaceRoot = "."
+		projectFolder = "."
 	}
-	workspaceRoot, err = filepathAbsEval(workspaceRoot)
+	projectFolder, err = filepathAbsEval(projectFolder)
 	if err != nil {
-		workspaceRoot = "."
+		projectFolder = "."
 	}
 
 	// daemonRoot is the user's home directory — it scopes daemon-level
-	// storage (sessions, SSH tunnels, config) AND the workspace browser
-	// (handleAPIWorkspaceBrowse) to the user rather than a specific project.
+	// storage (sessions, SSH tunnels, config) AND the project folder browser
+	// (handleAPIProjectFolderBrowse) to the user rather than a specific project.
 	//
 	// Resolution, most authoritative first:
 	//   1. SPROUT_DAEMON_ROOT — baked into the launchd/systemd unit at install
@@ -64,11 +64,11 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 	//   3. user.Current().HomeDir (`/etc/passwd`) — bypasses $HOME, used in
 	//      service mode when the plist/unit is stale and $HOME may be wrong
 	//      (e.g., a launchd cache from a pre-SPROUT_DAEMON_ROOT install).
-	//   4. workspaceRoot (the CWD) — last resort only.
+	//   4. projectFolder (the CWD) — last resort only.
 	//
 	// Falling back to the CWD is dangerous under a service manager: launchd /
 	// systemd can start the daemon in "/" or another system dir, and because
-	// the workspace browser is scoped to daemonRoot the user would be unable
+	// the project folder browser is scoped to daemonRoot the user would be unable
 	// to reach their projects. Warn loudly when we have to fall back.
 	serviceMode := configuration.GetEnvSimple("SERVICE") == "1"
 	daemonRoot := configuration.GetEnvSimple("DAEMON_ROOT")
@@ -104,19 +104,19 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		}
 	}
 	if daemonRoot == "" {
-		daemonRoot = workspaceRoot
+		daemonRoot = projectFolder
 		if serviceMode {
-			webuiLogger.Warn("user home could not be resolved; workspace browser may not reach projects",
-				slog.String("workspace_root", workspaceRoot),
+			webuiLogger.Warn("user home could not be resolved; project folder browser may not reach projects",
+				slog.String("project_folder", projectFolder),
 				slog.String("remediation", "sprout service uninstall && sprout service install"),
 			)
 		}
 	}
 
-	webuiLogger.Info("web UI startup configuration resolved", slog.String("workspace_root", workspaceRoot), slog.String("daemon_root", daemonRoot), slog.Bool("service_mode", serviceMode), slog.String("daemon_root_source", rootSource))
+	webuiLogger.Info("web UI startup configuration resolved", slog.String("project_folder", projectFolder), slog.String("daemon_root", daemonRoot), slog.Bool("service_mode", serviceMode), slog.String("daemon_root_source", rootSource))
 
-	// Resolve daemonRoot symlinks early so the recent-workspace check below
-	// compares canonical paths (recent-workspace paths are stored after
+	// Resolve daemonRoot symlinks early so the recent-project-folder check below
+	// compares canonical paths (recent-project-folder paths are stored after
 	// filepathAbsEval → EvalSymlinks). Without this, /var/folders vs
 	// /private/var/folders on macOS produces false negatives.
 	resolvedDaemonRoot := daemonRoot
@@ -126,28 +126,28 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 
 	if serviceMode {
 		// SP-130: in service mode the daemon's CWD is typically $HOME (baked
-		// into the plist/unit), so blindly defaulting the workspace to the
+		// into the plist/unit), so blindly defaulting the project folder to the
 		// CWD/daemonRoot means the agent runs with the entire home directory
-		// in scope. Instead, try to restore the most recent valid workspace.
+		// in scope. Instead, try to restore the most recent valid project folder.
 		// If it exists and is within daemonRoot, use it; otherwise leave
-		// workspaceRoot as the CWD-derived default (home) and let the
+		// projectFolder as the CWD-derived default (home) and let the
 		// frontend gate force explicit selection.
-		if recent := GetMostRecentWorkspace(); recent != "" {
+		if recent := GetMostRecentProjectFolder(); recent != "" {
 			if info, err := os.Stat(recent); err == nil && info.IsDir() {
 				if abs, err := filepath.Abs(recent); err == nil {
-					if isWithinWorkspace(abs, resolvedDaemonRoot) {
-						workspaceRoot = abs
+					if isWithinProjectFolder(abs, resolvedDaemonRoot) {
+						projectFolder = abs
 					}
 				}
 			}
 		}
-		// If no valid recent workspace was found, workspaceRoot stays as the
+		// If no valid recent project folder was found, projectFolder stays as the
 		// CWD-derived default — the frontend gate catches home and forces
 		// explicit selection rather than silently running scoped to ~.
 	}
 
-	// Initialize recent workspace tracking.
-	initRecentWorkspaces()
+	// Initialize recent project folder tracking.
+	initRecentProjectFolders()
 
 	providercatalog.RefreshFromRemoteAsync("")
 
@@ -228,39 +228,39 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 	if evaled, err := filepath.EvalSymlinks(daemonRoot); err == nil {
 		daemonRoot = evaled
 	}
-	if evaled, err := filepath.EvalSymlinks(workspaceRoot); err == nil {
-		workspaceRoot = evaled
+	if evaled, err := filepath.EvalSymlinks(projectFolder); err == nil {
+		projectFolder = evaled
 	}
 
 	ws := &ReactWebServer{
-		logger:            webuiLogger,
-		agent:             agent,
-		eventBus:          eventBus,
-		daemonRoot:        daemonRoot,
-		workspaceRoot:     workspaceRoot,
-		sshHostAlias:      strings.TrimSpace(configuration.GetEnvSimple("SSH_HOST_ALIAS")),
-		sshSessionKey:     strings.TrimSpace(configuration.GetEnvSimple("SSH_SESSION_KEY")),
-		sshLauncherURL:    strings.TrimSpace(configuration.GetEnvSimple("SSH_LAUNCHER_URL")),
-		sshHomePath:       strings.TrimSpace(configuration.GetEnvSimple("SSH_HOME")),
-		fileConsents:      newFileConsentManager(),
-		fileWatcher:       newFileWatcher(eventBus),
-		securityPromptMgr: securityPromptMgr,
-		askUserMgr:        askUserMgr,
-		clientContexts:    make(map[string]*webClientContext),
-		clientWorkspaces:  make(map[string]string),
-		chatSubscribers:   newChatSubscribersRegistry(),
-		userConnections:   &UserConnections{},
-		port:              port,
-		bindAddr:          bindAddr,
-		socketPath:        socketPath,
+		logger:               webuiLogger,
+		agent:                agent,
+		eventBus:             eventBus,
+		daemonRoot:           daemonRoot,
+		projectFolder:        projectFolder,
+		sshHostAlias:         strings.TrimSpace(configuration.GetEnvSimple("SSH_HOST_ALIAS")),
+		sshSessionKey:        strings.TrimSpace(configuration.GetEnvSimple("SSH_SESSION_KEY")),
+		sshLauncherURL:       strings.TrimSpace(configuration.GetEnvSimple("SSH_LAUNCHER_URL")),
+		sshHomePath:          strings.TrimSpace(configuration.GetEnvSimple("SSH_HOME")),
+		fileConsents:         newFileConsentManager(),
+		fileWatcher:          newFileWatcher(eventBus),
+		securityPromptMgr:    securityPromptMgr,
+		askUserMgr:           askUserMgr,
+		clientContexts:       make(map[string]*webClientContext),
+		clientProjectFolders: make(map[string]string),
+		chatSubscribers:      newChatSubscribersRegistry(),
+		userConnections:      &UserConnections{},
+		port:                 port,
+		bindAddr:             bindAddr,
+		socketPath:           socketPath,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: newCheckOriginFunc(bindAddr, normalizedAllowedOrigins),
 		},
-		terminalManager:          NewTerminalManager(workspaceRoot),
+		terminalManager:          NewTerminalManager(projectFolder),
 		startTime:                time.Now(),
 		fixReviewJobs:            make(map[string]*gitFixReviewJob),
 		previewManagers:          make(map[string]*preview.Manager),
-		sshSessions:              make(map[string]*sshWorkspaceSession),
+		sshSessions:              make(map[string]*sshProjectFolderSession),
 		sshInFlight:              make(map[string]chan struct{}),
 		sshLaunchStatuses:        make(map[string]*sshLaunchStatus),
 		normalizedAllowedOrigins: normalizedAllowedOrigins,
@@ -268,7 +268,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		serviceMode:              serviceMode,
 		authToken:                resolvedAuthToken,
 	}
-	ws.initClientWorkspaceStore()
+	ws.initClientProjectFolderStore()
 	return ws, nil
 }
 

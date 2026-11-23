@@ -5,7 +5,7 @@
 // They are deliberately not pre-warmed: a decoded grammar stays resident
 // for the life of the process, and pre-warming every supported language
 // cost ~435 MB and ~1.2 s at each startup — ~340 MB of it the Swift grammar
-// alone — whether or not the workspace contained those languages. The
+// alone — whether or not the project folder contained those languages. The
 // parser is safe for concurrent use: each call to ParseFile creates its own
 // parser instance.
 //

@@ -12,8 +12,8 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
-func (ws *ReactWebServer) getWorkspaceRootForRequest(r *http.Request) string {
-	root := ws.getClientContextForRequest(r).WorkspaceRoot
+func (ws *ReactWebServer) getProjectFolderForRequest(r *http.Request) string {
+	root := ws.getClientContextForRequest(r).ProjectFolder
 	// Resolve symlinks so that canonicalizePath comparisons are consistent
 	// (macOS /var → /private/var). The daemonRoot/workspaceRoot are resolved
 	// at server construction, but per-client context roots may not be.
@@ -24,7 +24,7 @@ func (ws *ReactWebServer) getWorkspaceRootForRequest(r *http.Request) string {
 }
 
 // getLayeredConfigManager creates a config manager using the layered approach
-// (global → workspace → session) for the given client ID.
+// (global → project folder → session) for the given client ID.
 // This is used as a fallback when no live agent's config manager is available.
 func (ws *ReactWebServer) getLayeredConfigManager(clientID string) (*configuration.Manager, error) {
 	configBase, err := configuration.GetConfigDir()
@@ -32,21 +32,21 @@ func (ws *ReactWebServer) getLayeredConfigManager(clientID string) (*configurati
 		return nil, fmt.Errorf("get config directory: %w", err)
 	}
 
-	// Resolve workspace root for this client
+	// Resolve project folder for this client
 	ws.mutex.RLock()
 	ctx := ws.clientContexts[clientID]
 	ws.mutex.RUnlock()
-	var workspaceRoot string
+	var projectFolder string
 	if ctx != nil {
-		workspaceRoot = ctx.WorkspaceRoot
+		projectFolder = ctx.ProjectFolder
 	}
 
-	var workspaceDir string
-	if workspaceRoot != "" {
-		workspaceDir = configuration.WorkspaceConfigDir(workspaceRoot)
+	var projectFolderDir string
+	if projectFolder != "" {
+		projectFolderDir = configuration.ProjectFolderConfigDir(projectFolder)
 	}
 
-	return configuration.NewManagerWithLayers(configBase, workspaceDir)
+	return configuration.NewManagerWithLayers(configBase, projectFolderDir)
 }
 
 func (ws *ReactWebServer) getTerminalManagerForRequest(r *http.Request) *TerminalManager {
@@ -82,32 +82,32 @@ func (ws *ReactWebServer) getCurrentSessionIDForRequest(r *http.Request) string 
 	return ws.getClientContextForRequest(r).CurrentSessionID
 }
 
-// getWorkspaceRootForClient returns the per-client workspace root for the given client ID.
-// Falls back to the server-level workspace root if the client context doesn't exist.
-func (ws *ReactWebServer) getWorkspaceRootForClient(clientID string) string {
+// getProjectFolderForClient returns the per-client project folder for the given client ID.
+// Falls back to the server-level project folder if the client context doesn't exist.
+func (ws *ReactWebServer) getProjectFolderForClient(clientID string) string {
 	ws.mutex.RLock()
 	defer ws.mutex.RUnlock()
 	if ctx := ws.clientContexts[clientID]; ctx != nil {
-		root := ctx.WorkspaceRoot
+		root := ctx.ProjectFolder
 		if evaled, err := filepath.EvalSymlinks(root); err == nil {
 			return evaled
 		}
 		return root
 	}
-	return ws.workspaceRoot
+	return ws.projectFolder
 }
 
-// getAutomateDir returns the workspace-local automate/ directory for the
-// current client's workspace. Falls back to the CWD when no workspace root
+// getAutomateDir returns the project-folder-local automate/ directory for the
+// current client's project folder. Falls back to the CWD when no project folder
 // is set (e.g., standalone daemon or pre-chat initialization).
 func (ws *ReactWebServer) getAutomateDir(r *http.Request) string {
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	if workspaceRoot == "" {
+	projectFolder := ws.getProjectFolderForRequest(r)
+	if projectFolder == "" {
 		wd, err := os.Getwd()
 		if err != nil {
 			return "."
 		}
-		workspaceRoot = wd
+		projectFolder = wd
 	}
-	return filepath.Join(workspaceRoot, "automate")
+	return filepath.Join(projectFolder, "automate")
 }

@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// PastedTextDirName is the workspace-relative directory under which large
+// PastedTextDirName is the project-folder-relative directory under which large
 // text pastes are auto-saved by SavePastedText. Mirrors PastedImageDirName.
 const PastedTextDirName = ".sprout/pastes"
 
@@ -25,7 +25,7 @@ const (
 )
 
 // SavePastedText writes content to .sprout/pastes/ with a timestamped
-// random-suffixed filename and returns the workspace-relative path
+// random-suffixed filename and returns the project-folder-relative path
 // (e.g. "./.sprout/pastes/paste_20260520_145959_abc123.txt"). The path is
 // suitable for insertion as a `@path` reference the agent can read.
 // SP-048-4d. Mirrors SavePastedImage.

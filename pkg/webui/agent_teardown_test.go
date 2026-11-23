@@ -11,13 +11,13 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
-// Switching a client's workspace clears ctx.Agent and ctx.ChatSessions. Before
+// Switching a client's project folder clears ctx.Agent and ctx.ChatSessions. Before
 // this teardown existed, the outgoing agents were only dropped from the map —
 // their own goroutines kept them alive, so their embedding managers went on
-// building and writing the OLD workspace's index for the life of the daemon.
-// With a single browser window, opening workspace A then B was enough to leave
-// two workspaces' index builds racing each other.
-func TestSetClientWorkspaceRootShutsDownOutgoingAgent(t *testing.T) {
+// building and writing the OLD project folder's index for the life of the daemon.
+// With a single browser window, opening project folder A then B was enough to leave
+// two project folders' index builds racing each other.
+func TestSetClientProjectFolderShutsDownOutgoingAgent(t *testing.T) {
 	daemonRoot := t.TempDir()
 	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
 	t.Cleanup(func() { credentials.ResetStorageBackend() })
@@ -36,11 +36,11 @@ func TestSetClientWorkspaceRootShutsDownOutgoingAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.SetWorkspaceRoot(daemonRoot)
+	_, _ = ws.SetProjectFolder(daemonRoot)
 
 	const clientID = "teardown-window"
-	if _, err := ws.setClientWorkspaceRoot(clientID, first); err != nil {
-		t.Fatalf("set first workspace: %v", err)
+	if _, err := ws.setClientProjectFolder(clientID, first); err != nil {
+		t.Fatalf("set first project folder: %v", err)
 	}
 
 	outgoing, err := ws.getClientAgent(clientID)
@@ -48,11 +48,11 @@ func TestSetClientWorkspaceRootShutsDownOutgoingAgent(t *testing.T) {
 		t.Skipf("agent creation unavailable in this environment: %v", err)
 	}
 	if outgoing == nil {
-		t.Fatal("expected an agent for the first workspace")
+		t.Fatal("expected an agent for the first project folder")
 	}
 
-	if _, err := ws.setClientWorkspaceRoot(clientID, second); err != nil {
-		t.Fatalf("set second workspace: %v", err)
+	if _, err := ws.setClientProjectFolder(clientID, second); err != nil {
+		t.Fatalf("set second project folder: %v", err)
 	}
 	ws.waitForAgentTeardown()
 
@@ -64,7 +64,7 @@ func TestSetClientWorkspaceRootShutsDownOutgoingAgent(t *testing.T) {
 	clientCtx := ws.clientContexts[clientID]
 	ws.mutex.RUnlock()
 	if clientCtx == nil {
-		t.Fatal("client context disappeared after workspace switch")
+		t.Fatal("client context disappeared after project folder switch")
 	}
 	if clientCtx.Agent == outgoing {
 		t.Error("client context still references the outgoing agent")

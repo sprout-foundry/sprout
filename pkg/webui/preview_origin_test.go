@@ -40,7 +40,7 @@ func getPreview(t *testing.T, url string) (*http.Response, string) {
 	return resp, string(body)
 }
 
-func TestPreviewOriginServesWorkspaceFile(t *testing.T) {
+func TestPreviewOriginServesProjectFolderFile(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "page.html"), []byte("<h1>hello</h1>"), 0o600); err != nil {
 		t.Fatal(err)
@@ -129,7 +129,7 @@ func TestPreviewOriginRejectsPathTraversal(t *testing.T) {
 		t.Errorf("status = 200 for a traversal path; body = %q", body)
 	}
 	if strings.Contains(body, "secret") {
-		t.Errorf("served content outside the workspace: %q", body)
+		t.Errorf("served content outside the project folder: %q", body)
 	}
 }
 

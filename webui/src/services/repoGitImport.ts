@@ -1,5 +1,5 @@
 /**
- * Opening an imported repository in the in-browser workspace as a git
+ * Opening an imported repository in the in-browser project folder as a git
  * repository, so source control (status, diff and the editor gutter, staging,
  * commit, branches, history) works through browser git.
  *
@@ -38,7 +38,7 @@ export interface RepoRestoreResult {
 }
 
 export interface RepoGitImportDeps {
-  /** The WASM shell whose workspace holds the files. */
+  /** The WASM shell whose project folder holds the files. */
   shell: () => Promise<WasmShell>;
   /** The files-only import (the local cache, else the host's import endpoint). */
   importFiles: (repoURL: string) => Promise<RepoRestoreResult>;
@@ -63,14 +63,14 @@ export async function restoreRepoWithBrowserGit(repoURL: string, deps: RepoGitIm
   let parseRepoRef: ParseRepoRef;
   try {
     const shell = await deps.shell();
-    const [gitModule, bridge, workspaceGit] = await Promise.all([
+    const [gitModule, bridge, projectFolderGit] = await Promise.all([
       import('./browserGit'),
       import('./browserGitBridge'),
       import('./workspaceFs/workspaceGit'),
     ]);
     bridge.ensureBrowserGitBridge(shell, deps.author);
     bg = gitModule;
-    parseRepoRef = workspaceGit.parseRepoRef;
+    parseRepoRef = projectFolderGit.parseRepoRef;
   } catch (err) {
     console.warn('[repo import] browser git unavailable; importing files only:', err);
     return { ...(await deps.importFiles(repoURL)), history: 'none' };

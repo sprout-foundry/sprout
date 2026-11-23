@@ -56,8 +56,8 @@ func TestHumaRemainingFamiliesDispatch(t *testing.T) {
 		return b
 	}
 
-	// --- workspace/instances: GET /api/workspace (workspaceGet) ---
-	resp := do(t, http.MethodGet, "/api/workspace", "")
+	// --- workspace/instances: GET /api/project-folder (projectFolderGet) ---
+	resp := do(t, http.MethodGet, "/api/project-folder", "")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /api/workspace: status = %d, want %d (body: %s)", resp.StatusCode, http.StatusOK, readAll(t, resp))
 	}
@@ -66,15 +66,15 @@ func TestHumaRemainingFamiliesDispatch(t *testing.T) {
 	if err := json.Unmarshal(body, &wsGet); err != nil {
 		t.Fatalf("decode /api/workspace: %v (body: %s)", err, body)
 	}
-	if _, ok := wsGet["workspace_root"]; !ok {
+	if _, ok := wsGet["project_folder"]; !ok {
 		t.Fatalf("GET /api/workspace: payload = %v, want a workspace_root key", wsGet)
 	}
 
-	// POST /api/workspace (workspaceSet) — empty path is 400, proving the
+	// POST /api/project-folder (projectFolderSet) — empty path is 400, proving the
 	// POST operation is registered and the handler ran (not a 404 catch-all).
-	resp = do(t, http.MethodPost, "/api/workspace", `{}`)
+	resp = do(t, http.MethodPost, "/api/project-folder", `{}`)
 	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("POST /api/workspace (no path): status = %d, want %d (body: %s)", resp.StatusCode, http.StatusBadRequest, readAll(t, resp))
+		t.Fatalf("POST /api/project-folder (no path): status = %d, want %d (body: %s)", resp.StatusCode, http.StatusBadRequest, readAll(t, resp))
 	}
 
 	// --- terminal: GET /api/terminal/history (terminalHistoryGet) ---
@@ -92,7 +92,7 @@ func TestHumaRemainingFamiliesDispatch(t *testing.T) {
 	}
 
 	// --- sync/txn: GET /api/txn/status (txnStatus, read-only) ---
-	// The test workspace is a fresh temp dir (not a git repo), so the
+	// The test project folder is a fresh temp dir (not a git repo), so the
 	// preflight reports in_git_repo=false. Proves the GET operation is the
 	// read-only half (not the POSTs).
 	resp = do(t, http.MethodGet, "/api/txn/status", "")
@@ -172,7 +172,7 @@ func TestHumaRemainingFamiliesDispatch(t *testing.T) {
 	for _, gate := range []struct {
 		method, path string
 	}{
-		{http.MethodDelete, "/api/workspace"},        // only GET+POST registered
+		{http.MethodDelete, "/api/project-folder"},   // only GET+POST registered
 		{http.MethodDelete, "/api/terminal/history"}, // only GET+POST registered
 		{http.MethodDelete, "/api/txn/status"},       // only GET registered
 		{http.MethodDelete, "/api/command/execute"},  // only POST registered

@@ -233,7 +233,7 @@ describe('FileTree context menu – file items', () => {
     expect(texts).toContain('Open in file browser');
     // But NOT "Open in editor" (only for files)
     expect(texts).not.toContain('Open in editor');
-    // And NOT "Copy absolute path" when workspaceRoot is not set
+    // And NOT "Copy absolute path" when projectFolder is not set
     expect(texts).not.toContain('Copy absolute path');
   });
 

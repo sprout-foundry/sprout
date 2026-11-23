@@ -73,16 +73,16 @@ func smWritePlanFile(t *testing.T, root, content string) {
 // Helpers
 // ---------------------------------------------------------------------------
 
-// smAgent builds a bare agent rooted at workspaceRoot with session id
+// smAgent builds a bare agent rooted at projectFolder with session id
 // "run-1" and a captured EventBus, so handleTodoWrite runs the real milestone
 // hook and its events can be asserted. changeTracker, when non-nil, is a bare
 // tracker (nil view) that the test seeds directly.
-func smAgent(t *testing.T, workspaceRoot string, changeTracker *changes.ChangeTracker) (*Agent, <-chan events.UIEvent) {
+func smAgent(t *testing.T, projectFolder string, changeTracker *changes.ChangeTracker) (*Agent, <-chan events.UIEvent) {
 	t.Helper()
 
 	ag := &Agent{state: NewAgentStateManager(false)}
 	ag.initSubManagers()
-	ag.SetWorkspaceRoot(workspaceRoot)
+	ag.SetProjectFolder(projectFolder)
 	ag.SetSessionID("run-1")
 	ag.changeTracker = changeTracker
 

@@ -53,7 +53,7 @@ test.describe('Binary Viewer', () => {
       }
       // Write the file via the backend API (may not exist — best effort)
       try {
-        const workspace = await fetch('/api/workspace').then((r) => r.json());
+        const workspace = await fetch('/api/project-folder').then((r) => r.json());
         const path = (workspace?.root || '.') + '/test-e2e.png';
         await fetch('/api/files/write', {
           method: 'POST',

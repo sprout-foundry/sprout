@@ -3,7 +3,7 @@
  * in-memory filesystem (mirrored to the host's file store, when it gave one).
  */
 
-import { toAbsolutePath, toWorkspacePath } from './events';
+import { toAbsolutePath, toProjectFolderPath } from './events';
 import type { AgentFileEntry, AgentFiles, SproutWasmBridge } from './types';
 
 function parseJSON<T>(raw: string, fallback: T): T {
@@ -17,17 +17,17 @@ function parseJSON<T>(raw: string, fallback: T): T {
 /** Directories `snapshot` and `walk` leave out: VCS state and installed dependencies. */
 const SKIPPED_DIRS = new Set(['.git', 'node_modules']);
 
-export function workspaceRootOf(bridge: SproutWasmBridge): string {
+export function projectFolderOf(bridge: SproutWasmBridge): string {
   return bridge.getWorkspaceRoot?.() || '/workspace';
 }
 
-export function readWorkspaceFile(bridge: SproutWasmBridge, absPath: string): string | null {
+export function readProjectFolderFile(bridge: SproutWasmBridge, absPath: string): string | null {
   const res = parseJSON<{ content?: string; error?: string }>(bridge.readFile(absPath), { error: 'unreadable' });
   return res.error ? null : (res.content ?? '');
 }
 
 export function createAgentFiles(bridge: SproutWasmBridge): AgentFiles {
-  const root = () => workspaceRootOf(bridge);
+  const root = () => projectFolderOf(bridge);
 
   const list = (dir = '.'): AgentFileEntry[] => {
     const abs = toAbsolutePath(dir, root());
@@ -38,7 +38,7 @@ export function createAgentFiles(bridge: SproutWasmBridge): AgentFiles {
       const childAbs = abs === '/' ? `/${e.name}` : `${abs.replace(/\/+$/, '')}/${e.name}`;
       return {
         name: e.name,
-        path: toWorkspacePath(childAbs, root()),
+        path: toProjectFolderPath(childAbs, root()),
         type: e.type === 'dir' ? 'dir' : 'file',
         size: e.size ?? 0,
       };
@@ -64,7 +64,7 @@ export function createAgentFiles(bridge: SproutWasmBridge): AgentFiles {
     get root() {
       return root();
     },
-    read: (path) => readWorkspaceFile(bridge, toAbsolutePath(path, root())),
+    read: (path) => readProjectFolderFile(bridge, toAbsolutePath(path, root())),
     list,
     walk,
     write: (path, content) => {
@@ -74,7 +74,7 @@ export function createAgentFiles(bridge: SproutWasmBridge): AgentFiles {
     snapshot: () => {
       const files: Record<string, string> = {};
       for (const path of walk()) {
-        const content = readWorkspaceFile(bridge, toAbsolutePath(path, root()));
+        const content = readProjectFolderFile(bridge, toAbsolutePath(path, root()));
         if (content !== null) files[path] = content;
       }
       return files;

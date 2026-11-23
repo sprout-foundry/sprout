@@ -5,7 +5,7 @@
  * - handleGoToDefinition (API call + cross-file navigation)
  * - handleFindAllReferences (API call + overlay state)
  * - handleSelectReference (navigate to reference in any file)
- * - handleSelectWorkspaceSymbol (navigate to workspace symbol)
+ * - handleSelectWorkspaceSymbol (navigate to project folder symbol)
  * - handleGoToLine (basic line navigation)
  * - State: showGoToWorkspaceSymbol, showFindRefs, refsSymbolName, refsResults, refsLoading
  * - Refs: bufferStateRef, localContentRef
@@ -57,7 +57,7 @@ export interface UseEditorSemanticReturn {
  * @param bufferRef - Ref to current buffer
  * @param localContent - Current editor content
  * @param isSemanticLanguage - Function to check if language supports semantics
- * @param openWorkspaceBuffer - Function to open a buffer in the workspace
+ * @param openWorkspaceBuffer - Function to open a buffer in the project folder
  */
 export function useEditorSemantic(
   viewRef: React.MutableRefObject<EditorView | null>,
@@ -294,7 +294,7 @@ export function useEditorSemantic(
   );
 
   // ---------------------------------------------------------------------------
-  // Select workspace symbol
+  // Select project folder symbol
   // ---------------------------------------------------------------------------
 
   const handleSelectWorkspaceSymbol = useCallback(

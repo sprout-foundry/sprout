@@ -44,7 +44,7 @@ vi.mock('../services/api', () => {
   const instance = {
     getHotkeys: async () => ({ hotkeys: [], platform: 'test' }),
     applyHotkeyPreset: async () => ({ hotkeys: [] }),
-    getWorkspace: async () => ({ workspace_root: '' }),
+    getProjectFolder: async () => ({ project_folder: '' }),
     getStats: async () => ({}),
     getSettings: async () => ({}),
   };
@@ -158,9 +158,9 @@ describe('SproutWorkspace files and editor', () => {
 
   it('renders the assembled editor for an arranged editor, and a file picked in the tree opens in it', async () => {
     render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} layout={IDE} />);
-    const workspace = await screen.findByTestId('sprout-workspace');
-    expect(within(workspace).getByTestId('workspace-editor')).toBeInTheDocument();
-    expect(within(workspace).queryByTestId('files-test-primitive-editor')).not.toBeInTheDocument();
+    const projectFolder = await screen.findByTestId('sprout-workspace');
+    expect(within(projectFolder).getByTestId('workspace-editor')).toBeInTheDocument();
+    expect(within(projectFolder).queryByTestId('files-test-primitive-editor')).not.toBeInTheDocument();
 
     act(() => {
       screen.getByTestId('files-test-tree-select').click();
@@ -231,9 +231,9 @@ describe('SproutWorkspace files and editor', () => {
         viewProps={{ fileTree: { onFileSelect, selectedFile: 'host.txt' }, editor: { value: 'host buffer' } }}
       />,
     );
-    const workspace = await screen.findByTestId('sprout-workspace');
+    const projectFolder = await screen.findByTestId('sprout-workspace');
 
-    const tree = within(workspace).getByTestId('files-test-tree');
+    const tree = within(projectFolder).getByTestId('files-test-tree');
     expect(tree).toHaveAttribute('data-selected', 'host.txt');
     expect(tree).toHaveAttribute('data-has-fetch', 'false');
     act(() => {
@@ -241,7 +241,10 @@ describe('SproutWorkspace files and editor', () => {
     });
     expect(onFileSelect).toHaveBeenCalledWith(expect.objectContaining({ path: 'src/app.ts' }));
 
-    expect(within(workspace).getByTestId('files-test-primitive-editor')).toHaveAttribute('data-value', 'host buffer');
-    expect(within(workspace).queryByTestId('workspace-editor')).not.toBeInTheDocument();
+    expect(within(projectFolder).getByTestId('files-test-primitive-editor')).toHaveAttribute(
+      'data-value',
+      'host buffer',
+    );
+    expect(within(projectFolder).queryByTestId('workspace-editor')).not.toBeInTheDocument();
   });
 });

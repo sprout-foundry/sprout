@@ -16,15 +16,15 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
-// automateSproutDirKey is a context key for the workspace-aware sprout
+// automateSproutDirKey is a context key for the project-folder-aware sprout
 // directory. The WebUI API layer sets this before calling RunAutomateWorkflow
 // so that writeAutomatePIDFile writes session files to the correct .sprout/
 // directory instead of the process CWD.
 type automateSproutDirKey struct{}
 
-// SproutDirFromContext returns the workspace-aware sprout directory from ctx,
+// SproutDirFromContext returns the project-folder-aware sprout directory from ctx,
 // or falls back to os.Getwd() (matching the legacy behavior for CLI-triggered
-// workflows where CWD is the workspace root).
+// workflows where CWD is the project folder).
 func SproutDirFromContext(ctx context.Context) string {
 	if dir, ok := ctx.Value(automateSproutDirKey{}).(string); ok && dir != "" {
 		return dir
@@ -51,7 +51,7 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 	}
 
 	// Resolve the automate directory
-	dir := automate.DirIn(a.GetWorkspaceRoot())
+	dir := automate.DirIn(a.GetProjectFolder())
 
 	// Find the workflow file (includes path traversal protection)
 	wfPath, err := automate.ResolvePath(dir, workflowName)
@@ -291,7 +291,7 @@ func isGoTestBinary(path string) bool {
 
 // handleListAutomateWorkflows lists available workflows from the automate/ directory.
 func handleListAutomateWorkflows(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	dir := automate.DirIn(a.GetWorkspaceRoot())
+	dir := automate.DirIn(a.GetProjectFolder())
 
 	workflows, err := automate.Discover(dir)
 	if err != nil {
@@ -349,12 +349,12 @@ func (a *Agent) getOrCreateBackgroundProcessManager() *tools.BackgroundProcessMa
 // whether to bypass the intent-confirmation prompt for run_automate calls.
 //
 // The agent is required (not optional) so the approval check resolves
-// the automate/ directory against the agent's workspace root —
+// the automate/ directory against the agent's project folder —
 // `automate.Dir()` alone returns the daemon CWD in SPROUT_SERVICE mode,
 // which would mismatch the directory the workflow itself will be loaded
 // from.
 func workflowRequiresApproval(agent *Agent, workflowName string) bool {
-	return WorkflowRequiresApprovalIn(automate.DirIn(agent.GetWorkspaceRoot()), workflowName)
+	return WorkflowRequiresApprovalIn(automate.DirIn(agent.GetProjectFolder()), workflowName)
 }
 
 // normalizeWorkflowKey produces a stable cache key for the in-session approval

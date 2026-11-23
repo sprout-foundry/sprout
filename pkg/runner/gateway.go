@@ -10,19 +10,19 @@ import (
 	"strings"
 )
 
-// GatewayProviderName is the workspace provider name for the platform
+// GatewayProviderName is the dev space provider name for the platform
 // gateway's OpenAI-compatible endpoint. A start task naming this provider
-// wires the workspace's agent to the gateway with the task's gateway key, so
-// the workspace uses the gateway's models (and the user's gateway quotas)
+// wires the dev space's agent to the gateway with the task's gateway key, so
+// the dev space uses the gateway's models (and the user's gateway quotas)
 // instead of a public provider's endpoint.
 const GatewayProviderName = "gateway"
 
-// GatewayKeyEnvVar carries the gateway key in the workspace daemon's
+// GatewayKeyEnvVar carries the gateway key in the dev space daemon's
 // environment. The key's scope, lifetime and revocation are the platform's:
 // the runner only passes it to the daemon, never writes it to disk and never
-// sends it anywhere but the gateway endpoint. Code running in the workspace
+// sends it anywhere but the gateway endpoint. Code running in the dev space
 // can read the daemon's environment, so the platform should mint a key scoped
-// to the one workspace and revoke it when the workspace ends.
+// to the one dev space and revoke it when the dev space ends.
 const GatewayKeyEnvVar = "SPROUT_GATEWAY_KEY"
 
 // platformGatewayPath is the platform's OpenAI-compatible gateway base,
@@ -35,7 +35,7 @@ func IsGatewayProvider(provider string) bool {
 	return strings.EqualFold(strings.TrimSpace(provider), GatewayProviderName)
 }
 
-// gatewayEndpoint returns the workspace's chat endpoint: the gateway base
+// gatewayEndpoint returns the dev space's chat endpoint: the gateway base
 // (gatewayURL, or platformAPIURL plus the platform's gateway path) plus
 // /chat/completions, the custom-provider endpoint convention the daemon
 // also derives /models from. A base that already ends in /chat/completions
@@ -75,11 +75,11 @@ func loopbackHost(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// writeGatewayProviderFile registers the gateway as the workspace's custom
-// provider in the workspace's scoped config dir (SPROUT_CONFIG_DIR, never
+// writeGatewayProviderFile registers the gateway as the dev space's custom
+// provider in the dev space's scoped config dir (SPROUT_CONFIG_DIR, never
 // the runner user's global config): endpoint + key env var. No default model
 // is pinned — the daemon's model picker lists the models the account may use
-// from the endpoint's /v1/models. The file lives and dies with the workspace.
+// from the endpoint's /v1/models. The file lives and dies with the dev space.
 func writeGatewayProviderFile(configDir, gatewayURL, platformAPIURL string) error {
 	endpoint, err := gatewayEndpoint(gatewayURL, platformAPIURL)
 	if err != nil {
@@ -87,7 +87,7 @@ func writeGatewayProviderFile(configDir, gatewayURL, platformAPIURL string) erro
 	}
 	providersDir := filepath.Join(configDir, "providers")
 	if err := os.MkdirAll(providersDir, 0o700); err != nil {
-		return fmt.Errorf("creating workspace providers dir: %w", err)
+		return fmt.Errorf("creating dev space providers dir: %w", err)
 	}
 	file := map[string]any{
 		"name":             GatewayProviderName,

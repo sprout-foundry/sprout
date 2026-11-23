@@ -106,7 +106,7 @@ function CommitDetailPanel({
     async (filePath: string) => {
       try {
         const result = await onLoadCommitFileDiff(commit.hash, filePath);
-        // Open the workspace buffer even when the diff comes back empty.
+        // Open the project folder buffer even when the diff comes back empty.
         // `git show -- <path>` returns no patch for binary files, no-op
         // entries (renames with no content change), and a few edge cases
         // around merge commits. Logging an error and bailing out made the

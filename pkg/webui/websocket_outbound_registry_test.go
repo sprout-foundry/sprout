@@ -21,7 +21,7 @@ func TestValidateOutboundMessageType_AcceptsKnownTypes(t *testing.T) {
 		events.EventTypeQueryCompleted,
 		events.EventTypeError,
 		events.EventTypeSessionChanged,
-		events.EventTypeWorkspaceChanged,
+		events.EventTypeProjectFolderChanged,
 	} {
 		t.Run(msgType, func(t *testing.T) {
 			if !validateOutboundMessageType(msgType) {
@@ -126,7 +126,7 @@ func TestOutboundRegistryCoversAllEventTypes(t *testing.T) {
 		events.EventTypeSecurityPromptRequest,
 		events.EventTypeAskUserRequest,
 		events.EventTypeAgentMessage,
-		events.EventTypeWorkspaceChanged,
+		events.EventTypeProjectFolderChanged,
 		events.EventTypeSessionTerminated,
 		events.EventTypeSessionChanged,
 		events.EventTypeAutomateSessionStarted,

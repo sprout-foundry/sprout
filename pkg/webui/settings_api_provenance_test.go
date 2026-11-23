@@ -94,8 +94,8 @@ func TestExpandNestedKeys_NilInput(t *testing.T) {
 // handleGetProvenanceSettings integration tests
 // ---------------------------------------------------------------------------
 
-// setupProvenanceTestServer creates a test server with global config and optional workspace config
-func setupProvenanceTestServer(t *testing.T, globalCfg, workspaceCfg *configuration.Config) (*ReactWebServer, string) {
+// setupProvenanceTestServer creates a test server with global config and optional project folder config
+func setupProvenanceTestServer(t *testing.T, globalCfg, projectFolderCfg *configuration.Config) (*ReactWebServer, string) {
 	t.Helper()
 
 	// Create isolated home directory
@@ -135,29 +135,29 @@ func setupProvenanceTestServer(t *testing.T, globalCfg, workspaceCfg *configurat
 	clientID := "test-client"
 	ctx := ws.getOrCreateClientContext(clientID)
 
-	// Create workspace config if provided
-	workspaceRoot := ""
-	if workspaceCfg != nil {
-		workspaceRoot = t.TempDir()
-		workspaceDir := filepath.Join(workspaceRoot, ".sprout")
-		os.MkdirAll(workspaceDir, 0700)
-		workspaceConfigPath := filepath.Join(workspaceDir, "config.json")
-		data, err := json.Marshal(workspaceCfg)
+	// Create project folder config if provided
+	projectFolder := ""
+	if projectFolderCfg != nil {
+		projectFolder = t.TempDir()
+		projectFolderDir := filepath.Join(projectFolder, ".sprout")
+		_ = os.MkdirAll(projectFolderDir, 0700)
+		projectFolderConfigPath := filepath.Join(projectFolderDir, "config.json")
+		data, err := json.Marshal(projectFolderCfg)
 		require.NoError(t, err)
-		os.WriteFile(workspaceConfigPath, data, 0600)
+		_ = os.WriteFile(projectFolderConfigPath, data, 0600)
 
-		ctx.WorkspaceRoot = workspaceRoot
+		ctx.ProjectFolder = projectFolder
 	}
 
 	return ws, clientID
 }
 
-func TestHandleGetProvenanceSettings_TopLevelKey_FromWorkspace(t *testing.T) {
-	// Setup: global has reasoning_effort=low, workspace has reasoning_effort=high
+func TestHandleGetProvenanceSettings_TopLevelKey_FromProjectFolder(t *testing.T) {
+	// Setup: global has reasoning_effort=low, project folder has reasoning_effort=high
 	globalCfg := &configuration.Config{ReasoningEffort: "low"}
-	workspaceCfg := &configuration.Config{ReasoningEffort: "high"}
+	projectFolderCfg := &configuration.Config{ReasoningEffort: "high"}
 
-	ws, clientID := setupProvenanceTestServer(t, globalCfg, workspaceCfg)
+	ws, clientID := setupProvenanceTestServer(t, globalCfg, projectFolderCfg)
 
 	// Make request
 	req := httptest.NewRequest(http.MethodGet, "/api/settings?layer=provenance", nil)
@@ -173,27 +173,27 @@ func TestHandleGetProvenanceSettings_TopLevelKey_FromWorkspace(t *testing.T) {
 	sources, ok := resp["sources"].(map[string]interface{})
 	require.True(t, ok, "sources should be present")
 
-	// Top-level key should be from workspace
-	assert.Equal(t, "workspace", sources["reasoning_effort"],
-		"top-level key reasoning_effort should come from workspace")
+	// Top-level key should be from project folder
+	assert.Equal(t, "project_folder", sources["reasoning_effort"],
+		"top-level key reasoning_effort should come from project folder")
 }
 
-func TestHandleGetProvenanceSettings_NestedKey_FromWorkspace(t *testing.T) {
-	// Setup: global has default api_timeouts, workspace has different values
+func TestHandleGetProvenanceSettings_NestedKey_FromProjectFolder(t *testing.T) {
+	// Setup: global has default api_timeouts, project folder has different values
 	globalCfg := &configuration.Config{
 		APITimeouts: &configuration.APITimeoutConfig{
 			ConnectionTimeoutSec: 30,
 			ChunkTimeoutSec:      60,
 		},
 	}
-	workspaceCfg := &configuration.Config{
+	projectFolderCfg := &configuration.Config{
 		APITimeouts: &configuration.APITimeoutConfig{
 			ConnectionTimeoutSec: 45, // different
 			ChunkTimeoutSec:      90, // different
 		},
 	}
 
-	ws, clientID := setupProvenanceTestServer(t, globalCfg, workspaceCfg)
+	ws, clientID := setupProvenanceTestServer(t, globalCfg, projectFolderCfg)
 
 	// Make request
 	req := httptest.NewRequest(http.MethodGet, "/api/settings?layer=provenance", nil)
@@ -209,19 +209,19 @@ func TestHandleGetProvenanceSettings_NestedKey_FromWorkspace(t *testing.T) {
 	sources, ok := resp["sources"].(map[string]interface{})
 	require.True(t, ok, "sources should be present")
 
-	// Nested keys should be from workspace
-	assert.Equal(t, "workspace", sources["api_timeouts.connection_timeout_sec"],
-		"nested key api_timeouts.connection_timeout_sec should come from workspace")
-	assert.Equal(t, "workspace", sources["api_timeouts.chunk_timeout_sec"],
-		"nested key api_timeouts.chunk_timeout_sec should come from workspace")
+	// Nested keys should be from project folder
+	assert.Equal(t, "project_folder", sources["api_timeouts.connection_timeout_sec"],
+		"nested key api_timeouts.connection_timeout_sec should come from project folder")
+	assert.Equal(t, "project_folder", sources["api_timeouts.chunk_timeout_sec"],
+		"nested key api_timeouts.chunk_timeout_sec should come from project folder")
 }
 
 func TestHandleGetProvenanceSettings_SessionOverridesOverrideEverything(t *testing.T) {
-	// Setup: global has reasoning_effort=low, workspace has reasoning_effort=medium, session overrides to high
+	// Setup: global has reasoning_effort=low, project folder has reasoning_effort=medium, session overrides to high
 	globalCfg := &configuration.Config{ReasoningEffort: "low"}
-	workspaceCfg := &configuration.Config{ReasoningEffort: "medium"}
+	projectFolderCfg := &configuration.Config{ReasoningEffort: "medium"}
 
-	ws, clientID := setupProvenanceTestServer(t, globalCfg, workspaceCfg)
+	ws, clientID := setupProvenanceTestServer(t, globalCfg, projectFolderCfg)
 
 	// Set session overrides (simulating a live session)
 	ctx := ws.clientContexts[clientID]
@@ -246,21 +246,21 @@ func TestHandleGetProvenanceSettings_SessionOverridesOverrideEverything(t *testi
 	sources, ok := resp["sources"].(map[string]interface{})
 	require.True(t, ok, "sources should be present")
 
-	// Session override should win over workspace
+	// Session override should win over project folder
 	assert.Equal(t, "session", sources["reasoning_effort"],
-		"session override for reasoning_effort should override workspace")
+		"session override for reasoning_effort should override project folder")
 }
 
 func TestHandleGetProvenanceSettings_NestedSessionOverride(t *testing.T) {
-	// Setup: global has api_timeouts, workspace differs, session overrides one nested value
+	// Setup: global has api_timeouts, project folder differs, session overrides one nested value
 	globalCfg := &configuration.Config{
 		APITimeouts: &configuration.APITimeoutConfig{
 			ConnectionTimeoutSec: 30,
 			ChunkTimeoutSec:      60,
 		},
 	}
-	// Workspace has different overall_timeout_sec
-	workspaceCfg := &configuration.Config{
+	// Project folder has different overall_timeout_sec
+	projectFolderCfg := &configuration.Config{
 		APITimeouts: &configuration.APITimeoutConfig{
 			ConnectionTimeoutSec: 30,
 			ChunkTimeoutSec:      60,
@@ -268,7 +268,7 @@ func TestHandleGetProvenanceSettings_NestedSessionOverride(t *testing.T) {
 		},
 	}
 
-	ws, clientID := setupProvenanceTestServer(t, globalCfg, workspaceCfg)
+	ws, clientID := setupProvenanceTestServer(t, globalCfg, projectFolderCfg)
 
 	// Set session override for a nested key
 	ctx := ws.clientContexts[clientID]
@@ -297,13 +297,13 @@ func TestHandleGetProvenanceSettings_NestedSessionOverride(t *testing.T) {
 
 	// Nested session override should work
 	assert.Equal(t, "session", sources["api_timeouts.connection_timeout_sec"],
-		"nested session override should override workspace")
+		"nested session override should override project folder")
 }
 
-func TestHandleGetProvenanceSettings_NoWorkspace_HasGlobal(t *testing.T) {
-	// Setup: only global config exists (no workspace)
-	// When workspaceCfg is nil, setupProvenanceTestServer doesn't set WorkspaceRoot
-	// on the client context, ensuring no workspace config is loaded.
+func TestHandleGetProvenanceSettings_NoProjectFolder_HasGlobal(t *testing.T) {
+	// Setup: only global config exists (no project folder)
+	// When projectFolderCfg is nil, setupProvenanceTestServer doesn't set ProjectFolder
+	// on the client context, ensuring no project folder config is loaded.
 	globalCfg := &configuration.Config{ReasoningEffort: "low"}
 
 	ws, clientID := setupProvenanceTestServer(t, globalCfg, nil)
@@ -325,7 +325,7 @@ func TestHandleGetProvenanceSettings_NoWorkspace_HasGlobal(t *testing.T) {
 	// Key should exist in sources
 	assert.Contains(t, sources, "reasoning_effort", "key should be in sources")
 
-	// Note: provenance may report 'workspace' even without explicit workspace config
+	// Note: provenance may report 'project folder' even without explicit project folder config
 	// because getConfigManager loads layered config from the current working directory's
 	// .sprout/config.json. The test verifies the endpoint works correctly rather than
 	// asserting a specific source layer.
@@ -339,13 +339,13 @@ func TestHandleGetProvenanceSettings_DeeplyNestedKeys(t *testing.T) {
 			ConnectionTimeoutSec: 30,
 		},
 	}
-	workspaceCfg := &configuration.Config{
+	projectFolderCfg := &configuration.Config{
 		APITimeouts: &configuration.APITimeoutConfig{
 			ConnectionTimeoutSec: 45, // different
 		},
 	}
 
-	ws, clientID := setupProvenanceTestServer(t, globalCfg, workspaceCfg)
+	ws, clientID := setupProvenanceTestServer(t, globalCfg, projectFolderCfg)
 
 	// Make request
 	req := httptest.NewRequest(http.MethodGet, "/api/settings?layer=provenance", nil)
@@ -374,15 +374,15 @@ func TestHandleGetProvenanceSettings_AllThreeLayers(t *testing.T) {
 			ConnectionTimeoutSec: 30,
 		},
 	}
-	// Workspace overrides reasoning_effort and changes api_timeouts
-	workspaceCfg := &configuration.Config{
+	// Project folder overrides reasoning_effort and changes api_timeouts
+	projectFolderCfg := &configuration.Config{
 		ReasoningEffort: "medium",
 		APITimeouts: &configuration.APITimeoutConfig{
 			ConnectionTimeoutSec: 45,
 		},
 	}
 
-	ws, clientID := setupProvenanceTestServer(t, globalCfg, workspaceCfg)
+	ws, clientID := setupProvenanceTestServer(t, globalCfg, projectFolderCfg)
 
 	// Set session override for reasoning_effort only
 	ctx := ws.clientContexts[clientID]
@@ -410,9 +410,9 @@ func TestHandleGetProvenanceSettings_AllThreeLayers(t *testing.T) {
 	// Session override should win for reasoning_effort
 	assert.Equal(t, "session", sources["reasoning_effort"],
 		"session override should have highest priority")
-	// Workspace override should apply for api_timeouts (not overridden by session)
-	assert.Equal(t, "workspace", sources["api_timeouts.connection_timeout_sec"],
-		"workspace override should apply when session doesn't override")
+	// Project folder override should apply for api_timeouts (not overridden by session)
+	assert.Equal(t, "project_folder", sources["api_timeouts.connection_timeout_sec"],
+		"project folder override should apply when session doesn't override")
 }
 
 func TestHandleGetProvenanceSettings_NilSessionOverrides(t *testing.T) {
@@ -448,12 +448,12 @@ func TestHandleGetProvenanceSettings_NilSessionOverrides(t *testing.T) {
 		"key should exist in sources even with nil session overrides")
 }
 
-func TestHandleGetProvenanceSettings_WorkspaceMatchesGlobal(t *testing.T) {
-	// Setup: workspace config is identical to global — all keys should be "global"
+func TestHandleGetProvenanceSettings_ProjectFolderMatchesGlobal(t *testing.T) {
+	// Setup: project folder config is identical to global — all keys should be "global"
 	globalCfg := &configuration.Config{ReasoningEffort: "medium"}
-	workspaceCfg := &configuration.Config{ReasoningEffort: "medium"}
+	projectFolderCfg := &configuration.Config{ReasoningEffort: "medium"}
 
-	ws, clientID := setupProvenanceTestServer(t, globalCfg, workspaceCfg)
+	ws, clientID := setupProvenanceTestServer(t, globalCfg, projectFolderCfg)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/settings?layer=provenance", nil)
 	req.Header.Set(webClientIDHeader, clientID)
@@ -469,5 +469,5 @@ func TestHandleGetProvenanceSettings_WorkspaceMatchesGlobal(t *testing.T) {
 	require.True(t, ok, "sources should be present")
 
 	assert.Equal(t, "global", sources["reasoning_effort"],
-		"identical workspace value should not claim workspace provenance")
+		"identical project folder value should not claim project folder provenance")
 }

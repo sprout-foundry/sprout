@@ -13,13 +13,13 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent"
 )
 
-// SP-046 workspace-sync transport scaffold. The actual WebSocket / HTTP
+// SP-046 project-folder-sync transport scaffold. The actual WebSocket / HTTP
 // transport lives in the platform repo (`../platform`); this file exposes
 // the hooks the platform-side code calls into from the browser. When no
 // sync endpoint is configured (free-tier WASM), all the entries here are
 // safe no-ops and the agent operates as a single-replica system.
 //
-// See roadmap/SP-046-workspace-sync-model.md for the full design.
+// See roadmap/SP-046-project-folder-sync-model.md for the full design.
 
 // syncState holds the WASM-side sync configuration. Protected by mu so
 // callers can mutate it from any goroutine (JS callback context).
@@ -51,7 +51,7 @@ func syncJSFuncs() map[string]interface{} {
 		"queueSyncOp":                  js.FuncOf(queueSyncOpFunc),
 		"flushSyncOps":                 js.FuncOf(flushSyncOpsFunc),
 		"getSyncOpQueue":               js.FuncOf(getSyncOpQueueFunc),
-		"handleWorkspacePatchConflict": js.FuncOf(handleWorkspacePatchConflictFunc),
+		"handleWorkspacePatchConflict": js.FuncOf(handleProjectFolderPatchConflictFunc),
 	}
 	// Include OPFS replica functions.
 	for name, fn := range opfsReplicaJSFuncs() {
@@ -87,7 +87,7 @@ func getSyncEndpointFunc(_ js.Value, _ []js.Value) interface{} {
 }
 
 // applyFileMetadataFunc lets the platform-side sync layer push a
-// WorkspaceFileMetadata update into the running agent. The Go-side
+// ProjectFolderFileMetadata update into the running agent. The Go-side
 // staleness rule consults this on every write_file call (see
 // pkg/agent/workspace_sync.go).
 //
@@ -105,7 +105,7 @@ func applyFileMetadataFunc(_ js.Value, args []js.Value) interface{} {
 	if raw == "" {
 		return map[string]interface{}{"error": "metadata JSON is required (second arg)"}
 	}
-	var md agent.WorkspaceFileMetadata
+	var md agent.ProjectFolderFileMetadata
 	if err := json.Unmarshal([]byte(raw), &md); err != nil {
 		return map[string]interface{}{"error": fmt.Sprintf("parse metadata: %v", err)}
 	}
@@ -240,7 +240,7 @@ func peekTheirsContent(theirsPath string) (string, bool) {
 	return content, ok
 }
 
-// handleWorkspacePatchConflictFunc processes an incoming workspace_patch
+// handleProjectFolderPatchConflictFunc processes an incoming workspace_patch
 // that carries conflict metadata. When conflict is true, it writes the
 // container's content to the .theirs sibling file in the virtual
 // filesystem so the browser can show a git-style diff/conflict UI.
@@ -252,8 +252,8 @@ func peekTheirsContent(theirsPath string) (string, bool) {
 // diff UI. Passing a relative or unnormalized path will cause the
 // conflict UI to fail silently.
 //
-// Signature: handleWorkspacePatchConflict(path: string, content: string, theirsPath: string): {ok: true}
-func handleWorkspacePatchConflictFunc(_ js.Value, args []js.Value) interface{} {
+// Signature: handleProjectFolderPatchConflict(path: string, content: string, theirsPath: string): {ok: true}
+func handleProjectFolderPatchConflictFunc(_ js.Value, args []js.Value) interface{} {
 	path := argString(args, 0, "")
 	content := argString(args, 1, "")
 	theirsPath := argString(args, 2, "")
@@ -261,7 +261,7 @@ func handleWorkspacePatchConflictFunc(_ js.Value, args []js.Value) interface{} {
 		return map[string]interface{}{"error": "path and theirsPath are required"}
 	}
 	// Store the theirs content so the UI can retrieve it for a git-style diff
-	stashFileMetadata(theirsPath, agent.WorkspaceFileMetadata{
+	stashFileMetadata(theirsPath, agent.ProjectFolderFileMetadata{
 		ContainerSeq: 0, // marker: this is a theirs file, not a synced container write
 	})
 	stashTheirsContent(theirsPath, content)
@@ -277,10 +277,10 @@ func handleWorkspacePatchConflictFunc(_ js.Value, args []js.Value) interface{} {
 
 var (
 	stashMu sync.RWMutex
-	stash   = map[string]agent.WorkspaceFileMetadata{}
+	stash   = map[string]agent.ProjectFolderFileMetadata{}
 )
 
-func stashFileMetadata(path string, md agent.WorkspaceFileMetadata) {
+func stashFileMetadata(path string, md agent.ProjectFolderFileMetadata) {
 	stashMu.Lock()
 	defer stashMu.Unlock()
 	stash[path] = md
@@ -288,7 +288,7 @@ func stashFileMetadata(path string, md agent.WorkspaceFileMetadata) {
 
 // peekFileMetadata is used by the test harness to verify applyFileMetadata
 // landed correctly. Not exported to JS — internal only.
-func peekFileMetadata(path string) (agent.WorkspaceFileMetadata, bool) {
+func peekFileMetadata(path string) (agent.ProjectFolderFileMetadata, bool) {
 	stashMu.RLock()
 	defer stashMu.RUnlock()
 	md, ok := stash[path]
@@ -296,7 +296,7 @@ func peekFileMetadata(path string) (agent.WorkspaceFileMetadata, bool) {
 }
 
 // ApplyAllStashedMetadata is called by the agent-init path once an Agent
-// exists, to replay every WorkspaceFileMetadata the platform-side sync
+// exists, to replay every ProjectFolderFileMetadata the platform-side sync
 // pushed in before the agent was ready. Keeps free-tier WASM (no agent)
 // from dropping metadata pushes silently.
 func ApplyAllStashedMetadata(a *agent.Agent) {

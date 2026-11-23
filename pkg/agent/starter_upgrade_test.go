@@ -84,13 +84,13 @@ func suWriteManifest(t *testing.T, root, content string) {
 	}
 }
 
-// suAgent wires client into a fresh agent whose workspace root is a project
+// suAgent wires client into a fresh agent whose project folder is a project
 // directory (the .sprout/ starter manifest lives under it). It mirrors the
 // e2e agent setup from plan_context_test.go and stack_skill_activation_test.go:
 // the full context profile keeps the tools on the roster, and SkipPrompt keeps
 // the turn from ever blocking on an interactive prompt (stdin is closed in
 // tests).
-func suAgent(t *testing.T, client api.ClientInterface, workspaceRoot string) *Agent {
+func suAgent(t *testing.T, client api.ClientInterface, projectFolder string) *Agent {
 	t.Helper()
 
 	mgr, cleanup := configuration.NewTestManager(t)
@@ -109,7 +109,7 @@ func suAgent(t *testing.T, client api.ClientInterface, workspaceRoot string) *Ag
 	}
 	t.Cleanup(ag.Shutdown)
 	ag.SetMaxIterations(10)
-	ag.SetWorkspaceRoot(workspaceRoot)
+	ag.SetProjectFolder(projectFolder)
 	return ag
 }
 
@@ -322,7 +322,7 @@ func TestStarterUpgradeNoticeMethod_OlderVersion(t *testing.T) {
 	suWriteManifest(t, root, suOlderManifestJSON)
 
 	ag := NewTestAgent()
-	ag.SetWorkspaceRoot(root)
+	ag.SetProjectFolder(root)
 
 	notice := ag.starterUpgradeNotice()
 	for _, want := range []string{
@@ -342,7 +342,7 @@ func TestStarterUpgradeNoticeMethod_SameVersion(t *testing.T) {
 	suWriteManifest(t, root, suSameManifestJSON)
 
 	ag := NewTestAgent()
-	ag.SetWorkspaceRoot(root)
+	ag.SetProjectFolder(root)
 
 	if got := ag.starterUpgradeNotice(); got != "" {
 		t.Errorf("up-to-date manifest -> empty notice, got:\n%s", got)
@@ -356,7 +356,7 @@ func TestStarterUpgradeNoticeMethod_NewerVersion(t *testing.T) {
 	suWriteManifest(t, root, suNewerManifestJSON)
 
 	ag := NewTestAgent()
-	ag.SetWorkspaceRoot(root)
+	ag.SetProjectFolder(root)
 
 	if got := ag.starterUpgradeNotice(); got != "" {
 		t.Errorf("newer manifest -> empty notice, got:\n%s", got)
@@ -369,7 +369,7 @@ func TestStarterUpgradeNoticeMethod_NoManifest(t *testing.T) {
 	root := t.TempDir() // no .sprout/starter.json
 
 	ag := NewTestAgent()
-	ag.SetWorkspaceRoot(root)
+	ag.SetProjectFolder(root)
 
 	if got := ag.starterUpgradeNotice(); got != "" {
 		t.Errorf("no manifest -> empty notice, got:\n%s", got)
@@ -384,7 +384,7 @@ func TestStarterUpgradeNoticeMethod_UnknownStarter(t *testing.T) {
 	suWriteManifest(t, root, suUnknownStarterManifestJSON)
 
 	ag := NewTestAgent()
-	ag.SetWorkspaceRoot(root)
+	ag.SetProjectFolder(root)
 
 	if got := ag.starterUpgradeNotice(); got != "" {
 		t.Errorf("unknown starter -> empty notice, got:\n%s", got)
@@ -398,7 +398,7 @@ func TestStarterUpgradeNoticeMethod_CorruptManifest(t *testing.T) {
 	suWriteManifest(t, root, suCorruptManifestJSON)
 
 	ag := NewTestAgent()
-	ag.SetWorkspaceRoot(root)
+	ag.SetProjectFolder(root)
 
 	if got := ag.starterUpgradeNotice(); got != "" {
 		t.Errorf("corrupt manifest -> empty notice, got:\n%s", got)

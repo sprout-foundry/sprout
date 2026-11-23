@@ -130,10 +130,10 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	// "prompt" → interactive approval; on deny fall through to the raw
 	// error. This is the pinned contract (file_access_prompt_test.go):
 	// denied and nil-prompter reads surface the underlying fs error, not
-	// a synthesized denial — the off-workspace block still holds because
+	// a synthesized denial — the off-project-folder block still holds because
 	// the bypass ctx is only set on approval.
 	if decision == "prompt" {
-		if ctx2, approved := promptForOffWorkspacePath(ctx, env, "read_file", path, resolvedPath, "read"); approved {
+		if ctx2, approved := promptForOffProjectFolderPath(ctx, env, "read_file", path, resolvedPath, "read"); approved {
 			ctx = ctx2
 		}
 	}
@@ -167,7 +167,7 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		return h.handleImage(ctx, env, path, ocrRequested(args))
 	}
 
-	// Use existing read logic. Off-workspace paths will fail
+	// Use existing read logic. Off-project-folder paths will fail
 	// with the raw filesystem error since the interactive gate is gone.
 	var content string
 	if startLine > 0 || endLine > 0 {
@@ -194,7 +194,7 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	if resolveReadTrust(env, trustPath) == injection.TrustThirdParty {
 		// The label carries the origin so the model can tell a vendored file
 		// from one of ours, which is the point of framing at ingress.
-		content = injection.WrapUntrusted("file: "+relToWorkspace(env.WorkspaceRoot, trustPath)+" (third-party)", content)
+		content = injection.WrapUntrusted("file: "+relToProjectFolder(env.ProjectFolder, trustPath)+" (third-party)", content)
 	}
 
 	// Repeat guard: once the read succeeded, an identical call (same path +
@@ -235,7 +235,7 @@ func (h *readFileHandler) Interactive() bool      { return false }
 
 // handlePDF processes a PDF file and returns it as base64 data URI for vision-capable models.
 func (h *readFileHandler) handlePDF(ctx context.Context, env ToolEnv, path string, ocr bool) (ToolResult, error) {
-	// Resolve path securely. Off-workspace paths will fail with the raw
+	// Resolve path securely. Off-project-folder paths will fail with the raw
 	// filesystem error since the interactive gate is gone.
 	cleanPath, err := filesystem.SafeResolvePathWithBypass(ctx, path)
 	if err != nil {
@@ -500,7 +500,7 @@ func ocrRequested(args map[string]any) bool {
 
 // handleRemote fetches an http(s) image or PDF and returns it the same way a
 // local file would be returned: pixels inline for a vision-capable primary,
-// OCR text otherwise. Remote content is never written to the workspace.
+// OCR text otherwise. Remote content is never written to the project folder.
 func (h *readFileHandler) handleRemote(ctx context.Context, env ToolEnv, url string, ocr bool) (ToolResult, error) {
 	primarySees := env.PrimaryAcceptsImages == nil || env.PrimaryAcceptsImages()
 

@@ -115,15 +115,15 @@ func TestHydrateCustomPersonas_ProjectNeedsAcceptance(t *testing.T) {
 	_, cleanup := NewTestManager(t)
 	defer cleanup()
 
-	workspaceRoot := t.TempDir()
-	workspaceConfigDir := filepath.Join(workspaceRoot, ConfigDirName)
-	projectDir := ProjectPersonasDir(workspaceConfigDir)
+	projectFolder := t.TempDir()
+	projectFolderConfigDir := filepath.Join(projectFolder, ConfigDirName)
+	projectDir := ProjectPersonasDir(projectFolderConfigDir)
 	path := writePersonaFile(t, projectDir, "repo.json", `{"personas":[
 		{"id": "repo_persona", "name": "Repo", "description": "from the repo", "system_prompt_text": "hi"}
 	]}`)
 
 	cfg := NewConfig()
-	HydrateCustomPersonas(cfg, workspaceConfigDir)
+	HydrateCustomPersonas(cfg, projectFolderConfigDir)
 
 	if _, ok := cfg.SubagentTypes["repo_persona"]; ok {
 		t.Fatal("unaccepted project persona is usable")
@@ -136,8 +136,8 @@ func TestHydrateCustomPersonas_ProjectNeedsAcceptance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.AcceptProjectPersona(workspaceRoot, "repo_persona", personas.ContentHash(data))
-	HydrateCustomPersonas(cfg, workspaceConfigDir)
+	cfg.AcceptProjectPersona(projectFolder, "repo_persona", personas.ContentHash(data))
+	HydrateCustomPersonas(cfg, projectFolderConfigDir)
 	if _, ok := cfg.SubagentTypes["repo_persona"]; !ok {
 		t.Fatalf("accepted project persona not usable; issues: %+v", cfg.PersonaIssues)
 	}
@@ -149,7 +149,7 @@ func TestHydrateCustomPersonas_ProjectNeedsAcceptance(t *testing.T) {
 	writePersonaFile(t, projectDir, "repo.json", `{"personas":[
 		{"id": "repo_persona", "name": "Repo", "description": "edited", "system_prompt_text": "changed"}
 	]}`)
-	HydrateCustomPersonas(cfg, workspaceConfigDir)
+	HydrateCustomPersonas(cfg, projectFolderConfigDir)
 	if _, ok := cfg.SubagentTypes["repo_persona"]; ok {
 		t.Fatal("changed project persona stayed usable")
 	}
@@ -186,9 +186,9 @@ func TestHydrateCustomPersonas_ResolvesPromptBesideFile(t *testing.T) {
 	}
 }
 
-// TestAcceptedPersonasMergePerWorkspace pins the layered merge: accepting a
+// TestAcceptedPersonasMergePerProjectFolder pins the layered merge: accepting a
 // project persona in one layer must not be discarded by another.
-func TestAcceptedPersonasMergePerWorkspace(t *testing.T) {
+func TestAcceptedPersonasMergePerProjectFolder(t *testing.T) {
 	base := Config{AcceptedPersonas: map[string]map[string]string{
 		"/repo/a": {"alpha": "hash-a"},
 	}}

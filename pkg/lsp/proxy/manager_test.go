@@ -14,34 +14,34 @@ import (
 
 func TestServerKey(t *testing.T) {
 	tests := []struct {
-		name          string
-		workspacePath string
-		languageID    string
-		wantContains  []string // parts that should be in the key
+		name              string
+		projectFolderPath string
+		languageID        string
+		wantContains      []string // parts that should be in the key
 	}{
 		{
-			name:          "simple absolute path",
-			workspacePath: "/foo/bar",
-			languageID:    "go",
-			wantContains:  []string{filepath.FromSlash("/foo/bar"), "go"},
+			name:              "simple absolute path",
+			projectFolderPath: "/foo/bar",
+			languageID:        "go",
+			wantContains:      []string{filepath.FromSlash("/foo/bar"), "go"},
 		},
 		{
-			name:          "simple absolute path with typescript",
-			workspacePath: "/workspace",
-			languageID:    "typescript",
-			wantContains:  []string{filepath.FromSlash("/workspace"), "typescript"},
+			name:              "simple absolute path with typescript",
+			projectFolderPath: "/workspace",
+			languageID:        "typescript",
+			wantContains:      []string{filepath.FromSlash("/workspace"), "typescript"},
 		},
 		{
-			name:          "relative path (gets normalized to absolute)",
-			workspacePath: "./src",
-			languageID:    "go",
-			wantContains:  []string{"go"}, // Can't predict exact absolute path
+			name:              "relative path (gets normalized to absolute)",
+			projectFolderPath: "./src",
+			languageID:        "go",
+			wantContains:      []string{"go"}, // Can't predict exact absolute path
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			key := serverKey(tt.workspacePath, tt.languageID)
+			key := serverKey(tt.projectFolderPath, tt.languageID)
 
 			// Verify key is not empty
 			assert.NotEmpty(t, key)
@@ -72,7 +72,7 @@ func TestServerKeyConsistency(t *testing.T) {
 		assert.NotEqual(t, key1, key2)
 	})
 
-	t.Run("different workspace produces different key", func(t *testing.T) {
+	t.Run("different project folder produces different key", func(t *testing.T) {
 		key1 := serverKey("/workspace1", "go")
 		key2 := serverKey("/workspace2", "go")
 
@@ -769,13 +769,13 @@ func TestManagerWithCustomConfig(t *testing.T) {
 }
 
 func TestManagerServerKeyEdgeCases(t *testing.T) {
-	t.Run("handles workspace with spaces", func(t *testing.T) {
+	t.Run("handles project folder with spaces", func(t *testing.T) {
 		key := serverKey("/path with spaces", "go")
 		assert.NotEmpty(t, key)
 		assert.Contains(t, key, "go")
 	})
 
-	t.Run("handles special characters in workspace", func(t *testing.T) {
+	t.Run("handles special characters in project folder", func(t *testing.T) {
 		key := serverKey("/path-with_special.chars", "typescript")
 		assert.NotEmpty(t, key)
 		assert.Contains(t, key, "typescript")

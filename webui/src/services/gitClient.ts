@@ -507,7 +507,7 @@ class GitClient {
           await this.pfs.unlink(`${dir}${entry.path}`).catch(() => undefined);
         }
       }
-      // best-effort: rmdir can fail on a non-empty dir; the workspaceFs layer
+      // best-effort: rmdir can fail on a non-empty dir; the projectFolderFs layer
       // surfaces delete failures from the unlink loop above.
       await this.pfs.rmdir(dir).catch(() => undefined);
     });

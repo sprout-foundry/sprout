@@ -65,58 +65,58 @@ function setupStorage(mock: ReturnType<typeof createMockStorage>) {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// readRecentWorkspaces
+// readRecentProjectFolders
 // ---------------------------------------------------------------------------
 
 describe('readRecentWorkspaces', () => {
   let mock: ReturnType<typeof createMockStorage>;
-  let readRecentWorkspaces: () => string[];
+  let readRecentProjectFolders: () => string[];
 
   beforeEach(async () => {
     mock = createMockStorage();
     setupStorage(mock);
     // Re-import each test so mocks are fresh
     const mod = await import('./workspaceStorage');
-    readRecentWorkspaces = mod.readRecentWorkspaces;
+    readRecentProjectFolders = mod.readRecentProjectFolders;
   });
 
   it('returns empty array when localStorage key is missing', () => {
     mock.getItem.mockReturnValue(null);
-    expect(readRecentWorkspaces()).toEqual([]);
+    expect(readRecentProjectFolders()).toEqual([]);
   });
 
   it('returns empty array for invalid JSON', () => {
     mock.getItem.mockReturnValue('not json at all');
-    expect(readRecentWorkspaces()).toEqual([]);
+    expect(readRecentProjectFolders()).toEqual([]);
   });
 
   it('returns empty array for non-array JSON', () => {
     mock.getItem.mockReturnValue(JSON.stringify({ foo: 'bar' }));
-    expect(readRecentWorkspaces()).toEqual([]);
+    expect(readRecentProjectFolders()).toEqual([]);
   });
 
   it('reads and normalizes paths', () => {
     mock.getItem.mockReturnValue(JSON.stringify(['/project/src', '/home/user/project', '//double//slash//path']));
-    const result = readRecentWorkspaces();
+    const result = readRecentProjectFolders();
     expect(result).toEqual(['/project/src', '/home/user/project', '/double/slash/path']);
   });
 
   it('filters out non-string entries', () => {
     mock.getItem.mockReturnValue(JSON.stringify(['/valid', 123, null, true]));
-    const result = readRecentWorkspaces();
+    const result = readRecentProjectFolders();
     expect(result).toEqual(['/valid']);
   });
 
   it('filters out paths that normalize to empty', () => {
     mock.getItem.mockReturnValue(JSON.stringify(['/valid', '', '  ']));
-    const result = readRecentWorkspaces();
+    const result = readRecentProjectFolders();
     expect(result).toEqual(['/valid']);
   });
 
   it('enforces MAX_RECENT_WORKSPACES cap', () => {
     const paths = Array.from({ length: MAX_RECENT_WORKSPACES + 5 }, (_, i) => `/path${i}`);
     mock.getItem.mockReturnValue(JSON.stringify(paths));
-    const result = readRecentWorkspaces();
+    const result = readRecentProjectFolders();
     expect(result).toHaveLength(MAX_RECENT_WORKSPACES);
     expect(result[0]).toBe('/path0');
     expect(result[result.length - 1]).toBe(`/path${MAX_RECENT_WORKSPACES - 1}`);
@@ -124,20 +124,20 @@ describe('readRecentWorkspaces', () => {
 
   it('handles empty array in storage', () => {
     mock.getItem.mockReturnValue(JSON.stringify([]));
-    expect(readRecentWorkspaces()).toEqual([]);
+    expect(readRecentProjectFolders()).toEqual([]);
   });
 
   it('deduplicates after normalization', () => {
     // '/a' and '/a/' normalize to same path
     mock.getItem.mockReturnValue(JSON.stringify(['/a', '/a/']));
-    const result = readRecentWorkspaces();
+    const result = readRecentProjectFolders();
     // After normalization both become '/a', but the code doesn't deduplicate
     // the read function normalizes each, so both become '/a' and are kept as is
     expect(result).toEqual(['/a', '/a']);
   });
 
   it('uses correct localStorage key', () => {
-    readRecentWorkspaces();
+    readRecentProjectFolders();
     expect(mock.getItem).toHaveBeenCalledWith(RECENT_WORKSPACES_KEY);
   });
 
@@ -145,39 +145,39 @@ describe('readRecentWorkspaces', () => {
     mock.getItem.mockImplementation(() => {
       throw new Error('SecurityError');
     });
-    expect(() => readRecentWorkspaces()).not.toThrow();
-    expect(readRecentWorkspaces()).toEqual([]);
+    expect(() => readRecentProjectFolders()).not.toThrow();
+    expect(readRecentProjectFolders()).toEqual([]);
   });
 });
 
 // ---------------------------------------------------------------------------
-// writeRecentWorkspaces
+// writeRecentProjectFolders
 // ---------------------------------------------------------------------------
 
 describe('writeRecentWorkspaces', () => {
   let mock: ReturnType<typeof createMockStorage>;
-  let writeRecentWorkspaces: (paths: string[]) => void;
+  let writeRecentProjectFolders: (paths: string[]) => void;
 
   beforeEach(async () => {
     mock = createMockStorage();
     setupStorage(mock);
     const mod = await import('./workspaceStorage');
-    writeRecentWorkspaces = mod.writeRecentWorkspaces;
+    writeRecentProjectFolders = mod.writeRecentProjectFolders;
   });
 
   it('saves paths to correct localStorage key', () => {
-    writeRecentWorkspaces(['/project', '/home']);
+    writeRecentProjectFolders(['/project', '/home']);
     expect(mock.setItem).toHaveBeenCalledWith(RECENT_WORKSPACES_KEY, JSON.stringify(['/project', '/home']));
   });
 
   it('saves empty array', () => {
-    writeRecentWorkspaces([]);
+    writeRecentProjectFolders([]);
     expect(mock.setItem).toHaveBeenCalledWith(RECENT_WORKSPACES_KEY, JSON.stringify([]));
   });
 
   it('slices to MAX_RECENT_WORKSPACES before saving', () => {
     const paths = Array.from({ length: MAX_RECENT_WORKSPACES + 5 }, (_, i) => `/path${i}`);
-    writeRecentWorkspaces(paths);
+    writeRecentProjectFolders(paths);
     const callArgs = mock.setItem.mock.calls[0];
     const saved = JSON.parse(callArgs[1] as string);
     expect(saved).toHaveLength(MAX_RECENT_WORKSPACES);
@@ -185,7 +185,7 @@ describe('writeRecentWorkspaces', () => {
   });
 
   it('does not normalize before saving (caller responsibility)', () => {
-    writeRecentWorkspaces(['/raw/path']);
+    writeRecentProjectFolders(['/raw/path']);
     const callArgs = mock.setItem.mock.calls[0];
     expect(callArgs[0]).toBe(RECENT_WORKSPACES_KEY);
     expect(JSON.parse(callArgs[1] as string)).toEqual(['/raw/path']);
@@ -193,43 +193,43 @@ describe('writeRecentWorkspaces', () => {
 });
 
 // ---------------------------------------------------------------------------
-// readRemoteRecentWorkspaces
+// readRemoteRecentProjectFolders
 // ---------------------------------------------------------------------------
 
 describe('readRemoteRecentWorkspaces', () => {
   let mock: ReturnType<typeof createMockStorage>;
-  let readRemoteRecentWorkspaces: () => Record<string, string[]>;
+  let readRemoteRecentProjectFolders: () => Record<string, string[]>;
 
   beforeEach(async () => {
     mock = createMockStorage();
     setupStorage(mock);
     const mod = await import('./workspaceStorage');
-    readRemoteRecentWorkspaces = mod.readRemoteRecentWorkspaces;
+    readRemoteRecentProjectFolders = mod.readRemoteRecentProjectFolders;
   });
 
   it('returns empty object when localStorage key is missing', () => {
     mock.getItem.mockReturnValue(null);
-    expect(readRemoteRecentWorkspaces()).toEqual({});
+    expect(readRemoteRecentProjectFolders()).toEqual({});
   });
 
   it('returns empty object for invalid JSON', () => {
     mock.getItem.mockReturnValue('garbage');
-    expect(readRemoteRecentWorkspaces()).toEqual({});
+    expect(readRemoteRecentProjectFolders()).toEqual({});
   });
 
   it('returns empty object for non-object JSON', () => {
     mock.getItem.mockReturnValue(JSON.stringify('just a string'));
-    expect(readRemoteRecentWorkspaces()).toEqual({});
+    expect(readRemoteRecentProjectFolders()).toEqual({});
   });
 
   it('returns empty object for array JSON', () => {
     mock.getItem.mockReturnValue(JSON.stringify(['arr']));
-    expect(readRemoteRecentWorkspaces()).toEqual({});
+    expect(readRemoteRecentProjectFolders()).toEqual({});
   });
 
   it('returns empty object for null JSON', () => {
     mock.getItem.mockReturnValue(JSON.stringify(null));
-    expect(readRemoteRecentWorkspaces()).toEqual({});
+    expect(readRemoteRecentProjectFolders()).toEqual({});
   });
 
   it('reads and normalizes remote workspace entries', () => {
@@ -239,7 +239,7 @@ describe('readRemoteRecentWorkspaces', () => {
         'host-b': ['/project/src'],
       }),
     );
-    const result = readRemoteRecentWorkspaces();
+    const result = readRemoteRecentProjectFolders();
     expect(result).toEqual({
       'host-a': ['/home/user', '/double/slash'],
       'host-b': ['/project/src'],
@@ -252,7 +252,7 @@ describe('readRemoteRecentWorkspaces', () => {
         host: ['/valid', 123, null, 'also-valid'],
       }),
     );
-    const result = readRemoteRecentWorkspaces();
+    const result = readRemoteRecentProjectFolders();
     expect(result).toEqual({
       host: ['/valid', '/also-valid'],
     });
@@ -264,7 +264,7 @@ describe('readRemoteRecentWorkspaces', () => {
       host: longList,
     });
     mock.getItem.mockReturnValue(JSON.stringify({ host: longList }));
-    const result = readRemoteRecentWorkspaces();
+    const result = readRemoteRecentProjectFolders();
     expect(result.host).toHaveLength(MAX_RECENT_WORKSPACES);
     expect(result.host?.[0]).toBe('/path0');
   });
@@ -275,12 +275,12 @@ describe('readRemoteRecentWorkspaces', () => {
         host: 'not an array',
       }),
     );
-    const result = readRemoteRecentWorkspaces();
+    const result = readRemoteRecentProjectFolders();
     expect(result).toEqual({ host: [] });
   });
 
   it('uses correct localStorage key', () => {
-    readRemoteRecentWorkspaces();
+    readRemoteRecentProjectFolders();
     expect(mock.getItem).toHaveBeenCalledWith(REMOTE_RECENT_WORKSPACES_KEY);
   });
 
@@ -288,8 +288,8 @@ describe('readRemoteRecentWorkspaces', () => {
     mock.getItem.mockImplementation(() => {
       throw new Error('SecurityError');
     });
-    expect(() => readRemoteRecentWorkspaces()).not.toThrow();
-    expect(readRemoteRecentWorkspaces()).toEqual({});
+    expect(() => readRemoteRecentProjectFolders()).not.toThrow();
+    expect(readRemoteRecentProjectFolders()).toEqual({});
   });
 
   it('filters out entries that normalize to empty', () => {
@@ -298,33 +298,33 @@ describe('readRemoteRecentWorkspaces', () => {
         host: ['/valid', '', '  ', '/also'],
       }),
     );
-    const result = readRemoteRecentWorkspaces();
+    const result = readRemoteRecentProjectFolders();
     expect(result).toEqual({ host: ['/valid', '/also'] });
   });
 });
 
 // ---------------------------------------------------------------------------
-// writeRemoteRecentWorkspaces
+// writeRemoteRecentProjectFolders
 // ---------------------------------------------------------------------------
 
 describe('writeRemoteRecentWorkspaces', () => {
   let mock: ReturnType<typeof createMockStorage>;
-  let writeRemoteRecentWorkspaces: (value: Record<string, string[]>) => void;
+  let writeRemoteRecentProjectFolders: (value: Record<string, string[]>) => void;
 
   beforeEach(async () => {
     mock = createMockStorage();
     setupStorage(mock);
     const mod = await import('./workspaceStorage');
-    writeRemoteRecentWorkspaces = mod.writeRemoteRecentWorkspaces;
+    writeRemoteRecentProjectFolders = mod.writeRemoteRecentProjectFolders;
   });
 
   it('saves to correct localStorage key', () => {
-    writeRemoteRecentWorkspaces({ host: ['/path'] });
+    writeRemoteRecentProjectFolders({ host: ['/path'] });
     expect(mock.setItem).toHaveBeenCalledWith(REMOTE_RECENT_WORKSPACES_KEY, JSON.stringify({ host: ['/path'] }));
   });
 
   it('saves empty object', () => {
-    writeRemoteRecentWorkspaces({});
+    writeRemoteRecentProjectFolders({});
     expect(mock.setItem).toHaveBeenCalledWith(REMOTE_RECENT_WORKSPACES_KEY, JSON.stringify({}));
   });
 
@@ -333,49 +333,49 @@ describe('writeRemoteRecentWorkspaces', () => {
       'host-a': ['/path1', '/path2'],
       'host-b': ['/path3'],
     };
-    writeRemoteRecentWorkspaces(value);
+    writeRemoteRecentProjectFolders(value);
     expect(mock.setItem).toHaveBeenCalledWith(REMOTE_RECENT_WORKSPACES_KEY, JSON.stringify(value));
   });
 });
 
 // ---------------------------------------------------------------------------
-// readSSHFavoriteWorkspaces
+// readSSHFavoriteProjectFolders
 // ---------------------------------------------------------------------------
 
 describe('readSSHFavoriteWorkspaces', () => {
   let mock: ReturnType<typeof createMockStorage>;
-  let readSSHFavoriteWorkspaces: () => Record<string, string[]>;
+  let readSSHFavoriteProjectFolders: () => Record<string, string[]>;
 
   beforeEach(async () => {
     mock = createMockStorage();
     setupStorage(mock);
     const mod = await import('./workspaceStorage');
-    readSSHFavoriteWorkspaces = mod.readSSHFavoriteWorkspaces;
+    readSSHFavoriteProjectFolders = mod.readSSHFavoriteProjectFolders;
   });
 
   it('returns empty object when localStorage key is missing', () => {
     mock.getItem.mockReturnValue(null);
-    expect(readSSHFavoriteWorkspaces()).toEqual({});
+    expect(readSSHFavoriteProjectFolders()).toEqual({});
   });
 
   it('returns empty object for invalid JSON', () => {
     mock.getItem.mockReturnValue('garbage');
-    expect(readSSHFavoriteWorkspaces()).toEqual({});
+    expect(readSSHFavoriteProjectFolders()).toEqual({});
   });
 
   it('returns empty object for non-object JSON', () => {
     mock.getItem.mockReturnValue(JSON.stringify('string'));
-    expect(readSSHFavoriteWorkspaces()).toEqual({});
+    expect(readSSHFavoriteProjectFolders()).toEqual({});
   });
 
   it('returns empty object for array JSON', () => {
     mock.getItem.mockReturnValue(JSON.stringify(['arr']));
-    expect(readSSHFavoriteWorkspaces()).toEqual({});
+    expect(readSSHFavoriteProjectFolders()).toEqual({});
   });
 
   it('returns empty object for null JSON', () => {
     mock.getItem.mockReturnValue(JSON.stringify(null));
-    expect(readSSHFavoriteWorkspaces()).toEqual({});
+    expect(readSSHFavoriteProjectFolders()).toEqual({});
   });
 
   it('reads and normalizes SSH favorite entries', () => {
@@ -385,7 +385,7 @@ describe('readSSHFavoriteWorkspaces', () => {
         otherhost: ['/project'],
       }),
     );
-    const result = readSSHFavoriteWorkspaces();
+    const result = readSSHFavoriteProjectFolders();
     expect(result).toEqual({
       myserver: ['/home/user/projects', '/double/slash'],
       otherhost: ['/project'],
@@ -398,14 +398,14 @@ describe('readSSHFavoriteWorkspaces', () => {
         host: ['/valid', 123, null],
       }),
     );
-    const result = readSSHFavoriteWorkspaces();
+    const result = readSSHFavoriteProjectFolders();
     expect(result).toEqual({ host: ['/valid'] });
   });
 
   it('enforces MAX_RECENT_WORKSPACES per host', () => {
     const longList = Array.from({ length: MAX_RECENT_WORKSPACES + 5 }, (_, i) => `/path${i}`);
     mock.getItem.mockReturnValue(JSON.stringify({ host: longList }));
-    const result = readSSHFavoriteWorkspaces();
+    const result = readSSHFavoriteProjectFolders();
     expect(result.host).toHaveLength(MAX_RECENT_WORKSPACES);
   });
 
@@ -415,12 +415,12 @@ describe('readSSHFavoriteWorkspaces', () => {
         host: 'not an array',
       }),
     );
-    const result = readSSHFavoriteWorkspaces();
+    const result = readSSHFavoriteProjectFolders();
     expect(result).toEqual({ host: [] });
   });
 
   it('uses correct localStorage key', () => {
-    readSSHFavoriteWorkspaces();
+    readSSHFavoriteProjectFolders();
     expect(mock.getItem).toHaveBeenCalledWith(SSH_FAVORITE_WORKSPACES_KEY);
   });
 
@@ -428,8 +428,8 @@ describe('readSSHFavoriteWorkspaces', () => {
     mock.getItem.mockImplementation(() => {
       throw new Error('SecurityError');
     });
-    expect(() => readSSHFavoriteWorkspaces()).not.toThrow();
-    expect(readSSHFavoriteWorkspaces()).toEqual({});
+    expect(() => readSSHFavoriteProjectFolders()).not.toThrow();
+    expect(readSSHFavoriteProjectFolders()).toEqual({});
   });
 
   it('filters out entries that normalize to empty', () => {
@@ -438,33 +438,33 @@ describe('readSSHFavoriteWorkspaces', () => {
         host: ['/valid', '', '  ', '/also'],
       }),
     );
-    const result = readSSHFavoriteWorkspaces();
+    const result = readSSHFavoriteProjectFolders();
     expect(result).toEqual({ host: ['/valid', '/also'] });
   });
 });
 
 // ---------------------------------------------------------------------------
-// writeSSHFavoriteWorkspaces
+// writeSSHFavoriteProjectFolders
 // ---------------------------------------------------------------------------
 
 describe('writeSSHFavoriteWorkspaces', () => {
   let mock: ReturnType<typeof createMockStorage>;
-  let writeSSHFavoriteWorkspaces: (value: Record<string, string[]>) => void;
+  let writeSSHFavoriteProjectFolders: (value: Record<string, string[]>) => void;
 
   beforeEach(async () => {
     mock = createMockStorage();
     setupStorage(mock);
     const mod = await import('./workspaceStorage');
-    writeSSHFavoriteWorkspaces = mod.writeSSHFavoriteWorkspaces;
+    writeSSHFavoriteProjectFolders = mod.writeSSHFavoriteProjectFolders;
   });
 
   it('saves to correct localStorage key', () => {
-    writeSSHFavoriteWorkspaces({ host: ['/path'] });
+    writeSSHFavoriteProjectFolders({ host: ['/path'] });
     expect(mock.setItem).toHaveBeenCalledWith(SSH_FAVORITE_WORKSPACES_KEY, JSON.stringify({ host: ['/path'] }));
   });
 
   it('saves empty object', () => {
-    writeSSHFavoriteWorkspaces({});
+    writeSSHFavoriteProjectFolders({});
     expect(mock.setItem).toHaveBeenCalledWith(SSH_FAVORITE_WORKSPACES_KEY, JSON.stringify({}));
   });
 
@@ -473,7 +473,7 @@ describe('writeSSHFavoriteWorkspaces', () => {
       'host-a': ['/path1', '/path2'],
       'host-b': ['/path3'],
     };
-    writeSSHFavoriteWorkspaces(value);
+    writeSSHFavoriteProjectFolders(value);
     expect(mock.setItem).toHaveBeenCalledWith(SSH_FAVORITE_WORKSPACES_KEY, JSON.stringify(value));
   });
 
@@ -481,6 +481,6 @@ describe('writeSSHFavoriteWorkspaces', () => {
     vi.spyOn(mock, 'setItem').mockImplementation(() => {
       throw new Error('QuotaExceededError');
     });
-    expect(() => writeSSHFavoriteWorkspaces({ host: ['/path'] })).not.toThrow();
+    expect(() => writeSSHFavoriteProjectFolders({ host: ['/path'] })).not.toThrow();
   });
 });

@@ -1,20 +1,20 @@
 import { Loader2 } from 'lucide-react';
 import React from 'react';
 import { collapseHomePath } from './pathUtils';
-import type { WorkspaceDirectory, RemoteWorkspaceContext } from './types';
+import type { ProjectFolderDirectory, RemoteProjectFolderContext } from './types';
 
-export interface WorkspaceSuggestionListProps {
+export interface ProjectFolderSuggestionListProps {
   workspaceRoot: string;
-  remoteContext: RemoteWorkspaceContext | null;
-  suggestions: WorkspaceDirectory[];
+  remoteContext: RemoteProjectFolderContext | null;
+  suggestions: ProjectFolderDirectory[];
   suggestionsLoading: boolean;
   suggestionsError: string | null;
   selectedIndex: number;
   onSelectSuggestion: (path: string) => Promise<void>;
 }
 
-export const WorkspaceSuggestionList: React.FC<WorkspaceSuggestionListProps> = ({
-  workspaceRoot,
+export const ProjectFolderSuggestionList: React.FC<ProjectFolderSuggestionListProps> = ({
+  workspaceRoot: projectFolder,
   remoteContext,
   suggestions,
   suggestionsLoading,
@@ -55,10 +55,10 @@ export const WorkspaceSuggestionList: React.FC<WorkspaceSuggestionListProps> = (
             type="button"
             className={`location-switcher-item ${
               index === selectedIndex ? 'selected' : ''
-            } ${dir.path === workspaceRoot ? 'active' : ''}`}
+            } ${dir.path === projectFolder ? 'active' : ''}`}
             onClick={() => onSelectSuggestion(dir.path)}
             role="option"
-            aria-selected={dir.path === workspaceRoot}
+            aria-selected={dir.path === projectFolder}
           >
             <span className="location-switcher-item-text">{dir.name}</span>
             <span className="location-switcher-item-meta">

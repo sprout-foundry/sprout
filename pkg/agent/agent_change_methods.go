@@ -57,7 +57,7 @@ func (a *Agent) EnableChangeTracking(instructions string) {
 	// dropped diff for the triggering command). See TrackShellTurn.
 	//
 	// Subagents skip the eager prime: each subagent tracker would hold
-	// its own copy of the workspace snapshot (up to the 32 MiB content
+	// its own copy of the project folder snapshot (up to the 32 MiB content
 	// budget) — N parallel subagents multiplied that by N, and read-only
 	// subagents paid the cold walk for nothing. TrackShellTurn
 	// auto-primes on the subagent's first non-read-only shell command,
@@ -70,7 +70,7 @@ func (a *Agent) EnableChangeTracking(instructions string) {
 	// query): edits the user made between turns must not be diffed as the
 	// agent's own at its next shell command.
 	if a.subagentDepth == 0 {
-		if root := a.currentWorkspaceRoot(); root != "" {
+		if root := a.currentProjectFolder(); root != "" {
 			a.changeTracker.RebaseShellTracking(root)
 		}
 	}
@@ -189,12 +189,12 @@ func (a *Agent) GetChangeTracker() *ChangeTracker {
 	return a.changeTracker
 }
 
-// IsPathOutsideWorkspace reports whether the resolved absolute path falls outside the agent's workspace root.
-func (a *Agent) IsPathOutsideWorkspace(path string) bool {
+// IsPathOutsideProjectFolder reports whether the resolved absolute path falls outside the agent's project folder.
+func (a *Agent) IsPathOutsideProjectFolder(path string) bool {
 	if a.changeTracker == nil || !a.changeTracker.IsEnabled() {
 		return false
 	}
-	return a.changeTracker.IsOutsideWorkspace(path)
+	return a.changeTracker.IsOutsideProjectFolder(path)
 }
 
 // GetRevisionID returns the current revision ID (if change tracking is enabled)
@@ -221,7 +221,7 @@ func (a *Agent) GetChangeCount() int {
 	return 0
 }
 
-// TurnChangedPaths returns the distinct workspace paths this agent's
+// TurnChangedPaths returns the distinct project folder paths this agent's
 // current turn changed (the gate for the turn-end
 // verification run), or nil when change tracking is off or the turn
 // changed no files. The window opens at the turn's EnableChangeTracking
@@ -460,7 +460,7 @@ func (a *Agent) TrackFileEdit(filePath string, originalContent string, newConten
 // TrackShellCommand is called by the shell_command tool to capture filesystem
 // mutations made outside the file tools (scripts, rm, git checkout, ...). It
 // skips commands the read-only classifier can prove change nothing, then
-// diffs the workspace — which records both writes and deletes. Best-effort:
+// diffs the project folder — which records both writes and deletes. Best-effort:
 // callers treat this as fire-and-forget.
 func (a *Agent) TrackShellCommand(command string) error {
 	tracker := a.GetChangeTracker()
@@ -474,21 +474,21 @@ func (a *Agent) TrackShellCommand(command string) error {
 	// follows cd commands; keying the snapshot cache to it made every
 	// post-cd shell command discard the primed baseline and pay a full
 	// cold re-walk (with the triggering command's diff silently
-	// dropped). Workspace root is stable for the agent's lifetime.
-	tracker.TrackShellCommandTurn(a.currentWorkspaceRoot(), command, shellIsDestructive(command))
+	// dropped). Project folder is stable for the agent's lifetime.
+	tracker.TrackShellCommandTurn(a.currentProjectFolder(), command, shellIsDestructive(command))
 	return nil
 }
 
 // PrepareShellCommand primes the shell-mutation baseline before a command
 // that may change files runs. Agents that skip the eager prime (subagents,
-// so read-only ones never pay for a workspace walk) otherwise primed after
+// so read-only ones never pay for a project folder walk) otherwise primed after
 // their first mutating command, losing that command's changes.
 func (a *Agent) PrepareShellCommand(command string) {
 	tracker := a.GetChangeTracker()
 	if tracker == nil || !tracker.IsEnabled() || shellLooksReadOnly(command) {
 		return
 	}
-	tracker.PrimeShellTracking(a.currentWorkspaceRoot())
+	tracker.PrimeShellTracking(a.currentProjectFolder())
 }
 
 // Standalone (no-agent) query functions.

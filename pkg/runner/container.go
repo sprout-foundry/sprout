@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-// ContainerLauncher runs each workspace in the sprout workspace image with
+// ContainerLauncher runs each dev space in the sprout dev space image with
 // the platform's hardening profile: non-root, read-only rootfs, every
 // capability dropped, no-new-privileges, CPU and memory limits, the daemon
 // published on loopback only. It drives the docker CLI, so Docker Desktop,
@@ -31,7 +31,7 @@ func (l *ContainerLauncher) docker() string {
 	return "docker"
 }
 
-func containerName(workspaceID string) string { return "sprout-ws-" + workspaceID }
+func containerName(devSpaceID string) string { return "sprout-ws-" + devSpaceID }
 
 // DockerAvailable reports whether container mode can run here.
 func DockerAvailable(ctx context.Context, docker string) error {
@@ -45,7 +45,7 @@ func DockerAvailable(ctx context.Context, docker string) error {
 	return nil
 }
 
-// ImageUnavailableError reports that the workspace image is neither present
+// ImageUnavailableError reports that the dev space image is neither present
 // locally nor pullable. The runner never holds registry credentials: the
 // docker CLI pulls with Docker's own credential store, so the fix is
 // `docker login` or a different image or mode.
@@ -55,7 +55,7 @@ type ImageUnavailableError struct {
 }
 
 func (e *ImageUnavailableError) Error() string {
-	return fmt.Sprintf(`container mode cannot pull the workspace image %s:
+	return fmt.Sprintf(`container mode cannot pull the dev space image %s:
   %s
 
 Fix one of:
@@ -87,12 +87,12 @@ func imageRegistry(image string) string {
 	return "docker.io"
 }
 
-// EnsureImage makes sure the workspace image is present, pulling it when it
+// EnsureImage makes sure the dev space image is present, pulling it when it
 // is not, so a missing image or registry credential fails before the runner
 // goes online rather than at its first task.
 func (l *ContainerLauncher) EnsureImage(ctx context.Context, progress io.Writer) error {
 	if strings.TrimSpace(l.Image) == "" {
-		return errors.New("container mode has no workspace image configured; pass --image <image>")
+		return errors.New("container mode has no dev space image configured; pass --image <image>")
 	}
 	if err := ValidateImage(l.Image); err != nil {
 		return err
@@ -101,7 +101,7 @@ func (l *ContainerLauncher) EnsureImage(ctx context.Context, progress io.Writer)
 		return nil
 	}
 	if progress != nil {
-		_, _ = fmt.Fprintf(progress, "Pulling workspace image %s…\n", l.Image)
+		_, _ = fmt.Fprintf(progress, "Pulling dev space image %s…\n", l.Image)
 	}
 	out, err := exec.CommandContext(ctx, l.docker(), "pull", l.Image).CombinedOutput() //nolint:gosec // G204: docker CLI with runner-built args
 	if err != nil {
@@ -113,51 +113,51 @@ func (l *ContainerLauncher) EnsureImage(ctx context.Context, progress io.Writer)
 	return nil
 }
 
-func (l *ContainerLauncher) Start(ctx context.Context, task WorkspaceTask) (*Workspace, error) {
-	dir, err := workspaceDir(task.WorkspaceID)
+func (l *ContainerLauncher) Start(ctx context.Context, task DevSpaceTask) (*DevSpace, error) {
+	dir, err := devSpaceDir(task.DevSpaceID)
 	if err != nil {
 		return nil, err
 	}
-	// A local-directory workspace bind-mounts the user's real directory at
+	// A local-directory dev space bind-mounts the user's real directory at
 	// /workspace (the allowlist was checked before the task started). A
-	// clone workspace keeps the runner-managed volume it owns.
-	workspaceMount := ""
-	if task.WorkspaceDir != "" {
+	// clone dev space keeps the runner-managed volume it owns.
+	devSpaceMount := ""
+	if task.DevSpaceDir != "" {
 		if task.RepoURL != "" {
 			// A local directory is served in place; a repo URL beside
 			// it would ask the image to clone into the user's real
 			// files, which it must never do.
 			return nil, fmt.Errorf("start task names both a repo and a local directory")
 		}
-		workspaceMount = task.WorkspaceDir + ":/workspace"
+		devSpaceMount = task.DevSpaceDir + ":/workspace"
 	} else {
 		volume := filepath.Join(dir, "volume")
 		if err := os.MkdirAll(volume, 0o700); err != nil {
-			return nil, fmt.Errorf("creating workspace volume: %w", err)
+			return nil, fmt.Errorf("creating dev space volume: %w", err)
 		}
 		// The container runs as uid 1000, which need not match the host user.
 		if err := os.Chmod(volume, 0o777); err != nil { //nolint:gosec // G302: the container's uid 1000 must write it; parent dir is 0700
 			return nil, err
 		}
-		workspaceMount = volume + ":/workspace"
+		devSpaceMount = volume + ":/workspace"
 	}
-	env := workspaceEnv(task)
-	if task.WorkspaceDir != "" {
+	env := devSpaceEnv(task)
+	if task.DevSpaceDir != "" {
 		// Inside the container the directory is the /workspace mount;
 		// the host path means nothing there and would only leak it.
 		env["WORKSPACE_DIR"] = "/workspace"
 	}
 	envFile, err := writeEnvFile(dir, env)
 	if err != nil {
-		return nil, fmt.Errorf("writing workspace env: %w", err)
+		return nil, fmt.Errorf("writing dev space env: %w", err)
 	}
 	defer func() { _ = os.Remove(envFile) }()
 
-	name := containerName(task.WorkspaceID)
+	name := containerName(task.DevSpaceID)
 	_ = exec.CommandContext(ctx, l.docker(), "rm", "-f", name).Run() //nolint:gosec // G204: docker CLI with runner-built args
 	args := []string{
 		"run", "-d", "--name", name,
-		"--label", "sprout.runner.workspace=" + task.WorkspaceID,
+		"--label", "sprout.runner.workspace=" + task.DevSpaceID,
 		"--env-file", envFile,
 		"--read-only",
 		"--cap-drop", "ALL",
@@ -166,7 +166,7 @@ func (l *ContainerLauncher) Start(ctx context.Context, task WorkspaceTask) (*Wor
 		"--tmpfs", "/tmp:size=128m",
 		"--tmpfs", "/run:size=16m",
 		"--tmpfs", "/home/sprout:size=32m,uid=1000,gid=1000,mode=0700",
-		"-v", workspaceMount,
+		"-v", devSpaceMount,
 		"-p", "127.0.0.1::" + strconv.Itoa(daemonPort),
 		l.Image,
 	}
@@ -178,7 +178,7 @@ func (l *ContainerLauncher) Start(ctx context.Context, task WorkspaceTask) (*Wor
 		_ = exec.CommandContext(ctx, l.docker(), "rm", "-f", name).Run() //nolint:gosec // G204: docker CLI with runner-built args
 		return nil, err
 	}
-	ws := &Workspace{ID: task.WorkspaceID, Port: port, Handle: name}
+	ws := &DevSpace{ID: task.DevSpaceID, Port: port, Handle: name}
 	if err := waitReady(ctx, port); err != nil {
 		logs, _ := exec.CommandContext(ctx, l.docker(), "logs", "--tail", "20", name).CombinedOutput() //nolint:gosec // G204: docker CLI with runner-built args
 		_ = exec.CommandContext(ctx, l.docker(), "rm", "-f", name).Run()                               //nolint:gosec // G204: docker CLI with runner-built args
@@ -201,7 +201,7 @@ func (l *ContainerLauncher) hostPort(ctx context.Context, name string) (int, err
 	return port, nil
 }
 
-func (l *ContainerLauncher) Stop(ctx context.Context, ws *Workspace) error {
+func (l *ContainerLauncher) Stop(ctx context.Context, ws *DevSpace) error {
 	if ws == nil {
 		return nil
 	}
@@ -211,9 +211,9 @@ func (l *ContainerLauncher) Stop(ctx context.Context, ws *Workspace) error {
 	return nil
 }
 
-func (l *ContainerLauncher) Destroy(ctx context.Context, workspaceID string, _ *Workspace) error {
-	_ = exec.CommandContext(ctx, l.docker(), "rm", "-f", containerName(workspaceID)).Run() //nolint:gosec // G204: docker CLI with runner-built args
-	dir, err := workspaceDir(workspaceID)
+func (l *ContainerLauncher) Destroy(ctx context.Context, devSpaceID string, _ *DevSpace) error {
+	_ = exec.CommandContext(ctx, l.docker(), "rm", "-f", containerName(devSpaceID)).Run() //nolint:gosec // G204: docker CLI with runner-built args
+	dir, err := devSpaceDir(devSpaceID)
 	if err != nil {
 		return err
 	}

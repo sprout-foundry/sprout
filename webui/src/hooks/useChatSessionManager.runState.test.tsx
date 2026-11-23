@@ -165,7 +165,7 @@ describe('stop that fails', () => {
 
 describe('send while the workspace is stopping', () => {
   it('rolls back the optimistic run without a second failure bubble', async () => {
-    const stopping = Object.assign(new Error('The workspace is stopping'), { code: 'workspace_stopping' });
+    const stopping = Object.assign(new Error('The workspace is stopping'), { code: 'dev_space_stopping' });
     const h = setup({
       state: { activeChatId: 'chat-a' } as Partial<AppState>,
       api: { sendQuery: vi.fn().mockRejectedValue(stopping) },

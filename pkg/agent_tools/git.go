@@ -162,7 +162,7 @@ func executeGitCommand(ctx context.Context, op GitOperationType, args string) (s
 	// Use SafeGitCmd so mutating operations are blocked when running under
 	// `go test` without an explicit working directory, preventing accidental
 	// mutations to the host repository.
-	wd := filesystem.WorkspaceRootFromContext(ctx)
+	wd := filesystem.ProjectFolderFromContext(ctx)
 	cmd := git.SafeGitCmd(wd, cmdArgs...)
 
 	output, err := cmd.CombinedOutput()

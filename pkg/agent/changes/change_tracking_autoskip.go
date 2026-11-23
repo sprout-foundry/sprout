@@ -6,33 +6,16 @@
 // Learned sets persist across agent sessions via change_tracking_shell_persist.go.
 package changes
 
-import (
-	"log"
-	"path/filepath"
-)
+import "log"
 
-// addAutoSkipDir registers an absolute directory path with the shell-
+// addAutoSkipDirLocked registers an absolute directory path with the shell-
 // walk auto-skip set so subsequent walks don't re-traverse it. Safe to
 // call repeatedly; persisting failures are logged but not surfaced —
 // the in-process skip still applies for the rest of the session.
-func (ct *ChangeTracker) addAutoSkipDir(workspaceRoot, relDir string) {
-	if ct == nil {
-		return
-	}
-	abs := filepath.Join(workspaceRoot, relDir)
-	// Walks read autoSkipDirs under shellCacheMu (walkWorkspace runs
-	// with that lock held); mutate under it too so a concurrent
-	// walk can't race on the map.
-	ct.shellCacheMu.Lock()
-	defer ct.shellCacheMu.Unlock()
-	ct.addAutoSkipDirLocked(workspaceRoot, abs)
-}
-
-// addAutoSkipDirLocked is addAutoSkipDir's body for callers already
-// holding shellCacheMu (TrackShellTurn → emitWithBulkRollup). The mutex
-// is NOT re-entrant — locking again here would self-deadlock.
-// Persists an iteration-safe snapshot of the map keyed by workspaceRoot.
-func (ct *ChangeTracker) addAutoSkipDirLocked(workspaceRoot, abs string) {
+// Callers already hold shellCacheMu (TrackShellTurn → emitWithBulkRollup);
+// the mutex is NOT re-entrant — locking again here would self-deadlock.
+// Persists an iteration-safe snapshot of the map keyed by projectFolder.
+func (ct *ChangeTracker) addAutoSkipDirLocked(projectFolder, abs string) {
 	if ct.autoSkipDirs == nil {
 		ct.autoSkipDirs = map[string]bool{}
 	}
@@ -44,7 +27,7 @@ func (ct *ChangeTracker) addAutoSkipDirLocked(workspaceRoot, abs string) {
 	for d := range ct.autoSkipDirs {
 		snapshot[d] = true
 	}
-	if err := saveAutoSkipDirsFor(workspaceRoot, snapshot); err != nil {
+	if err := saveAutoSkipDirsFor(projectFolder, snapshot); err != nil {
 		log.Printf("[change-tracker] failed to persist auto-skip dirs after bulk rollup: %v", err)
 	}
 }

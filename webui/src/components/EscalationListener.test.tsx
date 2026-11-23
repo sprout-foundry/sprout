@@ -102,6 +102,15 @@ function fireTrigger(overrides: Partial<EscalationTriggerEvent> = {}): void {
   act(() => dispatchTrigger(overrides));
 }
 
+/** Walk Mode A's two steps: open the confirm step, then start the task. */
+function startCloudTask(prompt?: string): void {
+  fireEvent.click(screen.getByTestId('escalation-toast-cloud-task'));
+  if (prompt !== undefined) {
+    fireEvent.change(screen.getByTestId('escalation-cloud-task-prompt'), { target: { value: prompt } });
+  }
+  fireEvent.click(screen.getByTestId('escalation-cloud-task-start'));
+}
+
 const RUN_RESULT: TxnRunResult = {
   stdout: 'built ok\n',
   stderr: '',
@@ -667,6 +676,13 @@ describe('EscalationListener — Mode A/B regressions', () => {
     // No command → Mode A is the primary inline action.
     fireTrigger({ command: undefined, reason: 'git_push_failed' });
     fireEvent.click(screen.getByTestId('escalation-toast-cloud-task'));
+    // The CTA opens the confirm step; nothing is submitted before "Start task".
+    const prompt = screen.getByTestId('escalation-cloud-task-prompt') as HTMLTextAreaElement;
+    expect(prompt.value).toBe(
+      'Continue building this repository. Pushing from the browser failed; commit and push the current changes.',
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('escalation-cloud-task-start'));
     await flush();
 
     const [, init] = fetchMock.mock.calls.find(([input]) => String(input) === '/api/tasks') as [string, RequestInit];
@@ -679,6 +695,42 @@ describe('EscalationListener — Mode A/B regressions', () => {
     expect(status).toHaveTextContent('Cloud task completed');
     // A finished task must not keep spinning.
     expect(status.querySelector('.spinner')).toBeNull();
+  });
+
+  it('posts what the user edited in the confirm step, not the derived prompt', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url === '/api/tasks') {
+        return jsonResponse({ task_id: 'task-9', status: 'pending' }, { status: 201 });
+      }
+      return jsonResponse({ task_id: 'task-9', status: 'pending' });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderListener();
+    fireTrigger({ command: undefined, reason: 'git_push_failed' });
+    startCloudTask('Continue, but run the full test suite first.');
+    await flush();
+
+    const [, init] = fetchMock.mock.calls.find(([input]) => String(input) === '/api/tasks') as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({
+      repo_url: 'https://github.com/acme/app',
+      prompt: 'Continue, but run the full test suite first.',
+    });
+  });
+
+  it('"Back" leaves the confirm step without submitting anything', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({}));
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderListener();
+    fireTrigger({ command: undefined, reason: 'git_push_failed' });
+    fireEvent.click(screen.getByTestId('escalation-toast-cloud-task'));
+    fireEvent.click(screen.getByTestId('escalation-cloud-task-back'));
+
+    expect(screen.queryByTestId('escalation-cloud-task-prompt')).toBeNull();
+    expect(screen.getByTestId('escalation-toast-cloud-task')).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('hides the cloud-task CTA once a txn is in flight for the same toast', async () => {
@@ -708,7 +760,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
     };
     renderListener(host);
     fireTrigger({ command: undefined, reason: 'git_push_failed' });
-    fireEvent.click(screen.getByTestId('escalation-toast-cloud-task'));
+    startCloudTask();
     await flush();
 
     const link = await screen.findByTestId('escalation-toast-cloud-task-link');
@@ -733,7 +785,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
     };
     renderListener(host);
     fireTrigger({ command: undefined, reason: 'git_push_failed' });
-    fireEvent.click(screen.getByTestId('escalation-toast-cloud-task'));
+    startCloudTask();
     await flush();
 
     expect(await screen.findByTestId('escalation-toast-cloud-task-status')).toBeInTheDocument();
@@ -750,7 +802,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
 
     renderListener(localHost);
     fireTrigger({ command: undefined, reason: 'git_push_failed' });
-    fireEvent.click(screen.getByTestId('escalation-toast-cloud-task'));
+    startCloudTask();
     await flush();
 
     expect(await screen.findByTestId('escalation-toast-cloud-task-status')).toBeInTheDocument();

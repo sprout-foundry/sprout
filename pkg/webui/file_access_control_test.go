@@ -57,7 +57,7 @@ func TestIsWithinProjectFolder_PathTraversal(t *testing.T) {
 func TestIsWithinProjectFolder_RealPaths(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectFolder := filepath.Join(tmpDir, "workspace")
-	os.MkdirAll(projectFolder, 0755)
+	_ = os.MkdirAll(projectFolder, 0755)
 
 	// Inside project folder
 	inside := filepath.Join(projectFolder, "src", "file.go")

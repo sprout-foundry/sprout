@@ -17,7 +17,7 @@ interface MutationHookParams {
   settings: SproutSettings | null;
   onSettingsChanged: (settings: SproutSettings) => void;
   addNotification: AddNotificationFn;
-  configViewLayer: 'session' | 'workspace' | 'global';
+  configViewLayer: 'session' | 'project_folder' | 'global';
   api: ReturnType<typeof ApiService.getInstance>;
   setProvenanceSources: (v: Record<string, string>) => void;
   /** Re-fetch the active layer after a non-session save. */
@@ -257,7 +257,7 @@ export function useSettingsMutation(params: MutationHookParams) {
         const updated = setNestedValue(current, keyOrPath, value) as SproutSettings;
         onSettingsChanged(updated);
 
-        let layer: 'session' | 'workspace' | 'global' | undefined;
+        let layer: 'session' | 'project_folder' | 'global' | undefined;
         if (configViewLayer !== 'session') {
           layer = configViewLayer;
         }
@@ -325,8 +325,8 @@ export function useSettingsMutation(params: MutationHookParams) {
     try {
       const globalData = await api.getSettingsLayer('global');
       const { mcp: _mcpRedacted, ...projectFolderData } = globalData;
-      await api.updateSettings(projectFolderData, 'workspace');
-      const data = await api.getSettingsLayer('workspace');
+      await api.updateSettings(projectFolderData, 'project_folder');
+      const data = await api.getSettingsLayer('project_folder');
       setLayerData(data);
       addNotification('success', 'Settings', 'Project folder config created from global settings', 3000);
     } catch (err) {

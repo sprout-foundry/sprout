@@ -75,7 +75,7 @@ export function handleWasmLocal(
       case '/api/files':
         return handleWasmFileList(shell, fullUrl);
       case '/api/browse':
-      case '/api/workspace/browse':
+      case '/api/project-folder/browse':
         return handleWasmBrowse(shell, fullUrl);
       case '/api/file-index':
         return handleWasmFileIndex(shell, fullUrl);
@@ -286,12 +286,12 @@ function projectFolderPathOf(shell: WasmShell, raw: string): string {
 }
 
 /**
- * GET /api/workspace — the project folder the file routes resolve against,
+ * GET /api/project-folder — the project folder the file routes resolve against,
  * in the daemon's shape.
  */
 export function handleWasmProjectFolderInfo(shell: WasmShell): Response {
   const root = normalizePath(projectFolderOf(shell) || '/');
-  return jsonOk({ message: 'ok', workspace_root: root, daemon_root: root });
+  return jsonOk({ message: 'ok', project_folder: root, daemon_root: root });
 }
 
 /** Path relative to the shell's CWD (the browser project folder). */

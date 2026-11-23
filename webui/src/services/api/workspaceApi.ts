@@ -38,15 +38,15 @@ function toProjectFolderResponse(data: Record<string, unknown>): ProjectFolderRe
       }));
   })();
 
-  const recent_workspaces = ((): Array<{
+  const recent_project_folders = ((): Array<{
     path: string;
     name: string;
     last_used: string;
     markers: string[];
     session_count: number;
   }> => {
-    if (!Array.isArray(data.recent_workspaces)) return [];
-    return data.recent_workspaces
+    if (!Array.isArray(data.recent_project_folders)) return [];
+    return data.recent_project_folders
       .filter((w): w is RawProjectFolderEntry => typeof w === 'object' && w != null && 'path' in w)
       .map((w) => ({
         path: String(w.path ?? ''),
@@ -59,15 +59,15 @@ function toProjectFolderResponse(data: Record<string, unknown>): ProjectFolderRe
 
   return {
     daemon_root: String(data.daemon_root ?? ''),
-    workspace_root: String(data.workspace_root ?? ''),
+    project_folder: String(data.project_folder ?? ''),
     is_project: parseBool(data.is_project),
     project_markers: parseStrArray(data.project_markers),
-    needs_workspace_selection: parseBool(data.needs_workspace_selection),
+    needs_project_folder_selection: parseBool(data.needs_project_folder_selection),
     // SP-130: home-directory gate fields
-    workspace_is_home: parseBool(data.workspace_is_home),
+    project_folder_is_home: parseBool(data.project_folder_is_home),
     home_dir: String(data.home_dir ?? ''),
     suggested_projects,
-    recent_workspaces,
+    recent_project_folders,
     ...(data.ssh_context != null && typeof data.ssh_context === 'object'
       ? { ssh_context: data.ssh_context as ProjectFolderResponse['ssh_context'] }
       : {}),
@@ -75,7 +75,7 @@ function toProjectFolderResponse(data: Record<string, unknown>): ProjectFolderRe
 }
 
 export async function getProjectFolder(fetchFn: typeof fetch): Promise<ProjectFolderResponse> {
-  const response = await fetchFn('/api/workspace');
+  const response = await fetchFn('/api/project-folder');
   const text = await response.text();
 
   const parseProjectFolderPayload = (t: string): Record<string, unknown> => {
@@ -110,7 +110,7 @@ export async function getProjectFolder(fetchFn: typeof fetch): Promise<ProjectFo
     throw new Error('Project folder API returned an HTML response');
   }
 
-  if (data && typeof data === 'object' && 'workspace_root' in data && 'daemon_root' in data) {
+  if (data && typeof data === 'object' && 'project_folder' in data && 'daemon_root' in data) {
     return toProjectFolderResponse(data);
   }
 
@@ -122,7 +122,7 @@ export async function setProjectFolder(
   path: string,
   consentHome?: boolean,
 ): Promise<ProjectFolderResponse & { message: string }> {
-  const response = await fetchFn('/api/workspace', {
+  const response = await fetchFn('/api/project-folder', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path, consent_home: consentHome ?? false }),
@@ -143,7 +143,7 @@ export async function setProjectFolder(
   if (!response.ok) {
     const err = new Error(String(data.error ?? data.message ?? 'Failed to update the project folder'));
     // Attach a structured code so callers can distinguish the home-consent
-    // flow (backend rejects with code: "home_workspace_requires_consent")
+    // flow (backend rejects with code: "home_project_folder_requires_consent")
     // from a generic failure. SP-130.
     if (data.code) (err as Error & { code?: string }).code = String(data.code);
     throw err;
@@ -155,7 +155,7 @@ export async function setProjectFolder(
     throw new Error('Project folder API returned an HTML response');
   }
 
-  if (data && typeof data === 'object' && 'workspace_root' in data && 'daemon_root' in data) {
+  if (data && typeof data === 'object' && 'project_folder' in data && 'daemon_root' in data) {
     return { ...toProjectFolderResponse(data), message: String(data.message ?? '') };
   }
 
@@ -188,7 +188,7 @@ export interface BrowseResult {
  */
 export async function browseDirectory(fetchFn: typeof fetch, path?: string): Promise<BrowseResult> {
   const query = path ? `?path=${encodeURIComponent(path)}` : '';
-  const response = await fetchFn(`/api/workspace/browse${query}`);
+  const response = await fetchFn(`/api/project-folder/browse${query}`);
   const text = await response.text();
 
   const data = (() => {

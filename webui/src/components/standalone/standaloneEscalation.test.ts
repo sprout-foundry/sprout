@@ -46,7 +46,7 @@ function stubShell(): WasmShell {
     ['/workspace/src/main.ts', 'console.log("hi")'],
     ['/workspace/README.md', '# demo'],
   ]);
-  // Mirror the real shell's path resolution (cmd/wasm/workspace_root.go:
+  // Mirror the real shell's path resolution (cmd/wasm/project_folder.go:
   // relative paths join the project folder, '~' joins HOME=/home/user).
   const resolve = (p: string): string => {
     if (p === '~') return '/home/user';

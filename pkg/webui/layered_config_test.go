@@ -262,7 +262,7 @@ func TestHandlePutProjectFolderSettings_ReachesLiveConfigManager(t *testing.T) {
 	ctx.ProjectFolder = projectFolder
 
 	// Prime the merged config with a known value via a project-folder-layer write.
-	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", `{"reasoning_effort": "low"}`)
+	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=project_folder", `{"reasoning_effort": "low"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("initial project folder PUT failed: %d: %s", rec.Code, rec.Body.String())
 	}
@@ -276,7 +276,7 @@ func TestHandlePutProjectFolderSettings_ReachesLiveConfigManager(t *testing.T) {
 	}
 
 	// Change the same key through a second layer write.
-	rec = makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", `{"reasoning_effort": "high"}`)
+	rec = makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=project_folder", `{"reasoning_effort": "high"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("second project folder PUT failed: %d: %s", rec.Code, rec.Body.String())
 	}
@@ -356,7 +356,7 @@ func TestHandlePutProjectFolderSettings(t *testing.T) {
 	ctx.ProjectFolder = projectFolder
 
 	body := `{"reasoning_effort": "low"}`
-	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", body)
+	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=project_folder", body)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -465,13 +465,13 @@ func TestHandlePutProjectFolderSettings_CopyFromGlobal(t *testing.T) {
 	}
 
 	// Step 3: PUT global data to project folder (simulates "updateSettings(globalData, 'project folder')")
-	rec = makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", rec.Body.String())
+	rec = makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=project_folder", rec.Body.String())
 	if rec.Code != http.StatusOK {
 		t.Fatalf("project folder PUT failed: %d: %s", rec.Code, rec.Body.String())
 	}
 
 	// Step 4: GET project folder settings and verify data was preserved
-	req = httptest.NewRequest(http.MethodGet, "/api/settings?layer=workspace", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/settings?layer=project_folder", nil)
 	req.Header.Set("X-Sprout-Client-ID", clientID)
 	rec = httptest.NewRecorder()
 	ws.handleAPISettings(rec, req)
@@ -506,7 +506,7 @@ func TestHandlePutProjectFolderSettings_ProviderModel(t *testing.T) {
 	ctx.ProjectFolder = projectFolder
 
 	body := `{"provider": "openai", "model": "gpt-4"}`
-	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", body)
+	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=project_folder", body)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -612,7 +612,7 @@ func TestHandlePutProjectFolderSettings_ProviderOnly(t *testing.T) {
 	ctx.ProjectFolder = projectFolder
 
 	body := `{"provider": "anthropic"}`
-	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", body)
+	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=project_folder", body)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -673,7 +673,7 @@ func TestHandlePutProjectFolderSettings_ModelWithoutProvider(t *testing.T) {
 	}
 
 	body := `{"model": "gpt-4o"}`
-	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", body)
+	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=project_folder", body)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())

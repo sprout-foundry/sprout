@@ -1,7 +1,7 @@
 /**
  * useWebSocketEventHandler.session_test.ts — Tests for the session_terminated
  * event handler and the log-only handlers (delegate_clarification_*,
- * workspace_patch).
+ * project_folder_patch).
  *
  * Verifies that:
  * - session_terminated resets activeRequestsRef, sets lastError, and stops
@@ -468,10 +468,10 @@ describe('delegate_clarification_responded', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Tests: workspace_patch (log-only)
+// Tests: project_folder_patch (log-only)
 // ---------------------------------------------------------------------------
 
-describe('workspace_patch', () => {
+describe('project_folder_patch', () => {
   function setup() {
     const stateHolder = { current: createDefaultState() };
     const setStateMock = vi.fn((updater: unknown) => {
@@ -505,7 +505,7 @@ describe('workspace_patch', () => {
     act(() => {
       hookHandleEvent!({
         id: 'evt-ws-patch',
-        type: 'workspace_patch',
+        type: 'project_folder_patch',
         data: { path: 'foo.txt', content: 'secret-data', action: 'write', seq: 1 },
       });
     });

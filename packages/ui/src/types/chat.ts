@@ -226,7 +226,7 @@ export interface ChatProps {
   lastError?: string | null;
   /**
    * SP-142 §3: another chat in this project folder has a query running — the
-   * server rejected this chat's send with 409 workspace_busy. The composer
+   * server rejected this chat's send with 409 project_folder_busy. The composer
    * footer renders an inline notice naming the running chat, with a
    * send-anyway affordance that queues locally (drains on completion).
    * null = gate open.

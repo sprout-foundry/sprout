@@ -22,7 +22,7 @@ func (ws *ReactWebServer) handleAPISettingsGet(w http.ResponseWriter, r *http.Re
 	case "global":
 		ws.handleGetGlobalSettings(w, r)
 		return
-	case "workspace":
+	case "project_folder":
 		ws.handleGetProjectFolderSettings(w, r)
 		return
 	case "session":
@@ -129,7 +129,7 @@ func (ws *ReactWebServer) handleGetSessionSettings(w http.ResponseWriter, r *htt
 }
 
 // handleGetProvenanceSettings returns per-key source information for the effective config.
-// Response shape: { "sources": { "key": "global"|"workspace"|"session" } }
+// Response shape: { "sources": { "key": "global"|"project_folder"|"session" } }
 func (ws *ReactWebServer) handleGetProvenanceSettings(w http.ResponseWriter, r *http.Request) {
 	// Load global config
 	var globalCfg configuration.Config
@@ -185,7 +185,7 @@ func (ws *ReactWebServer) handleGetProvenanceSettings(w http.ResponseWriter, r *
 	// Compare project folder vs global (using expanded maps for nested keys).
 	// Merge in defaults from a fresh config so that explicit project folder zero
 	// values (e.g., reasoning_effort="") match the implicit global default
-	// instead of being falsely attributed to "workspace".
+	// instead of being falsely attributed to "project_folder".
 	globalJSON, _ := json.Marshal(globalCfg)
 	projectFolderJSON, _ := json.Marshal(projectFolderCfg)
 	var globalMap, projectFolderMap map[string]interface{}
@@ -212,10 +212,10 @@ func (ws *ReactWebServer) handleGetProvenanceSettings(w http.ResponseWriter, r *
 		if gv, ok := expandedGlobal[k]; ok {
 			gvBytes, _ := json.Marshal(gv)
 			if string(wvBytes) != string(gvBytes) && string(wvBytes) != "null" {
-				sources[k] = "workspace"
+				sources[k] = "project_folder"
 			}
 		} else if wv != nil {
-			sources[k] = "workspace"
+			sources[k] = "project_folder"
 		}
 	}
 

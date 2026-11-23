@@ -109,7 +109,7 @@ func (ws *ReactWebServer) handleAPIBootstrap(w http.ResponseWriter, r *http.Requ
 	// "service mode" is still a self-hosted local install — the daemon
 	// has a real project folder ($HOME) and the user reaches it via
 	// localhost. Conflating it with "cloud" caused the frontend's
-	// CloudAdapter to short-circuit /api/workspace with the synthetic
+	// CloudAdapter to short-circuit /api/project-folder with the synthetic
 	// /home/user response (cloudEndpointRegistry/endpoints/synthetic.ts)
 	// instead of calling the real local daemon. Managed cloud
 	// deployments override via VITE_SPROUT_MODE at build time

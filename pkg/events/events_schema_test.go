@@ -195,7 +195,7 @@ func TestEventPayloadsValidateAgainstSchema(t *testing.T) {
 		// Required string + int64 numbers.
 		{"file_content_changed", FileContentChangedEvent("/a.go", 1234, 56), "string + int64"},
 		// Required string/int set (seq), optional conflict omitted.
-		{"workspace_patch", ProjectFolderPatchEvent("/a.go", "content", "write", 3), "string + int seq"},
+		{"project_folder_patch", ProjectFolderPatchEvent("/a.go", "content", "write", 3), "string + int seq"},
 		// Many float/int telemetry fields.
 		{"context_management_diagnostic", ContextManagementDiagnosticEvent(100, 200, 300, 0.5, 0.1, 0.2, 0.1, 4, 8, 10, 20, 5), "floats + ints"},
 		// Required set + bool success + timestamp.

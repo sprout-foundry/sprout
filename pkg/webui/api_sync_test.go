@@ -71,7 +71,7 @@ func TestHandleAPISyncOp_WriteOp(t *testing.T) {
 	ws.projectFolder = dir
 
 	// Create the default client context so getProjectFolderForRequest works.
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 	ws.getClientContextForRequest(req)
 
 	// Now send the write op.
@@ -117,7 +117,7 @@ func TestHandleAPISyncOp_DeleteOp(t *testing.T) {
 	ws.projectFolder = dir
 
 	// Create the default client context.
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 	ws.getClientContextForRequest(req)
 
 	body := `{"op_type":"delete","path":"todelete.txt","browser_seq":1,"timestamp":1000}`
@@ -158,7 +158,7 @@ func TestHandleAPISyncOp_RenameOp(t *testing.T) {
 	ws.projectFolder = dir
 
 	// Create the default client context.
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 	ws.getClientContextForRequest(req)
 
 	body := `{"op_type":"rename","path":"old.txt","new_path":"new.txt","browser_seq":1,"timestamp":1000}`
@@ -213,7 +213,7 @@ func TestHandleAPISyncOp_ConflictDetection(t *testing.T) {
 	})
 
 	// Create the default client context.
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 	ws.getClientContextForRequest(req)
 
 	body := `{"op_type":"write","path":"conflict.txt","content":"new content","browser_seq":10,"timestamp":1000}`
@@ -250,7 +250,7 @@ func TestHandleAPISyncOp_PathTraversal(t *testing.T) {
 	ws.projectFolder = dir
 
 	// Create the default client context.
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 	ws.getClientContextForRequest(req)
 
 	body := `{"op_type":"write","path":"../../../etc/passwd","content":"hack","browser_seq":1,"timestamp":1000}`
@@ -346,7 +346,7 @@ func TestHandleAPISyncBatch_MultipleOps(t *testing.T) {
 	ws.projectFolder = dir
 
 	// Create the default client context.
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 	ws.getClientContextForRequest(req)
 
 	body := `{"ops":[
@@ -410,7 +410,7 @@ func TestHandleAPISyncBatch_StopsOnConflict(t *testing.T) {
 	})
 
 	// Create the default client context.
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 	ws.getClientContextForRequest(req)
 
 	body := `{"ops":[

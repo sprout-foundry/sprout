@@ -177,7 +177,7 @@ func showConfigOrigin(key string) error {
 	}
 	// 3. Project folder config
 	if wsPath := configuration.GetProjectFolderConfigPath("."); wsPath != "" {
-		layers = append(layers, layer{"workspace", wsPath})
+		layers = append(layers, layer{"project folder", wsPath})
 	}
 	// 4. Project-folder-local override
 	wsDir := configuration.ProjectFolderConfigDir(".")

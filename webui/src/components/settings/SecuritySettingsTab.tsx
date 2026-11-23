@@ -170,7 +170,7 @@ function SecurityPolicyEditor({ settings, updateSetting }: SecurityPolicyEditorP
       ) : (
         <div className="settings-help-spaced-top">
           <div className="config-help settings-help-spaced">
-            Project-folder security rules. Persisted to config; the project folder's file
+            Project-folder security rules. Persisted to config; the project folder&apos;s file
             <code> .sprout/security-policy.json </code>still takes precedence when present.
           </div>
 

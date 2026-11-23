@@ -475,7 +475,7 @@ export class CloudAdapter implements APIAdapter {
     // The file routes resolve paths against the shell's project folder, so
     // that is the root reported; before the shell is up the synthetic
     // answer below reports the same default.
-    if (urlPath === '/api/workspace' && method === 'GET' && !nativeFs && this.wasmShell) {
+    if (urlPath === '/api/project-folder' && method === 'GET' && !nativeFs && this.wasmShell) {
       return handleWasmProjectFolderInfo(this.wasmShell);
     }
 

@@ -46,7 +46,7 @@ const (
 func (t PathTier) String() string {
 	switch t {
 	case PathTierProjectFolder:
-		return "workspace"
+		return "project_folder"
 	case PathTierExternal:
 		return "external"
 	case PathTierSensitive:

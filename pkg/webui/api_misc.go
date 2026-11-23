@@ -23,7 +23,7 @@ func (ws *ReactWebServer) buildAPIConfig(r *http.Request) map[string]interface{}
 	config := map[string]interface{}{
 		"port":           ws.port,
 		"daemon_root":    ws.GetDaemonRoot(),
-		"workspace_root": clientCtx.ProjectFolder,
+		"project_folder": clientCtx.ProjectFolder,
 		"agent": map[string]interface{}{
 			"name":    "sprout",
 			"version": "1.0.0", // This should come from actual version info

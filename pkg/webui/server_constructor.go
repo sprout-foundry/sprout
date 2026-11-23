@@ -107,13 +107,13 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		daemonRoot = projectFolder
 		if serviceMode {
 			webuiLogger.Warn("user home could not be resolved; project folder browser may not reach projects",
-				slog.String("workspace_root", projectFolder),
+				slog.String("project_folder", projectFolder),
 				slog.String("remediation", "sprout service uninstall && sprout service install"),
 			)
 		}
 	}
 
-	webuiLogger.Info("web UI startup configuration resolved", slog.String("workspace_root", projectFolder), slog.String("daemon_root", daemonRoot), slog.Bool("service_mode", serviceMode), slog.String("daemon_root_source", rootSource))
+	webuiLogger.Info("web UI startup configuration resolved", slog.String("project_folder", projectFolder), slog.String("daemon_root", daemonRoot), slog.Bool("service_mode", serviceMode), slog.String("daemon_root_source", rootSource))
 
 	// Resolve daemonRoot symlinks early so the recent-project-folder check below
 	// compares canonical paths (recent-project-folder paths are stored after

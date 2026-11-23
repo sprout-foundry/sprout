@@ -46,8 +46,8 @@ func (ws *ReactWebServer) setClientActiveRootLocked(clientID string, ctx *webCli
 func (ws *ReactWebServer) publishProjectFolderChanged(clientID, previous, current, source string) {
 	data := map[string]interface{}{
 		"daemon_root":             ws.GetDaemonRoot(),
-		"workspace_root":          current,
-		"previous_workspace_root": previous,
+		"project_folder":          current,
+		"previous_project_folder": previous,
 	}
 	if source != "" {
 		data["source"] = source

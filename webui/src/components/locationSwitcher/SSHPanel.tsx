@@ -209,7 +209,7 @@ export const SSHPanel: React.FC<SSHPanelProps> = ({
               >
                 <span className="location-switcher-item-text">{session.host_alias}</span>
                 <span className="location-switcher-item-meta">
-                  {collapseHomePath(session.remote_workspace_path || '$HOME', sshHomePaths[session.host_alias])}
+                  {collapseHomePath(session.remote_project_folder_path || '$HOME', sshHomePaths[session.host_alias])}
                 </span>
                 <div className="location-switcher-session-retarget">
                   <input
@@ -254,7 +254,7 @@ export const SSHPanel: React.FC<SSHPanelProps> = ({
                   <button
                     type="button"
                     className="location-switcher-session-btn"
-                    onClick={() => handleOpenSshHost(session.host_alias, session.remote_workspace_path)}
+                    onClick={() => handleOpenSshHost(session.host_alias, session.remote_project_folder_path)}
                     disabled={Boolean(isOpeningSshHost) || Boolean(isClosingSshSession)}
                   >
                     Open

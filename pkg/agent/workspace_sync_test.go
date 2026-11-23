@@ -1789,7 +1789,7 @@ func TestWriteFileNoProjectFolderPatchOnFailure(t *testing.T) {
 // outbound registry agree on the string value.
 func TestProjectFolderPatchRegisteredInOutboundTypes(t *testing.T) {
 	// Verify the event type constant has the expected string value
-	assert.Equal(t, "workspace_patch", events.EventTypeProjectFolderPatch,
+	assert.Equal(t, "project_folder_patch", events.EventTypeProjectFolderPatch,
 		"EventTypeProjectFolderPatch should equal the literal used in the outbound registry")
 
 	// The outbound registry (pkg/webui/websocket_outbound_registry.go) includes
@@ -1834,7 +1834,7 @@ func TestWriteFileEmitsBothEventsInOrder(t *testing.T) {
 	assert.Equal(t, events.EventTypeProjectFolderPatch, event2.Type,
 		"second event should be workspace_patch")
 	data2, ok := event2.Data.(map[string]interface{})
-	require.True(t, ok, "workspace_patch data should be a map")
+	require.True(t, ok, "project_folder_patch data should be a map")
 	assert.Equal(t, filePath, data2["file_path"])
 	assert.Equal(t, "write", data2["action"])
 	assert.Equal(t, len(content), data2["size"])
@@ -1848,13 +1848,13 @@ func expectProjectFolderPatchConflict(t *testing.T, data map[string]interface{},
 	t.Helper()
 
 	if expectConflict {
-		assert.Contains(t, data, "conflict", "workspace_patch event should contain conflict key when browser has unsynced edits")
+		assert.Contains(t, data, "conflict", "project_folder_patch event should contain conflict key when browser has unsynced edits")
 		assert.Equal(t, true, data["conflict"], "conflict should be true")
-		assert.Contains(t, data, "theirs_path", "workspace_patch event should contain theirs_path key when browser has unsynced edits")
+		assert.Contains(t, data, "theirs_path", "project_folder_patch event should contain theirs_path key when browser has unsynced edits")
 		assert.Equal(t, expectedTheirsPath, data["theirs_path"], "theirs_path should match expected value")
 	} else {
-		assert.NotContains(t, data, "conflict", "workspace_patch event should NOT contain conflict key when browser has no unsynced edits")
-		assert.NotContains(t, data, "theirs_path", "workspace_patch event should NOT contain theirs_path key when browser has no unsynced edits")
+		assert.NotContains(t, data, "conflict", "project_folder_patch event should NOT contain conflict key when browser has no unsynced edits")
+		assert.NotContains(t, data, "theirs_path", "project_folder_patch event should NOT contain theirs_path key when browser has no unsynced edits")
 	}
 }
 

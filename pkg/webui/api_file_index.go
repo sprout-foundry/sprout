@@ -23,14 +23,14 @@ func (ws *ReactWebServer) handleAPIFileIndex(w http.ResponseWriter, r *http.Requ
 
 	projectFolder := ws.getProjectFolderForRequest(r)
 	if projectFolder == "" {
-		writeJSONErr(w, http.StatusBadRequest, "workspace_not_selected", "No project folder selected")
+		writeJSONErr(w, http.StatusBadRequest, "project_folder_not_selected", "No project folder selected")
 		return
 	}
 	// Same home-project-folder hardening as /api/browse and /api/files (SP-130):
 	// walking $HOME raises macOS TCC prompts and is what the project folder gate
 	// exists to prevent.
 	if isHomeProjectFolder(projectFolder) && !hasHomeProjectFolderConsent() {
-		writeJSONErr(w, http.StatusForbidden, "workspace_not_selected",
+		writeJSONErr(w, http.StatusForbidden, "project_folder_not_selected",
 			"Project folder is the home directory and no consent was granted; select a project folder first")
 		return
 	}
@@ -38,12 +38,12 @@ func (ws *ReactWebServer) handleAPIFileIndex(w http.ResponseWriter, r *http.Requ
 	result := filediscovery.BuildFileIndex(projectFolder, filediscovery.DefaultIndexLimits())
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"message":      "success",
-		"workspace":    projectFolder,
-		"files":        result.Files,
-		"file_count":   result.FileCount,
-		"dir_count":    result.DirCount,
-		"truncated":    result.Truncated,
-		"skipped_dirs": result.SkippedDirs,
+		"message":        "success",
+		"project_folder": projectFolder,
+		"files":          result.Files,
+		"file_count":     result.FileCount,
+		"dir_count":      result.DirCount,
+		"truncated":      result.Truncated,
+		"skipped_dirs":   result.SkippedDirs,
 	})
 }

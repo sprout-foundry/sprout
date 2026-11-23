@@ -78,7 +78,7 @@ describe('useLayoutPersistence — remembered workspace path', () => {
     session.path = '/home/u/proj';
     session.persist.mockReset();
     api.getProjectFolder.mockReset();
-    api.getProjectFolder.mockResolvedValue({ workspace_root: '/home/u', daemon_root: '/home/u' });
+    api.getProjectFolder.mockResolvedValue({ project_folder: '/home/u', daemon_root: '/home/u' });
   });
 
   afterEach(() => {

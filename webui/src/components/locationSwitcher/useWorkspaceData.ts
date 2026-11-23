@@ -52,7 +52,7 @@ export function useProjectFolderData({ isConnected }: UseProjectFolderDataProps)
   // The shared store keeps the last known project folder across disconnects, so
   // the switcher never blanks the path while the connection recovers.
   const { workspace: folderInfo, error: projectFolderError } = useProjectFolderState();
-  const projectFolder = normalizePath(folderInfo?.workspace_root || '');
+  const projectFolder = normalizePath(folderInfo?.project_folder || '');
   const daemonRoot = normalizePath(folderInfo?.daemon_root || '');
   const [remoteContext, setRemoteContext] = useState<RemoteProjectFolderContext | null>(null);
   const [switchingState, setSwitchingState] = useState<SwitchingState>({
@@ -150,7 +150,7 @@ export function useProjectFolderData({ isConnected }: UseProjectFolderDataProps)
   // Derive the remote context and record recents from each new project folder.
   useEffect(() => {
     if (!folderInfo) return;
-    const nextWS = normalizePath(folderInfo.workspace_root || '');
+    const nextWS = normalizePath(folderInfo.project_folder || '');
     if (folderInfo.ssh_context?.is_remote && folderInfo.ssh_context.host_alias) {
       const next = {
         hostAlias: folderInfo.ssh_context.host_alias,
@@ -233,7 +233,7 @@ export function useProjectFolderData({ isConnected }: UseProjectFolderDataProps)
           // wording; if it can't be read, switch without the warning.
         }
         const response = await apiService.current.setProjectFolder(normalizedTarget);
-        const nextWS = normalizePath(response.workspace_root || normalizedTarget);
+        const nextWS = normalizePath(response.project_folder || normalizedTarget);
         persistTabProjectFolderPath(nextWS);
         void applyProjectFolder(nextWS, response.daemon_root);
         if (response.ssh_context?.is_remote && response.ssh_context.host_alias) {
@@ -255,7 +255,7 @@ export function useProjectFolderData({ isConnected }: UseProjectFolderDataProps)
         // consent with a structured code. Surface a friendly message and let
         // the user pick a project folder via the project folder picker instead.
         const err = error as Error & { code?: string };
-        if (err.code === 'home_workspace_requires_consent') {
+        if (err.code === 'home_project_folder_requires_consent') {
           setSwitchingState({
             isSwitching: false,
             error: 'Selecting your home directory requires consent. Use the folderInfo picker to confirm.',

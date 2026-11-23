@@ -11,7 +11,7 @@ type sessionAllowedFoldersContextKey string
 type auditLoggerContextKey string
 
 const (
-	projectFolderContextKeyValue         projectFolderContextKey         = "workspace_root"
+	projectFolderContextKeyValue         projectFolderContextKey         = "project_folder"
 	securityBypassContextKeyValue        projectFolderContextKey         = "security_bypass"
 	effectiveCwdContextKeyValue          effectiveCwdContextKey          = "effective_cwd"
 	sessionAllowedFoldersContextKeyValue sessionAllowedFoldersContextKey = "session_allowed_folders"

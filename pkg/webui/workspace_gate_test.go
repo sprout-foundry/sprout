@@ -151,17 +151,17 @@ func TestHasHomeProjectFolderConsent_MalformedFile(t *testing.T) {
 		},
 		{
 			name:    "null consented_at",
-			content: `{"home_workspace":{"consented_at":null}}`,
+			content: `{"home_project_folder":{"consented_at":null}}`,
 			want:    false,
 		},
 		{
 			name:    "empty consented_at",
-			content: `{"home_workspace":{"consented_at":""}}`,
+			content: `{"home_project_folder":{"consented_at":""}}`,
 			want:    false,
 		},
 		{
 			name:    "valid timestamp",
-			content: `{"home_workspace":{"consented_at":"2025-01-02T15:04:05Z"}}`,
+			content: `{"home_project_folder":{"consented_at":"2025-01-02T15:04:05Z"}}`,
 			want:    true,
 		},
 	}
@@ -259,7 +259,7 @@ func useTestProjectFolderConsent(t *testing.T, home string, consented bool) {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		t.Fatal(err)
 	}
-	body := `{"home_workspace":{"consented_at":"2026-01-01T00:00:00Z"}}`
+	body := `{"home_project_folder":{"consented_at":"2026-01-01T00:00:00Z"}}`
 	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
 		t.Fatal(err)
 	}

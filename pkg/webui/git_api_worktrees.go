@@ -199,7 +199,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 	daemonRoot := ws.daemonRoot
 	ws.mutex.RUnlock()
 	if !worktreePathAllowed(absPath, daemonRoot, projectFolder) {
-		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within the project folder or sit beside it (../)")
+		writeJSONErr(w, http.StatusBadRequest, "path_outside_project_folder", "Worktree path must stay within the project folder or sit beside it (../)")
 		return
 	}
 
@@ -284,7 +284,7 @@ func (ws *ReactWebServer) handleAPIGitWorktreeRemove(w http.ResponseWriter, r *h
 	daemonRoot := ws.daemonRoot
 	ws.mutex.RUnlock()
 	if !worktreePathAllowed(absPath, daemonRoot, projectFolder) {
-		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within the project folder or sit beside it (../)")
+		writeJSONErr(w, http.StatusBadRequest, "path_outside_project_folder", "Worktree path must stay within the project folder or sit beside it (../)")
 		return
 	}
 
@@ -407,15 +407,15 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCheckout(w http.ResponseWriter, r 
 	// Publish event to notify frontend of project folder change
 	ws.publishClientEvent(clientID, events.EventTypeProjectFolderChanged, map[string]interface{}{
 		"daemon_root":             ws.GetDaemonRoot(),
-		"workspace_root":          absPath,
-		"previous_workspace_root": projectFolder,
+		"project_folder":          absPath,
+		"previous_project_folder": projectFolder,
 		"source":                  "checkout",
 	})
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"message":   "Switched to worktree successfully",
-		"path":      absPath,
-		"workspace": absPath,
+		"message":        "Switched to worktree successfully",
+		"path":           absPath,
+		"project_folder": absPath,
 	})
 }
 

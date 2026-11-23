@@ -10,7 +10,7 @@ interface FieldRenderersParams {
   updateSetting: (keyOrPath: string, value: unknown) => Promise<void>;
   savingKey: string | null;
   provenanceSources: Record<string, string>;
-  configViewLayer: 'session' | 'workspace' | 'global';
+  configViewLayer: 'session' | 'project_folder' | 'global';
 }
 
 export interface FieldRenderers {

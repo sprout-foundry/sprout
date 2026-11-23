@@ -262,15 +262,15 @@ export function useLayoutPersistence({
   // root (the home directory) while startup restores the tab's project, and
   // persisting that interim root here replaced the saved project path — the
   // restore then saw nothing to restore. The remembered path only changes
-  // through an explicit selection or a workspace_changed event.
+  // through an explicit selection or a project_folder_changed event.
   useEffect(() => {
     let cancelled = false;
     ensureProjectFolder()
       .then((ws) => {
-        if (!cancelled && ws.workspace_root) {
+        if (!cancelled && ws.project_folder) {
           // Seed the LSP client service's cached project folder so path
           // resolution (relative → absolute) works before any LSP client connects.
-          getLSPClientService().setProjectFolder(ws.workspace_root);
+          getLSPClientService().setProjectFolder(ws.project_folder);
         }
       })
       .catch((err) => {

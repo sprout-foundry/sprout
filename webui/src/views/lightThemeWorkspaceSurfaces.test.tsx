@@ -72,7 +72,7 @@ vi.mock('../services/api', () => {
       return { hotkeys: [] };
     }
     async getProjectFolder() {
-      return { workspace_root: '' };
+      return { project_folder: '' };
     }
     getAgentSessionSummary(...args: unknown[]) {
       return api.getAgentSessionSummary(...args);

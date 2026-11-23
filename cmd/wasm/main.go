@@ -117,7 +117,7 @@ func initFunc(this js.Value, args []js.Value) interface{} {
 				os.MkdirAll(h, 0755)
 				wasmshell.ShellEnv.Set("HOME", h)
 			}
-			if ws := cfg.Get("workspace"); ws.Type() == js.TypeString {
+			if ws := cfg.Get("projectFolder"); ws.Type() == js.TypeString {
 				if err := setProjectFolder(ws.String()); err != nil {
 					return "init: project folder: " + err.Error()
 				}

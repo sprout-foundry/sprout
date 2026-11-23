@@ -232,7 +232,7 @@ func BridgeHandler(manager *Manager, upgrader websocket.Upgrader, projectFolder 
 			return
 		}
 
-		projectFolderPath := r.URL.Query().Get("workspace")
+		projectFolderPath := r.URL.Query().Get("project_folder")
 		if projectFolderPath == "" {
 			http.Error(w, "project folder parameter is required", http.StatusBadRequest)
 			return

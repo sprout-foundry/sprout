@@ -72,7 +72,7 @@ func isHomeProjectFolder(projectFolder string) bool {
 type homeProjectFolderConsentFile struct {
 	HomeProjectFolder struct {
 		ConsentedAt time.Time `json:"consented_at"`
-	} `json:"home_workspace"`
+	} `json:"home_project_folder"`
 }
 
 // homeConsentPath returns the path to the home-project-folder consent file

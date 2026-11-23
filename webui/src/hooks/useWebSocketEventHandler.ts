@@ -497,7 +497,7 @@ export function useWebSocketEventHandler({
           return handleError(ctx);
         case 'metrics_update':
           return handleMetricsUpdate(ctx);
-        case 'workspace_changed':
+        case 'project_folder_changed':
           return handleProjectFolderChanged(ctx);
         case 'security_approval_request':
           return handleSecurityApprovalRequest(ctx);
@@ -535,11 +535,11 @@ export function useWebSocketEventHandler({
           return handleDelegateClarificationRequested(ctx);
         case 'delegate_clarification_responded':
           return handleDelegateClarificationResponded(ctx);
-        case 'workspace_patch':
+        case 'project_folder_patch':
           return handleProjectFolderPatch(ctx);
         case 'session_displaced':
           return handleSessionDisplaced(ctx);
-        case 'workspace_stopping':
+        case 'dev_space_stopping':
           return handleDevSpaceStopping(ctx);
         default:
           const logEntry = createLogEntry(event);

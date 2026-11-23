@@ -96,7 +96,7 @@ export const wasmLocalEndpoints: CloudEndpoint[] = [
     description: 'Prettier config for a file (WASM filesystem)',
   },
   {
-    path: '/api/workspace/browse',
+    path: '/api/project-folder/browse',
     methods: ['GET'],
     category: 'wasm-local',
     description: 'Project folder browsing (WASM filesystem)',

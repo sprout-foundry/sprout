@@ -312,7 +312,7 @@ export const handleError = (ctx: EventHandlerContext): void => {
   console.error('[FAIL] Error event:', data);
 };
 
-// Handle workspace_stopping: the hosting platform is about to stop this
+// Handle dev_space_stopping: the hosting platform is about to stop this
 // project folder (idle timeout, runtime cap, drain) and warns ahead of time.
 export const handleDevSpaceStopping = (ctx: EventHandlerContext): void => {
   const { event, setState } = ctx;

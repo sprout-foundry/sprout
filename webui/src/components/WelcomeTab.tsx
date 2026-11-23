@@ -51,9 +51,9 @@ function ProjectFolderPickerView({
   return (
     <ProjectFolderPicker
       daemonRoot={projectFolderInfo.daemon_root}
-      currentProjectFolder={projectFolderInfo.workspace_root}
+      currentProjectFolder={projectFolderInfo.project_folder}
       suggestedProjects={projectFolderInfo.suggested_projects}
-      recentProjectFolders={projectFolderInfo.recent_workspaces}
+      recentProjectFolders={projectFolderInfo.recent_project_folders}
       onSelect={setProjectFolder}
       onBrowse={handleBrowse}
     />
@@ -197,7 +197,7 @@ function WelcomeTab(props: WelcomeTabProps): JSX.Element {
   const { projectFolderInfo, homeDir, isLoading, setProjectFolder } = useWorkspace();
 
   // When project folder selection is needed (not a project), show the picker
-  if (!isLoading && projectFolderInfo.needs_workspace_selection) {
+  if (!isLoading && projectFolderInfo.needs_project_folder_selection) {
     return (
       <div className="welcome-tab" data-testid="editor-welcome-tab">
         <ProjectFolderPickerView

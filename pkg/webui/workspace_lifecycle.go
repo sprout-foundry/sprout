@@ -36,7 +36,7 @@ const (
 
 // errCodeDevSpaceStopping is the error code a query gets once prepare-stop
 // has run and the daemon no longer accepts work.
-const errCodeDevSpaceStopping = "workspace_stopping"
+const errCodeDevSpaceStopping = "dev_space_stopping"
 
 // lifecycleState is the daemon's activity and stop bookkeeping. The zero
 // value is ready to use.

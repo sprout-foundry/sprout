@@ -393,8 +393,8 @@ func TestHandleAPIGitWorktreeCheckoutSiblingAccepted(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if resp["workspace"] != worktreePath {
-		t.Errorf("expected project folder %q in response, got %v", worktreePath, resp["workspace"])
+	if resp["project_folder"] != worktreePath {
+		t.Errorf("expected project folder %q in response, got %v", worktreePath, resp["project_folder"])
 	}
 }
 

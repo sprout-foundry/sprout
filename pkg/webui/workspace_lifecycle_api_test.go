@@ -290,7 +290,7 @@ func TestLifecycleRoutes_AuthAndNotice(t *testing.T) {
 			t.Fatalf("notice event = %s %v", ev.Type, data)
 		}
 		if !ws.shouldForwardEventToConnection(ev, &ConnectionInfo{ClientID: "any", ChatID: "chat-x"}) {
-			t.Fatal("workspace_stopping is not forwarded to connected clients")
+			t.Fatal("dev_space_stopping is not forwarded to connected clients")
 		}
 	case <-time.After(time.Second):
 		t.Fatal("notice did not publish workspace_stopping")

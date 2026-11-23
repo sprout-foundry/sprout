@@ -57,7 +57,7 @@ func TestClassifyToolCallWithProjectFolderEscalatesToCaution(t *testing.T) {
 	if !res.ShouldPrompt {
 		t.Fatal("expected ShouldPrompt=true")
 	}
-	if res.RiskType != "filesystem_outside_workspace" {
+	if res.RiskType != "filesystem_outside_project_folder" {
 		t.Fatalf("expected risk type filesystem_outside_workspace, got %s", res.RiskType)
 	}
 }

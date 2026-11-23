@@ -3,7 +3,7 @@
 // Package webui provides the React web server with embedded assets.
 //
 // This file implements the project folder sync HTTP handler for
-// POST /api/workspace/sync (SP-046).
+// POST /api/project-folder/sync (SP-046).
 // See roadmap/SP-046-project-folder-sync-model.md for the full specification.
 
 package webui
@@ -29,7 +29,7 @@ var projectFolderSyncState = agenttools.NewSyncState()
 // SP-046-5. It tracks which device currently holds an active session.
 var activeSessionRegistry = NewActiveSessionRegistry()
 
-// syncRequest is the JSON body shape for POST /api/workspace/sync.
+// syncRequest is the JSON body shape for POST /api/project-folder/sync.
 type syncRequest struct {
 	// Op is the operation type. Currently only "patch" is supported.
 	Op string `json:"op"`
@@ -48,7 +48,7 @@ type syncRequest struct {
 	LastSyncedContainer int64 `json:"last_synced_container"`
 }
 
-// handleAPIProjectFolderSync handles POST /api/workspace/sync.
+// handleAPIProjectFolderSync handles POST /api/project-folder/sync.
 //
 // Accepts a browser→container patch operation: the user edited a file in the
 // browser editor, and this call syncs the change to the server-side state.
@@ -106,13 +106,13 @@ func (ws *ReactWebServer) handleAPIProjectFolderSync(w http.ResponseWriter, r *h
 	writeJSON(w, http.StatusOK, metadata)
 }
 
-// takeoverRequest is the JSON body shape for POST /api/workspace/takeover.
+// takeoverRequest is the JSON body shape for POST /api/project-folder/takeover.
 type takeoverRequest struct {
 	SessionID string `json:"session_id"`
 	DeviceID  string `json:"device_id"`
 }
 
-// handleAPIProjectFolderTakeover handles POST /api/workspace/takeover (SP-046-5).
+// handleAPIProjectFolderTakeover handles POST /api/project-folder/takeover (SP-046-5).
 //
 // A new device requests to take over an existing session. If the session is
 // already active on another device, the old device is swapped out and a

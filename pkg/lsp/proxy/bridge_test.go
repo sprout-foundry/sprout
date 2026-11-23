@@ -209,7 +209,7 @@ func TestBridgeHandlerParameterValidation(t *testing.T) {
 
 		handler := BridgeHandler(manager, upgrader, "/tmp")
 
-		req := httptest.NewRequest("GET", "/?workspace=/tmp", nil)
+		req := httptest.NewRequest("GET", "/?project_folder=/tmp", nil)
 		w := httptest.NewRecorder()
 
 		handler(w, req)
@@ -249,7 +249,7 @@ func TestBridgeHandlerParameterValidation(t *testing.T) {
 
 		handler := BridgeHandler(manager, upgrader, "/allowed")
 
-		req := httptest.NewRequest("GET", "/?language=go&workspace=/forbidden", nil)
+		req := httptest.NewRequest("GET", "/?language=go&project_folder=/forbidden", nil)
 		w := httptest.NewRecorder()
 
 		handler(w, req)
@@ -273,7 +273,7 @@ func TestBridgeHandlerParameterValidation(t *testing.T) {
 		projectFolder := "/tmp"
 		handler := BridgeHandler(manager, upgrader, projectFolder)
 
-		req := httptest.NewRequest("GET", "/?language=unknown-language-xyz&workspace="+projectFolder, nil)
+		req := httptest.NewRequest("GET", "/?language=unknown-language-xyz&project_folder="+projectFolder, nil)
 		w := httptest.NewRecorder()
 
 		handler(w, req)
@@ -295,7 +295,7 @@ func TestBridgeHandlerEdgeCases(t *testing.T) {
 
 		handler := BridgeHandler(manager, upgrader, "/tmp")
 
-		req := httptest.NewRequest("GET", "/?language=&workspace=", nil)
+		req := httptest.NewRequest("GET", "/?language=&project_folder=", nil)
 		w := httptest.NewRecorder()
 
 		handler(w, req)
@@ -328,7 +328,7 @@ func TestBridgeHandlerWithCustomConfig(t *testing.T) {
 
 		handler := BridgeHandler(manager, upgrader, "/tmp")
 
-		req := httptest.NewRequest("GET", "/?language=test&workspace=/tmp", nil)
+		req := httptest.NewRequest("GET", "/?language=test&project_folder=/tmp", nil)
 		w := httptest.NewRecorder()
 
 		handler(w, req)

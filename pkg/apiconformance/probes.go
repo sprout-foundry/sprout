@@ -85,9 +85,9 @@ func DefaultProbes() []Probe {
 		makeProbe("get-stats", "diagnostics", "/api/stats", nil),
 
 		// workspace/instances
-		makeProbe("workspaceGet", "workspace/instances", "/api/workspace", nil),
-		makeProbe("workspaceProjects", "workspace/instances", "/api/workspace/projects", nil),
-		makeProbe("workspaceBrowse", "workspace/instances", "/api/workspace/browse", nil),
+		makeProbe("workspaceGet", "workspace/instances", "/api/project-folder", nil),
+		makeProbe("workspaceProjects", "workspace/instances", "/api/project-folder/projects", nil),
+		makeProbe("workspaceBrowse", "workspace/instances", "/api/project-folder/browse", nil),
 		makeProbe("instancesList", "workspace/instances", "/api/instances", nil),
 
 		// files

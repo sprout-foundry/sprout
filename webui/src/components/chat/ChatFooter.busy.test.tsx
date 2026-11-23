@@ -7,7 +7,7 @@ import type { ToolExecution } from './types';
  * The workspace-busy notice and send-anyway queueing.
  *
  * The composer footer renders the inline notice when the server rejects a
- * send with 409 workspace_busy (another chat in this client context holds
+ * send with 409 project_folder_busy (another chat in this client context holds
  * the project folder gate): it names the running chat, offers Send-anyway
  * (queues locally behind the runner; the queue drains on completion), and
  * dismisses. The notice retires when the running chat's query_completed

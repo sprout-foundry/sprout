@@ -94,7 +94,7 @@ func nextProjectFolderChanged(t *testing.T, ch <-chan events.UIEvent, clientID s
 			if data["client_id"] != clientID {
 				continue
 			}
-			root, _ := data["workspace_root"].(string)
+			root, _ := data["project_folder"].(string)
 			return root
 		case <-timeout:
 			t.Fatalf("no workspace_changed event for %s", clientID)
@@ -125,7 +125,7 @@ func TestChatSwitchReturnsToSelectedProject(t *testing.T) {
 		t.Fatalf("root after switching to the worktree chat = %q, want %q", root, p.worktree)
 	}
 	if got := nextProjectFolderChanged(t, evs, client); got != p.worktree {
-		t.Errorf("workspace_changed root = %q, want %q", got, p.worktree)
+		t.Errorf("project_folder_changed root = %q, want %q", got, p.worktree)
 	}
 
 	p.switchChat(t, client, defaultChatID)
@@ -133,7 +133,7 @@ func TestChatSwitchReturnsToSelectedProject(t *testing.T) {
 		t.Fatalf("roots after switching back = (%q, %q), want the selected project %q", root, project, p.project)
 	}
 	if got := nextProjectFolderChanged(t, evs, client); got != p.project {
-		t.Errorf("workspace_changed root = %q, want %q", got, p.project)
+		t.Errorf("project_folder_changed root = %q, want %q", got, p.project)
 	}
 	if got := p.ws.GetProjectFolder(); got != p.daemonRoot {
 		t.Errorf("a non-default client's switch moved the server root to %q", got)
@@ -162,7 +162,7 @@ func TestWorktreeClearReturnsToSelectedProject(t *testing.T) {
 		t.Fatalf("root after clearing the worktree = %q, want the project %q", root, p.project)
 	}
 	if got := nextProjectFolderChanged(t, evs, client); got != p.project {
-		t.Errorf("workspace_changed root = %q, want %q", got, p.project)
+		t.Errorf("project_folder_changed root = %q, want %q", got, p.project)
 	}
 }
 
@@ -184,7 +184,7 @@ func TestDeleteAllPublishesProjectFolderChanged(t *testing.T) {
 		t.Fatalf("delete all: %d %s", rec.Code, rec.Body.String())
 	}
 	if got := nextProjectFolderChanged(t, evs, client); got != p.project {
-		t.Errorf("workspace_changed root = %q, want %q", got, p.project)
+		t.Errorf("project_folder_changed root = %q, want %q", got, p.project)
 	}
 }
 
@@ -297,7 +297,7 @@ func TestProjectFolderGetDoesNotRaceChatSwitch(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 20; i++ {
-			req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+			req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 			req.Header.Set(webClientIDHeader, client)
 			rec := httptest.NewRecorder()
 			p.ws.handleAPIProjectFolderGet(rec, req)

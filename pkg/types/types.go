@@ -195,7 +195,7 @@ type EditPlan struct {
 
 // AgentContext represents context for agent operations
 type AgentContext struct {
-	ProjectFolder string            `json:"workspace_root"`
+	ProjectFolder string            `json:"project_folder"`
 	CurrentFiles  []string          `json:"current_files"`
 	GitStatus     string            `json:"git_status,omitempty"`
 	Metadata      map[string]string `json:"metadata,omitempty"`

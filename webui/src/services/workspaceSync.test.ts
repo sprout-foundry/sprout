@@ -25,15 +25,15 @@ import {
 
 function ws(root: string, extra: Record<string, unknown> = {}) {
   return {
-    workspace_root: root,
+    project_folder: root,
     daemon_root: '/home/u',
     is_project: root !== '/home/u',
     project_markers: [],
-    needs_workspace_selection: root === '/home/u',
-    workspace_is_home: root === '/home/u',
+    needs_project_folder_selection: root === '/home/u',
+    project_folder_is_home: root === '/home/u',
     home_dir: '/home/u',
     suggested_projects: [],
-    recent_workspaces: [],
+    recent_project_folders: [],
     ...extra,
   };
 }

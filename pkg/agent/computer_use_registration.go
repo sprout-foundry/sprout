@@ -187,10 +187,10 @@ func (a *Agent) checkComputerUseSessionOptIn(toolName string) error {
 			a.debugLog("[computer-use] requesting per-session opt-in via webui for %s (project folder: %s)\n", toolName, ws)
 		}
 		extras := map[string]string{
-			"risk_type": "Computer Use Opt-In",
-			"workspace": ws,
-			"action":    toolName,
-			"kind":      "computer_use_optin",
+			"risk_type":      "Computer Use Opt-In",
+			"project_folder": ws,
+			"action":         toolName,
+			"kind":           "computer_use_optin",
 		}
 		decision, outcome := mgr.RequestApprovalDecisionWithOutcome(
 			a.GetEventBus(),
@@ -248,8 +248,8 @@ func (a *Agent) applyComputerUseOptInDecision(decision security.ApprovalDecision
 		a.computerUseSessionApproved = true
 		a.computerUseMu.Unlock()
 		computer_use.RecordSafetyEvent("opt_in", map[string]any{
-			"workspace": projectFolder,
-			"scope":     decision.String(),
+			"project_folder": projectFolder,
+			"scope":          decision.String(),
 		})
 		if a.debug {
 			a.debugLog("[computer-use] session opt-in approved (scope=%s, project_folder=%s)\n", decision.String(), projectFolder)

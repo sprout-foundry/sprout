@@ -45,7 +45,7 @@ vi.mock('../services/api', () => {
       return { hotkeys: [{ key: 'Ctrl+`', command_id: 'toggle_terminal', global: true }], platform: 'test' };
     },
     applyHotkeyPreset: async () => ({ hotkeys: [] }),
-    getProjectFolder: async () => ({ workspace_root: '' }),
+    getProjectFolder: async () => ({ project_folder: '' }),
     getStats: async () => ({}),
     getSettings: async () => ({}),
   };

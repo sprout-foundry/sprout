@@ -83,9 +83,9 @@ export type ServerEventType =
   | 'ask_user_request'
   | 'password_request'
   | 'agent_message'
-  | 'workspace_changed'
+  | 'project_folder_changed'
   | 'session_terminated'
-  | 'workspace_stopping'
+  | 'dev_space_stopping'
   | 'session_changed'
   | 'delegate_clarification_requested'
   | 'delegate_clarification_responded'
@@ -170,7 +170,7 @@ export interface ConfigConflictData {
 }
 
 /**
- * Payload of the `409 workspace_busy` rejection (SP-142 §3): a query was
+ * Payload of the `409 project_folder_busy` rejection (SP-142 §3): a query was
  * submitted from a chat while another chat in the same client context
  * (project folder) had one running. The composer turns this into an inline
  * busy notice with a send-anyway (local queue) affordance.
@@ -179,7 +179,7 @@ export interface ConfigConflictData {
  */
 export interface ProjectFolderBusyData {
   error: string;
-  code: 'workspace_busy';
+  code: 'project_folder_busy';
   running_chat_id: string;
   running_chat_name: string;
 }

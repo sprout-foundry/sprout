@@ -21,7 +21,7 @@ type proxyChatRequest struct {
 	Stream        bool               `json:"stream"` // Accepted for format compatibility; streaming is always used
 	ChatID        string             `json:"chat_id,omitempty"`
 	Steer         bool               `json:"steer,omitempty"`
-	ProjectFolder string             `json:"workspace_root,omitempty"`
+	ProjectFolder string             `json:"project_folder,omitempty"`
 	SystemPrompt  string             `json:"system_prompt,omitempty"`
 }
 

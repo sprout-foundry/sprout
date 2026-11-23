@@ -174,7 +174,7 @@ func TestHandleGetProvenanceSettings_TopLevelKey_FromProjectFolder(t *testing.T)
 	require.True(t, ok, "sources should be present")
 
 	// Top-level key should be from project folder
-	assert.Equal(t, "workspace", sources["reasoning_effort"],
+	assert.Equal(t, "project_folder", sources["reasoning_effort"],
 		"top-level key reasoning_effort should come from project folder")
 }
 
@@ -210,9 +210,9 @@ func TestHandleGetProvenanceSettings_NestedKey_FromProjectFolder(t *testing.T) {
 	require.True(t, ok, "sources should be present")
 
 	// Nested keys should be from project folder
-	assert.Equal(t, "workspace", sources["api_timeouts.connection_timeout_sec"],
+	assert.Equal(t, "project_folder", sources["api_timeouts.connection_timeout_sec"],
 		"nested key api_timeouts.connection_timeout_sec should come from project folder")
-	assert.Equal(t, "workspace", sources["api_timeouts.chunk_timeout_sec"],
+	assert.Equal(t, "project_folder", sources["api_timeouts.chunk_timeout_sec"],
 		"nested key api_timeouts.chunk_timeout_sec should come from project folder")
 }
 
@@ -411,7 +411,7 @@ func TestHandleGetProvenanceSettings_AllThreeLayers(t *testing.T) {
 	assert.Equal(t, "session", sources["reasoning_effort"],
 		"session override should have highest priority")
 	// Project folder override should apply for api_timeouts (not overridden by session)
-	assert.Equal(t, "workspace", sources["api_timeouts.connection_timeout_sec"],
+	assert.Equal(t, "project_folder", sources["api_timeouts.connection_timeout_sec"],
 		"project folder override should apply when session doesn't override")
 }
 

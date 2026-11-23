@@ -43,7 +43,7 @@ func (ws *ReactWebServer) handleAPIPreviewSource(w http.ResponseWriter, r *http.
 		return
 	}
 	if !isWithinProjectFolder(canonical, projectFolder) {
-		writeJSONErr(w, http.StatusForbidden, "path_outside_workspace", "Path is outside the project folder")
+		writeJSONErr(w, http.StatusForbidden, "path_outside_project_folder", "Path is outside the project folder")
 		return
 	}
 

@@ -301,7 +301,7 @@ type queryRequest struct {
 	ChatID        string `json:"chat_id,omitempty"`
 	Provider      string `json:"provider,omitempty"`
 	Model         string `json:"model,omitempty"`
-	ProjectFolder string `json:"workspace_root,omitempty"`
+	ProjectFolder string `json:"project_folder,omitempty"`
 	SystemPrompt  string `json:"system_prompt,omitempty"`
 }
 

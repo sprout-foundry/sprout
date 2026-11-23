@@ -40,7 +40,7 @@ export async function reconcileTabProjectFolder(
   projectFolder: ProjectFolderResponse,
   canSwitch = true,
 ): Promise<ProjectFolderReconcileOutcome> {
-  const serverRoot = trimSlashes(projectFolder.workspace_root);
+  const serverRoot = trimSlashes(projectFolder.project_folder);
   const daemonRoot = trimSlashes(projectFolder.daemon_root);
   const remembered = trimSlashes(getTabProjectFolderPath());
   if (!serverRoot) return 'unresolved';
@@ -50,7 +50,7 @@ export async function reconcileTabProjectFolder(
     if (!remembered || !canSwitch) return 'unresolved';
     try {
       const response = await ApiService.getInstance().setProjectFolder(remembered);
-      const restoredRoot = trimSlashes(response.workspace_root) || remembered;
+      const restoredRoot = trimSlashes(response.project_folder) || remembered;
       persistTabProjectFolderPath(restoredRoot);
       // Replace the store's snapshot, which still shows the default root,
       // before telling the other workspace-scoped surfaces.
@@ -83,8 +83,8 @@ export async function consentToHomeProjectFolder(
     ApiService.getInstance().setProjectFolder(path, consentHome),
 ): Promise<boolean> {
   const fresh = await refreshProjectFolder({ force: true });
-  if (!fresh.workspace_is_home || !fresh.needs_workspace_selection) return false;
-  await setProjectFolder(fresh.workspace_root, true);
+  if (!fresh.project_folder_is_home || !fresh.needs_project_folder_selection) return false;
+  await setProjectFolder(fresh.project_folder, true);
   // The gate reads the store; refresh it so the recorded consent closes it.
   await refreshProjectFolder({ force: true }).catch(() => undefined);
   return true;

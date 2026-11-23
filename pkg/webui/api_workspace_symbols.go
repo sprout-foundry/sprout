@@ -25,7 +25,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceSymbols(w http.ResponseWriter, r *ht
 
 	projectFolder := ws.getProjectFolderForRequest(r)
 	if projectFolder == "" {
-		writeJSONErr(w, http.StatusBadRequest, "workspace_not_found", "Project folder not found")
+		writeJSONErr(w, http.StatusBadRequest, "project_folder_not_found", "Project folder not found")
 		return
 	}
 

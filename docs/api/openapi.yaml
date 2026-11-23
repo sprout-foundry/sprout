@@ -1306,7 +1306,7 @@ paths:
         - sync/txn
   /api/lifecycle/notice:
     post:
-      description: Relays a workspace_stopping event ({reason, at, deadline_seconds}) to every connected client so the UI can warn before a timer-driven stop. Does not change daemon state.
+      description: Relays a dev_space_stopping event ({reason, at, deadline_seconds}) to every connected client so the UI can warn before a timer-driven stop. Does not change daemon state.
       operationId: lifecycleNotice
       responses:
         "200":
@@ -1528,6 +1528,101 @@ paths:
       summary: Mint a URL for the HTML preview iframe.
       tags:
         - preview
+  /api/project-folder:
+    get:
+      description: Reports the requesting client's active project folder, whether it is a recognized project directory, and recent-project-folder metadata.
+      operationId: workspaceGet
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Report the client's active project folder.
+      tags:
+        - workspace/instances
+    post:
+      description: Sets the requesting client's active project folder to the `path` in the body. The path must resolve within the daemon root.
+      operationId: workspaceSet
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Set the client's active project folder.
+      tags:
+        - workspace/instances
+  /api/project-folder/browse:
+    get:
+      description: Lists the directories under the daemon root (the parent of the active project folder) so the client can pick a new project folder. Defaults to the daemon root when `path` is omitted.
+      operationId: workspaceBrowse
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Browse directories under the daemon root.
+      tags:
+        - workspace/instances
+  /api/project-folder/projects:
+    get:
+      description: Lists the recent projects known to the client (the project folder picker) with their last-used ordering.
+      operationId: workspaceProjects
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: List known projects.
+      tags:
+        - workspace/instances
+  /api/project-folder/sync:
+    post:
+      description: Applies the pending file-sync operations for the project folder (the SP-046 workspace-sync surface).
+      operationId: workspaceSync
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Synchronize the project folder tree.
+      tags:
+        - workspace/instances
+  /api/project-folder/takeover:
+    post:
+      description: Marks the requesting client as the active owner of the project folder, superseding the previous owner.
+      operationId: workspaceTakeover
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Take over a project folder from another device.
+      tags:
+        - workspace/instances
   /api/providers:
     get:
       description: Lists the LLM providers available to the agent, with their connection status and configuration.
@@ -2620,69 +2715,6 @@ paths:
       summary: Upload an image for use in a chat.
       tags:
         - files
-  /api/workspace:
-    get:
-      description: Reports the requesting client's active project folder, whether it is a recognized project directory, and recent-project-folder metadata.
-      operationId: workspaceGet
-      responses:
-        "200":
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ErrorModel'
-          description: Error
-      summary: Report the client's active project folder.
-      tags:
-        - workspace/instances
-    post:
-      description: Sets the requesting client's active project folder to the `path` in the body. The path must resolve within the daemon root.
-      operationId: workspaceSet
-      responses:
-        "200":
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ErrorModel'
-          description: Error
-      summary: Set the client's active project folder.
-      tags:
-        - workspace/instances
-  /api/workspace/browse:
-    get:
-      description: Lists the directories under the daemon root (the parent of the active project folder) so the client can pick a new project folder. Defaults to the daemon root when `path` is omitted.
-      operationId: workspaceBrowse
-      responses:
-        "200":
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ErrorModel'
-          description: Error
-      summary: Browse directories under the daemon root.
-      tags:
-        - workspace/instances
-  /api/workspace/projects:
-    get:
-      description: Lists the recent projects known to the client (the project folder picker) with their last-used ordering.
-      operationId: workspaceProjects
-      responses:
-        "200":
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ErrorModel'
-          description: Error
-      summary: List known projects.
-      tags:
-        - workspace/instances
   /api/workspace/symbols:
     get:
       description: Returns the project folder's indexed symbols, optionally filtered by `query`. Falls back to building the index on a cache miss.
@@ -2697,38 +2729,6 @@ paths:
                 $ref: '#/components/schemas/ErrorModel'
           description: Error
       summary: List project folder symbols.
-      tags:
-        - workspace/instances
-  /api/workspace/sync:
-    post:
-      description: Applies the pending file-sync operations for the project folder (the SP-046 workspace-sync surface).
-      operationId: workspaceSync
-      responses:
-        "200":
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ErrorModel'
-          description: Error
-      summary: Synchronize the project folder tree.
-      tags:
-        - workspace/instances
-  /api/workspace/takeover:
-    post:
-      description: Marks the requesting client as the active owner of the project folder, superseding the previous owner.
-      operationId: workspaceTakeover
-      responses:
-        "200":
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ErrorModel'
-          description: Error
-      summary: Take over a project folder from another device.
       tags:
         - workspace/instances
   /api/ws-metrics:

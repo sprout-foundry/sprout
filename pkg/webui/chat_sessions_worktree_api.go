@@ -95,7 +95,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSet(w http.ResponseWriter,
 		daemonRoot := ws.daemonRoot
 		ws.mutex.RUnlock()
 		if !isWithinProjectFolder(absPath, daemonRoot) && absPath != daemonRoot {
-			writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within project folder boundary")
+			writeJSONErr(w, http.StatusBadRequest, "path_outside_project_folder", "Worktree path must stay within project folder boundary")
 			return
 		}
 
@@ -198,7 +198,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 	daemonRoot := ws.daemonRoot
 	ws.mutex.RUnlock()
 	if !isWithinProjectFolder(absPath, daemonRoot) && absPath != daemonRoot {
-		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within project folder boundary")
+		writeJSONErr(w, http.StatusBadRequest, "path_outside_project_folder", "Worktree path must stay within project folder boundary")
 		return
 	}
 
@@ -243,8 +243,8 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 	// Publish event so frontend can update project folder state.
 	ws.publishClientEvent(clientID, events.EventTypeProjectFolderChanged, map[string]interface{}{
 		"daemon_root":             ws.GetDaemonRoot(),
-		"workspace_root":          absPath,
-		"previous_workspace_root": previousProjectFolder,
+		"project_folder":          absPath,
+		"previous_project_folder": previousProjectFolder,
 		"source":                  "worktree_switch",
 	})
 
@@ -317,7 +317,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 		Branch                  string `json:"branch"`
 		BaseRef                 string `json:"base_ref,omitempty"`
 		Name                    string `json:"name,omitempty"`
-		AutoSwitchProjectFolder bool   `json:"auto_switch_workspace,omitempty"`
+		AutoSwitchProjectFolder bool   `json:"auto_switch_project_folder,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -360,7 +360,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 	daemonRoot := ws.daemonRoot
 	ws.mutex.RUnlock()
 	if !isWithinProjectFolder(worktreePath, daemonRoot) && worktreePath != daemonRoot {
-		writeJSONErr(w, http.StatusBadRequest, "path_outside_workspace", "Worktree path must stay within project folder boundary")
+		writeJSONErr(w, http.StatusBadRequest, "path_outside_project_folder", "Worktree path must stay within project folder boundary")
 		return
 	}
 
@@ -459,8 +459,8 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 	if req.AutoSwitchProjectFolder {
 		ws.publishClientEvent(clientID, events.EventTypeProjectFolderChanged, map[string]interface{}{
 			"daemon_root":             ws.GetDaemonRoot(),
-			"workspace_root":          worktreePath,
-			"previous_workspace_root": previousProjectFolder,
+			"project_folder":          worktreePath,
+			"previous_project_folder": previousProjectFolder,
 			"source":                  "worktree_switch",
 		})
 	}
@@ -476,7 +476,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 		"chat_session":   chatSession,
 		"worktree_path":  worktreePath,
 		"branch":         req.Branch,
-		"workspace_root": newProjectFolder,
+		"project_folder": newProjectFolder,
 	})
 }
 

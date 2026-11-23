@@ -231,10 +231,10 @@ describe('server snapshot replay', () => {
   });
 });
 
-describe('workspace_stopping', () => {
+describe('dev_space_stopping', () => {
   it('warns with the time left and leaves the run alone', () => {
     const { holder, emit } = setup({ isProcessing: true });
-    emit('workspace_stopping', { reason: 'idle', at: '2026-10-12T15:00:00Z', deadline_seconds: 600 });
+    emit('dev_space_stopping', { reason: 'idle', at: '2026-10-12T15:00:00Z', deadline_seconds: 600 });
     expect(notify).toHaveBeenCalledWith(
       'warning',
       'Dev space stopping',

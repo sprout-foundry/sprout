@@ -547,13 +547,13 @@ func TestToolDefinitionFields(t *testing.T) {
 func TestParameterDefFields(t *testing.T) {
 	t.Parallel()
 	p := ParameterDef{
-		Name:        "workspace_root",
+		Name:        "project_folder",
 		Type:        "string",
 		Required:    true,
 		Description: "The project folder",
 	}
-	if p.Name != "workspace_root" {
-		t.Errorf("Name = %q, want %q", p.Name, "workspace_root")
+	if p.Name != "project_folder" {
+		t.Errorf("Name = %q, want %q", p.Name, "project_folder")
 	}
 	if p.Type != "string" {
 		t.Errorf("Type = %q, want %q", p.Type, "string")

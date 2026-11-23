@@ -92,7 +92,7 @@ export interface UseChatSessionManagerParams {
   activeChatIdRef: React.MutableRefObject<string | null>;
   queuedMessagesRef: React.MutableRefObject<QueuedMessage[]>;
   isProcessing: boolean;
-  /** The chat held back by workspace_busy, if any; its queued messages wait for the running chat. */
+  /** The chat held back by project_folder_busy, if any; its queued messages wait for the running chat. */
   workspaceBusy?: WorkspaceBusyInfo | null;
   /**
    * The chat transport. Omitted, the app's own `ApiService` singleton is
@@ -472,7 +472,7 @@ export function useChatSessionManager({
           branch,
           base_ref: baseRef || undefined,
           name: name || undefined,
-          auto_switch_workspace: autoSwitch,
+          auto_switch_project_folder: autoSwitch,
         });
         const newId = response.chat_session.id;
         const sessionsResp = await chatSessions.listChatSessions();
@@ -678,14 +678,14 @@ export function useChatSessionManager({
         setState((prev) => ({ inputValue: '' }));
         debugLog('[OK] Message sent successfully');
       } catch (error) {
-        // workspace_busy (SP-142 §3): another chat in this client context has
+        // project_folder_busy (SP-142 §3): another chat in this client context has
         // a query running — the server refuses to start a second concurrent
         // runner on one project folder. Queue the message for this chat and hold
         // it until the running chat finishes (the drain effect waits while
         // projectFolderBusy names this chat). The optimistic bubble comes back
         // out: until it is sent it lives in the queue panel, not the
         // transcript.
-        if (error instanceof Error && (error as Error & { code?: string }).code === 'workspace_busy') {
+        if (error instanceof Error && (error as Error & { code?: string }).code === 'project_folder_busy') {
           const busy = error as Error & { code?: string; runningChatId?: string; runningChatName?: string };
           // Roll back the optimistic active-request bump — nothing is running
           // for THIS chat; the runner lives in the other chat.
@@ -752,10 +752,10 @@ export function useChatSessionManager({
             return;
           }
         }
-        // workspace_stopping: the daemon is draining before the project folder
+        // dev_space_stopping: the daemon is draining before the project folder
         // stops. The server already reported it on the chat (a terminal error
         // event); only undo the optimistic running state here.
-        if (error instanceof Error && (error as Error & { code?: string }).code === 'workspace_stopping') {
+        if (error instanceof Error && (error as Error & { code?: string }).code === 'dev_space_stopping') {
           if (activeRequestsRef.current > 0) activeRequestsRef.current -= 1;
           setState(() => ({ isProcessing: activeRequestsRef.current > 0, lastError: error.message }));
           return;

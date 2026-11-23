@@ -4,16 +4,16 @@
 
 export interface ProjectFolderResponse {
   daemon_root: string;
-  workspace_root: string;
+  project_folder: string;
   is_project: boolean;
   project_markers: string[];
-  needs_workspace_selection: boolean;
+  needs_project_folder_selection: boolean;
   /** True when the resolved project folder is the user's home directory (SP-130). */
-  workspace_is_home: boolean;
+  project_folder_is_home: boolean;
   /** The user's actual home directory (SP-130), used to display and consent. */
   home_dir: string;
   suggested_projects: Array<{ path: string; name: string; markers: string[] }>;
-  recent_workspaces: Array<{
+  recent_project_folders: Array<{
     path: string;
     name: string;
     last_used: string;

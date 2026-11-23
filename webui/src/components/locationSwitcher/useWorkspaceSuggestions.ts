@@ -127,7 +127,7 @@ export function useProjectFolderSuggestions({
       setSuggestionsLoading(true);
       setSuggestionsError(null);
       try {
-        const response = await clientFetch(`/api/workspace/browse?path=${encodeURIComponent(target.browsePath)}`);
+        const response = await clientFetch(`/api/project-folder/browse?path=${encodeURIComponent(target.browsePath)}`);
         if (!response.ok) {
           const body = await response.json().catch(() => null);
           const message =

@@ -193,6 +193,7 @@ Never leave the page — a self-host backend does not need to implement these. L
 | `/api/file/consent` | POST | File consent (no security prompts in cloud mode) |
 | `/api/files` | GET | File listing (WASM handles locally) |
 | `/api/files/prettier-config` | GET | Prettier config for a file (WASM filesystem) |
+| `/api/project-folder/browse` | GET | Project folder browsing (WASM filesystem) |
 | `/api/query` | POST | Agent query (WASM shell runs the full agent loop in-browser) |
 | `/api/query/steer` | POST | Steer agent mid-conversation (WASM shell injects into steering channel) |
 | `/api/query/stop` | POST | Stop agent execution (WASM shell interrupts in-browser agent) |
@@ -202,7 +203,6 @@ Never leave the page — a self-host backend does not need to implement these. L
 | `/api/terminal/history` | GET, POST | Terminal history (WASM terminal) |
 | `/api/terminal/sessions` | GET | Terminal sessions (WASM terminal manages) |
 | `/api/terminal/shells` | GET | Available shells (WASM terminal) |
-| `/api/workspace/browse` | GET | Project folder browsing (WASM filesystem) |
 
 ### Endpoints answered with synthetic safe-defaults
 
@@ -232,6 +232,7 @@ The adapter answers these itself with safe defaults; a backend may ignore them.
 | `/api/onboarding/complete` | POST | Complete onboarding |
 | `/api/onboarding/skip` | POST | Skip onboarding |
 | `/api/onboarding/status` | GET | Onboarding status (cloud is pre-configured) |
+| `/api/project-folder` | GET, POST | Project folder info (cloud mode: the WASM shell owns the project folder, virtual FS root) |
 | `/api/providers/models` | GET | Provider model listing (not available in browser mode) |
 | `/api/semantic` | POST | Semantic operations — go-to-def, hover etc (not available in browser mode) |
 | `/api/sessions/search` | GET | Session search (not available in browser mode) |
@@ -241,7 +242,6 @@ The adapter answers these itself with safe defaults; a backend may ignore them.
 | `/api/settings/subagent-types` | GET | Subagent type configs (not available in browser mode) |
 | `/api/settings/subagent-types//…` | GET | Subagent type read-only (not available in browser mode) |
 | `/api/support-bundle` | GET | Support bundle (not available in cloud mode) |
-| `/api/workspace` | GET, POST | Project folder info (cloud mode: the WASM shell owns the project folder, virtual FS root) |
 | `/api/workspace/symbols` | GET | Workspace symbols via LSP (not available in browser mode) |
 
 ### No-op endpoints

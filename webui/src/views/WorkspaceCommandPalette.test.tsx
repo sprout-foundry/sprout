@@ -45,7 +45,7 @@ vi.mock('../services/api', () => {
       return { hotkeys: [{ key: 'Ctrl+Shift+P', command_id: 'command_palette' }], platform: 'test' };
     },
     applyHotkeyPreset: async () => ({ hotkeys: [] }),
-    getProjectFolder: async () => ({ workspace_root: '/work/widgets' }),
+    getProjectFolder: async () => ({ project_folder: '/work/widgets' }),
     getStats: async () => ({}),
     getSettings: async () => ({}),
   };

@@ -172,7 +172,7 @@ const AppContent: React.FC<AppContentProps> = ({
   const apiService = ApiService.getInstance();
   const sproutFetch = useSproutFetch();
   // SP-130: home-directory gate. `useWorkspace` fetches project folder metadata
-  // (is_project, needs_workspace_selection, workspace_is_home, …). When the
+  // (is_project, needs_project_folder_selection, project_folder_is_home, …). When the
   // resolved project folder is the user's home directory without consent, a
   // blocking overlay renders on top of the normal UI until the user either
   // selects a project folder or explicitly consents to running in home.
@@ -789,8 +789,8 @@ const AppContent: React.FC<AppContentProps> = ({
   // project folder (falling back to the project folder metadata's root), which is
   // the stable identifier a local/daemon host uses.
   const project = useMemo(
-    () => ({ id: projectFolder || projectFolderInfo.workspace_root || '' }),
-    [projectFolder, projectFolderInfo.workspace_root],
+    () => ({ id: projectFolder || projectFolderInfo.project_folder || '' }),
+    [projectFolder, projectFolderInfo.project_folder],
   );
 
   // ── Sidebar props ────────────────────────────────────────────────
@@ -874,7 +874,7 @@ const AppContent: React.FC<AppContentProps> = ({
        * overlay on top of the normal UI when the workspace resolves to the
        * user's home directory without consent. The component itself also
        * short-circuits in cloud mode (supportsWorkspaceSwitching = false). */}
-      {projectFolderInfo.needs_workspace_selection && projectFolderInfo.workspace_is_home && (
+      {projectFolderInfo.needs_project_folder_selection && projectFolderInfo.project_folder_is_home && (
         <ProjectFolderGateModal
           projectFolderInfo={projectFolderInfo}
           onSelectProjectFolder={(path) => setProjectFolderViaHook(path)}

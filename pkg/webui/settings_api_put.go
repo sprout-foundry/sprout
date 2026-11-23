@@ -21,7 +21,7 @@ func (ws *ReactWebServer) handleAPISettingsPut(w http.ResponseWriter, r *http.Re
 	case "session":
 		ws.handlePutSessionSettings(w, r)
 		return
-	case "workspace":
+	case "project_folder":
 		ws.handlePutProjectFolderSettings(w, r)
 		return
 	case "global":

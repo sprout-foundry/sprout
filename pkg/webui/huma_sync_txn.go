@@ -131,7 +131,7 @@ func registerSyncTxnHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodPost,
 		Path:        "/api/lifecycle/notice",
 		Summary:     "Warn connected clients that the project folder will stop.",
-		Description: "Relays a workspace_stopping event ({reason, at, deadline_seconds}) to every connected client so the UI can warn before a timer-driven stop. Does not change daemon state.",
+		Description: "Relays a dev_space_stopping event ({reason, at, deadline_seconds}) to every connected client so the UI can warn before a timer-driven stop. Does not change daemon state.",
 		Tags:        []string{"sync/txn"},
 	}, ws.lifecycleNoticeHumaHandler)
 }

@@ -208,7 +208,7 @@ func (ws *ReactWebServer) createClientAgent(clientID string) (*agent.Agent, erro
 		// Ensure the project folder .sprout/ dir exists with a .gitignore
 		// covering personal overrides and state directories.
 		if err := configuration.EnsureProjectFolderConfigDir(projectFolder); err != nil {
-			ws.log().Warn("failed to ensure project folder config dir", slog.String("workspace_root", projectFolder), slog.Any("err", err))
+			ws.log().Warn("failed to ensure project folder config dir", slog.String("project_folder", projectFolder), slog.Any("err", err))
 		}
 		// Auto-bootstrap project folder config when opening a git repo that
 		// doesn't have .sprout/config.json yet. Same logic as
@@ -218,7 +218,7 @@ func (ws *ReactWebServer) createClientAgent(clientID string) (*agent.Agent, erro
 			configPath := filepath.Join(projectFolderDir, "config.json")
 			if _, statErr := os.Stat(configPath); os.IsNotExist(statErr) {
 				if err := configuration.BootstrapIsolatedConfig(projectFolderDir); err != nil {
-					ws.log().Warn("isolated daemon project folder configuration bootstrap failed", slog.String("workspace_root", projectFolder), slog.Any("err", err))
+					ws.log().Warn("isolated daemon project folder configuration bootstrap failed", slog.String("project_folder", projectFolder), slog.Any("err", err))
 				}
 			}
 		}

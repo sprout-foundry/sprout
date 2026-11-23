@@ -102,7 +102,7 @@ type sshProjectFolderSession struct {
 type persistedSSHProjectFolderSession struct {
 	Key                     string    `json:"key"`
 	HostAlias               string    `json:"host_alias"`
-	RemoteProjectFolderPath string    `json:"remote_workspace_path"`
+	RemoteProjectFolderPath string    `json:"remote_project_folder_path"`
 	RemotePort              int       `json:"remote_port"`
 	RemotePID               int       `json:"remote_pid"`
 	StartedAt               time.Time `json:"started_at"`

@@ -18,15 +18,15 @@ import {
 
 function ws(root: string, daemon = '/home/u') {
   return {
-    workspace_root: root,
+    project_folder: root,
     daemon_root: daemon,
     is_project: true,
     project_markers: [],
-    needs_workspace_selection: false,
-    workspace_is_home: false,
+    needs_project_folder_selection: false,
+    project_folder_is_home: false,
     home_dir: '/home/u',
     suggested_projects: [],
-    recent_workspaces: [],
+    recent_project_folders: [],
   };
 }
 
@@ -76,7 +76,7 @@ describe('workspaceStore', () => {
     await second;
     older.resolve(ws('/home/u'));
 
-    await expect(first).resolves.toMatchObject({ workspace_root: '/home/u/new' });
+    await expect(first).resolves.toMatchObject({ project_folder: '/home/u/new' });
     expect(getWorkspaceRoot()).toBe('/home/u/new');
   });
 

@@ -130,7 +130,7 @@ type infoJSONPayload struct {
 	ContextLimit     int     `json:"context_limit"`
 	ContextPct       float64 `json:"context_pct"`
 	Cost             float64 `json:"cost"`
-	ProjectFolder    string  `json:"workspace"`
+	ProjectFolder    string  `json:"project_folder"`
 	Persona          string  `json:"persona"`
 	RiskProfile      string  `json:"risk_profile"`
 	SubagentProvider string  `json:"subagent_provider"`

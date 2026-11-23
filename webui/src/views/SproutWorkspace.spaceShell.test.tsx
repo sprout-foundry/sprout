@@ -138,7 +138,8 @@ const fetchSpy = vi.fn(async (input: unknown) => {
   if (url.includes('/api/git/')) return json({ message: 'success' });
   if (url.includes('/api/files')) return json(FILES);
   if (url.includes('/api/search')) return json(SEARCH_RESULT);
-  if (url.includes('/api/workspace')) return json({ workspace_root: '/work/widgets', daemon_root: '/work/widgets' });
+  if (url.includes('/api/project-folder'))
+    return json({ project_folder: '/work/widgets', daemon_root: '/work/widgets' });
   return json({});
 });
 

@@ -232,7 +232,7 @@ func (ws *ReactWebServer) runChatQuery(
 		w.WriteHeader(http.StatusConflict)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"error":             fmt.Sprintf("Another chat (%s) is working in this project folder", runningChatName),
-			"code":              "workspace_busy",
+			"code":              "project_folder_busy",
 			"running_chat_id":   runningChatID,
 			"running_chat_name": runningChatName,
 		})

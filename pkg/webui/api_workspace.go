@@ -30,7 +30,7 @@ var (
 //
 // The scan reads every non-hidden directory under root to depth 2, which on a
 // home directory is both slow and privacy-prompt-inducing. A single page load
-// calls GET /api/workspace from ~10 places (useAppInitialization, useProjectFolder,
+// calls GET /api/project-folder from ~10 places (useAppInitialization, useProjectFolder,
 // ProjectFolderBar, useFileIndex, lspClientService, …); without this the walk ran
 // once per call.
 // The cache holds the raw scan only. Callers that decorate the list (e.g.
@@ -149,14 +149,14 @@ func (ws *ReactWebServer) handleAPIProjectFolderGet(w http.ResponseWriter, r *ht
 	}
 
 	response := map[string]interface{}{
-		"daemon_root":               ws.GetDaemonRoot(),
-		"workspace_root":            projectFolder,
-		"is_project":                isProject,
-		"project_markers":           markers,
-		"needs_workspace_selection": needsSelection,
-		"recent_workspaces":         GetRecentProjectFolders(),
-		"workspace_is_home":         projectFolderIsHome,
-		"home_dir":                  resolveHomeDir(),
+		"daemon_root":                    ws.GetDaemonRoot(),
+		"project_folder":                 projectFolder,
+		"is_project":                     isProject,
+		"project_markers":                markers,
+		"needs_project_folder_selection": needsSelection,
+		"recent_project_folders":         GetRecentProjectFolders(),
+		"project_folder_is_home":         projectFolderIsHome,
+		"home_dir":                       resolveHomeDir(),
 	}
 
 	// Suggest nearby projects only when selection is actually needed. Moving
@@ -252,7 +252,7 @@ func (ws *ReactWebServer) handleAPIProjectFolderSet(w http.ResponseWriter, r *ht
 				} else {
 					writeJSON(w, http.StatusForbidden, map[string]interface{}{
 						"error": "Selecting the home directory as project folder requires explicit consent. The agent will have access to all files under your home directory.",
-						"code":  "home_workspace_requires_consent",
+						"code":  "home_project_folder_requires_consent",
 					})
 					return
 				}
@@ -275,7 +275,7 @@ func (ws *ReactWebServer) handleAPIProjectFolderSet(w http.ResponseWriter, r *ht
 
 	projectFolder, err := ws.setClientProjectFolder(clientID, req.Path)
 	if err != nil {
-		writeJSONErr(w, http.StatusBadRequest, "workspace_update_failed", fmt.Sprintf("Failed to set project folder: %v", err))
+		writeJSONErr(w, http.StatusBadRequest, "project_folder_update_failed", fmt.Sprintf("Failed to set project folder: %v", err))
 		return
 	}
 
@@ -284,14 +284,14 @@ func (ws *ReactWebServer) handleAPIProjectFolderSet(w http.ResponseWriter, r *ht
 
 	ws.publishClientEvent(clientID, events.EventTypeProjectFolderChanged, map[string]interface{}{
 		"daemon_root":             ws.GetDaemonRoot(),
-		"workspace_root":          projectFolder,
-		"previous_workspace_root": previousProjectFolder,
+		"project_folder":          projectFolder,
+		"previous_project_folder": previousProjectFolder,
 	})
 
 	response := map[string]interface{}{
 		"daemon_root":    ws.GetDaemonRoot(),
 		"message":        "Project folder updated",
-		"workspace_root": projectFolder,
+		"project_folder": projectFolder,
 	}
 	clientCtx := ws.projectFolderViewForRequest(r)
 	if clientCtx.SSHHostAlias != "" {
@@ -371,7 +371,7 @@ func (ws *ReactWebServer) handleAPIProjectFolderBrowse(w http.ResponseWriter, r 
 		"message":        "success",
 		"path":           canonicalDir,
 		"daemon_root":    daemonRoot,
-		"workspace_root": ws.getProjectFolderForRequest(r),
+		"project_folder": ws.getProjectFolderForRequest(r),
 		"files":          files,
 	})
 }

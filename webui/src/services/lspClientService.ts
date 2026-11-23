@@ -372,7 +372,7 @@ class LSPClientService {
   async getProjectFolderPath(): Promise<string> {
     try {
       const projectFolder = await ensureProjectFolder();
-      this.workspacePath = projectFolder.workspace_root;
+      this.workspacePath = projectFolder.project_folder;
       return this.workspacePath;
     } catch (err) {
       console.error('[LSPClientService] Failed to get workspace:', err);
@@ -412,7 +412,7 @@ class LSPClientService {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
 
-    return `${protocol}//${host}/api/lsp/ws?language=${languageId}&workspace=${encodedPath}`;
+    return `${protocol}//${host}/api/lsp/ws?language=${languageId}&project_folder=${encodedPath}`;
   }
 
   /**

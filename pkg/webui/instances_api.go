@@ -57,7 +57,7 @@ type sshHostEntryDTO struct {
 
 type sshLaunchRequestDTO struct {
 	HostAlias               string `json:"host_alias"`
-	RemoteProjectFolderPath string `json:"remote_workspace_path,omitempty"`
+	RemoteProjectFolderPath string `json:"remote_project_folder_path,omitempty"`
 	// forward is this machine's provider, captured from the request's client.
 	forward *sshForwardedProvider
 }
@@ -70,7 +70,7 @@ type sshBrowseRequestDTO struct {
 type sshSessionEntryDTO struct {
 	Key                     string    `json:"key"`
 	HostAlias               string    `json:"host_alias"`
-	RemoteProjectFolderPath string    `json:"remote_workspace_path"`
+	RemoteProjectFolderPath string    `json:"remote_project_folder_path"`
 	LocalPort               int       `json:"local_port,omitempty"`
 	RemotePort              int       `json:"remote_port"`
 	RemotePID               int       `json:"remote_pid,omitempty"`

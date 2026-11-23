@@ -101,7 +101,7 @@ func TestMultiWindowClientIsolationForProjectFolderSessionAndModel(t *testing.T)
 		if evaled, err := filepath.EvalSymlinks(expected); err == nil {
 			expected = evaled
 		}
-		req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 		req.Header.Set(webClientIDHeader, clientID)
 		rec := httptest.NewRecorder()
 		ws.handleAPIProjectFolder(rec, req)
@@ -109,7 +109,7 @@ func TestMultiWindowClientIsolationForProjectFolderSessionAndModel(t *testing.T)
 			t.Fatalf("project folder status for %s: %d (%s)", clientID, rec.Code, rec.Body.String())
 		}
 		var payload struct {
-			ProjectFolder string `json:"workspace_root"`
+			ProjectFolder string `json:"project_folder"`
 		}
 		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 			t.Fatalf("project folder decode for %s: %v", clientID, err)
@@ -206,7 +206,7 @@ func TestActiveQueryIsolationAllowsOtherWindowProjectFolderSwitch(t *testing.T) 
 	ws.activeQueries = 1
 
 	bodyA, _ := json.Marshal(map[string]string{"path": clientATarget})
-	reqA := httptest.NewRequest(http.MethodPost, "/api/workspace", bytes.NewReader(bodyA))
+	reqA := httptest.NewRequest(http.MethodPost, "/api/project-folder", bytes.NewReader(bodyA))
 	reqA.Header.Set(webClientIDHeader, clientA)
 	recA := httptest.NewRecorder()
 	ws.handleAPIProjectFolder(recA, reqA)
@@ -215,7 +215,7 @@ func TestActiveQueryIsolationAllowsOtherWindowProjectFolderSwitch(t *testing.T) 
 	}
 
 	bodyB, _ := json.Marshal(map[string]string{"path": clientBTarget})
-	reqB := httptest.NewRequest(http.MethodPost, "/api/workspace", bytes.NewReader(bodyB))
+	reqB := httptest.NewRequest(http.MethodPost, "/api/project-folder", bytes.NewReader(bodyB))
 	reqB.Header.Set(webClientIDHeader, clientB)
 	recB := httptest.NewRecorder()
 	ws.handleAPIProjectFolder(recB, reqB)

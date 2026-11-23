@@ -48,7 +48,7 @@ const (
 	EventTypeDelegatedTaskOutcome    = "delegated_task_outcome"
 	EventTypeTodoUpdate              = "todo_update"
 	EventTypeFileChanged             = "file_changed"
-	EventTypeProjectFolderPatch      = "workspace_patch"
+	EventTypeProjectFolderPatch      = "project_folder_patch"
 	EventTypeFileContentChanged      = "file_content_changed"
 	EventTypeStreamChunk             = "stream_chunk"
 	EventTypeMetricsUpdate           = "metrics_update"
@@ -89,12 +89,12 @@ const (
 	// pointing at Settings → Credentials, distinct from generic warning
 	// messages that get inlined into the active assistant bubble.
 	EventTypeProviderNoCredential = "provider_no_credential"
-	EventTypeProjectFolderChanged = "workspace_changed"
+	EventTypeProjectFolderChanged = "project_folder_changed"
 	EventTypeSessionTerminated    = "session_terminated"
 	// EventTypeDevSpaceStopping warns connected clients that the dev space
 	// is about to stop (idle timeout, runtime cap, drain). Payload:
 	// {reason, at, deadline_seconds}.
-	EventTypeDevSpaceStopping = "workspace_stopping"
+	EventTypeDevSpaceStopping = "dev_space_stopping"
 	// EventTypeSessionChanged signals that a chat session's metadata
 	// (name, pin state, active state) changed and tabs viewing that chat
 	// should reconcile. SP-034-3e.

@@ -251,8 +251,8 @@ describe.each([
   });
 
   it('reports the workspace root the file routes serve', async () => {
-    const res = await adapter.fetch('/api/workspace');
-    expect(await res.json()).toMatchObject({ workspace_root: ROOT, daemon_root: ROOT });
+    const res = await adapter.fetch('/api/project-folder');
+    expect(await res.json()).toMatchObject({ project_folder: ROOT, daemon_root: ROOT });
   });
 
   it.each([null, ...ROOT_SPELLINGS])('lists the imported files at the root spelled %j', async (spelling) => {

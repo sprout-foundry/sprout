@@ -6,9 +6,9 @@ const respond = (status: number, body: unknown) =>
 
 describe('getFiles', () => {
   it('carries the server error code on a refusal', async () => {
-    await expect(getFiles(respond(403, { code: 'workspace_not_selected' }))).rejects.toMatchObject({
+    await expect(getFiles(respond(403, { code: 'project_folder_not_selected' }))).rejects.toMatchObject({
       message: 'Failed to fetch files',
-      code: 'workspace_not_selected',
+      code: 'project_folder_not_selected',
     });
   });
 

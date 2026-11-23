@@ -51,7 +51,7 @@ const testSessionKey = "test-host::$HOME"
 // startEchoBackend creates an httptest server that acts as the "remote" sprout
 // backend.  It handles:
 //   - /health          → {"status":"ok"}
-//   - /api/workspace   → {"workspace_root":"/remote/project"}
+//   - /api/project-folder   → {"project_folder":"/remote/project"}
 //   - /api/stats       → {"session_id":"s1"}
 //   - /api/providers   → {"providers":["openai"]}
 //   - /api/files       → {"files":[]}
@@ -67,9 +67,9 @@ func startEchoBackend(t *testing.T) (*httptest.Server, int) {
 		w.Header().Set("Content-Type", "application/json")
 		io.WriteString(w, `{"status":"ok"}`) //nolint:errcheck
 	})
-	mux.HandleFunc("/api/workspace", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/project-folder", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, `{"workspace_root":"/remote/project"}`) //nolint:errcheck
+		io.WriteString(w, `{"project_folder":"/remote/project"}`) //nolint:errcheck,gosec // test fake
 	})
 	mux.HandleFunc("/api/stats", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -240,7 +240,7 @@ func TestSSHProxyProjectFolderAPI(t *testing.T) {
 	_, port := startEchoBackend(t)
 	srv := newProxyServer(port, testSessionKey)
 
-	req := httptest.NewRequest(http.MethodGet, sessionProxyPath(testSessionKey, "/api/workspace"), nil)
+	req := httptest.NewRequest(http.MethodGet, sessionProxyPath(testSessionKey, "/api/project-folder"), nil)
 	rec := httptest.NewRecorder()
 	srv.handleSSHProxy(rec, req)
 
@@ -251,8 +251,8 @@ func TestSSHProxyProjectFolderAPI(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
-	if body["workspace_root"] != "/remote/project" {
-		t.Fatalf("unexpected workspace_root: %v", body["workspace_root"])
+	if body["project_folder"] != "/remote/project" {
+		t.Fatalf("unexpected workspace_root: %v", body["project_folder"])
 	}
 }
 
@@ -499,7 +499,7 @@ func TestSSHProxyConcurrentRequests(t *testing.T) {
 
 	paths := []string{
 		sessionProxyPath(testSessionKey, "/health"),
-		sessionProxyPath(testSessionKey, "/api/workspace"),
+		sessionProxyPath(testSessionKey, "/api/project-folder"),
 		sessionProxyPath(testSessionKey, "/api/stats"),
 		sessionProxyPath(testSessionKey, "/api/providers"),
 		sessionProxyPath(testSessionKey, "/api/files"),
@@ -597,8 +597,8 @@ func TestSSHProxyRealBackendIntegration(t *testing.T) {
 		}
 	})
 
-	t.Run("workspace_api_proxied", func(t *testing.T) {
-		resp, err := client.Get(baseURL + "/api/workspace")
+	t.Run("project_folder_api_proxied", func(t *testing.T) {
+		resp, err := client.Get(baseURL + "/api/project-folder") //nolint:gosec // test server URL
 		if err != nil {
 			t.Fatalf("GET /api/workspace: %v", err)
 		}
@@ -611,7 +611,7 @@ func TestSSHProxyRealBackendIntegration(t *testing.T) {
 		if err := json.Unmarshal(body, &data); err != nil {
 			t.Fatalf("invalid JSON from /api/workspace: %v; body: %s", err, body)
 		}
-		if _, ok := data["workspace_root"]; !ok {
+		if _, ok := data["project_folder"]; !ok {
 			t.Fatalf("expected workspace_root in response; got: %v", data)
 		}
 	})

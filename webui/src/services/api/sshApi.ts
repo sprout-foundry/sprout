@@ -48,7 +48,7 @@ export async function openSSHProjectFolder(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       host_alias: hostAlias,
-      remote_workspace_path: remoteProjectFolderPath,
+      remote_project_folder_path: remoteProjectFolderPath,
     }),
   });
 
@@ -124,7 +124,7 @@ export async function getSSHLaunchStatus(
   remoteProjectFolderPath?: string,
 ): Promise<SSHLaunchStatus> {
   const params = new URLSearchParams({ host_alias: hostAlias });
-  if (remoteProjectFolderPath) params.set('remote_workspace_path', remoteProjectFolderPath);
+  if (remoteProjectFolderPath) params.set('remote_project_folder_path', remoteProjectFolderPath);
   const response = await fetchFn(`/api/instances/ssh-launch-status?${params}`);
   if (!response.ok) throw new Error('Failed to get SSH launch status');
   return response.json();

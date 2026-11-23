@@ -85,7 +85,7 @@ import { WorkspaceEditorProvider } from './WorkspaceEditorContext';
  *
  * `project` is the project this workspace is for. It is a minimal, host-facing
  * description; the web UI models the same thing as a workspace root
- * (`useWorkspace`'s `WorkspaceInfo.workspace_root`) on local/daemon hosts and
+ * (`useWorkspace`'s `WorkspaceInfo.project_folder`) on local/daemon hosts and
  * as the active repository URL (`services/activeRepo`) on hosted ones, so the
  * two identifying fields below are named after those. It is the workspace's
  * identity today — it is surfaced on the workspace root (`data-project`) and

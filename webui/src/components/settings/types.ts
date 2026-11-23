@@ -13,8 +13,8 @@ export interface MutationContext {
   onSettingsChanged: (settings: SproutSettings) => void;
   /** Function to show toast notifications */
   addNotification: (type: 'success' | 'error' | 'info', title: string, message: string, duration?: number) => string;
-  /** Current settings layer ('session' | 'workspace' | 'global') */
-  configViewLayer: 'session' | 'workspace' | 'global';
+  /** Current settings layer ('session' | 'project_folder' | 'global') */
+  configViewLayer: 'session' | 'project_folder' | 'global';
   /** Callback to update provenance sources (for session layer) */
   setProvenanceSources: (v: Record<string, string>) => void;
   /** Setter for savingKey (to update loading indicators) */
@@ -66,7 +66,7 @@ export interface SettingsPanelProps {
 
 /* ─── Hierarchical section model (SP-017) ──────────────────── */
 
-export type SettingsSection = 'agent' | 'workspace' | 'environment' | 'editor' | 'experimental';
+export type SettingsSection = 'agent' | 'project_folder' | 'environment' | 'editor' | 'experimental';
 
 export type SettingsSubsection =
   // Agent (session scope)
@@ -91,7 +91,7 @@ export type SettingsSubsection =
 export interface SectionDef {
   id: SettingsSection;
   label: string;
-  scope: 'session' | 'workspace' | 'global' | 'runtime';
+  scope: 'session' | 'project_folder' | 'global' | 'runtime';
   description: string;
   subsections: { id: SettingsSubsection; label: string }[];
 }
@@ -110,9 +110,9 @@ export const SECTION_GROUPS: SectionDef[] = [
     ],
   },
   {
-    id: 'workspace',
+    id: 'project_folder',
     label: 'Workspace',
-    scope: 'workspace',
+    scope: 'project_folder',
     description: 'Settings for this project directory',
     subsections: [
       { id: 'workspace-mcp', label: 'MCP Servers' },
@@ -156,9 +156,9 @@ export function getSectionForSubsection(subsectionId: SettingsSubsection): Secti
 }
 
 /** Derive configViewLayer from a section scope. */
-export function scopeToLayer(scope: SectionDef['scope']): 'session' | 'workspace' | 'global' {
+export function scopeToLayer(scope: SectionDef['scope']): 'session' | 'project_folder' | 'global' {
   if (scope === 'session' || scope === 'runtime') return 'session';
-  if (scope === 'workspace') return 'workspace';
+  if (scope === 'project_folder') return 'project_folder';
   return 'global';
 }
 

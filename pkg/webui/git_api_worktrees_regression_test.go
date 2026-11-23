@@ -153,7 +153,7 @@ func TestGitWorktreeCreate_RejectsEscapeBeyondSibling(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "path_outside_workspace") {
+	if !strings.Contains(rec.Body.String(), "path_outside_project_folder") {
 		t.Fatalf("expected path_outside_workspace code, got %s", rec.Body.String())
 	}
 }

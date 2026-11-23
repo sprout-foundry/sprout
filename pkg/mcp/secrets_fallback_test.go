@@ -50,7 +50,7 @@ func TestGetMCPHeaderCredential_ProjectFolderFallback(t *testing.T) {
 
 	value, source := getMCPHeaderCredential(foundryAuthKey)
 	assert.Equal(t, "Bearer ws-token", value)
-	assert.Equal(t, "workspace", source)
+	assert.Equal(t, "project_folder", source)
 }
 
 // When both scopes hold the key, the process's own (ambient) store wins.
@@ -68,7 +68,7 @@ func TestGetMCPHeaderCredential_AmbientWins(t *testing.T) {
 
 	value, source := getMCPHeaderCredential(foundryAuthKey)
 	assert.Equal(t, "Bearer ambient", value, "the process's own store must win")
-	assert.NotEqual(t, "workspace", source)
+	assert.NotEqual(t, "project_folder", source)
 }
 
 // No fallback registered and no ambient value: both empty, so the header is

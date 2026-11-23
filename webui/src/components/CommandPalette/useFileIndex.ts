@@ -126,8 +126,8 @@ function useFileIndex(options: UseFileIndexOptions): UseFileIndexResult {
       try {
         const projectFolder = await ensureProjectFolder();
         if (cancelled) return;
-        resolvedRoot = String(projectFolder.workspace_root || '').trim();
-        needsSelection = Boolean(projectFolder.needs_workspace_selection);
+        resolvedRoot = String(projectFolder.project_folder || '').trim();
+        needsSelection = Boolean(projectFolder.needs_project_folder_selection);
         setProjectFolder(resolvedRoot);
       } catch (err) {
         // Index against the last known root rather than none.

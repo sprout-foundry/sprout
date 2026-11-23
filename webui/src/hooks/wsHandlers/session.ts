@@ -53,7 +53,7 @@ function endStepParagraph(messages: Message[]): Message[] {
   return [...messages.slice(0, -1), { ...last, content: `${last.content}\n\n` }];
 }
 
-// Handle workspace_changed event
+// Handle project_folder_changed event
 //
 // When the project folder changes (e.g. switching to a git worktree via the
 // Worktrees panel), we refresh workspace-dependent UI in place instead of
@@ -103,7 +103,7 @@ export const handleProjectFolderChanged = (ctx: EventHandlerContext): void => {
   }));
 
   // Notify other components to refresh their workspace-dependent data.
-  const projectFolder = (data as Record<string, unknown>).workspace_root;
+  const projectFolder = (data as Record<string, unknown>).project_folder;
   const daemonRoot = (data as Record<string, unknown>).daemon_root;
   window.dispatchEvent(
     new CustomEvent('sprout:workspace-changed', {
@@ -223,8 +223,8 @@ export const handleCompactCompleted = (ctx: EventHandlerContext): void => {
   );
 };
 
-// Handle workspace_patch event (log-only; full VFS integration is a follow-up).
-// Redact file contents from the log entry — workspace_patch carries the full
+// Handle project_folder_patch event (log-only; full VFS integration is a follow-up).
+// Redact file contents from the log entry — project_folder_patch carries the full
 // written `content`, which may include secrets/PII and should not persist in
 // React state. Only path/action/seq are safe to log.
 export const handleProjectFolderPatch = (ctx: EventHandlerContext): void => {

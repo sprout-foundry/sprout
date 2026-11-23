@@ -266,7 +266,7 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, projectFo
 		return
 	}
 
-	ws.log().Info("project folder hydration streaming started", slog.Int64("file_count", totalFiles), slog.Int64("total_bytes", totalSize), slog.Int64("estimated_seconds", estimateSeconds), slog.String("workspace_root", projectFolder))
+	ws.log().Info("project folder hydration streaming started", slog.Int64("file_count", totalFiles), slog.Int64("total_bytes", totalSize), slog.Int64("estimated_seconds", estimateSeconds), slog.String("project_folder", projectFolder))
 
 	// --- Phase 3: Stream files ---
 	filesSent := int64(0)

@@ -37,7 +37,7 @@ func TestHandleAPIProjectFolderSetUpdatesProjectFolder(t *testing.T) {
 		t.Fatalf("marshal request body: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/workspace", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/project-folder", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
 	server.handleAPIProjectFolder(rec, req)
@@ -68,7 +68,7 @@ func TestHandleAPIProjectFolderGetReturnsCurrentRoot(t *testing.T) {
 		terminalManager: NewTerminalManager(root),
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 	rec := httptest.NewRecorder()
 
 	server.handleAPIProjectFolder(rec, req)
@@ -79,7 +79,7 @@ func TestHandleAPIProjectFolderGetReturnsCurrentRoot(t *testing.T) {
 
 	var response struct {
 		DaemonRoot    string `json:"daemon_root"`
-		ProjectFolder string `json:"workspace_root"`
+		ProjectFolder string `json:"project_folder"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 		t.Fatalf("unmarshal response: %v", err)
@@ -106,7 +106,7 @@ func TestHandleAPIProjectFolderBrowseIsScopedToDaemonRoot(t *testing.T) {
 		terminalManager: NewTerminalManager(daemonRoot),
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace/browse?path="+childDir, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder/browse?path="+childDir, nil)
 	rec := httptest.NewRecorder()
 	server.handleAPIProjectFolderBrowse(rec, req)
 	if rec.Code != http.StatusOK {
@@ -114,7 +114,7 @@ func TestHandleAPIProjectFolderBrowseIsScopedToDaemonRoot(t *testing.T) {
 	}
 
 	outsideRoot := t.TempDir()
-	req = httptest.NewRequest(http.MethodGet, "/api/workspace/browse?path="+outsideRoot, nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/project-folder/browse?path="+outsideRoot, nil)
 	rec = httptest.NewRecorder()
 	server.handleAPIProjectFolderBrowse(rec, req)
 	if rec.Code != http.StatusForbidden {
@@ -146,7 +146,7 @@ func TestHandleAPIProjectFolderSetRejectsDuringActiveQuery(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]string{"path": nextRoot})
-	req := httptest.NewRequest(http.MethodPost, "/api/workspace", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/project-folder", bytes.NewReader(body))
 	req.Header.Set(webClientIDHeader, "client-a")
 	rec := httptest.NewRecorder()
 

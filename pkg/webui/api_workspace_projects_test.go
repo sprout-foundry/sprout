@@ -47,7 +47,7 @@ func TestHandleAPIProjectFolderProjects_Success(t *testing.T) {
 	}
 	ws.daemonRoot = daemonRoot
 
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace/projects", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder/projects", nil)
 	rec := httptest.NewRecorder()
 	ws.handleAPIProjectFolderProjects(rec, req)
 
@@ -97,7 +97,7 @@ func TestHandleAPIProjectFolderProjects_EmptyResults(t *testing.T) {
 	}
 	ws.daemonRoot = daemonRoot
 
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace/projects", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder/projects", nil)
 	rec := httptest.NewRecorder()
 	ws.handleAPIProjectFolderProjects(rec, req)
 
@@ -137,7 +137,7 @@ func TestHandleAPIProjectFolderProjects_MethodNotAllowed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/workspace/projects", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/project-folder/projects", nil)
 	rec := httptest.NewRecorder()
 	ws.handleAPIProjectFolderProjects(rec, req)
 
@@ -165,7 +165,7 @@ func TestHandleAPIProjectFolderProjects_Caching(t *testing.T) {
 	ws.daemonRoot = daemonRoot
 
 	// First request — should NOT be cached
-	req1 := httptest.NewRequest(http.MethodGet, "/api/workspace/projects", nil)
+	req1 := httptest.NewRequest(http.MethodGet, "/api/project-folder/projects", nil)
 	rec1 := httptest.NewRecorder()
 	ws.handleAPIProjectFolderProjects(rec1, req1)
 
@@ -183,7 +183,7 @@ func TestHandleAPIProjectFolderProjects_Caching(t *testing.T) {
 	}
 
 	// Second request — should be cached
-	req2 := httptest.NewRequest(http.MethodGet, "/api/workspace/projects", nil)
+	req2 := httptest.NewRequest(http.MethodGet, "/api/project-folder/projects", nil)
 	rec2 := httptest.NewRecorder()
 	ws.handleAPIProjectFolderProjects(rec2, req2)
 

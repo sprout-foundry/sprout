@@ -23,7 +23,7 @@ vi.mock('../config/mode', () => ({
 vi.mock('./WorkspaceGateModal.css', () => ({}));
 vi.mock('./WorkspaceBrowser.css', () => ({}));
 
-// The inline browser talks to /api/workspace/browse; stub the service so the
+// The inline browser talks to /api/project-folder/browse; stub the service so the
 // modal tests stay offline.
 const browseMock = vi.hoisted(() => vi.fn());
 const setProjectFolderMock = vi.hoisted(() => vi.fn());
@@ -59,14 +59,14 @@ vi.mock('../services/nativeFs', () => ({
 
 const baseProjectFolderInfo = {
   daemon_root: '/home/alice/.sprout',
-  workspace_root: '/home/alice',
+  project_folder: '/home/alice',
   is_project: false,
   project_markers: [],
-  needs_workspace_selection: true,
-  workspace_is_home: true,
+  needs_project_folder_selection: true,
+  project_folder_is_home: true,
   home_dir: '/home/alice',
   suggested_projects: [{ path: '/home/alice/dev/myapp', name: 'myapp', markers: ['.git'] }],
-  recent_workspaces: [
+  recent_project_folders: [
     {
       path: '/home/alice/dev/old',
       name: 'old',
@@ -199,7 +199,7 @@ function stubReload(): ReturnType<typeof vi.fn> {
 // ---------------------------------------------------------------------------
 
 describe('WorkspaceGateModal', () => {
-  it('renders the blocking overlay when needs_workspace_selection && workspace_is_home', () => {
+  it('renders the blocking overlay when needs_project_folder_selection && project_folder_is_home', () => {
     renderModal();
     expect(container!.querySelector('[data-testid="workspace-gate-modal"]')).not.toBeNull();
   });
@@ -451,20 +451,20 @@ describe('WorkspaceGateModal', () => {
     expect(err!.textContent).toMatch(/already exists/i);
   });
 
-  it('consents through POST /api/workspace (setWorkspace with consentHome) and reloads', async () => {
+  it('consents through POST /api/project-folder (setWorkspace with consentHome) and reloads', async () => {
     modeState.studio = true;
     const reloadSpy = vi.fn();
     Object.defineProperty(window, 'location', { value: { reload: reloadSpy }, writable: true });
     setProjectFolderMock.mockResolvedValue({
-      workspace_root: '/home/alice',
+      project_folder: '/home/alice',
       daemon_root: '/home/alice/.sprout',
       message: 'Workspace updated',
     });
     getProjectFolderMock.mockResolvedValue({
-      workspace_root: '/home/alice',
+      project_folder: '/home/alice',
       daemon_root: '/home/alice',
-      workspace_is_home: true,
-      needs_workspace_selection: true,
+      project_folder_is_home: true,
+      needs_project_folder_selection: true,
     });
 
     renderModal();
@@ -472,8 +472,8 @@ describe('WorkspaceGateModal', () => {
       container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-home-btn"]')!.click();
     });
 
-    // The api-service consent path: setProjectFolder(workspace_root, consentHome=true)
-    // POSTs /api/workspace with { path, consent_home: true }.
+    // The api-service consent path: setProjectFolder(project_folder, consentHome=true)
+    // POSTs /api/project-folder with { path, consent_home: true }.
     expect(setProjectFolderMock).toHaveBeenCalledTimes(1);
     expect(setProjectFolderMock).toHaveBeenCalledWith('/home/alice', true);
   });
@@ -482,10 +482,10 @@ describe('WorkspaceGateModal', () => {
     modeState.studio = true;
     // The modal's snapshot still says home; the server already moved on.
     getProjectFolderMock.mockResolvedValue({
-      workspace_root: '/home/alice/project',
+      project_folder: '/home/alice/project',
       daemon_root: '/home/alice',
-      workspace_is_home: false,
-      needs_workspace_selection: false,
+      project_folder_is_home: false,
+      needs_project_folder_selection: false,
     });
 
     renderModal();
@@ -540,7 +540,7 @@ describe('WorkspaceGateModal', () => {
       createProjectFolderMock.mockResolvedValue({ ok: true, rootName: 'myproj' });
       listStartersMock.mockResolvedValue([{ id: 'fixture', version: '0.1.0', files: 4, has_manifest: true }]);
       getProjectFolderMock.mockResolvedValue({
-        workspace_root: '/home/alice/myproj',
+        project_folder: '/home/alice/myproj',
         daemon_root: '/home/alice/.sprout',
       });
       instantiateStarterMock.mockResolvedValue({

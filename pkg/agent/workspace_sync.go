@@ -164,7 +164,7 @@ type ReconciliationActionResult struct {
 // against the container's stored metadata and returns a reconciliation plan.
 func ReconcileSeqNumbers(ag *Agent, browserSeqs map[string]int64) ([]ReconciliationActionResult, error) {
 	if ag == nil {
-		return nil, agenterrors.NewTool("workspace_sync", "agent is nil", nil)
+		return nil, agenterrors.NewTool("project_folder_sync", "agent is nil", nil)
 	}
 	if ag.fileMetadata == nil {
 		// No metadata store means no files tracked — everything is browser_ahead

@@ -24,7 +24,7 @@ export interface SSHHostEntry {
 export interface SSHSessionEntry {
   key: string;
   host_alias: string;
-  remote_workspace_path: string;
+  remote_project_folder_path: string;
   local_port?: number;
   remote_port: number;
   remote_pid?: number;

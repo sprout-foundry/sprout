@@ -36,7 +36,7 @@ vi.mock('../services/api', () => {
       return { hotkeys: [] };
     }
     async getProjectFolder() {
-      return { workspace_root: '' };
+      return { project_folder: '' };
     }
   }
   return { ApiService: MockApiService };

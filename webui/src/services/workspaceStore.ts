@@ -88,7 +88,7 @@ function accept(projectFolder: ProjectFolderResponse): void {
   clearRetry();
   retryAttempt = 0;
   emit({ workspace: projectFolder, loading: false, error: null, updatedAt: Date.now() });
-  setProjectFolderCwdScope(projectFolder.workspace_root);
+  setProjectFolderCwdScope(projectFolder.project_folder);
 }
 
 export function getProjectFolderState(): ProjectFolderStoreState {
@@ -97,7 +97,7 @@ export function getProjectFolderState(): ProjectFolderStoreState {
 
 /** The last known project folder ('' until the first successful fetch). */
 export function getWorkspaceRoot(): string {
-  return state.workspace?.workspace_root ?? '';
+  return state.workspace?.project_folder ?? '';
 }
 
 export function subscribeProjectFolder(listener: () => void): () => void {
@@ -164,7 +164,7 @@ export function ensureProjectFolder(maxAgeMs = WORKSPACE_STALE_AFTER_MS): Promis
 
 /**
  * Record a project folder the server just confirmed (a successful POST
- * /api/workspace or a workspace_changed event) and refetch the full
+ * /api/project-folder or a project_folder_changed event) and refetch the full
  * project folder metadata. Any GET started before this point is discarded: it
  * may describe the previous root.
  */
@@ -174,24 +174,24 @@ export function applyProjectFolder(projectFolder: string, daemonRoot?: string): 
   if (!root) return refreshProjectFolder({ force: true }).catch(() => null);
   // The same root applied twice in a row (the caller, then the DOM event it
   // announced) shares the refetch the first apply started.
-  if (inflight && state.workspace?.workspace_root === root && inflight.seq === lastApplySeq) {
+  if (inflight && state.workspace?.project_folder === root && inflight.seq === lastApplySeq) {
     return inflight.promise.catch(() => null);
   }
   sequence += 1;
   inflight = null;
   const base: ProjectFolderResponse = state.workspace ?? {
     daemon_root: '',
-    workspace_root: '',
+    project_folder: '',
     is_project: false,
     project_markers: [],
-    needs_workspace_selection: false,
-    workspace_is_home: false,
+    needs_project_folder_selection: false,
+    project_folder_is_home: false,
     home_dir: '',
     suggested_projects: [],
-    recent_workspaces: [],
+    recent_project_folders: [],
   };
-  if (base.workspace_root !== root || (daemonRoot && base.daemon_root !== daemonRoot)) {
-    accept({ ...base, workspace_root: root, daemon_root: daemonRoot || base.daemon_root });
+  if (base.project_folder !== root || (daemonRoot && base.daemon_root !== daemonRoot)) {
+    accept({ ...base, project_folder: root, daemon_root: daemonRoot || base.daemon_root });
   }
   const refreshed = refreshProjectFolder({ force: true });
   lastApplySeq = sequence;
@@ -200,7 +200,7 @@ export function applyProjectFolder(projectFolder: string, daemonRoot?: string): 
 
 /**
  * Tell every workspace-dependent surface that the root changed. The same DOM
- * event the server's workspace_changed event produces, for changes the client
+ * event the server's project_folder_changed event produces, for changes the client
  * made itself before the event stream is up (boot restore, reconnect).
  */
 export function announceProjectFolderChanged(projectFolder: string, daemonRoot = ''): void {
@@ -253,7 +253,7 @@ export function useProjectFolderState(): ProjectFolderStoreState {
 
 /** Reactive project folder ('' until known; the last known root while disconnected). */
 export function useProjectFolder(): string {
-  return useProjectFolderState().workspace?.workspace_root ?? '';
+  return useProjectFolderState().workspace?.project_folder ?? '';
 }
 
 export function __resetProjectFolderStoreForTests(): void {

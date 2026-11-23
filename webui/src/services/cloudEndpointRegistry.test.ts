@@ -719,22 +719,22 @@ describe('cloudEndpointRegistry', () => {
       }
     });
 
-    it('should classify /api/workspace as synthetic in cloud mode', () => {
-      const getResult = classifyEndpoint('/api/workspace', 'GET');
+    it('should classify /api/project-folder as synthetic in cloud mode', () => {
+      const getResult = classifyEndpoint('/api/project-folder', 'GET');
       expect(getResult).not.toBeNull();
       expect(getResult?.category).toBe('synthetic');
       expect(getResult?.syntheticResponse).toEqual({
         message: 'ok',
-        workspace_root: '/workspace',
+        project_folder: '/workspace',
         daemon_root: '/workspace',
       });
 
-      const postResult = classifyEndpoint('/api/workspace', 'POST');
+      const postResult = classifyEndpoint('/api/project-folder', 'POST');
       expect(postResult).not.toBeNull();
       expect(postResult?.category).toBe('synthetic');
       expect(postResult?.syntheticResponse).toEqual({
         message: 'ok',
-        workspace_root: '/workspace',
+        project_folder: '/workspace',
         daemon_root: '/workspace',
       });
     });

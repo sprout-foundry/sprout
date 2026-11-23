@@ -349,7 +349,7 @@ export function useAppInitialization({
           // default root it may have fetched first.
           const folderInfo = await refreshProjectFolder({ force: true });
           const outcome = await reconcileTabProjectFolder(folderInfo, supportsWorkspaceSwitching);
-          const projectFolder = String(folderInfo?.workspace_root || '').trim();
+          const projectFolder = String(folderInfo?.project_folder || '').trim();
           const daemonRoot = String(folderInfo?.daemon_root || '').trim();
           // Only prompt when there is genuinely no prior choice. A remembered
           // path equal to the daemon root is the user's deliberate choice

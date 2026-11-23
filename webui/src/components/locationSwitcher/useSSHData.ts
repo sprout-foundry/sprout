@@ -91,7 +91,7 @@ export function useSSHData({
     if (!isAnyPanelOpen || remoteContext || !focusedSshSessionKey) return;
     const session = sshSessions.find((e) => e.key === focusedSshSessionKey);
     if (!session) return;
-    const draftValue = sshSessionPathDrafts[session.key] ?? session.remote_workspace_path ?? '';
+    const draftValue = sshSessionPathDrafts[session.key] ?? session.remote_project_folder_path ?? '';
     const { browsePath, prefix } = getSSHBrowseQuery(draftValue);
     let cancelled = false;
     (async () => {
@@ -134,7 +134,7 @@ export function useSSHData({
       const d = sshSessionPathDrafts[s.key];
       const t = typeof d === 'string' ? d.trim() : '';
       if (t) return t;
-      const sp = (s.remote_workspace_path || '').trim();
+      const sp = (s.remote_project_folder_path || '').trim();
       return sp || undefined;
     },
     [sshSessionPathDrafts],

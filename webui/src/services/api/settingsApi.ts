@@ -21,7 +21,7 @@ export async function getSettings(fetchFn: typeof fetch): Promise<SproutSettings
 
 export async function getSettingsLayer(
   fetchFn: typeof fetch,
-  layer: 'global' | 'workspace' | 'session',
+  layer: 'global' | 'project_folder' | 'session',
 ): Promise<Record<string, unknown>> {
   const response = await fetchFn(`/api/settings?layer=${layer}`);
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -37,7 +37,7 @@ export async function getSettingsProvenance(fetchFn: typeof fetch): Promise<{ so
 export async function updateSettings(
   fetchFn: typeof fetch,
   settings: Record<string, unknown>,
-  layer?: 'session' | 'workspace' | 'global',
+  layer?: 'session' | 'project_folder' | 'global',
 ): Promise<{ message: string }> {
   const url = layer ? `/api/settings?layer=${layer}` : '/api/settings';
   const response = await fetchFn(url, {

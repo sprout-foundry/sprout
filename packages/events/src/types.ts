@@ -505,8 +505,8 @@ export interface ProgressCompleteData {
 
 export interface WorkspaceChangedData {
   daemon_root?: string;
-  workspace_root?: string;
-  previous_workspace_root?: string;
+  project_folder?: string;
+  previous_project_folder?: string;
   client_id?: string;
   source?: string;
 }
@@ -716,7 +716,7 @@ export type WsEvent =
     }
   | { type: "error"; data?: ErrorData; id?: string; timestamp?: string }
   | {
-      type: "workspace_stopping";
+      type: "dev_space_stopping";
       data?: WorkspaceStoppingData;
       id?: string;
       timestamp?: string;
@@ -795,7 +795,7 @@ export type WsEvent =
       timestamp?: string;
     }
   | {
-      type: "workspace_patch";
+      type: "project_folder_patch";
       data?: WorkspacePatchData;
       id?: string;
       timestamp?: string;
@@ -813,7 +813,7 @@ export type WsEvent =
       timestamp?: string;
     }
   | {
-      type: "workspace_changed";
+      type: "project_folder_changed";
       data?: WorkspaceChangedData;
       id?: string;
       timestamp?: string;

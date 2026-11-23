@@ -371,8 +371,8 @@ func SubagentClarificationRespondedEvent(subagentID, requestID, response string)
 func ProjectFolderChangedEvent(daemonRoot, projectFolder, previousProjectFolder string) map[string]interface{} {
 	return map[string]interface{}{
 		"daemon_root":             daemonRoot,
-		"workspace_root":          projectFolder,
-		"previous_workspace_root": previousProjectFolder,
+		"project_folder":          projectFolder,
+		"previous_project_folder": previousProjectFolder,
 	}
 }
 

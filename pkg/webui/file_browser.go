@@ -31,7 +31,7 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 	// prompt. The frontend shows the project folder gate instead; until a
 	// real project folder is selected there is nothing legitimate to browse.
 	if isHomeProjectFolder(projectFolder) && !hasHomeProjectFolderConsent() {
-		writeJSONErr(w, http.StatusForbidden, "workspace_not_selected",
+		writeJSONErr(w, http.StatusForbidden, "project_folder_not_selected",
 			"Project folder is the home directory and no consent was granted; select a project folder first")
 		return
 	}
@@ -46,7 +46,7 @@ func (ws *ReactWebServer) handleAPIBrowse(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if !isWithinProjectFolder(canonicalDir, projectFolder) {
-		writeJSONErr(w, http.StatusForbidden, "directory_outside_workspace", "Directory outside project folder")
+		writeJSONErr(w, http.StatusForbidden, "directory_outside_project_folder", "Directory outside project folder")
 		return
 	}
 

@@ -142,7 +142,7 @@ func (ws *ReactWebServer) setClientProjectFolder(clientID, path string) (string,
 
 	// Non-blocking: hands each agent to its own goroutine, so this is safe
 	// under the deferred ws.mutex unlock.
-	ws.releaseAgents("workspace_switch", releasing...)
+	ws.releaseAgents("project_folder_switch", releasing...)
 
 	return projectFolder, nil
 }

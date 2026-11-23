@@ -295,7 +295,7 @@ vi.mock('../hooks/useEditorContextMenu', () => {
           apiService
             .getProjectFolder()
             .then((ws: any) => {
-              setWsRoot(ws?.workspace_root || null);
+              setWsRoot(ws?.project_folder || null);
             })
             .catch(() => setWsRoot(null));
         }
@@ -995,7 +995,7 @@ describe('EditorPane', () => {
     // ── Context & service mocks ──
     apiServiceMock = {
       getProjectFolder: vi.fn().mockResolvedValue({
-        workspace_root: '/home/user/project',
+        project_folder: '/home/user/project',
         daemon_root: '/home/user/project/.sprout',
       }),
       getGitDiff: vi.fn().mockResolvedValue({ diff: '' }),
@@ -1191,7 +1191,7 @@ describe('EditorPane', () => {
 
     it('"Copy absolute path" item is NOT present when workspace root is empty', async () => {
       apiServiceMock.getProjectFolder.mockResolvedValueOnce({
-        workspace_root: '',
+        project_folder: '',
         daemon_root: '/home/user/project/.sprout',
       });
 

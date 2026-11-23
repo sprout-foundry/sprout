@@ -76,7 +76,7 @@ func TestHandleAPIConfig_Success(t *testing.T) {
 	if _, ok := resp["daemon_root"]; !ok {
 		t.Error("expected 'daemon_root' in response")
 	}
-	if _, ok := resp["workspace_root"]; !ok {
+	if _, ok := resp["project_folder"]; !ok {
 		t.Error("expected 'workspace_root' in response")
 	}
 	if _, ok := resp["agent"]; !ok {

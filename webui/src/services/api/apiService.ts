@@ -813,7 +813,7 @@ class ApiService {
     return settingsApi.getSettings(clientFetch);
   }
 
-  async getSettingsLayer(layer: 'global' | 'workspace' | 'session'): Promise<Record<string, unknown>> {
+  async getSettingsLayer(layer: 'global' | 'project_folder' | 'session'): Promise<Record<string, unknown>> {
     return settingsApi.getSettingsLayer(clientFetch, layer);
   }
 
@@ -823,7 +823,7 @@ class ApiService {
 
   async updateSettings(
     settings: Record<string, unknown>,
-    layer?: 'session' | 'workspace' | 'global',
+    layer?: 'session' | 'project_folder' | 'global',
   ): Promise<{ message: string }> {
     return settingsApi.updateSettings(clientFetch, settings, layer);
   }

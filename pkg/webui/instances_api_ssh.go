@@ -109,7 +109,7 @@ func (ws *ReactWebServer) handleAPISSHLaunchStatus(w http.ResponseWriter, r *htt
 		return
 	}
 
-	remoteProjectFolderPath := strings.TrimSpace(r.URL.Query().Get("remote_workspace_path"))
+	remoteProjectFolderPath := strings.TrimSpace(r.URL.Query().Get("remote_project_folder_path"))
 	if remoteProjectFolderPath == "" {
 		remoteProjectFolderPath = "$HOME"
 	}

@@ -154,14 +154,14 @@ function ProjectFolderGateModal({
                     // A starter was picked: the bridge created the folder and
                     // made it the project folder, so the new project's
                     // absolute path is the current project folder (GET
-                    // /api/workspace → workspace_root). Instantiate the
+                    // /api/project-folder → project_folder). Instantiate the
                     // starter there. "Blank" skips this step, leaving the
                     // create flow byte-identical to a plain folder create.
                     if (selectedStarter !== '') {
                       const ws = await refreshProjectFolder({ force: true });
                       await ApiService.getInstance().instantiateStarter({
                         starter: selectedStarter,
-                        path: ws.workspace_root,
+                        path: ws.project_folder,
                         name: newName,
                       });
                     }
@@ -308,7 +308,7 @@ function ProjectFolderGateModal({
               onClick={() =>
                 // Same path as the desktop variant's consent handler in
                 // AppContent: re-read the project folder, then POST
-                // /api/workspace with consent_home: true if still needed.
+                // /api/project-folder with consent_home: true if still needed.
                 run('consent', () => consentToHomeProjectFolder())
               }
               disabled={pending !== null}
@@ -351,16 +351,16 @@ function ProjectFolderGateModal({
 
         {browsing ? (
           <ProjectFolderBrowser
-            initialPath={projectFolderInfo.workspace_root || projectFolderInfo.daemon_root}
+            initialPath={projectFolderInfo.project_folder || projectFolderInfo.daemon_root}
             onSelect={(path) => run('select', () => onSelectProjectFolder(path))}
             onCancel={() => setBrowsing(false)}
           />
         ) : (
           <ProjectFolderPicker
             daemonRoot={projectFolderInfo.daemon_root}
-            currentProjectFolder={projectFolderInfo.workspace_root}
+            currentProjectFolder={projectFolderInfo.project_folder}
             suggestedProjects={projectFolderInfo.suggested_projects}
-            recentProjectFolders={projectFolderInfo.recent_workspaces}
+            recentProjectFolders={projectFolderInfo.recent_project_folders}
             onSelect={(path) => run('select', () => onSelectProjectFolder(path))}
             onBrowse={() => setBrowsing(true)}
           />

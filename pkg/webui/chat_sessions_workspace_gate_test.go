@@ -85,7 +85,7 @@ func TestProjectFolderQueryGateRejectsSecondChat(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatal(err)
 	}
-	if payload.Code != "workspace_busy" {
+	if payload.Code != "project_folder_busy" {
 		t.Fatalf("expected code workspace_busy, got %q", payload.Code)
 	}
 	if payload.RunningChatID != "default" {

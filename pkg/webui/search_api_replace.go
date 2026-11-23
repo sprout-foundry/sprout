@@ -86,7 +86,7 @@ func (ws *ReactWebServer) handleAPIQuerySearchReplace(w http.ResponseWriter, r *
 	for _, file := range req.Files {
 		canonicalPath, err := canonicalizePath(file, projectFolder, false)
 		if err != nil || !isWithinProjectFolder(canonicalPath, projectFolder) {
-			writeJSONErr(w, http.StatusBadRequest, "file_outside_workspace", fmt.Sprintf("File outside project folder: %s", file))
+			writeJSONErr(w, http.StatusBadRequest, "file_outside_project_folder", fmt.Sprintf("File outside project folder: %s", file))
 			return
 		}
 	}

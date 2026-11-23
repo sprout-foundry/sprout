@@ -443,7 +443,7 @@ func (a *Agent) Breakpoints() []Breakpoint {
 	userIdx := 1
 	for _, msg := range messages {
 		if msg.Role == "user" {
-			content := StripUserMessageTimestamp(msg.Content)
+			content := StripUserMessageEnvelope(msg.Content)
 			if len(content) > 80 {
 				content = content[:80] + "..."
 			}

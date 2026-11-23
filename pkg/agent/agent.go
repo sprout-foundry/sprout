@@ -117,7 +117,9 @@ type Agent struct {
 
 	systemPrompt     string
 	baseSystemPrompt string // Base prompt restored when persona is cleared
-	maxIterations    int
+	// personaReplacedPrompt: a persona's own prompt replaced the embedded one (workspace_context.go).
+	personaReplacedPrompt bool
+	maxIterations         int
 
 	// Conversation timing
 	conversationStartTime time.Time

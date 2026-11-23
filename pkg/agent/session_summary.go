@@ -264,7 +264,7 @@ func buildTopicSummaryPrompt(messages []api.Message) (string, string) {
 	for _, msg := range messages {
 		switch msg.Role {
 		case "user":
-			content := strings.TrimSpace(StripUserMessageTimestamp(msg.Content))
+			content := strings.TrimSpace(StripUserMessageEnvelope(msg.Content))
 			if content == "" {
 				continue
 			}

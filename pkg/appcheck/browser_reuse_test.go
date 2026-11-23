@@ -36,7 +36,10 @@ func TestRepeatedChecksReuseTheBrowser(t *testing.T) {
 			}
 			t.Fatalf("attempt %d: OpenSession: %v", attempt, err)
 		}
-		session.Page().Navigate(srv.URL)
+		if err := session.Page().Navigate(srv.URL); err != nil {
+			session.Close()
+			t.Fatalf("attempt %d: Navigate: %v", attempt, err)
+		}
 		if err := session.Page().WaitLoad(); err != nil {
 			session.Close()
 			t.Fatalf("attempt %d: WaitLoad: %v", attempt, err)

@@ -298,7 +298,7 @@ test.describe("Section structure", () => {
   // Array of [label, expectedScopeBadge] pairs
   const sections: Array<[string, string]> = [
     ["Agent", "session"],
-    ["Workspace", "project_folder"],
+    ["Workspace", "project folder"],
     ["Environment", "global"],
     ["Editor", "runtime"],
     ["Experimental", "global"],

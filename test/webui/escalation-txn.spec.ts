@@ -69,11 +69,11 @@ const WORKSPACE_ID = "e2e-ws-1";
 const TXN_ID = "e2e-txn-1";
 
 /** Route globs — exact per-endpoint so app bootstrap traffic is untouched. */
-const RESOLVE_ROUTE = "**/workspace/txn/resolve*";
+const RESOLVE_ROUTE = "**/dev-space/txn/resolve*";
 const LIST_ROUTE = RESOLVE_ROUTE; // the resolve endpoint (list replaced in SP-BUILDER-12)
-const CREATE_ROUTE = "**/workspace/txn";
-const TXN_OPEN_ROUTE = `**/workspace/txn/${WORKSPACE_ID}/txn`;
-const TXN_ACTION_ROUTE = `**/workspace/txn/${WORKSPACE_ID}/txn/${TXN_ID}/*`;
+const CREATE_ROUTE = "**/dev-space/txn";
+const TXN_OPEN_ROUTE = `**/dev-space/txn/${WORKSPACE_ID}/txn`;
+const TXN_ACTION_ROUTE = `**/dev-space/txn/${WORKSPACE_ID}/txn/${TXN_ID}/*`;
 
 /** Dismiss any toast left over from a previous test (serial page reuse). */
 async function dismissToastIfOpen() {
@@ -128,7 +128,7 @@ test.describe("Escalation — Run in cloud container (ETH-2)", () => {
       if (route.request().method() !== "GET") return route.fallback();
       captured.push({
         method: "GET",
-        pathname: "/workspace/txn/resolve",
+        pathname: "/dev-space/txn/resolve",
         body: null,
       });
       await route.fulfill({
@@ -147,7 +147,7 @@ test.describe("Escalation — Run in cloud container (ETH-2)", () => {
       if (route.request().method() !== "POST") return route.fallback();
       captured.push({
         method: "POST",
-        pathname: `/workspace/txn/${WORKSPACE_ID}/txn`,
+        pathname: `/dev-space/txn/${WORKSPACE_ID}/txn`,
         body: route.request().postDataJSON(),
       });
       await route.fulfill({
@@ -273,19 +273,19 @@ test.describe("Escalation — Run in cloud container (ETH-2)", () => {
     const lifecycle = captured
       .map((c) => `${c.method} ${c.pathname}`)
       .join("\n");
-    expect(lifecycle).toContain(`GET /workspace/txn/resolve`);
-    expect(lifecycle).toContain(`POST /workspace/txn/${WORKSPACE_ID}/txn`);
+    expect(lifecycle).toContain(`GET /dev-space/txn/resolve`);
+    expect(lifecycle).toContain(`POST /dev-space/txn/${WORKSPACE_ID}/txn`);
     expect(lifecycle).toContain(
-      `POST /workspace/txn/${WORKSPACE_ID}/txn/${TXN_ID}/push`,
+      `POST /dev-space/txn/${WORKSPACE_ID}/txn/${TXN_ID}/push`,
     );
     expect(lifecycle).toContain(
-      `POST /workspace/txn/${WORKSPACE_ID}/txn/${TXN_ID}/run`,
+      `POST /dev-space/txn/${WORKSPACE_ID}/txn/${TXN_ID}/run`,
     );
     expect(lifecycle).toContain(
-      `POST /workspace/txn/${WORKSPACE_ID}/txn/${TXN_ID}/pull`,
+      `POST /dev-space/txn/${WORKSPACE_ID}/txn/${TXN_ID}/pull`,
     );
     expect(lifecycle).toContain(
-      `POST /workspace/txn/${WORKSPACE_ID}/txn/${TXN_ID}/finish`,
+      `POST /dev-space/txn/${WORKSPACE_ID}/txn/${TXN_ID}/finish`,
     );
 
     // The pushed manifest is the pinned delta-manifest shape.

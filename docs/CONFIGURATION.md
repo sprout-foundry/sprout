@@ -194,6 +194,15 @@ How memories (`<config dir>/memories/*.md`) enter the system prompt. Every reque
 { "memory_prompt": "index" }
 ```
 
+#### `workspace_context_placement`
+
+Where the project context file (AGENTS.md, CLAUDE.md, … or the README fallback) and the working directory go.
+
+- `"system"` (default, or unset): at the end of the system prompt.
+- `"user"`: in the conversation's first user message, in a `<workspace-context>` block after the turn timestamp, stamped once and replayed unchanged on later turns.
+
+Chat templates put the tool schemas after the system prompt, so with `"system"` every directory gives the tools a different prefix. With `"user"`, the system prompt and the tools are the same for every conversation the same user starts, and a server with prefix caching can start each new conversation from one cached image of them instead of recomputing tens of thousands of tokens.
+
 #### `risk_profile` and `risk_profiles`
 
 Selects the shell-command risk cascade preset and (optionally) customizes its rules. See [`docs/SECURITY.md#risk-profiles`](SECURITY.md#risk-profiles) for the full table of profiles, behavior, and override format.

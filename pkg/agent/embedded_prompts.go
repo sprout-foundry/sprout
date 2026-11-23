@@ -90,6 +90,9 @@ func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, pro
 	promptContent = filesystem.LocalizeScratchDir(promptContent)
 
 	contextFiles, err := LoadContextFiles()
+	if profile.WorkspaceContextInUserMessage {
+		contextFiles = "" // the first user message carries it (workspace_context.go)
+	}
 	if err == nil && contextFiles != "" {
 		// AGENTS.md is always injected. In LCM, warn if the file is large.
 		if profile.Mode == configuration.ContextModeLowContext {
@@ -119,9 +122,9 @@ func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, pro
 	}
 
 	// Cwd at the tail to preserve prompt-prefix cache. Timestamp lives in the user message.
-	cwdString := buildCurrentWorkingDirectorySection(workspaceRoot)
-
-	promptContent = promptContent + cwdString
+	if !profile.WorkspaceContextInUserMessage {
+		promptContent = promptContent + buildCurrentWorkingDirectorySection(workspaceRoot)
+	}
 
 	return promptContent, nil
 }

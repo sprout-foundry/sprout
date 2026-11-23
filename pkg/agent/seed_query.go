@@ -303,6 +303,7 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// (StripUserMessageTimestamp consumers keep working on disk state).
 	// Applied after image processing so placeholders see clean text; the
 	// query_started event above already published the raw display text.
+	processedQuery = a.withWorkspaceContext(processedQuery)
 	a.turnTimestampMu.RLock()
 	turnStamp := a.turnTimestamp
 	a.turnTimestampMu.RUnlock()

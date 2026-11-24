@@ -10,7 +10,7 @@
  *
  * This module supplies the `ChatSessionsApi` the chat unit consumes. The
  * chat unit selects it when the capability is on (see
- * `views/WorkspaceChatContext.tsx`); with the capability off the daemon's
+ * `views/SpacesChatContext.tsx`); with the capability off the daemon's
  * endpoints (or the browser-local store for the in-browser agent) are used
  * unchanged.
  *

@@ -75,7 +75,7 @@ vi.mock('../services/localEventsProvider', () => ({
 vi.mock('../hooks/useAppInitialization', () => ({ useAppInitialization: () => {} }));
 vi.mock('./Sidebar', () => ({ default: () => null }));
 vi.mock('./Terminal', () => ({ default: () => null }));
-vi.mock('../workspaces/CodeShell', async () => {
+vi.mock('../spaces/CodeShell', async () => {
   const { default: MenuBar } = await import('./MenuBar');
   return {
     default: () => (

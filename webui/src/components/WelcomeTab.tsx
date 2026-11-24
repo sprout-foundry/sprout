@@ -1,8 +1,8 @@
 import { Terminal, GitBranch, MessageSquare, Zap, BookOpen, Settings, Command, X } from 'lucide-react';
 import { copy } from '../config/copy';
 import { useHostCapabilities } from '../host';
-import { useProjectFolder } from '../hooks/useWorkspace';
-import ProjectFolderPicker from './WorkspacePicker';
+import { useProjectFolder } from '../hooks/useProjectFolder';
+import ProjectFolderPicker from './ProjectFolderPicker';
 import './WelcomeTab.css';
 
 /** Mac users see ⌘; everyone else sees Ctrl. Mirrors HotkeyContext logic. */

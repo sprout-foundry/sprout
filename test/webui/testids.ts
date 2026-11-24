@@ -360,7 +360,7 @@ const TESTIDS = {
   "run-host-bare-metal-warning": "run-host-bare-metal-warning",
   "run-host-notice": "run-host-notice",
 
-  // Session working directory (services/workspaceCwd.ts) — Files panel
+  // Session working directory (services/projectFolderCwd.ts) — Files panel
   // repo/cwd selector row (WorkspaceCwdBar). The chip was removed: the
   // select is the single surface showing the cwd (no duplication).
   "workspace-cwd-bar": "workspace-cwd-bar",
@@ -462,18 +462,18 @@ const TESTIDS = {
   "host-example-usage": "host-example-usage", // the usage view
   "host-notification-count": "host-notification-count", // the notification badge
 
-  // Workspace views (views/SproutWorkspace.tsx)
+  // Workspace views (views/SproutSpaces.tsx)
   "sprout-workspace": "sprout-workspace", // the workspace view root
-  "workspace-editor": "workspace-editor", // the assembled editor view (views/WorkspaceEditorView.tsx)
-  "workspace-git": "workspace-git", // the source control view root (views/WorkspaceGitView.tsx)
+  "workspace-editor": "workspace-editor", // the assembled editor view (views/SpacesEditorView.tsx)
+  "workspace-git": "workspace-git", // the source control view root (views/SpacesGitView.tsx)
   "workspace-git-empty": "workspace-git-empty", // the source control view's no-repository / no-git state
   "workspace-git-diff": "workspace-git-diff", // the source control view's inline diff
   "workspace-git-diff-open": "workspace-git-diff-open", // opens the diffed file in the editor
-  "workspace-search": "workspace-search", // the search view root (views/WorkspaceSearchView.tsx)
-  "workspace-space-shell": "workspace-space-shell", // the composed space shell root (views/SproutWorkspaceSpaceShell.tsx)
-  "workspace-sidebar": "workspace-sidebar", // the composed shell's project sidebar (views/WorkspaceSidebar.tsx)
+  "workspace-search": "workspace-search", // the search view root (views/SpacesSearchView.tsx)
+  "workspace-space-shell": "workspace-space-shell", // the composed space shell root (views/SproutSpacesSpaceShell.tsx)
+  "workspace-sidebar": "workspace-sidebar", // the composed shell's project sidebar (views/SpacesSidebar.tsx)
   "workspace-sidebar-rail": "workspace-sidebar-rail", // the collapsed sidebar's rail
-  "workspace-docked-terminal": "workspace-docked-terminal", // the composed shell's docked terminal (views/WorkspaceDockedTerminal.tsx)
+  "workspace-docked-terminal": "workspace-docked-terminal", // the composed shell's docked terminal (views/SpacesDockedTerminal.tsx)
   "user-menu-report-bug": "user-menu-report-bug", // UserMenu "Report a bug" action
 } as const;
 

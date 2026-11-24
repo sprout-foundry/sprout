@@ -10,8 +10,8 @@ import { LSPClient as LSPClientClass, languageServerExtensions } from '@codemirr
 import type { EditorView } from '@codemirror/view';
 import { debugLog } from '../utils/log';
 import { clientFetch } from './clientSession';
-import { getProjectFolderCwd, normalizeProjectFolderCwd, resolveProjectFolderPath } from './workspaceCwd';
-import { ensureProjectFolder, getProjectFolder } from './workspaceStore';
+import { getProjectFolderCwd, normalizeProjectFolderCwd, resolveProjectFolderPath } from './projectFolderCwd';
+import { ensureProjectFolder, getProjectFolder } from './projectFolderStore';
 
 // Types from @codemirror/lsp-client
 

@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CloudAdapter } from './cloudAdapter';
 import { getVfsManifestSnapshot, untrackFileWrite } from './vfsFiles';
 import type { WasmDirEntry, WasmShell } from './wasmShell';
-import { createRestFs } from './workspaceFs/restFs';
+import { createRestFs } from './projectFolderFs/restFs';
 
 const ROOT = '/workspace';
 

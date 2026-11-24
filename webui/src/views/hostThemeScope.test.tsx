@@ -34,7 +34,7 @@ vi.mock('../services/localEventsProvider', () => ({
   },
 }));
 
-vi.mock('../workspaces/CodeShell', () => ({
+vi.mock('../spaces/CodeShell', () => ({
   default: () => <div data-testid="sprout-workspace-code-shell" />,
 }));
 vi.mock('../services/api', () => {
@@ -61,8 +61,8 @@ import { useHost } from '../host';
 import { headlessHost } from '../host/HostProvider';
 import type { SproutHost } from '../host/types';
 import { THEME_PACKS } from '../themes/themePacks';
-import { SproutSpaces } from './SproutWorkspace';
-import type { SproutProject } from './SproutWorkspace';
+import { SproutSpaces } from './SproutSpaces';
+import type { SproutProject } from './SproutSpaces';
 
 const PROJECT: SproutProject = { id: '/Users/dev/project', name: 'project', root: '/Users/dev/project' };
 

@@ -10,16 +10,16 @@ import { ApiService } from '../services/api';
 import { getStoredToken } from '../services/githubService';
 import { searchForRepo } from '../services/homeView';
 import { gitCorsProxy } from '../services/gitCorsProxy';
-import { cloneIntoProjectFolder } from '../services/workspaceClone';
-import { useProjectFolderCwd, setProjectFolderCwd } from '../services/workspaceCwd';
-import { getProjectFolderFs, listProjectFolderRepos } from '../services/workspaceFs/backendsExport';
-import type { FsEntry } from '../services/workspaceFs/types';
-import { parseRepoRef, repoDir } from '../services/workspaceFs/workspaceGit';
+import { cloneIntoProjectFolder } from '../services/projectFolderClone';
+import { useProjectFolderCwd, setProjectFolderCwd } from '../services/projectFolderCwd';
+import { getProjectFolderFs, listProjectFolderRepos } from '../services/projectFolderFs/backendsExport';
+import type { FsEntry } from '../services/projectFolderFs/types';
+import { parseRepoRef, repoDir } from '../services/projectFolderFs/projectFolderGit';
 import { repoSlug } from '../host/repoName';
-import { useProjectFolderFileTree } from '../views/useWorkspaceFileTree';
+import { useProjectFolderFileTree } from '../views/useProjectFolderFileTree';
 import GitHubRepoPicker from './GitHubRepoPicker';
 import { showThemedAlert, showThemedPrompt } from './ThemedDialog';
-import ProjectFolderCwdBar from './WorkspaceCwdBar';
+import ProjectFolderCwdBar from './ProjectFolderCwdBar';
 
 export interface FileTreeHandle {
   refresh: (options?: FileTreeRefreshOptions) => void;
@@ -349,7 +349,7 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
         />
         {/* Working-directory row. STUDIO: full row — the select is the
             single source of truth for the session cwd (Files / Terminal /
-            Git / Agent share it via services/workspaceCwd.ts); a cwd inside
+            Git / Agent share it via services/projectFolderCwd.ts); a cwd inside
             a repo shows as a dynamic "owner/name › sub/path" option instead
             of the select silently claiming the root. PLAIN WEBUI: selector
             hidden (root is fixed for the daemon's lifetime; LocationSwitcher

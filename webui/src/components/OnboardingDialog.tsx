@@ -2,7 +2,7 @@ import { Check, Download, Star, X } from 'lucide-react';
 import { useState, useRef, useEffect, useCallback, type ReactElement } from 'react';
 import type { WindowsOnboardingGuidance } from '../hooks/useOnboarding';
 import { ApiService, type OnboardingProviderOption } from '../services/api';
-import { useProjectFolderGateOpen } from '../services/workspaceGate';
+import { useProjectFolderGateOpen } from '../services/projectFolderGate';
 import type { OnboardingState } from '../types/app';
 
 export interface OnboardingDialogProps {

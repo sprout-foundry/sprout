@@ -2,7 +2,7 @@ import { getActiveHost } from '../host/accessor';
 import { backendURLs } from '../host/agentBackend';
 import { debugLog } from '../utils/log';
 import { getAdapter } from './apiAdapter';
-import { publishProjectFolderResponse } from './workspaceResponses';
+import { publishProjectFolderResponse } from './projectFolderResponses';
 
 export const WEBUI_CLIENT_ID_HEADER = 'X-Sprout-Client-ID';
 export const WEBUI_CLIENT_ID_QUERY_PARAM = 'client_id';

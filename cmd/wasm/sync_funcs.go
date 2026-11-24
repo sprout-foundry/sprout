@@ -89,7 +89,7 @@ func getSyncEndpointFunc(_ js.Value, _ []js.Value) interface{} {
 // applyFileMetadataFunc lets the platform-side sync layer push a
 // ProjectFolderFileMetadata update into the running agent. The Go-side
 // staleness rule consults this on every write_file call (see
-// pkg/agent/workspace_sync.go).
+// pkg/agent/project_folder_sync.go).
 //
 // Signature: applyFileMetadata(path: string, metadataJSON: string): {ok: true}
 //
@@ -223,7 +223,7 @@ var (
 // stashTheirsContent stores the "theirs" content for a conflict path.
 // callers MUST pass a normalized absolute path that matches the format
 // produced by the container-side CheckPatchConflict (see
-// pkg/agent/workspace_sync.go). Passing relative or unnormalized paths
+// pkg/agent/project_folder_sync.go). Passing relative or unnormalized paths
 // will cause lookups in the UI layer to fail silently.
 func stashTheirsContent(theirsPath, content string) {
 	theirsStashMu.Lock()
@@ -247,7 +247,7 @@ func peekTheirsContent(theirsPath string) (string, bool) {
 //
 // IMPORTANT: the `theirsPath` parameter must be a normalized absolute
 // path that matches the format produced by the container-side
-// CheckPatchConflict (see pkg/agent/workspace_sync.go). This ensures
+// CheckPatchConflict (see pkg/agent/project_folder_sync.go). This ensures
 // the browser can locate the file in the virtual filesystem for the
 // diff UI. Passing a relative or unnormalized path will cause the
 // conflict UI to fail silently.

@@ -31,10 +31,10 @@ vi.mock('../components/PreviewPanel', () => ({
     <div data-testid="views-test-preview-panel" data-open={String(!!props.open)} />
   ),
 }));
-vi.mock('./WorkspaceCommandPalette', () => ({
+vi.mock('./SpacesCommandPalette', () => ({
   SpacesCommandPalette: () => <div data-testid="views-test-command-palette" />,
 }));
-vi.mock('./WorkspaceTerminalView', () => ({ SpacesTerminalView: () => <div data-testid="views-test-terminal" /> }));
+vi.mock('./SpacesTerminalView', () => ({ SpacesTerminalView: () => <div data-testid="views-test-terminal" /> }));
 // Partial mock: FileTree stubbed (it fetches when rendered bare), the rest
 // of the barrel — notably the real PreviewPane — untouched.
 vi.mock('@sprout/ui', async (importOriginal) => {

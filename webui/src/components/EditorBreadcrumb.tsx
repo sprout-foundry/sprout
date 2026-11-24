@@ -1,7 +1,7 @@
 import { ChevronRight } from 'lucide-react';
 import { useMemo, useCallback, memo, useSyncExternalStore } from 'react';
 import type { KeyboardEvent } from 'react';
-import { getProjectFolderCwd, subscribeProjectFolderCwd } from '../services/workspaceCwd';
+import { getProjectFolderCwd, subscribeProjectFolderCwd } from '../services/projectFolderCwd';
 import { type SymbolInfo as BreadcrumbSymbol, type SymbolKind, KIND_ICONS } from '../utils/symbolUtils';
 import './EditorBreadcrumb.css';
 

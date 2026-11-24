@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react';
 import type { ViewType } from '../types/app';
-import type { OpenProjectFolderFileOptions } from '../views/WorkspaceEditorContext';
+import type { OpenProjectFolderFileOptions } from '../views/SpacesEditorContext';
 
 export interface UseFileHandlerParams {
   onViewChange: (view: ViewType) => void;

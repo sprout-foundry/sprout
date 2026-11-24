@@ -1,4 +1,4 @@
-import type { UseGitProjectFolderOptions, UseGitProjectFolderResult } from '../../hooks/useGitWorkspace';
+import type { UseGitProjectFolderOptions, UseGitProjectFolderResult } from '../../hooks/useGitProjectFolder';
 import type { GitCommitDetail, GitCommitSummary } from '../../types/git-types';
 import type { GitSidebarPanelProps } from '../GitSidebarPanel';
 

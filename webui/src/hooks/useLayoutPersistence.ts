@@ -24,7 +24,7 @@ import {
   type BufferLayoutEntry,
   type LayoutSnapshot,
 } from '../services/layoutPersistence';
-import { ensureProjectFolder } from '../services/workspaceStore';
+import { ensureProjectFolder } from '../services/projectFolderStore';
 import type { EditorBuffer, EditorPane, PaneLayout, PaneSize } from '../types/editor';
 import { resolveEditorFilePath, getLSPClientService } from '../services/lspClientService';
 import { debugLog } from '../utils/log';

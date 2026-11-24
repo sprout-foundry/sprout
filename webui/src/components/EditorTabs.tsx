@@ -22,7 +22,7 @@ import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useTabDragReorder } from '../hooks/useTabDragReorder';
 import { readFileWithConsent } from '../services/fileAccess';
 import { notificationBus } from '../services/notificationBus';
-import { useProjectFolder } from '../services/workspaceStore';
+import { useProjectFolder } from '../services/projectFolderStore';
 import { type EditorBuffer } from '../types/editor';
 import { isSharedMode } from '../utils/sharedMode';
 import { catchIfAsync, getBufferIcon, getChatId, getFileIcon, getFileIconColor } from './editorTabIcons';

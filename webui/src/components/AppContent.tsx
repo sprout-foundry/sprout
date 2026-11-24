@@ -10,14 +10,14 @@ import { useHotkeyCommandHandler } from '../hooks/useHotkeyCommandHandler';
 import { useChatSessionsSync } from '../hooks/useChatSessionsSync';
 import { getPluginViewIds } from '../services/pluginRegistry';
 import { useFileHandler } from '../hooks/useFileHandler';
-import { useGitProjectFolder } from '../hooks/useGitWorkspace';
+import { useGitProjectFolder } from '../hooks/useGitProjectFolder';
 import { buildGitPanelProps } from './git/gitPanelProps';
 import { useHotkeysConfig } from '../hooks/useHotkeysConfig';
 import { useShallowStable } from '../hooks/useShallowStable';
 import { useInstances } from '../hooks/useInstances';
 import { type SectionTab } from '../hooks/useSidebarState';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
-import { useProjectFolder } from '../hooks/useWorkspace';
+import { useProjectFolder } from '../hooks/useProjectFolder';
 import { requestComposerFocus } from '../hooks/useComposerFocusRequest';
 import { ApiService } from '../services/api';
 import type { ChatSession } from '../services/chatSessions';
@@ -36,7 +36,7 @@ import ErrorBoundary from './ErrorBoundary';
 import Sidebar from './Sidebar';
 import { useMockupPresence } from './useMockupPresence';
 import Terminal from './Terminal';
-import ProjectFolderGateModal from './WorkspaceGateModal';
+import ProjectFolderGateModal from './ProjectFolderGateModal';
 import { WorktreeChatDialog } from './WorktreeChatDialog';
 import { isLayeredLayout, OPEN_COMMAND_PALETTE_EVENT } from '../config/layout';
 import { ChatHistorySwitcher } from './chat/ChatHistorySwitcher';
@@ -724,7 +724,7 @@ const AppContent: React.FC<AppContentProps> = ({
   });
 
   // The active mode's shell (workspaceMode.Shell) owns the <main> column and
-  // the chrome that belongs to that mode — see workspaces/shell.ts. Each
+  // the chrome that belongs to that mode — see spaces/shell.ts. Each
   // shell reads only the slice of this object its mode renders.
   const shellProps: SpacesShellProps = {
     isMobile,

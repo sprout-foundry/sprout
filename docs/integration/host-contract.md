@@ -1140,7 +1140,7 @@ branch is recoverable from the conversion commits (`git show 536a191c2`,
 | `components/StatusBar.tsx` — account-managed model badge | `transport.authMode === 'bearer'` |
 | `components/HeaderBar.tsx` — platform header affordances (back-to-dashboard, Start Building, credits) vs Sprout's MenuBar | `transport.authMode === 'bearer'` |
 | `components/AppContent.tsx` — platform notification polling + phone tab bar | `transport.authMode === 'bearer'` |
-| `workspaces/CodeShell.tsx` — project named by repo slug | `transport.authMode === 'bearer'` |
+| `spaces/CodeShell.tsx` — project named by repo slug | `transport.authMode === 'bearer'` |
 | `components/chat/EmptyChatPanel.tsx` — offer the "open a repository" panel | `transport.authMode === 'bearer'`, and not a daemon backend (a daemon has the project's checkout, so there is nothing to open) |
 | `components/chat/ChatMetricsStrip.tsx` — hide the dollar cost (credits are metered) | `transport.authMode === 'bearer'` (inverted) |
 | `components/GitSidebarPanel.tsx` — browser git, and the "unsupported in browser mode" ops | `transport.authMode === 'bearer'` |
@@ -1160,12 +1160,12 @@ branch is recoverable from the conversion commits (`git show 536a191c2`,
 | `components/SidebarGitSection.tsx` — two local-only panes (worktrees) | `capabilities.localTerminal` |
 | `components/SidebarFilesSection.tsx` — clone-repo action | `capabilities.localTerminal` |
 | `components/Sidebar.tsx` — the Automations tab (`supportsAutomations`, i.e. `!isCloud`) | `capabilities.automations` |
-| `components/WorkspaceBar.tsx` — hidden host name | `capabilities.workspaceSwitching` |
+| `components/ProjectFolderBar.tsx` — hidden host name | `capabilities.workspaceSwitching` |
 | `components/TerminalWorkbench.tsx` — the WASM terminal notice | the pane transport: shown on the in-browser shell, not on a PTY |
 | `hooks/useSecurityHandlers.ts` — the ask-user POST path | `transport.agent` (`hostRunsInBrowserAgent`): the in-browser agent takes the POST, a daemon the socket event |
 | `hooks/useEscalationTriggers.ts` + `components/AgentEscalationBridge.tsx` — hosted-only escalation | `capabilities.localTerminal` (inverted) |
 | `components/locationSwitcher/SSHPanel.tsx` — the SSH panel | `capabilities.ssh` |
-| `components/locationSwitcher/WorkspacePopover.tsx` + `hooks/useInstances.ts` — the instance list | `capabilities.instances` |
+| `components/locationSwitcher/ProjectFolderPopover.tsx` + `hooks/useInstances.ts` — the instance list | `capabilities.instances` |
 | `components/chat/ChatHistorySwitcher.tsx` + `components/ChatView.tsx` — session export | `capabilities.export` |
 | `components/layered/LayeredSidebar.tsx` — hosted layout title, project rail, terminal section | `capabilities.instances` (`hosted` = `instances`) |
 

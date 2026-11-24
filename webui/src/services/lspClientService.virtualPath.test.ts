@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { resolveEditorFilePath } from './lspClientService';
 
-vi.mock('./workspaceStore', () => ({
+vi.mock('./projectFolderStore', () => ({
   getProjectFolder: () => '/w',
 }));
 

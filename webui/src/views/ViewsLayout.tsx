@@ -3,11 +3,11 @@ import type { ElementType } from 'react';
 import AgentChangesPanel from '../components/AgentChangesPanel';
 import ChatView from '../components/ChatView';
 import { PreviewPanel } from '../components/PreviewPanel';
-import { SpacesCommandPalette } from './WorkspaceCommandPalette';
-import { SpacesTerminalView } from './WorkspaceTerminalView';
+import { SpacesCommandPalette } from './SpacesCommandPalette';
+import { SpacesTerminalView } from './SpacesTerminalView';
 import './ViewsLayout.css';
-import { SpacesGitView } from './WorkspaceGitView';
-import { SpacesSearchView } from './WorkspaceSearchView';
+import { SpacesGitView } from './SpacesGitView';
+import { SpacesSearchView } from './SpacesSearchView';
 
 /**
  * Layout configuration + arrangement renderer.

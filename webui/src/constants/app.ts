@@ -8,7 +8,7 @@ export const INSTANCE_SWITCH_RESET_KEY = 'sprout:webui:instanceSwitchReset';
 /**
  * Active project folder mode, scoped per instance (`<key>:<pid>:<scope>`), so each
  * connected filesystem root remembers which mode the user was in.
- * See `webui/src/workspaces/`.
+ * See `webui/src/spaces/`.
  */
 export const WORKSPACE_MODE_STORAGE_KEY = 'sprout:webui:workspaceMode:v1';
 export const MAX_PERSISTED_LOGS = 1000;

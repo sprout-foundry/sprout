@@ -1,0 +1,762 @@
+import { Columns2, Rows2, X, MessageSquarePlus } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react';
+import { useEditorManager, MIN_PANE_WIDTH_PERCENT, normalizePaneSize } from '../contexts/EditorManagerContext';
+import { isSharedMode } from '../utils/sharedMode';
+import type { PerChatState, ViewType } from '../types/app';
+import EditorTabs from './EditorTabs';
+import EditorWithOutline from './EditorWithOutline';
+import ResizeHandle from './ResizeHandle';
+import SpacesPane from './SpacesPane';
+import Chat from './ChatView';
+import { useIsMobileViewport } from '../hooks/useMobileSheets';
+import { MobileChatSwitcher } from './chat/MobileChatSwitcher';
+import { useEngagedWithin } from '../hooks/useEngagedWithin';
+import { useCommandHandler } from '../services/commandHandlers';
+
+/** The daemon's built-in chat (pkg/webui defaultChatID); the server refuses to delete it. */
+const PERMANENT_DEFAULT_CHAT_ID = 'default';
+
+const SPLIT_COMMANDS = new Map<string, 'vertical' | 'horizontal'>([
+  ['split_editor_vertical', 'vertical'],
+  ['split_editor_horizontal', 'horizontal'],
+]);
+
+// The pane commands this project folder handles: it owns the split layout.
+const isPaneCommand = (commandId: string): boolean =>
+  /^focus_split_\d+$/.test(commandId) || SPLIT_COMMANDS.has(commandId);
+
+export interface EditorSpacesProps {
+  currentView: ViewType;
+  perChatCache?: Record<string, PerChatState>;
+  activeChatId?: string | null;
+  /** Chat sessions, mirrored into per-pane EditorTabs (rename/delete menus). */
+  chatSessions?: Array<{
+    id: string;
+    name?: string;
+    is_pinned?: boolean;
+    is_default?: boolean;
+    active_query?: boolean;
+    worktree_path?: string;
+    provider?: string;
+    model?: string;
+  }>;
+  /** Switch the active chat when a chat tab is middle-clicked/cycled. */
+  onActiveChatChange?: (id: string) => void;
+  onCreateChat?: () => Promise<string | null>;
+  /** Opens the New-Chat-in-Worktree dialog (AppContent owns the dialog). */
+  onCreateChatInWorktree?: () => void;
+  onDeleteChat?: (id: string, options?: { removeWorktree?: boolean }) => Promise<void> | void;
+  onDeleteAllChats?: () => void;
+  onRenameChat?: (id: string, name: string) => void;
+  chatProps: React.ComponentProps<typeof SpacesPane>['chatProps'];
+  reviewProps: React.ComponentProps<typeof SpacesPane>['reviewProps'];
+  diffState: React.ComponentProps<typeof SpacesPane>['diffState'];
+  handleOutlineNavigateToSymbol: (line: number) => void;
+  /** Called when the user clicks Back from a non-chat view. */
+  onViewChange?: (view: ViewType) => void;
+}
+
+// Cache pane flex styles by weight. Bounded so that drag-resizing (which
+// produces a unique float weight per pixel-delta) doesn't grow the map
+// without limit. When the cap is hit we drop the oldest entries.
+const PANE_FLEX_CACHE_CAP = 64;
+const paneFlexCache = new Map<number, CSSProperties>();
+
+const toPaneFlex = (weight: number): CSSProperties => {
+  const cached = paneFlexCache.get(weight);
+  if (cached) return cached;
+  if (paneFlexCache.size >= PANE_FLEX_CACHE_CAP) {
+    const oldestKey = paneFlexCache.keys().next().value;
+    if (oldestKey !== undefined) paneFlexCache.delete(oldestKey);
+  }
+  const result: CSSProperties = {
+    flexGrow: weight,
+    flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 0,
+    minHeight: 0,
+  };
+  paneFlexCache.set(weight, result);
+  return result;
+};
+
+const PaneWrapper: React.FC<{ children: React.ReactNode; style?: CSSProperties }> = ({ children, style }) => (
+  <div className="pane-wrapper" style={style}>
+    {children}
+  </div>
+);
+
+const EditorPaneWrapper: React.FC<{ children: React.ReactNode; isActive?: boolean; onClick?: () => void }> = ({
+  children,
+  isActive,
+  onClick,
+}) => {
+  return (
+    <div
+      className={`editor-pane-wrapper ${isActive ? 'active' : ''}`}
+      onClick={!isActive ? onClick : undefined}
+      tabIndex={isActive ? -1 : 0}
+      onFocus={() => isActive && onClick?.()}
+    >
+      {children}
+    </div>
+  );
+};
+
+const EditorPaneComponent: React.FC<{
+  paneId: string;
+  isActive?: boolean;
+  onClick?: () => void;
+  perChatCache?: Record<string, PerChatState>;
+  activeChatId?: string | null;
+  chatProps: React.ComponentProps<typeof SpacesPane>['chatProps'];
+  reviewProps: React.ComponentProps<typeof SpacesPane>['reviewProps'];
+  diffState: React.ComponentProps<typeof SpacesPane>['diffState'];
+  chatSessions?: React.ComponentProps<typeof SpacesPane>['chatSessions'];
+}> = ({ paneId, onClick, perChatCache, activeChatId, chatProps, reviewProps, diffState, chatSessions }) => {
+  return (
+    <div className="editor-pane-host" onClick={onClick}>
+      <SpacesPane
+        paneId={paneId}
+        perChatCache={perChatCache}
+        activeChatId={activeChatId}
+        chatSessions={chatSessions}
+        chatProps={chatProps}
+        reviewProps={reviewProps}
+        diffState={diffState}
+      />
+    </div>
+  );
+};
+
+const EditorSpaces: React.FC<EditorSpacesProps> = ({
+  currentView,
+  perChatCache,
+  activeChatId,
+  chatSessions,
+  onActiveChatChange,
+  onCreateChat,
+  onCreateChatInWorktree,
+  onDeleteChat,
+  onDeleteAllChats,
+  onRenameChat,
+  chatProps,
+  reviewProps,
+  diffState,
+  handleOutlineNavigateToSymbol,
+  onViewChange,
+}) => {
+  // P4.2: phone form factor — peer-buffer keep-alive topology (see
+  // the mobile branch below). Desktop keeps the panes topology
+  // unchanged.
+  const isMobileViewport = useIsMobileViewport();
+  // A mockup is not a route in this component: it renders in the shell's
+  // preview panel, beside the editor rather than inside it.
+  const {
+    panes,
+    paneLayout,
+    activePaneId,
+    activeBufferId,
+    buffers,
+    switchPane,
+    splitPane,
+    closePane,
+    closeSplit,
+    paneSizes,
+    updatePaneSize,
+    maxPanes,
+    openProjectFolderBuffer,
+    closeBuffer,
+  } = useEditorManager();
+
+  // Derive chat-tab data for EditorTabs (same derivation PaneLayoutManager
+  // used before the pane renderer moved here).
+  const activeChatQueries = useMemo(() => {
+    const set = new Set<string>();
+    for (const session of chatSessions ?? []) {
+      if (session.active_query) set.add(session.id);
+    }
+    return set;
+  }, [chatSessions]);
+
+  // The chats that can't be deleted: the daemon's permanent "default" chat.
+  // Not the wire is_default flag — the list endpoint sets it on whichever
+  // chat is active, which hid Rename and Delete on the chat you were in.
+  const defaultChatIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const session of chatSessions ?? []) {
+      if (session.id === PERMANENT_DEFAULT_CHAT_ID) set.add(session.id);
+    }
+    return set;
+  }, [chatSessions]);
+
+  const chatWorktreePaths = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const session of chatSessions ?? []) {
+      if (session.worktree_path) map.set(session.id, session.worktree_path);
+    }
+    return map;
+  }, [chatSessions]);
+
+  // EditorTabs' delete callback returns void; discard the promise.
+  const onDeleteChatSync = useMemo(() => {
+    if (!onDeleteChat) return undefined;
+    return (id: string, options?: { removeWorktree?: boolean }) => {
+      void onDeleteChat(id, options);
+    };
+  }, [onDeleteChat]);
+
+  const currentBuffer = activeBufferId ? buffers.get(activeBufferId) : null;
+  const canSplit = panes.length < maxPanes;
+  const canCloseSplit = panes.length > 1;
+
+  const [nestedSplit, setNestedSplit] = React.useState<{
+    hostPaneId: string;
+    nestedPaneId: string;
+    direction: 'vertical' | 'horizontal';
+  } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dragStartSizeRef = useRef<Map<string, number>>(new Map());
+  const isPaneDraggingRef = useRef<Set<string>>(new Set());
+
+  // Refs for values read inside memoized render helpers to keep dependency
+  // arrays stable. Assigned during render: the helpers read them in this same
+  // render, and an effect-time write lands after it — the pane then showed the
+  // previous chat state (a just-sent message missing, a finished run still
+  // spinning) until some unrelated re-render.
+  const activePaneIdRef = useRef(activePaneId);
+  activePaneIdRef.current = activePaneId;
+  // Only the pane you're working in shows its tab as focused: with focus in
+  // the sidebar, terminal or another pane, each pane's tab stays marked as
+  // shown but not highlighted.
+  const projectFolderRef = useRef<HTMLDivElement>(null);
+  const engaged = useEngagedWithin(projectFolderRef);
+  const engagedRef = useRef(engaged);
+  engagedRef.current = engaged;
+  const panesRef = useRef(panes);
+  panesRef.current = panes;
+  const perChatCacheRef = useRef(perChatCache);
+  perChatCacheRef.current = perChatCache;
+  const activeChatIdRef = useRef(activeChatId);
+  activeChatIdRef.current = activeChatId;
+  const chatPropsRef = useRef(chatProps);
+  chatPropsRef.current = chatProps;
+  const reviewPropsRef = useRef(reviewProps);
+  reviewPropsRef.current = reviewProps;
+  const diffStateRef = useRef(diffState);
+  diffStateRef.current = diffState;
+  const chatSessionsRef = useRef(chatSessions);
+  chatSessionsRef.current = chatSessions;
+
+  // Refs for functions used by memoized render helpers — declared before render helpers to avoid TDZ
+  const handleSplitRequestRef = useRef<((direction: 'vertical' | 'horizontal') => void) | null>(null);
+  const handleCloseAllSplitsRef = useRef<((fromPaneId?: string) => void) | null>(null);
+
+  // ---------------------------------------------------------------------------
+  // Handlers (must be declared before render helpers that reference them via refs)
+  // ---------------------------------------------------------------------------
+
+  const handleSplitRequest = useCallback(
+    (direction: 'vertical' | 'horizontal') => {
+      if (!activePaneId) {
+        return;
+      }
+
+      const previousPaneCount = panes.length;
+      const newPaneId = splitPane(activePaneId, direction);
+      if (!newPaneId) {
+        return;
+      }
+
+      if (previousPaneCount === 2) {
+        setNestedSplit({
+          hostPaneId: activePaneId,
+          nestedPaneId: newPaneId,
+          direction,
+        });
+        updatePaneSize(`group:${activePaneId}`, 50);
+        updatePaneSize(`nested:${activePaneId}`, 50);
+      }
+    },
+    [activePaneId, panes.length, splitPane, updatePaneSize],
+  );
+
+  const handleCloseAllSplits = useCallback(
+    (fromPaneId?: string) => {
+      if (nestedSplit) {
+        // When a nested split is active, close just the nested pane (3 → 2 panes)
+        closePane(nestedSplit.nestedPaneId);
+        setNestedSplit(null);
+      } else {
+        // No nested split — close all splits (2 → 1 pane), keeping the pane
+        // the user invoked the control from.
+        closeSplit(fromPaneId);
+      }
+    },
+    [closeSplit, closePane, nestedSplit],
+  );
+
+  // Keep function refs up to date for memoized render helpers
+  React.useEffect(() => {
+    handleSplitRequestRef.current = handleSplitRequest;
+  }, [handleSplitRequest]);
+  React.useEffect(() => {
+    handleCloseAllSplitsRef.current = handleCloseAllSplits;
+  }, [handleCloseAllSplits]);
+
+  React.useEffect(() => {
+    if (panes.length !== 3 && nestedSplit) {
+      setNestedSplit(null);
+    }
+  }, [nestedSplit, panes.length]);
+
+  const handlePaneResize = useCallback(
+    (sizeKey: string, axis: 'horizontal' | 'vertical', invert = false) =>
+      (_deltaPixels: number, totalDeltaPixels: number) => {
+        if (!containerRef.current) return;
+
+        const containerRect = containerRef.current.getBoundingClientRect();
+        const isVertical = axis === 'horizontal';
+        const containerSize = isVertical ? containerRect.width : containerRect.height;
+        const deltaPercent = ((invert ? -totalDeltaPixels : totalDeltaPixels) / containerSize) * 100;
+
+        // Capture size at drag start to avoid accumulation bugs.
+        if (!isPaneDraggingRef.current.has(sizeKey)) {
+          isPaneDraggingRef.current.add(sizeKey);
+          dragStartSizeRef.current.set(sizeKey, paneSizes[sizeKey] || 50);
+        }
+        const sizeAtDragStart = dragStartSizeRef.current.get(sizeKey)!;
+        const maxAllowed =
+          100 -
+          MIN_PANE_WIDTH_PERCENT *
+            Math.max(
+              0,
+              Object.keys(paneSizes).filter(
+                (k) => !k.startsWith('group:') && !k.startsWith('nested:') && !k.startsWith('grid:'),
+              ).length - 1,
+            );
+        const newSize = Math.max(MIN_PANE_WIDTH_PERCENT, Math.min(maxAllowed, sizeAtDragStart + deltaPercent));
+        updatePaneSize(sizeKey, newSize);
+      },
+    [paneSizes, updatePaneSize],
+  );
+
+  // Cache returned functions from handlePaneResizeEnd to avoid recreating them.
+  const resizeEndCacheRef = useRef(new Map<string, () => void>());
+
+  const handlePaneResizeEnd = useCallback((sizeKey: string) => {
+    const cached = resizeEndCacheRef.current.get(sizeKey);
+    if (cached) return cached;
+    const fn = () => {
+      isPaneDraggingRef.current.delete(sizeKey);
+      dragStartSizeRef.current.delete(sizeKey);
+    };
+    resizeEndCacheRef.current.set(sizeKey, fn);
+    return fn;
+  }, []);
+
+  const showResizeHandles = panes.length > 1;
+
+  const renderSplitControls = useCallback(
+    (paneId: string) => {
+      // Controls render in *every* pane (with a dimmed style in non-active
+      // panes) so users can discover the split / close-split affordance
+      // without first clicking into a pane. A click on a non-active pane's
+      // control focuses that pane first, then performs the action.
+      const isActive = paneId === activePaneIdRef.current;
+      const activateThenRun = (action: () => void) => () => {
+        if (!isActive) switchPane(paneId);
+        action();
+      };
+      return (
+        <div className={`split-controls split-controls-embedded ${isActive ? '' : 'split-controls--inactive'}`}>
+          {onCreateChat && !isSharedMode() && (
+            <button
+              onClick={activateThenRun(async () => {
+                // Optimistic placeholder: open the tab immediately with a
+                // spinner; on resolve open the real (path-keyed) buffer and
+                // drop the placeholder — mutating the placeholder in place
+                // races the session-list sync and can double-tab the chat.
+                const placeholderId = openProjectFolderBuffer({
+                  kind: 'chat',
+                  path: `__workspace/chat/creating-${Date.now()}`,
+                  title: 'Creating…',
+                  isPinned: false,
+                  isClosable: true,
+                  metadata: { creating: true },
+                });
+                const swapInReal = (newId: string) => {
+                  openProjectFolderBuffer({
+                    kind: 'chat',
+                    path: `__workspace/chat/${newId}`,
+                    title: 'New Chat',
+                    isPinned: false,
+                    isClosable: true,
+                    metadata: { chatId: newId },
+                  });
+                  void closeBuffer(placeholderId);
+                  // Creating a chat lands you IN it — switch chat-level
+                  // state to match the now-active buffer.
+                  onActiveChatChange?.(newId);
+                };
+                try {
+                  const newId = await onCreateChat();
+                  if (newId) {
+                    swapInReal(newId);
+                  } else {
+                    void closeBuffer(placeholderId);
+                  }
+                } catch (err) {
+                  console.warn('[EditorWorkspace] Failed to create chat:', err);
+                  void closeBuffer(placeholderId);
+                }
+              })}
+              className="pane-control-btn compact"
+              title="New chat"
+              aria-label="New chat"
+            >
+              <MessageSquarePlus size={13} />
+            </button>
+          )}
+          {canCloseSplit && (
+            <button
+              onClick={activateThenRun(() => handleCloseAllSplitsRef.current?.(paneId))}
+              className="pane-control-btn compact"
+              title="Close split panes"
+              aria-label="Close split panes"
+            >
+              <X size={13} />
+            </button>
+          )}
+          {canSplit && (
+            <button
+              onClick={activateThenRun(() => handleSplitRequestRef.current?.('vertical'))}
+              className="pane-control-btn compact"
+              title="Split vertically"
+              aria-label="Split vertically"
+            >
+              <Columns2 size={14} />
+            </button>
+          )}
+          {canSplit && (
+            <button
+              onClick={activateThenRun(() => handleSplitRequestRef.current?.('horizontal'))}
+              className="pane-control-btn compact"
+              title="Split horizontally"
+              aria-label="Split horizontally"
+            >
+              <Rows2 size={14} />
+            </button>
+          )}
+        </div>
+      );
+    },
+    [onCreateChat, canCloseSplit, canSplit, switchPane, openProjectFolderBuffer, closeBuffer, onActiveChatChange],
+  );
+
+  const renderPaneById = useCallback(
+    (paneId: string, style?: CSSProperties) => {
+      const pane = panesRef.current.find((item) => item.id === paneId);
+      if (!pane) {
+        return null;
+      }
+
+      return (
+        <PaneWrapper key={pane.id} style={style}>
+          <div className="pane-shell">
+            <EditorTabs
+              paneId={pane.id}
+              paneFocused={engagedRef.current && pane.id === activePaneIdRef.current}
+              compact
+              actions={renderSplitControls(pane.id)}
+              onActiveChatChange={onActiveChatChange}
+              activeChatQueries={activeChatQueries}
+              defaultChatIds={defaultChatIds}
+              chatWorktreePaths={chatWorktreePaths}
+              onCreateChat={
+                onCreateChat
+                  ? () => {
+                      // Return the promise so EditorTabs can open the chat
+                      // buffer as soon as the new id resolves.
+                      return onCreateChat().catch((err: unknown) => {
+                        console.warn('[EditorTabs] Failed to create chat:', err);
+                        return null;
+                      });
+                    }
+                  : undefined
+              }
+              onCreateChatInWorktree={onCreateChatInWorktree}
+              onDeleteChat={onDeleteChatSync}
+              onRenameChat={onRenameChat}
+              onDeleteAllChats={onDeleteAllChats}
+              chatSessions={chatSessions}
+            />
+            <EditorPaneWrapper isActive={pane.id === activePaneIdRef.current} onClick={() => switchPane(pane.id)}>
+              <EditorPaneComponent
+                paneId={pane.id}
+                isActive={pane.id === activePaneIdRef.current}
+                onClick={() => switchPane(pane.id)}
+                perChatCache={perChatCacheRef.current}
+                activeChatId={activeChatIdRef.current}
+                chatProps={chatPropsRef.current}
+                reviewProps={reviewPropsRef.current}
+                diffState={diffStateRef.current}
+                chatSessions={chatSessionsRef.current}
+              />
+            </EditorPaneWrapper>
+          </div>
+        </PaneWrapper>
+      );
+    },
+    [renderSplitControls, switchPane],
+  );
+
+  const renderPaneLayout = () => {
+    if (panes.length === 0) {
+      return null;
+    }
+
+    if (panes.length < 3 || !nestedSplit) {
+      if (panes.length === 1) {
+        return renderPaneById(panes[0].id, toPaneFlex(1));
+      }
+
+      if (panes.length === 2) {
+        const [firstPane, secondPane] = panes;
+        const splitAxis = paneLayout === 'split-horizontal' ? 'vertical' : 'horizontal';
+        const firstPaneSize = Math.max(
+          MIN_PANE_WIDTH_PERCENT,
+          Math.min(100 - MIN_PANE_WIDTH_PERCENT, paneSizes[firstPane.id] || 50),
+        );
+        const secondPaneSize = 100 - firstPaneSize;
+
+        return (
+          <>
+            {renderPaneById(firstPane.id, toPaneFlex(firstPaneSize))}
+            <ResizeHandle
+              direction={splitAxis}
+              ariaLabel="Resize editor split"
+              onResize={handlePaneResize(firstPane.id, splitAxis)}
+              onResizeEnd={handlePaneResizeEnd(firstPane.id)}
+            />
+            {renderPaneById(secondPane.id, toPaneFlex(secondPaneSize))}
+          </>
+        );
+      }
+
+      return (
+        <>
+          {(() => {
+            const rawSizes = panes.map((p) => paneSizes[p.id] || 100 / panes.length);
+            const totalSize = rawSizes.reduce((a, b) => a + b, 0);
+            return (
+              <>
+                {panes.map((pane, index) => {
+                  const paneSize = normalizePaneSize(rawSizes[index], totalSize);
+                  const isLast = index === panes.length - 1;
+                  const splitAxis = paneLayout === 'split-horizontal' ? 'vertical' : 'horizontal';
+
+                  return (
+                    <React.Fragment key={pane.id}>
+                      {renderPaneById(pane.id, toPaneFlex(paneSize))}
+                      {showResizeHandles && !isLast && (
+                        <ResizeHandle
+                          direction={splitAxis}
+                          ariaLabel="Resize editor split"
+                          onResize={handlePaneResize(pane.id, splitAxis)}
+                          onResizeEnd={handlePaneResizeEnd(pane.id)}
+                        />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </>
+            );
+          })()}
+        </>
+      );
+    }
+
+    // 3+ panes with nested split
+    const hostPane = panes.find((pane) => pane.id === nestedSplit.hostPaneId);
+    const nestedPane = panes.find((pane) => pane.id === nestedSplit.nestedPaneId);
+    const siblingPane = panes.find(
+      (pane) => pane.id !== nestedSplit.hostPaneId && pane.id !== nestedSplit.nestedPaneId,
+    );
+    if (!hostPane || !nestedPane || !siblingPane) {
+      return null;
+    }
+
+    const rootDirection = paneLayout === 'split-horizontal' ? 'column' : 'row';
+    const nestedDirection = nestedSplit.direction === 'horizontal' ? 'column' : 'row';
+    const hostIsFirst =
+      panes.findIndex((pane) => pane.id === hostPane.id) < panes.findIndex((pane) => pane.id === siblingPane.id);
+    const rootSizeKey = `group:${hostPane.id}`;
+    const nestedSizeKey = `nested:${hostPane.id}`;
+    const groupSize = normalizePaneSize(paneSizes[rootSizeKey] || 50, 100);
+    const nestedSize = normalizePaneSize(paneSizes[nestedSizeKey] || 50, 100);
+    const rootHandleDirection = rootDirection === 'row' ? 'horizontal' : 'vertical';
+    const nestedHandleDirection = nestedDirection === 'row' ? 'horizontal' : 'vertical';
+
+    const nestedGroup = (
+      <div className={`nested-pane-group nested-pane-group-${nestedDirection}`} style={toPaneFlex(groupSize)}>
+        {renderPaneById(hostPane.id, toPaneFlex(nestedSize))}
+        <ResizeHandle
+          direction={nestedHandleDirection}
+          ariaLabel="Resize editor split"
+          onResize={handlePaneResize(nestedSizeKey, nestedHandleDirection)}
+          onResizeEnd={handlePaneResizeEnd(nestedSizeKey)}
+        />
+        {renderPaneById(nestedPane.id, toPaneFlex(100 - nestedSize))}
+      </div>
+    );
+
+    return (
+      <div className={`nested-pane-layout nested-pane-layout-${rootDirection}`}>
+        {hostIsFirst ? nestedGroup : renderPaneById(siblingPane.id, toPaneFlex(100 - groupSize))}
+        <ResizeHandle
+          direction={rootHandleDirection}
+          ariaLabel="Resize editor split"
+          onResize={handlePaneResize(rootSizeKey, rootHandleDirection, !hostIsFirst)}
+          onResizeEnd={handlePaneResizeEnd(rootSizeKey)}
+        />
+        {hostIsFirst ? renderPaneById(siblingPane.id, toPaneFlex(100 - groupSize)) : nestedGroup}
+      </div>
+    );
+  };
+
+  // Handle focus_split hotkeys (focus_split_1 through focus_split_6)
+  const handleFocusPaneIndex = useCallback(
+    (index: number) => {
+      if (index < 0) {
+        return;
+      }
+
+      // If the pane exists, switch to it
+      if (index < panes.length) {
+        switchPane(panes[index].id);
+        return;
+      }
+
+      // If we can create a new pane, do so
+      if (panes.length < maxPanes) {
+        const sourcePaneId = activePaneId || panes[panes.length - 1]?.id;
+        if (!sourcePaneId) return;
+
+        const direction = panes.length === 1 ? 'vertical' : 'horizontal';
+        const newPaneId = splitPane(sourcePaneId, direction);
+
+        if (newPaneId) {
+          if (panes.length === 1) {
+            updatePaneSize(`group:${sourcePaneId}`, 50);
+            updatePaneSize(`nested:${sourcePaneId}`, 50);
+          }
+          switchPane(newPaneId);
+        }
+      }
+    },
+    [panes, activePaneId, splitPane, switchPane, updatePaneSize, maxPanes],
+  );
+
+  // Listen for the pane hotkeys (focus_split_N, split_editor_*)
+  useCommandHandler(isPaneCommand);
+  React.useEffect(() => {
+    const handleHotkey = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.commandId) return;
+
+      const commandId = detail.commandId;
+      const splitDirection = SPLIT_COMMANDS.get(commandId);
+      if (splitDirection) {
+        handleSplitRequest(splitDirection);
+        return;
+      }
+      const match = commandId.match(/^focus_split_(\d+)$/);
+
+      if (match) {
+        const index = parseInt(match[1], 10) - 1; // Convert to 0-based index
+        handleFocusPaneIndex(index);
+      }
+    };
+
+    window.addEventListener('sprout:hotkey', handleHotkey);
+    return () => window.removeEventListener('sprout:hotkey', handleHotkey);
+  }, [handleFocusPaneIndex, handleSplitRequest]);
+
+  // ── P4.2 mobile helpers ──────────────────────────────────────────
+  // activePaneHasChat: is the active buffer the chat? (Peer topology:
+  // chat surface is visible iff the chat buffer is active; the editor
+  // surface renders otherwise.) currentBuffer is the manager-level
+  // active buffer — exactly what the mobile toggle keys on.
+  const activePaneHasChat = useCallback(
+    () => currentBuffer?.kind === 'chat' || currentBuffer === null,
+    [currentBuffer],
+  );
+
+  // ── P4.2 mobile branch: peer-buffer keep-alive topology ─────────
+  // Phone IDE placement (user doctrine 2026-09-10): the editor is not
+  // a sheet over chat and chat is not a sheet over the editor — the
+  // two are PEER surfaces. Both stay MOUNTED; the active buffer
+  // toggles visibility. This kills the remount state-loss in BOTH
+  // directions (chat draft/scroll/streaming view survived file opens,
+  // editor cursor/scroll survived chat hops) while keeping P4.1's
+  // single-column layout. No hierarchy, no sheets-over-anything.
+  if (isMobileViewport) {
+    const chatBufferOpen = activePaneHasChat();
+    const chats = chatSessions ?? [];
+    return (
+      <div className="mobile-peer-surfaces" data-testid="mobile-peer-surfaces">
+        <div className="mobile-peer-surface" data-active={chatBufferOpen} data-testid="mobile-chat-surface">
+          {/* No tab strip on phones: the chat picker stands in for it. */}
+          {onActiveChatChange && chats.length > 0 && (
+            <MobileChatSwitcher
+              chats={chats}
+              activeChatId={activeChatId ?? null}
+              onSelect={onActiveChatChange}
+              onCreate={
+                onCreateChat
+                  ? () => {
+                      void onCreateChat().then((id) => {
+                        if (id) onActiveChatChange(id);
+                      });
+                    }
+                  : undefined
+              }
+            />
+          )}
+          <Chat {...chatProps} />
+        </div>
+        {!chatBufferOpen && (
+          <div className="mobile-peer-surface" data-active={true} data-testid="mobile-editor-surface">
+            <SpacesPane
+              paneId={activePaneId ?? panes[0]?.id ?? ''}
+              perChatCache={perChatCache}
+              activeChatId={activeChatId}
+              chatProps={chatProps}
+              reviewProps={reviewProps}
+              diffState={diffState}
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <EditorWithOutline
+      content={currentBuffer?.content || ''}
+      fileExtension={currentBuffer?.file?.ext}
+      cursorLine={currentBuffer?.cursorPosition?.line || 0}
+      isFileOpen={currentBuffer?.kind === 'file'}
+      onNavigateToSymbol={handleOutlineNavigateToSymbol}
+    >
+      <div ref={projectFolderRef} className={`editor-workspace ${paneLayout}`}>
+        <div ref={containerRef} className={`panes-container layout-${paneLayout}`}>
+          {renderPaneLayout()}
+        </div>
+      </div>
+    </EditorWithOutline>
+  );
+};
+
+export default EditorSpaces;

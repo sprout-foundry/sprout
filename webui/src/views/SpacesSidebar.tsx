@@ -1,0 +1,260 @@
+/**
+ * The composed space shell's sidebar: the standalone app's project sidebar
+ * (`ProjectNav`, the layered layout's L2) with its sections drilled into the
+ * workspace's own views — Files (the file-tree unit), Search, Source control —
+ * instead of the app's sidebar panels, which reach app-only state.
+ *
+ * The host owns which project and which space is mounted, so the app's
+ * project rail (L1) is not rendered and the entries are the mounted space's
+ * own: Files / Search / Source control (when the host declares
+ * `capabilities.git`) and, for an in-browser terminal, Terminal. Collapsing
+ * leaves a slim rail that expands it again.
+ *
+ * Its look is the layered layout's stylesheet (`Layered.css`), which the app
+ * loads with its own sidebar and the package loads with the views; it is not
+ * imported here, so mounting the views does not move it in the app's cascade.
+ */
+
+import type { FileInfo, FileTreeHandle } from '@sprout/ui';
+import { PanelLeftOpen } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
+import ProjectNav, { NAV_ICONS } from '../components/layered/ProjectNav';
+import type { ProjectNavConversations, ProjectNavTarget } from '../components/layered/ProjectNav';
+import ResizeHandle from '../components/ResizeHandle';
+import { useSpacesKeyDown } from '../contexts/HotkeyContext';
+import { SIDEBAR_DEFAULT_WIDTH, clampSidebarWidth } from '../hooks/useSidebarState';
+import { useCommandHandler } from '../services/commandHandlers';
+import { useProjectFolderFileTree } from './useProjectFolderFileTree';
+import type { ProjectFolderGitState } from './useProjectFolderGitState';
+import { SpacesFileTreeView } from './SpacesFileTreeView';
+import { SpacesGitStatusPanel } from './SpacesGitView';
+import { SpacesSearchView } from './SpacesSearchView';
+import '../components/Sidebar.css';
+
+const CODE_SIDEBAR_COMMANDS: readonly string[] = ['open_search', 'toggle_sidebar', 'toggle_explorer'];
+
+const SECTION_TITLES: Record<string, string> = {
+  files: 'Files',
+  search: 'Search',
+  git: 'Source control',
+};
+
+export interface SpacesSidebarProps {
+  /** The project's display name, the sidebar's title. */
+  title: string;
+  collapsed: boolean;
+  onCollapsedChange: (collapsed: boolean) => void;
+  conversations: ProjectNavConversations;
+  /** The git state, or null when the host has no git (no Source control entry). */
+  git: ProjectFolderGitState | null;
+  /** The workspace's absolute root, for the tree's absolute-path copies. */
+  projectFolder?: string;
+  /** The path of the file the editor shows, selected in the tree. */
+  selectedFile?: string;
+  /** Open a workspace file in the editor, optionally at a line. */
+  onOpenFile: (path: string, line?: number) => void;
+  /** Offered as a Terminal entry that opens and closes the docked terminal. */
+  onToggleTerminal?: () => void;
+}
+
+export function SpacesSidebar({
+  title,
+  collapsed,
+  onCollapsedChange,
+  conversations,
+  git,
+  projectFolder: projectFolder,
+  selectedFile,
+  onOpenFile,
+  onToggleTerminal,
+}: SpacesSidebarProps): JSX.Element {
+  const [open, setOpen] = useState<ProjectNavTarget | null>({ kind: 'section', id: 'files' });
+  const [width, setWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
+  const [isResizing, setIsResizing] = useState(false);
+  const treeRef = useRef<FileTreeHandle>(null);
+  const toggleCollapsed = useCallback(() => onCollapsedChange(!collapsed), [collapsed, onCollapsedChange]);
+
+  const show = useCallback(
+    (target: ProjectNavTarget) => {
+      setOpen(target);
+      if (collapsed) onCollapsedChange(false);
+    },
+    [collapsed, onCollapsedChange],
+  );
+
+  // Ctrl/Cmd+\ collapses and expands it, as in the app.
+  useSpacesKeyDown((event) => {
+    if (event.key === '\\' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      toggleCollapsed();
+    }
+  });
+
+  useCommandHandler(CODE_SIDEBAR_COMMANDS);
+  useEffect(() => {
+    const handleHotkey = (event: Event) => {
+      const commandId = (event as CustomEvent<{ commandId?: string }>).detail?.commandId;
+      if (commandId === 'toggle_sidebar') toggleCollapsed();
+      if (commandId === 'open_search') show({ kind: 'section', id: 'search' });
+      if (commandId === 'toggle_explorer') {
+        window.dispatchEvent(new CustomEvent('sprout:reveal-in-explorer', { detail: { path: selectedFile ?? '' } }));
+      }
+    };
+    // "Reveal in file list" (the editor tab menu, Toggle Explorer, the
+    // breadcrumb): show Files and reveal the path in the tree.
+    const handleReveal = (event: Event) => {
+      show({ kind: 'section', id: 'files' });
+      const path = (event as CustomEvent<{ path?: string }>).detail?.path;
+      if (path) setTimeout(() => treeRef.current?.revealFile(path), 100);
+    };
+    window.addEventListener('sprout:hotkey', handleHotkey);
+    window.addEventListener('sprout:reveal-in-explorer', handleReveal);
+    return () => {
+      window.removeEventListener('sprout:hotkey', handleHotkey);
+      window.removeEventListener('sprout:reveal-in-explorer', handleReveal);
+    };
+  }, [show, toggleCollapsed, selectedFile]);
+
+  const navigate = (target: ProjectNavTarget) => {
+    if (target.kind === 'conversation') {
+      if (target.id) conversations.onSelect(target.id);
+      else conversations.onOpen();
+      setOpen(null);
+      return;
+    }
+    if (target.id === 'terminal') {
+      onToggleTerminal?.();
+      return;
+    }
+    setOpen(target);
+  };
+
+  const entry = (kind: 'section', id: keyof typeof NAV_ICONS, label: string) => ({
+    target: { kind, id } as ProjectNavTarget,
+    label,
+    icon: NAV_ICONS[id],
+  });
+  const codeEntries = [
+    entry('section', 'files', 'Files'),
+    entry('section', 'search', 'Search'),
+    ...(git ? [entry('section', 'git', 'Source control')] : []),
+    ...(onToggleTerminal ? [entry('section', 'terminal', 'Terminal')] : []),
+  ];
+
+  if (collapsed) {
+    return (
+      <div className="sprout-workspace-shell__rail" data-testid="workspace-sidebar-rail">
+        <button
+          type="button"
+          className="project-nav-back"
+          onClick={() => onCollapsedChange(false)}
+          title="Expand sidebar"
+          aria-label="Expand sidebar"
+        >
+          <PanelLeftOpen size={15} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="sidebar-resize-wrapper sprout-workspace-shell__sidebar" data-testid="workspace-sidebar">
+      <div className={`sidebar layered${isResizing ? ' resizing' : ''}`} style={{ width: `${width}px` }}>
+        <ProjectNav
+          title={title}
+          onHide={() => onCollapsedChange(true)}
+          hideLabel="Collapse sidebar"
+          conversations={conversations}
+          conversationInMain={conversations.inMain && !open}
+          current={open}
+          onNavigate={navigate}
+          codeEntries={codeEntries}
+          automationEntries={[]}
+          footerEntries={[]}
+          drill={
+            open
+              ? {
+                  title: SECTION_TITLES[open.id] ?? open.id,
+                  content: (
+                    <SidebarSection
+                      id={open.id}
+                      git={git}
+                      treeRef={treeRef}
+                      projectFolder={projectFolder}
+                      selectedFile={selectedFile}
+                      onOpenFile={onOpenFile}
+                    />
+                  ),
+                  onBack: () => setOpen(null),
+                }
+              : undefined
+          }
+        />
+      </div>
+      <ResizeHandle
+        direction="horizontal"
+        onResize={(delta) => setWidth((current) => clampSidebarWidth(current + delta))}
+        onResizeStart={() => setIsResizing(true)}
+        onResizeEnd={() => setIsResizing(false)}
+        onDoubleClick={() => setWidth(SIDEBAR_DEFAULT_WIDTH)}
+        className="sidebar-resize-handle"
+        ariaLabel="Resize sidebar"
+      />
+    </div>
+  );
+}
+
+function SidebarSection({
+  id,
+  git,
+  treeRef,
+  projectFolder: projectFolder,
+  selectedFile,
+  onOpenFile,
+}: {
+  id: string;
+  git: ProjectFolderGitState | null;
+  treeRef: React.RefObject<FileTreeHandle>;
+  projectFolder?: string;
+  selectedFile?: string;
+  onOpenFile: (path: string, line?: number) => void;
+}): JSX.Element | null {
+  let content: ReactNode = null;
+  if (id === 'files') {
+    content = (
+      <FilesSection
+        treeRef={treeRef}
+        projectFolder={projectFolder}
+        selectedFile={selectedFile}
+        onOpenFile={onOpenFile}
+      />
+    );
+  } else if (id === 'search') {
+    content = <SpacesSearchView onFileClick={onOpenFile} autoFocus />;
+  } else if (id === 'git' && git) {
+    content = <SpacesGitStatusPanel projectFolder={git.projectFolder} panel={git.panel} />;
+  }
+  return <>{content}</>;
+}
+
+function FilesSection({
+  treeRef,
+  projectFolder: projectFolder,
+  selectedFile,
+  onOpenFile,
+}: {
+  treeRef: React.RefObject<FileTreeHandle>;
+  projectFolder?: string;
+  selectedFile?: string;
+  onOpenFile: (path: string, line?: number) => void;
+}): JSX.Element {
+  const onFileSelect = useCallback(
+    (file: FileInfo) => {
+      if (!file.isDir) onOpenFile(file.path);
+    },
+    [onOpenFile],
+  );
+  const tree = useProjectFolderFileTree({ onFileSelect, selectedFile, projectFolder: projectFolder });
+  return <SpacesFileTreeView ref={treeRef} {...tree} />;
+}

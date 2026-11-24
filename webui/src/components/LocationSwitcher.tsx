@@ -6,9 +6,9 @@ import type { SproutInstance } from '../services/api';
 import { getPathDisplayName, collapseHomePath } from './locationSwitcher/pathUtils';
 import { SSHPanel } from './locationSwitcher/SSHPanel';
 import { useSSHData } from './locationSwitcher/useSSHData';
-import { useProjectFolderData } from './locationSwitcher/useWorkspaceData';
-import { useProjectFolderSuggestions } from './locationSwitcher/useWorkspaceSuggestions';
-import { ProjectFolderPopover } from './locationSwitcher/WorkspacePopover';
+import { useProjectFolderData } from './locationSwitcher/useProjectFolderData';
+import { useProjectFolderSuggestions } from './locationSwitcher/useProjectFolderSuggestions';
+import { ProjectFolderPopover } from './locationSwitcher/ProjectFolderPopover';
 
 export interface LocationSwitcherProps {
   isConnected: boolean;

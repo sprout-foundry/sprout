@@ -23,7 +23,7 @@ import {
   projectFolderOf,
 } from './vfsFiles';
 import type { WasmDirEntry, WasmShell } from './wasmShell';
-import { projectFolderCwdContextLine } from './workspaceCwd';
+import { projectFolderCwdContextLine } from './projectFolderCwd';
 
 // Global event dispatcher — set by the webui's event system so WASM
 // agent events flow into the same React state as WebSocket events.
@@ -1372,7 +1372,7 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
     return jsonError('Query is required', 400);
   }
 
-  // Working directory context (services/workspaceCwd.ts): when a repo is
+  // Working directory context (services/projectFolderCwd.ts): when a repo is
   // selected in the Files panel, tell the agent up front so it stops
   // exploring from the project folder top. Appended to the string handed to the
   // model ONLY — `query` (and thus query_started / chat history / the UI)

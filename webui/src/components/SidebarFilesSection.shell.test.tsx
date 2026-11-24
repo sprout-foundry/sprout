@@ -15,7 +15,7 @@ import { HostProvider } from '../host/HostProvider';
 import { makeTestHost } from '../host/testHost';
 import SidebarFilesSection from './SidebarFilesSection';
 
-vi.mock('../services/workspaceFs/backendsExport', () => ({
+vi.mock('../services/projectFolderFs/backendsExport', () => ({
   getProjectFolderFs: vi.fn(),
   listProjectFolderRepos: vi.fn().mockResolvedValue(['octo/sprout']),
 }));

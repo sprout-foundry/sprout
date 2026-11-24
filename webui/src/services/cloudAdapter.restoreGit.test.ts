@@ -38,7 +38,7 @@ vi.mock('./repoImportCache', () => ({
 
 import { CloudAdapter } from './cloudAdapter';
 import { REPO_IMPORT_PROGRESS_EVENT } from './repoGitImport';
-import { GIT_REPO_CHANGED_EVENT } from './workspaceClone';
+import { GIT_REPO_CHANGED_EVENT } from './projectFolderClone';
 
 const adapter = () => new CloudAdapter({ apiBase: 'http://localhost', wsUrl: 'ws://localhost/ws', navItems: [] });
 const CACHED = { repo: 'acme/web', files: [{ path: 'a.txt', content: 'x' }] };

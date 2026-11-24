@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ApiService } from '../../services/api';
 import { clientFetch } from '../../services/clientSession';
-import { ensureProjectFolder, getProjectFolder } from '../../services/workspaceStore';
+import { ensureProjectFolder, getProjectFolder } from '../../services/projectFolderStore';
 import { debugLog, type useLog } from '../../utils/log';
 import type { FileResult } from './CommandPalette';
 import { MAX_INDEXED_FILES, MAX_INDEXED_DIRECTORIES, SKIP_DIRECTORIES, MAX_DIRECTORY_DEPTH } from './constants';

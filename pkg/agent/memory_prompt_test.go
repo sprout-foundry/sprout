@@ -11,7 +11,7 @@ func TestNormalizeMemoryPromptMode(t *testing.T) {
 		want string
 		ok   bool
 	}{
-		{"", "full", true},
+		{"", "index", true},
 		{"full", "full", true},
 		{"INDEX", "index", true},
 		{"  off  ", "off", true},
@@ -35,12 +35,13 @@ func TestLoadMemoriesForPromptMode(t *testing.T) {
 		t.Fatalf("SaveMemory: %v", err)
 	}
 
-	full := LoadMemoriesForPromptMode("", 0)
-	if full != LoadMemoriesForPrompt() {
-		t.Fatalf("default mode differs from LoadMemoriesForPrompt")
-	}
+	unset := LoadMemoriesForPromptMode("", 0)
+	full := LoadMemoriesForPromptMode("full", 0)
 	if !strings.Contains(full, "### alpha\n") || !strings.Contains(full, "Second line of the body.") {
 		t.Fatalf("full mode lacks a body:\n%s", full)
+	}
+	if full != LoadMemoriesForPrompt() {
+		t.Fatalf("explicit full mode differs from LoadMemoriesForPrompt")
 	}
 
 	index := LoadMemoriesForPromptMode("index", 0)
@@ -51,6 +52,9 @@ func TestLoadMemoriesForPromptMode(t *testing.T) {
 	}
 	if strings.Contains(index, "Second line of the body.") {
 		t.Fatalf("index mode carries a body:\n%s", index)
+	}
+	if unset != index {
+		t.Fatalf("unset mode should normalize to index:\nunset:\n%s\nindex:\n%s", unset, index)
 	}
 	if len(index) >= len(full) {
 		t.Fatalf("index (%d bytes) not smaller than full (%d)", len(index), len(full))

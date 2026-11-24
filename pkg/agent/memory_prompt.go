@@ -8,7 +8,7 @@ import (
 
 // Memory prompt modes (config memory_prompt).
 const (
-	MemoryPromptFull  = "full"  // every body, up to the byte cap (the default)
+	MemoryPromptFull  = "full"  // every body, up to the byte cap
 	MemoryPromptIndex = "index" // names and first lines; bodies are read on demand with manage_memory
 	MemoryPromptOff   = "off"   // nothing; manage_memory still lists, searches and reads them
 )
@@ -16,13 +16,13 @@ const (
 const memoryIndexSummaryChars = 120
 
 // normalizeMemoryPromptMode resolves a config memory_prompt value to one of the
-// MemoryPrompt* constants. "" is the full default. ok is false for a value that
+// MemoryPrompt* constants. "" is the index default. ok is false for a value that
 // names no mode; the caller then runs full and warns, so a typo never silently
 // changes what the prompt carries.
 func normalizeMemoryPromptMode(mode string) (normalized string, ok bool) {
 	mode = strings.ToLower(strings.TrimSpace(mode))
 	if mode == "" {
-		return MemoryPromptFull, true
+		return MemoryPromptIndex, true
 	}
 	switch mode {
 	case MemoryPromptFull, MemoryPromptIndex, MemoryPromptOff:
@@ -34,7 +34,7 @@ func normalizeMemoryPromptMode(mode string) (normalized string, ok bool) {
 
 // LoadMemoriesForPromptMode formats the memories for the system prompt in the given mode.
 // maxBytes <= 0 uses maxMemoryPromptBytes. Every request carries the result, so the index
-// mode keeps a large memory store from costing thousands of tokens a request.
+// mode (the default) keeps a large memory store from costing thousands of tokens a request.
 func LoadMemoriesForPromptMode(mode string, maxBytes int) string {
 	normalized, ok := normalizeMemoryPromptMode(mode)
 	if !ok {

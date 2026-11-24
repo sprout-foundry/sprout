@@ -33,7 +33,7 @@ type ContextProfile struct {
 	// SystemPromptCore, from Config.SystemPromptCore, replaces the embedded
 	// core prompt the profile would load.
 	SystemPromptCore string `json:"-"`
-	// From Config.MemoryPrompt / MemoryPromptMaxBytes (see memory_prompt.go in pkg/agent).
+	// From Config.MemoryPrompt / MemoryPromptMaxBytes (see memory_prompt.go in pkg/agent). Unset normalizes to "index".
 	MemoryPrompt         string `json:"-"`
 	MemoryPromptMaxBytes int    `json:"-"`
 }

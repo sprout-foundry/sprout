@@ -27,34 +27,40 @@ func AdoptLink(fromDir string) (bool, error) {
 		slots[st.Slot()] = true
 	}
 
-	moved, err := adoptDirLinks(fromDir, slots)
+	movedSlots, err := adoptDirLinks(fromDir, slots)
 	if err != nil {
-		return moved, err
+		return len(movedSlots) > 0, err
 	}
 	legacyMoved, err := adoptLegacyLink(fromDir, slots)
 	if legacyMoved {
-		moved = true
+		movedSlots = append(movedSlots, "gpu.json")
 	}
-	if moved {
-		// The repo's config no longer looks linked; what stays is a link
-		// this machine already had (skipped above).
-		_ = os.RemoveAll(filepath.Join(fromDir, "gpu"))
+	// Only what moved goes: a link skipped above (the machine already has
+	// its slot) stays in the repo config untouched.
+	for _, slot := range movedSlots {
+		_ = os.Remove(filepath.Join(fromDir, "gpu", "links", slot+".json"))
 	}
-	return moved, err
+	if legacyMoved {
+		_ = os.Remove(filepath.Join(fromDir, "gpu", "gpu.json"))
+	}
+	// Empty remains go too, so the repo config stops looking linked.
+	_ = os.Remove(filepath.Join(fromDir, "gpu", "links"))
+	_ = os.Remove(filepath.Join(fromDir, "gpu"))
+	return len(movedSlots) > 0, err
 }
 
 // adoptDirLinks moves the gpu/links/*.json files the current sprout layout
-// uses.
-func adoptDirLinks(fromDir string, slots map[string]bool) (bool, error) {
+// uses, returning the slots it moved.
+func adoptDirLinks(fromDir string, slots map[string]bool) ([]string, error) {
 	linksDir := filepath.Join(fromDir, "gpu", "links")
 	entries, err := os.ReadDir(linksDir)
 	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
+		return nil, nil
 	}
 	if err != nil {
-		return false, fmt.Errorf("reading %s: %w", linksDir, err)
+		return nil, fmt.Errorf("reading %s: %w", linksDir, err)
 	}
-	moved := false
+	var moved []string
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 			continue
@@ -75,7 +81,7 @@ func adoptDirLinks(fromDir string, slots map[string]bool) (bool, error) {
 			return moved, err
 		}
 		slots[st.Slot()] = true
-		moved = true
+		moved = append(moved, st.Slot())
 	}
 	return moved, nil
 }
@@ -111,7 +117,9 @@ func adoptOne(fromDir string, st *State) error {
 	withConfigDir(fromDir, func() {
 		key, err = loadSecret(AgentKeyName(st.Slot()))
 		if err != nil || key == "" {
-			key, _ = loadSecret(legacyAgentKey)
+			// An older sprout kept the link's key under the single-link
+			// name; that entry is this link's when it has no per-slot one.
+			key, err = loadSecret(legacyAgentKey)
 		}
 		engineKey, _ = loadSecret(EngineKeyName(st.Slot()))
 		if engineKey == "" {
@@ -132,17 +140,15 @@ func adoptOne(fromDir string, st *State) error {
 	if err := st.Save(); err != nil {
 		return err
 	}
-	// The source entries go (also the legacy key names an old sprout may
-	// have used), so the repo's config no longer looks linked.
+	// The source credential entries go (also the legacy key names an old
+	// sprout may have used); the repo's state file is removed by the
+	// caller, which knows which ones moved.
 	withConfigDir(fromDir, func() {
 		_ = credentials.NewFileBackend().Delete(AgentKeyName(st.Slot()))
 		_ = credentials.NewFileBackend().Delete(EngineKeyName(st.Slot()))
 		_ = credentials.NewFileBackend().Delete(legacyAgentKey)
 		_ = credentials.NewFileBackend().Delete(legacyEngineKey)
 	})
-	path := filepath.Join(fromDir, "gpu", "links", st.Slot()+".json")
-	_ = os.Remove(path)
-	_ = os.Remove(filepath.Join(fromDir, "gpu", "gpu.json"))
 	return nil
 }
 

@@ -180,11 +180,23 @@ func LoadLink(slot string) (*State, error) {
 }
 
 // Save writes the state to the link's own file with owner-only permissions.
+// It refuses when a different link already occupies the slot: two names
+// reducing to one slot would otherwise overwrite each other's state and
+// share credential entries.
 func (s *State) Save() error {
 	slot := s.Slot()
 	if slot == "" {
 		return fmt.Errorf("link name %q has no usable file name; pick another with --name", s.Name)
 	}
+	if other, err := LoadLink(slot); err == nil && other.Linked() && other.LinkID != s.LinkID {
+		return fmt.Errorf("the slot %q is already taken by the link %q; pick another name with --name", slot, other.Name)
+	}
+	return s.saveAt(slot)
+}
+
+// saveAt writes the state file without the slot guard; migrateLegacy uses
+// it, since the guard reads the links dir it is about to create.
+func (s *State) saveAt(slot string) error {
 	path, err := statePath(slot)
 	if err != nil {
 		return err

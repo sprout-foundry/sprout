@@ -88,16 +88,31 @@ func InstallService(name string) (string, error) {
 	// usually has nobody logged in. Enabling it needs no sudo where polkit
 	// lets users linger themselves; ServiceNotice says when it did not.
 	_ = exec.Command("loginctl", "enable-linger").Run()
-	uninstallLegacyService()
 	return path, nil
 }
 
+// InstallAllServices installs every link's service instance and, once all
+// are in place, replaces the single unit an older sprout installed: removing
+// it any earlier would leave a migrated link unserved if a later install
+// failed.
+func InstallAllServices(names []string) ([]string, error) {
+	var paths []string
+	for _, name := range names {
+		path, err := InstallService(name)
+		if err != nil {
+			return paths, err
+		}
+		paths = append(paths, path)
+	}
+	uninstallLegacyService()
+	return paths, nil
+}
+
 // UninstallService disables and removes one link's service instance. An
-// empty name removes every instance and the template.
-func UninstallService(name string) error {
-	if name != "" {
-		_ = exec.Command("systemctl", "--user", "disable", "--now", instanceUnit(name)).Run() //nolint:gosec // G204: fixed systemctl subcommand for the link's own unit
-		uninstallLegacyService()
+// empty slot removes every instance, the template and the legacy unit.
+func UninstallService(slot string) error {
+	if slot != "" {
+		_ = exec.Command("systemctl", "--user", "disable", "--now", instanceUnit(slot)).Run() //nolint:gosec // G204: fixed systemctl subcommand for the link's own unit
 		return nil
 	}
 	dir, err := systemdUserDir()
@@ -114,6 +129,7 @@ func UninstallService(name string) error {
 	if err := os.Remove(filepath.Join(dir, systemdUnitTemplate)); err != nil && !os.IsNotExist(err) {
 		return err
 	}
+	_ = os.Remove(filepath.Join(dir, legacySystemdUnit))
 	_ = exec.Command("systemctl", "--user", "daemon-reload").Run()
 	return nil
 }

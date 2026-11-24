@@ -124,17 +124,39 @@ func runGPUInstall(cmd *cobra.Command, _ []string) error {
 	if err := gpulink.MoveKeysToFileStore(); err != nil {
 		return fmt.Errorf("a GPU link key could not be moved where the services can read it (%w); run `sprout gpu link` again", err)
 	}
-	for _, st := range links {
+	if gpuName != "" {
+		st, _, err := gpuTarget()
+		if err != nil {
+			return err
+		}
 		path, err := gpulink.InstallService(st.Name)
 		if err != nil {
 			return fmt.Errorf("installing the service for %q: %w", st.Name, err)
 		}
 		_, _ = fmt.Fprintf(out, "Installed %s for %q.\n", path, st.Name)
+		return nil
+	}
+	paths, err := gpulink.InstallAllServices(linkNames(links))
+	if err != nil {
+		return err
+	}
+	for i, path := range paths {
+		_, _ = fmt.Fprintf(out, "Installed %s for %q.\n", path, links[i].Name)
 	}
 	if note := gpulink.ServiceNotice(); note != "" {
 		_, _ = fmt.Fprintln(out, note)
 	}
 	return nil
+}
+
+// linkNames lists the links' names in the same order LoadLinks returned
+// them, so installed paths pair with their links in the output.
+func linkNames(links []*gpulink.State) []string {
+	names := make([]string, len(links))
+	for i, st := range links {
+		names[i] = st.Name
+	}
+	return names
 }
 
 func runGPUUninstall(cmd *cobra.Command, _ []string) error {

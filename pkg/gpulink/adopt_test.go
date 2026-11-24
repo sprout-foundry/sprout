@@ -93,7 +93,8 @@ func TestAdoptLinkMovesALegacyRepoLink(t *testing.T) {
 }
 
 // A repo link whose slot the machine already has stays put: it is the same
-// link, and moving it would only duplicate it.
+// link, and moving it would only duplicate it. AdoptLink removes only what
+// it moved, so the skipped link's file survives in the repo config.
 func TestAdoptLinkSkipsAnExistingSlot(t *testing.T) {
 	machine, repo := t.TempDir(), t.TempDir()
 	credentials.ResetStorageBackend()
@@ -122,5 +123,9 @@ func TestAdoptLinkSkipsAnExistingSlot(t *testing.T) {
 	st, err := LoadLink("box")
 	if err != nil || st.LinkID != "link-machine" {
 		t.Fatalf("machine link = %+v, %v; want the machine's own", st, err)
+	}
+	// The repo's skipped link file stays (only moved files are removed).
+	if _, err := os.Stat(filepath.Join(repo, "gpu", "links", "box.json")); err != nil {
+		t.Fatalf("the skipped repo link file was removed: %v", err)
 	}
 }

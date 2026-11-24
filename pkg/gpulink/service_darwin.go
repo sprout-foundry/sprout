@@ -78,8 +78,24 @@ func InstallService(name string) (string, error) {
 	if out, err := exec.Command("launchctl", "bootstrap", domain, path).CombinedOutput(); err != nil { //nolint:gosec // G204: launchctl with the link's own plist
 		return "", fmt.Errorf("launchctl bootstrap: %s", out)
 	}
-	uninstallLegacyService()
 	return path, nil
+}
+
+// InstallAllServices installs every link's agent and, once all are in
+// place, stops and removes the single agent an older sprout installed:
+// removing it any earlier would leave a migrated link unserved if a later
+// install failed.
+func InstallAllServices(names []string) ([]string, error) {
+	var paths []string
+	for _, name := range names {
+		path, err := InstallService(name)
+		if err != nil {
+			return paths, err
+		}
+		paths = append(paths, path)
+	}
+	uninstallLegacyService()
+	return paths, nil
 }
 
 // UninstallService stops and removes one link's launchd agent. An empty slot

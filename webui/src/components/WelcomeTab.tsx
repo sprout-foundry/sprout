@@ -1,8 +1,8 @@
 import { Terminal, GitBranch, MessageSquare, Zap, BookOpen, Settings, Command, X } from 'lucide-react';
 import { copy } from '../config/copy';
 import { useHostCapabilities } from '../host';
-import { useWorkspace } from '../hooks/useWorkspace';
-import ProjectFolderPicker from './WorkspacePicker';
+import { useProjectFolder } from '../hooks/useProjectFolder';
+import ProjectFolderPicker from './ProjectFolderPicker';
 import './WelcomeTab.css';
 
 /** Mac users see ⌘; everyone else sees Ctrl. Mirrors HotkeyContext logic. */
@@ -28,16 +28,16 @@ function ProjectFolderPickerView({
   homeDir,
   setProjectFolder,
 }: {
-  projectFolderInfo: ReturnType<typeof useWorkspace>['projectFolderInfo'];
+  projectFolderInfo: ReturnType<typeof useProjectFolder>['projectFolderInfo'];
   homeDir: string;
   setProjectFolder: (path: string) => Promise<void>;
 }): JSX.Element {
-  const { workspaceSwitching: supportsWorkspaceSwitching } = useHostCapabilities();
+  const { projectFolderSwitching: supportsProjectFolderSwitching } = useHostCapabilities();
   const handleBrowse = () => {
-    window.dispatchEvent(new CustomEvent('sprout:open-workspace-switcher'));
+    window.dispatchEvent(new CustomEvent('sprout:open-project-folder-switcher'));
   };
 
-  if (!supportsWorkspaceSwitching) {
+  if (!supportsProjectFolderSwitching) {
     return (
       <div className="welcome-tab">
         <div className="welcome-header">
@@ -194,7 +194,7 @@ function WelcomeContent({
 /* ── WelcomeTab Root Component ─────────────────────────────────────── */
 
 function WelcomeTab(props: WelcomeTabProps): JSX.Element {
-  const { projectFolderInfo, homeDir, isLoading, setProjectFolder } = useWorkspace();
+  const { projectFolderInfo, homeDir, isLoading, setProjectFolder } = useProjectFolder();
 
   // When project folder selection is needed (not a project), show the picker
   if (!isLoading && projectFolderInfo.needs_project_folder_selection) {

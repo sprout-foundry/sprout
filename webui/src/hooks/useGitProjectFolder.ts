@@ -1,0 +1,810 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { showThemedConfirm } from '../components/ThemedDialog';
+import { useEvents } from '../contexts/EventsContext';
+import * as gitApi from '../services/api/gitApi';
+import * as miscApi from '../services/api/miscApi';
+import { notificationBus } from '../services/notificationBus';
+import { GIT_REPO_CHANGED_EVENT } from '../services/projectFolderClone';
+import { getProjectFolderCwd, subscribeProjectFolderCwd } from '../services/projectFolderCwd';
+import { useProjectFolder } from '../services/projectFolderStore';
+import type { SproutEvent } from '../types/events';
+import { changesProjectFolderFiles } from './projectFolderFileEvents';
+import type {
+  GitStatusData,
+  FileSection,
+  GitCommitSummary,
+  GitCommitDetail,
+  GitBranchesState,
+} from '../types/git-types';
+import { selectionKey, parseSelectionKey } from '../types/git-types';
+import { useLog, debugLog, warn } from '../utils/log';
+
+export interface GitDiffResponse {
+  message: string;
+  path: string;
+  has_staged: boolean;
+  has_unstaged: boolean;
+  staged_diff: string;
+  unstaged_diff: string;
+  diff: string;
+  original_content?: string;
+  modified_content?: string;
+  contents_truncated?: boolean;
+}
+
+export interface DeepReviewResult {
+  message: string;
+  status: string;
+  feedback: string;
+  detailed_guidance?: string;
+  suggested_new_prompt?: string;
+  review_output: string;
+  provider?: string;
+  model?: string;
+  warnings?: string[];
+}
+
+export interface UseGitProjectFolderOptions {
+  fetchFn: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  gitRefreshToken: number;
+  selectedGitFilePath?: string | null;
+  onViewChange: (view: 'chat' | 'editor' | 'git') => void;
+  onGitCommit: (message: string, files: string[]) => Promise<unknown>;
+  onGitAICommit: () => Promise<{ commitMessage: string; warnings?: string[] }>;
+  onGitStage: (files: string[]) => Promise<void>;
+  onGitUnstage: (files: string[]) => Promise<void>;
+  onGitDiscard: (files: string[]) => Promise<void>;
+  openProjectFolderBuffer: (options: {
+    kind: 'chat' | 'diff' | 'review' | 'compare';
+    path: string;
+    title: string;
+    content?: string;
+    ext?: string;
+    isPinned?: boolean;
+    isClosable?: boolean;
+    metadata?: Record<string, unknown>;
+  }) => string;
+}
+
+export const useGitProjectFolder = ({
+  fetchFn,
+  gitRefreshToken,
+  selectedGitFilePath,
+  onViewChange,
+  onGitCommit,
+  onGitAICommit,
+  onGitStage,
+  onGitUnstage,
+  onGitDiscard,
+  openProjectFolderBuffer,
+}: UseGitProjectFolderOptions) => {
+  const log = useLog();
+  const events = useEvents();
+
+  const [gitStatus, setGitStatus] = useState<GitStatusData | null>(null);
+  const [commitMessage, setCommitMessage] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [activeDiffPath, setActiveDiffPath] = useState<string | null>(selectedGitFilePath || null);
+  const [activeDiffSelectionKey, setActiveDiffSelectionKey] = useState<string | null>(null);
+  const [activeDiff, setActiveDiff] = useState<GitDiffResponse | null>(null);
+  const [diffMode, setDiffMode] = useState<'combined' | 'staged' | 'unstaged'>('combined');
+  const [isDiffLoading, setIsDiffLoading] = useState(false);
+  const [diffError, setDiffError] = useState<string | null>(null);
+  const [isGitLoading, setIsGitLoading] = useState(false);
+  const [hasLoadedGitStatus, setHasLoadedGitStatus] = useState(false);
+  const [isGitActing, setIsGitActing] = useState(false);
+  const [isGeneratingCommitMessage, setIsGeneratingCommitMessage] = useState(false);
+  const [gitActionError, setGitActionError] = useState<string | null>(null);
+  const [gitActionWarning, setGitActionWarning] = useState<string | null>(null);
+  const [gitBranches, setGitBranches] = useState<GitBranchesState>({ current: '', branches: [] });
+  const projectFolder = useProjectFolder();
+  const [isReviewLoading, setIsReviewLoading] = useState(false);
+  const [isReviewFixing, setIsReviewFixing] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewFixResult, setReviewFixResult] = useState<string | null>(null);
+  const [reviewFixLogs, setReviewFixLogs] = useState<string[]>([]);
+  const [reviewFixSessionID, setReviewFixSessionID] = useState<string | null>(null);
+  const [deepReview, setDeepReview] = useState<DeepReviewResult | null>(null);
+  const fixPollTimeoutRef = useRef<number | null>(null);
+  const fixPollIndexRef = useRef(0);
+
+  useEffect(() => {
+    return () => {
+      if (fixPollTimeoutRef.current !== null) {
+        window.clearTimeout(fixPollTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const loadGitStatus = useCallback(async () => {
+    setIsGitLoading(true);
+    // Working directory (session cwd): when a repo is selected, git ops
+    // target that repo instead of the project folder top.
+    const cwd = getProjectFolderCwd();
+    try {
+      const [data, branchData] = await Promise.all([
+        gitApi.getGitStatus(fetchFn, cwd),
+        gitApi.getGitBranches(fetchFn, cwd).catch((err) => {
+          debugLog('[loadGitStatus] failed to fetch git branches:', err);
+          return { current: '', branches: [] };
+        }),
+      ]);
+      if (data.message !== 'success') {
+        throw new Error(data.message || 'Failed to load git status');
+      }
+
+      // A successful status load supersedes any stale error banner from an
+      // earlier failed attempt (e.g. the boot call that ran before the
+      // WASM shell was ready).
+      setGitActionError(null);
+
+      const status = data.status || {
+        branch: '',
+        ahead: 0,
+        behind: 0,
+        staged: [],
+        modified: [],
+        untracked: [],
+        deleted: [],
+        renamed: [],
+      };
+
+      // Not in a git repository — show the "No git repository found" message.
+      if (!data.in_git_repo) {
+        setGitStatus(null);
+        setGitActionWarning(null);
+        setGitBranches({ current: '', branches: [] });
+        return;
+      }
+
+      // Show warning if file list was truncated due to limits
+      if (data.status?.truncated) {
+        setGitActionWarning(
+          'Too many files changed. Showing only the first 500 files per section. Use git status or command line to see all files.',
+        );
+      } else {
+        setGitActionWarning(data.note ?? null);
+      }
+
+      setGitStatus({
+        branch: status.branch || '',
+        ahead: status.ahead || 0,
+        behind: status.behind || 0,
+        staged: status.staged || [],
+        modified: status.modified || [],
+        untracked: status.untracked || [],
+        deleted: status.deleted || [],
+        renamed: status.renamed || [],
+        clean: !(
+          status.staged?.length ||
+          status.modified?.length ||
+          status.untracked?.length ||
+          status.deleted?.length ||
+          status.renamed?.length
+        ),
+        truncated: status.truncated || false,
+      });
+      setGitBranches({
+        current: branchData.current || status.branch || '',
+        branches: branchData.branches || [],
+      });
+    } catch (error) {
+      log.error('Failed to load git status', { title: 'Git Error' });
+      setGitStatus(null);
+      setGitActionError(error instanceof Error ? error.message : 'Failed to load git status');
+    } finally {
+      setIsGitLoading(false);
+      setHasLoadedGitStatus(true);
+    }
+  }, [fetchFn, log]);
+
+  useEffect(() => {
+    loadGitStatus();
+  }, [loadGitStatus, gitRefreshToken]);
+
+  // Reload status when the session working directory changes (the user
+  // picked a different repo in the Files panel) so the panel reflects the
+  // newly targeted repo immediately.
+  useEffect(() => subscribeProjectFolderCwd(() => loadGitStatus()), [loadGitStatus]);
+
+  // A clone swaps in a repository (branch, history, remote) without any file
+  // event the watchers below would see.
+  useEffect(() => {
+    const reload = () => loadGitStatus();
+    window.addEventListener(GIT_REPO_CHANGED_EVENT, reload);
+    return () => window.removeEventListener(GIT_REPO_CHANGED_EVENT, reload);
+  }, [loadGitStatus]);
+
+  // Debounced git status refresh on file change and tool completion events.
+  // When files are written (editor save, agent edits, search replace, shell
+  // commands), the git panel should reflect the new status.
+  // Uses a 2s debounce to coalesce rapid agent edits into a single refresh.
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const scheduleRefresh = () => {
+      if (debounceTimerRef.current !== null) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      debounceTimerRef.current = setTimeout(() => {
+        debounceTimerRef.current = null;
+        loadGitStatus();
+      }, 2000);
+    };
+
+    const handleGitRefreshEvent = (event: SproutEvent) => {
+      if (changesProjectFolderFiles(event)) scheduleRefresh();
+    };
+
+    events.onEvent(handleGitRefreshEvent);
+    return () => {
+      events.removeEvent(handleGitRefreshEvent);
+      if (debounceTimerRef.current !== null) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [events, loadGitStatus]);
+
+  const loadDiff = useCallback(
+    async (filePath: string) => {
+      setIsDiffLoading(true);
+      setDiffError(null);
+      try {
+        const response = await gitApi.getGitDiff(fetchFn, filePath, getProjectFolderCwd());
+        setActiveDiff(response);
+        const nextMode =
+          response.has_staged && !response.has_unstaged
+            ? 'staged'
+            : !response.has_staged && response.has_unstaged
+              ? 'unstaged'
+              : 'combined';
+        setDiffMode(nextMode);
+        openProjectFolderBuffer({
+          kind: 'diff',
+          path: `__workspace/diff/${filePath}`,
+          title: `Diff: ${filePath.split('/').pop() || filePath}`,
+          ext: '.diff',
+          metadata: {
+            sourcePath: filePath,
+            diff: response,
+            diffMode: nextMode,
+            // Full-file contents: the editable merge view must operate on
+            // the real file, not the hunk fragment reconstruction.
+            originalContent: response.original_content,
+            modifiedContent: response.modified_content,
+            contentsTruncated: response.contents_truncated ?? false,
+          },
+        });
+      } catch (error) {
+        log.error('Failed to load diff', { title: 'Git Error' });
+        setDiffError(error instanceof Error ? error.message : 'Failed to load diff');
+        setActiveDiff(null);
+      } finally {
+        setIsDiffLoading(false);
+      }
+    },
+    [fetchFn, openProjectFolderBuffer, log],
+  );
+
+  useEffect(() => {
+    if (!selectedGitFilePath) {
+      return;
+    }
+    setActiveDiffSelectionKey(null);
+    setActiveDiffPath(selectedGitFilePath);
+    loadDiff(selectedGitFilePath);
+  }, [loadDiff, selectedGitFilePath]);
+
+  // When git status refreshes, if the currently previewed file moved to a
+  // different section (e.g. user staged it), re-key activeDiffSelectionKey so
+  // the row stays highlighted in its new section instead of going dark.
+  useEffect(() => {
+    if (!gitStatus || !activeDiffSelectionKey) return;
+    const parsed = parseSelectionKey(activeDiffSelectionKey);
+    if (!parsed) return;
+    const stillInOriginalSection = gitStatus[parsed.section]?.some((file) => file.path === parsed.path);
+    if (stillInOriginalSection) return;
+    const sections: FileSection[] = ['staged', 'modified', 'untracked', 'deleted'];
+    for (const section of sections) {
+      if (gitStatus[section]?.some((file) => file.path === parsed.path)) {
+        setActiveDiffSelectionKey(selectionKey(section, parsed.path));
+        return;
+      }
+    }
+    // File no longer present in any section — clear preview key.
+    setActiveDiffSelectionKey(null);
+  }, [gitStatus, activeDiffSelectionKey]);
+
+  const selectedEntries = useMemo(
+    () =>
+      Array.from(selectedFiles)
+        .map(parseSelectionKey)
+        .filter((entry): entry is { section: FileSection; path: string } => entry !== null),
+    [selectedFiles],
+  );
+
+  const stageablePaths = useMemo(
+    () => Array.from(new Set(selectedEntries.filter((entry) => entry.section !== 'staged').map((entry) => entry.path))),
+    [selectedEntries],
+  );
+
+  const unstageablePaths = useMemo(
+    () => Array.from(new Set(selectedEntries.filter((entry) => entry.section === 'staged').map((entry) => entry.path))),
+    [selectedEntries],
+  );
+
+  const discardablePaths = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          selectedEntries
+            .filter((entry) => entry.section === 'modified' || entry.section === 'deleted')
+            .map((entry) => entry.path),
+        ),
+      ),
+    [selectedEntries],
+  );
+
+  const runGitAction = useCallback(
+    async (action: () => Promise<unknown>, fallbackMessage: string) => {
+      setGitActionError(null);
+      setGitActionWarning(null);
+      setIsGitActing(true);
+      try {
+        await action();
+        await loadGitStatus();
+        setSelectedFiles(new Set());
+      } catch (error) {
+        warn(`[runGitAction] failed: ${error instanceof Error ? error.message : String(error)}`);
+        setGitActionError(error instanceof Error ? error.message : fallbackMessage);
+      } finally {
+        setIsGitActing(false);
+      }
+    },
+    [loadGitStatus],
+  );
+
+  const handleToggleFileSelection = useCallback((section: FileSection, filePath: string) => {
+    const key = selectionKey(section, filePath);
+    setSelectedFiles((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleToggleSectionSelection = useCallback(
+    (section: FileSection) => {
+      const files = gitStatus?.[section] || [];
+      if (files.length === 0) return;
+
+      setSelectedFiles((prev) => {
+        const next = new Set(prev);
+        const keys = files.map((file) => selectionKey(section, file.path));
+        const allSelected = keys.every((key) => next.has(key));
+        keys.forEach((key) => {
+          if (allSelected) {
+            next.delete(key);
+          } else {
+            next.add(key);
+          }
+        });
+        return next;
+      });
+    },
+    [gitStatus],
+  );
+
+  const clearSelectedFiles = useCallback(() => {
+    setSelectedFiles(new Set());
+  }, []);
+
+  const handleSelectFiles = useCallback((keys: string[]) => {
+    setSelectedFiles(new Set(keys));
+  }, []);
+
+  const handlePreviewGitFile = useCallback(
+    (section: FileSection, filePath: string) => {
+      setActiveDiffSelectionKey(selectionKey(section, filePath));
+      setActiveDiffPath(filePath);
+      loadDiff(filePath);
+      onViewChange('editor');
+    },
+    [loadDiff, onViewChange],
+  );
+
+  const handleStageSelected = useCallback(() => {
+    if (stageablePaths.length === 0) return;
+    runGitAction(() => onGitStage(stageablePaths), 'Failed to stage selected files');
+  }, [onGitStage, runGitAction, stageablePaths]);
+
+  const handleUnstageSelected = useCallback(() => {
+    if (unstageablePaths.length === 0) return;
+    runGitAction(() => onGitUnstage(unstageablePaths), 'Failed to unstage selected files');
+  }, [onGitUnstage, runGitAction, unstageablePaths]);
+
+  const handleDiscardSelected = useCallback(() => {
+    if (discardablePaths.length === 0) return;
+    const count = discardablePaths.length;
+    const preview = discardablePaths.slice(0, 5).join('\n');
+    const more = count > 5 ? `\n…and ${count - 5} more` : '';
+    runGitAction(async () => {
+      const confirmed = await showThemedConfirm(
+        `Discard local changes to ${count} file${count === 1 ? '' : 's'}? This cannot be undone.\n\n${preview}${more}`,
+        { title: 'Discard changes', type: 'danger', confirmLabel: 'Discard' },
+      );
+      if (!confirmed) return;
+      await onGitDiscard(discardablePaths);
+    }, 'Failed to discard selected files');
+  }, [discardablePaths, onGitDiscard, runGitAction]);
+
+  const handleStageFile = useCallback(
+    (filePath: string) => {
+      runGitAction(() => onGitStage([filePath]), `Failed to stage ${filePath}`);
+    },
+    [onGitStage, runGitAction],
+  );
+
+  const handleUnstageFile = useCallback(
+    (filePath: string) => {
+      runGitAction(() => onGitUnstage([filePath]), `Failed to unstage ${filePath}`);
+    },
+    [onGitUnstage, runGitAction],
+  );
+
+  const handleDiscardFile = useCallback(
+    (filePath: string) => {
+      runGitAction(async () => {
+        const confirmed = await showThemedConfirm(`Discard local changes to ${filePath}? This cannot be undone.`, {
+          title: 'Discard changes',
+          type: 'danger',
+          confirmLabel: 'Discard',
+        });
+        if (!confirmed) return;
+        await onGitDiscard([filePath]);
+      }, `Failed to discard ${filePath}`);
+    },
+    [onGitDiscard, runGitAction],
+  );
+
+  const handleSectionAction = useCallback(
+    (section: FileSection) => {
+      const files = gitStatus?.[section] || [];
+      if (files.length === 0) return;
+
+      if (section === 'staged') {
+        runGitAction(() => onGitUnstage(files.map((file) => file.path)), 'Failed to unstage section');
+        return;
+      }
+
+      if (section === 'modified' || section === 'untracked' || section === 'deleted') {
+        runGitAction(() => onGitStage(files.map((file) => file.path)), 'Failed to stage section');
+      }
+    },
+    [gitStatus, onGitStage, onGitUnstage, runGitAction],
+  );
+
+  const handleGitCommitClick = useCallback(() => {
+    if (!commitMessage.trim() || !gitStatus?.staged.length) return;
+    runGitAction(async () => {
+      await onGitCommit(
+        commitMessage,
+        gitStatus.staged.map((file) => file.path),
+      );
+      setCommitMessage('');
+      setDeepReview(null);
+    }, 'Failed to create commit');
+  }, [commitMessage, gitStatus, onGitCommit, runGitAction]);
+
+  const handleGenerateCommitMessage = useCallback(() => {
+    if (!gitStatus?.staged.length) return;
+    setGitActionError(null);
+    setGitActionWarning(null);
+    setIsGeneratingCommitMessage(true);
+    onGitAICommit()
+      .then(({ commitMessage: generatedMessage, warnings }) => {
+        if (!generatedMessage || !generatedMessage.trim()) {
+          throw new Error('AI returned an empty commit message');
+        }
+        setCommitMessage(generatedMessage.trim());
+        if (warnings && warnings.length > 0) {
+          setGitActionWarning(warnings.join(' '));
+        }
+      })
+      .catch((error) => {
+        debugLog('[useGitProjectFolder] Failed to generate commit message:', error);
+        const msg = error instanceof Error ? error.message : 'Failed to generate commit message';
+        setGitActionError(msg);
+        notificationBus.notify('warning', 'AI Commit', msg, 5000);
+      })
+      .finally(() => {
+        setIsGeneratingCommitMessage(false);
+      });
+  }, [gitStatus, onGitAICommit]);
+
+  const handleRunReview = useCallback(async () => {
+    setReviewError(null);
+    setGitActionWarning(null);
+    setReviewFixResult(null);
+    setIsReviewLoading(true);
+    try {
+      const response = await miscApi.generateDeepReview(fetchFn);
+      setDeepReview(response);
+      openProjectFolderBuffer({
+        kind: 'review',
+        path: '__workspace/review',
+        title: 'Review',
+        ext: '.review',
+        metadata: { reviewGeneratedAt: Date.now() },
+      });
+      onViewChange('editor');
+    } catch (error) {
+      warn(`[handleRunReview] failed: ${error instanceof Error ? error.message : String(error)}`);
+      setReviewError(error instanceof Error ? error.message : 'Failed to generate review');
+      setDeepReview(null);
+    } finally {
+      setIsReviewLoading(false);
+    }
+  }, [fetchFn, onViewChange, openProjectFolderBuffer]);
+
+  const handleFixFromReview = useCallback(
+    async (options?: { fixPrompt?: string; selectedItems?: string[] }) => {
+      if (!deepReview?.review_output) return;
+      setReviewError(null);
+      setReviewFixResult(null);
+      setReviewFixLogs([]);
+      setReviewFixSessionID(null);
+      setIsReviewFixing(true);
+      try {
+        const started = await miscApi.startFixFromDeepReview(fetchFn, deepReview.review_output, options);
+        setReviewFixSessionID(started.session_id || null);
+        fixPollIndexRef.current = 0;
+        setReviewFixLogs((prev) => [...prev, `Started fix session: ${started.session_id}`]);
+
+        const poll = async () => {
+          try {
+            const status = await miscApi.getFixFromDeepReviewStatus(fetchFn, started.job_id, fixPollIndexRef.current);
+            if (status.logs?.length) {
+              setReviewFixLogs((prev) => [...prev, ...status.logs]);
+            }
+            fixPollIndexRef.current = status.next_index || fixPollIndexRef.current;
+
+            if (status.status === 'completed') {
+              setReviewFixResult(status.result || 'Fix workflow completed.');
+              setIsReviewFixing(false);
+              await loadGitStatus();
+              return;
+            }
+
+            if (status.status === 'error') {
+              throw new Error(status.error || 'Fix workflow failed');
+            }
+
+            fixPollTimeoutRef.current = window.setTimeout(poll, 1000);
+          } catch (error) {
+            warn(`[handleFixFromReview] poll error: ${error instanceof Error ? error.message : String(error)}`);
+            setReviewError(error instanceof Error ? error.message : 'Failed to fetch fix progress');
+            setIsReviewFixing(false);
+          }
+        };
+
+        await poll();
+      } catch (error) {
+        warn(`[handleFixFromReview] outer error: ${error instanceof Error ? error.message : String(error)}`);
+        setReviewError(error instanceof Error ? error.message : 'Failed to apply fixes from review');
+        setIsReviewFixing(false);
+      }
+    },
+    [fetchFn, deepReview, loadGitStatus],
+  );
+
+  const handleDiffModeChange = useCallback(
+    (mode: 'combined' | 'staged' | 'unstaged') => {
+      setDiffMode(mode);
+      if (!activeDiffPath) {
+        return;
+      }
+
+      openProjectFolderBuffer({
+        kind: 'diff',
+        path: `__workspace/diff/${activeDiffPath}`,
+        title: `Diff: ${activeDiffPath.split('/').pop() || activeDiffPath}`,
+        ext: '.diff',
+        metadata: {
+          sourcePath: activeDiffPath,
+          diff: activeDiff,
+          diffMode: mode,
+          originalContent: activeDiff?.original_content,
+          modifiedContent: activeDiff?.modified_content,
+          contentsTruncated: activeDiff?.contents_truncated ?? false,
+        },
+      });
+    },
+    [activeDiff, activeDiffPath, openProjectFolderBuffer],
+  );
+
+  const currentBranch = gitBranches.current;
+
+  const handleCheckoutBranch = useCallback(
+    (branch: string) => {
+      if (!branch.trim() || branch === currentBranch) return;
+      runGitAction(async () => {
+        await gitApi.checkoutGitBranch(fetchFn, branch, getProjectFolderCwd());
+      }, `Failed to checkout ${branch}`);
+    },
+    [fetchFn, currentBranch, runGitAction],
+  );
+
+  const handleCreateBranch = useCallback(
+    (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      runGitAction(async () => {
+        await gitApi.createGitBranch(fetchFn, trimmed, getProjectFolderCwd());
+      }, `Failed to create branch ${trimmed}`);
+    },
+    [fetchFn, runGitAction],
+  );
+
+  const handlePull = useCallback(() => {
+    runGitAction(async () => {
+      await gitApi.pullGit(fetchFn, getProjectFolderCwd());
+    }, 'Failed to pull changes');
+  }, [fetchFn, runGitAction]);
+
+  const handlePush = useCallback(() => {
+    runGitAction(async () => {
+      await gitApi.pushGit(fetchFn, getProjectFolderCwd());
+    }, 'Failed to push changes');
+  }, [fetchFn, runGitAction]);
+
+  const handleCreatePullRequest = useCallback(
+    async (params: {
+      title: string;
+      body?: string;
+      base?: string;
+      head?: string;
+      draft?: boolean;
+    }): Promise<{ url: string; number: number; state: string }> => {
+      setGitActionError(null);
+      setGitActionWarning(null);
+      setIsGitActing(true);
+      try {
+        const result = await gitApi.createPullRequest(fetchFn, params, getProjectFolderCwd());
+        return result;
+      } catch (error) {
+        warn(`[handleCreatePullRequest] failed: ${error instanceof Error ? error.message : String(error)}`);
+        setGitActionError(error instanceof Error ? error.message : 'Failed to create pull request');
+        throw error;
+      } finally {
+        setIsGitActing(false);
+      }
+    },
+    [fetchFn],
+  );
+
+  // Git history callbacks
+  const handleLoadCommits = useCallback(
+    async (limit: number, offset: number, opts?: { signal?: AbortSignal }) => {
+      const res = await gitApi.getGitLog(fetchFn, limit, offset, { ...opts, dir: getProjectFolderCwd() });
+      return { commits: res.commits, total: res.total };
+    },
+    [fetchFn],
+  );
+
+  const handleLoadCommitDetail = useCallback(
+    (hash: string) => gitApi.getGitCommitDetail(fetchFn, hash, getProjectFolderCwd()),
+    [fetchFn],
+  );
+
+  const handleLoadCommitFileDiff = useCallback(
+    (hash: string, path: string) => gitApi.getGitCommitFileDiff(fetchFn, hash, path, getProjectFolderCwd()),
+    [fetchFn],
+  );
+
+  const handleCheckoutCommit = useCallback(
+    async (hash: string): Promise<{ message: string }> => {
+      setGitActionError(null);
+      setGitActionWarning(null);
+      setIsGitActing(true);
+      try {
+        const result = await gitApi.checkoutGitCommit(fetchFn, hash, getProjectFolderCwd());
+        await loadGitStatus();
+        setSelectedFiles(new Set());
+        return result;
+      } catch (error) {
+        warn(`[handleCheckoutCommit] failed: ${error instanceof Error ? error.message : String(error)}`);
+        setGitActionError(error instanceof Error ? error.message : `Failed to checkout commit ${hash}`);
+        throw error;
+      } finally {
+        setIsGitActing(false);
+      }
+    },
+    [fetchFn, loadGitStatus],
+  );
+
+  const handleRevertCommit = useCallback(
+    async (hash: string): Promise<{ message: string }> => {
+      setGitActionError(null);
+      setGitActionWarning(null);
+      setIsGitActing(true);
+      try {
+        const result = await gitApi.revertGitCommit(fetchFn, hash, getProjectFolderCwd());
+        await loadGitStatus();
+        setSelectedFiles(new Set());
+        return result;
+      } catch (error) {
+        warn(`[handleRevertCommit] failed: ${error instanceof Error ? error.message : String(error)}`);
+        setGitActionError(error instanceof Error ? error.message : 'Failed to revert commit');
+        throw error;
+      } finally {
+        setIsGitActing(false);
+      }
+    },
+    [fetchFn, loadGitStatus],
+  );
+
+  return {
+    gitStatus,
+    gitBranches,
+    projectFolder,
+    commitMessage,
+    setCommitMessage,
+    selectedFiles,
+    activeDiffSelectionKey,
+    activeDiffPath,
+    activeDiff,
+    diffMode,
+    isDiffLoading,
+    diffError,
+    isGitLoading,
+    hasLoadedGitStatus,
+    isGitActing,
+    isGeneratingCommitMessage,
+    gitActionError,
+    gitActionWarning,
+    isReviewLoading,
+    isReviewFixing,
+    reviewError,
+    reviewFixResult,
+    reviewFixLogs,
+    reviewFixSessionID,
+    deepReview,
+    stageablePaths,
+    unstageablePaths,
+    discardablePaths,
+    handleToggleFileSelection,
+    handleToggleSectionSelection,
+    clearSelectedFiles,
+    handleSelectFiles,
+    handlePreviewGitFile,
+    handleStageSelected,
+    handleUnstageSelected,
+    handleDiscardSelected,
+    handleStageFile,
+    handleUnstageFile,
+    handleDiscardFile,
+    handleSectionAction,
+    handleGitCommitClick,
+    handleGenerateCommitMessage,
+    handleRunReview,
+    handleFixFromReview,
+    handleDiffModeChange,
+    handleCheckoutBranch,
+    handleCreateBranch,
+    handlePull,
+    handlePush,
+    handleCreatePullRequest,
+    handleLoadCommits,
+    handleLoadCommitDetail,
+    handleLoadCommitFileDiff,
+    handleCheckoutCommit,
+    handleRevertCommit,
+    refreshGitStatus: loadGitStatus,
+  };
+};
+
+export type UseGitProjectFolderResult = ReturnType<typeof useGitProjectFolder>;

@@ -34,14 +34,14 @@ body {
 }
 
 /* SP-160 §160a: the app renders its space through `SproutWorkspace`, which
- * wraps the space shell in a `.sprout-workspace` root (the host-page scoping
+ * wraps the space shell in a `.sprout-spaces` root (the host-page scoping
  * element the package stylesheet targets). In the app the wrapper is
  * redundant — the app owns its own scoping and lays its flex children out
  * directly — so it participates as `display: contents`: its children (the
  * space's `<main class="main-content">`) become the flex items they are today,
  * keeping the layout byte-identical. Custom properties (the theme on
  * `data-theme`) still inherit through it, so the theme attribute stays live. */
-.app > .sprout-workspace {
+.app > .sprout-spaces {
   display: contents;
 }
 
@@ -91,8 +91,8 @@ body {
   z-index: 100;
 }
 
-/* When .workspace-bar lives inside .header-bar it renders as an inline right-side element */
-.header-bar .workspace-bar {
+/* When .project-folder-bar lives inside .header-bar it renders as an inline right-side element */
+.header-bar .project-folder-bar {
   height: auto;
   min-height: 0;
   padding: 0 14px;
@@ -397,7 +397,7 @@ body {
 }
 
 /* Standalone workspace bar (mobile) */
-.workspace-bar {
+.project-folder-bar {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -411,11 +411,11 @@ body {
   font-size: 12px;
 }
 
-.workspace-bar--remote .workspace-bar-icon--remote {
+.project-folder-bar--remote .project-folder-bar-icon--remote {
   color: var(--accent-primary);
 }
 
-.workspace-bar-host {
+.project-folder-bar-host {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -424,7 +424,7 @@ body {
   font-weight: 600;
 }
 
-.workspace-bar-icon {
+.project-folder-bar-icon {
   color: var(--text-tertiary);
   flex-shrink: 0;
   padding: 4px;
@@ -435,21 +435,21 @@ body {
   justify-content: center;
 }
 
-.workspace-bar-host-name {
+.project-folder-bar-host-name {
   white-space: nowrap;
 }
 
-.workspace-bar--remote .workspace-bar-host-name {
+.project-folder-bar--remote .project-folder-bar-host-name {
   color: var(--accent-primary);
 }
 
-.workspace-bar-sep {
+.project-folder-bar-sep {
   color: var(--text-tertiary);
   flex-shrink: 0;
   font-size: 11px;
 }
 
-.workspace-bar-path {
+.project-folder-bar-path {
   color: var(--text-secondary);
   font-family: var(--font-mono, monospace);
   font-size: 11px;
@@ -593,12 +593,12 @@ body {
     padding: 0 8px;
   }
 
-  .header-bar .workspace-bar {
+  .header-bar .project-folder-bar {
     padding: 0 8px;
     font-size: 11px;
   }
 
-  .workspace-bar-path {
+  .project-folder-bar-path {
     max-width: 180px;
   }
 
@@ -895,7 +895,7 @@ select option {
   background: var(--bg-secondary);
 }
 
-.editor-workspace {
+.editor-spaces {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -928,7 +928,7 @@ select option {
 /* Route fallback used by lazy-loaded panels (Tasks / Billing / Team) — sits
  * inside EditorWorkspace and gets a comfortable inner padding for the
  * Skeleton lines. Was previously an inline style. */
-.editor-workspace-route-fallback {
+.editor-spaces-route-fallback {
   padding: var(--space-6);
 }
 
@@ -2132,7 +2132,7 @@ button.primary.success {
 
 /* ── Working-directory selector (Files section header) ─────────── */
 
-.workspace-cwd-bar {
+.project-folder-cwd-bar {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -2141,7 +2141,7 @@ button.primary.success {
   border-bottom: 1px solid color-mix(in srgb, var(--text-secondary, #8b93a7) 14%, transparent);
 }
 
-.workspace-cwd-select-label {
+.project-folder-cwd-select-label {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
@@ -2150,7 +2150,7 @@ button.primary.success {
   color: var(--text-secondary, #8b93a7);
 }
 
-.workspace-cwd-select {
+.project-folder-cwd-select {
   min-width: 0;
   max-width: 100%;
   flex: 1 1 auto;
@@ -2194,11 +2194,11 @@ button.primary.success {
     5px 5px;
 }
 
-.workspace-cwd-select:hover {
+.project-folder-cwd-select:hover {
   border-color: color-mix(in srgb, var(--accent-primary) 45%, transparent);
 }
 
-.workspace-cwd-select:focus-visible {
+.project-folder-cwd-select:focus-visible {
   outline: none;
   border-color: var(--border-focus);
   box-shadow: 0 0 0 2px var(--accent-primary-alpha);
@@ -2206,7 +2206,7 @@ button.primary.success {
 
 /* "+ Add repo" button on the workspace row — adds a workspace entry
  * (clone) rather than acting on the loaded tree. */
-.workspace-add-repo-btn {
+.project-folder-add-repo-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2221,18 +2221,18 @@ button.primary.success {
   transition: all 0.12s var(--ease-out);
 }
 
-.workspace-add-repo-btn:hover {
+.project-folder-add-repo-btn:hover {
   border-color: var(--accent-primary);
   color: var(--accent-primary);
   background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
 }
 
-.workspace-add-repo-btn:disabled {
+.project-folder-add-repo-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.workspace-add-repo-btn--labeled {
+.project-folder-add-repo-btn--labeled {
   width: auto;
   gap: var(--space-1);
   padding: 0 var(--space-2);
@@ -2240,7 +2240,7 @@ button.primary.success {
   font-size: 12px;
 }
 
-.workspace-add-repo-btn:focus-visible {
+.project-folder-add-repo-btn:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--accent-primary);
 }
@@ -2248,29 +2248,29 @@ button.primary.success {
 /* Touch: raise BOTH controls to a comfortable target — the select gets a
  * taller hit area too, not just the button. */
 @media (hover: none) {
-  .workspace-cwd-select {
+  .project-folder-cwd-select {
     height: 32px;
     padding: 0 6px;
   }
 
-  .workspace-add-repo-btn {
+  .project-folder-add-repo-btn {
     width: 32px;
     height: 32px;
   }
 
-  .workspace-add-repo-btn--labeled {
+  .project-folder-add-repo-btn--labeled {
     width: auto;
   }
 }
 
 /* Very narrow rows (small phones, iPad split view): the row is a container,
  * so the icon drops out based on the ROW's width — not the viewport's. */
-.workspace-cwd-bar {
+.project-folder-cwd-bar {
   container-type: inline-size;
 }
 
 @container (max-width: 300px) {
-  .workspace-cwd-select-label > svg {
+  .project-folder-cwd-select-label > svg {
     display: none;
   }
 }

@@ -3,11 +3,11 @@ import type { ElementType } from 'react';
 import AgentChangesPanel from '../components/AgentChangesPanel';
 import ChatView from '../components/ChatView';
 import { PreviewPanel } from '../components/PreviewPanel';
-import { WorkspaceCommandPalette } from './WorkspaceCommandPalette';
-import { WorkspaceTerminalView } from './WorkspaceTerminalView';
+import { SpacesCommandPalette } from './SpacesCommandPalette';
+import { SpacesTerminalView } from './SpacesTerminalView';
 import './ViewsLayout.css';
-import { WorkspaceGitView } from './WorkspaceGitView';
-import { WorkspaceSearchView } from './WorkspaceSearchView';
+import { SpacesGitView } from './SpacesGitView';
+import { SpacesSearchView } from './SpacesSearchView';
 
 /**
  * Layout configuration + arrangement renderer.
@@ -48,7 +48,7 @@ export const SLOT_ORDER: readonly ViewSlot[] = ['left', 'center', 'right', 'over
  * `previewPanel`) require the webui context stack; primitives
  * (`fileTree`, `editor`, `previewPane`) render standalone. The `git`
  * (source control) and `search` views are composites too: they call the
- * workspace's git and search endpoints through its transport. `terminal` (the
+ * spaces' git and search endpoints through its transport. `terminal` (the
  * host's terminal, or an unavailable notice) and `commandPalette` (an overlay
  * that renders nothing until opened) are composite too.
  */
@@ -87,7 +87,7 @@ export type ViewComponent = ElementType;
 /**
  * The built-in webui arrangement: files at left, the chat at center, the
  * agent-changes panel at right, the preview panel as an overlay (a composed
- * workspace mounts it only for a host that declares `capabilities.preview`,
+ * spaces mount it only for a host that declares `capabilities.preview`,
  * closed until opened). The command
  * palette sits in the overlay too (it renders nothing until opened); an
  * arrangement that supplies its own `overlay` without it opts out. This is
@@ -113,10 +113,10 @@ export const VIEWS_BY_KIND: Record<ViewKind, ViewComponent> = {
   editor: Editor,
   previewPane: PreviewPane,
   previewPanel: PreviewPanel,
-  git: WorkspaceGitView,
-  search: WorkspaceSearchView,
-  terminal: WorkspaceTerminalView,
-  commandPalette: WorkspaceCommandPalette,
+  git: SpacesGitView,
+  search: SpacesSearchView,
+  terminal: SpacesTerminalView,
+  commandPalette: SpacesCommandPalette,
 };
 
 /**
@@ -162,7 +162,7 @@ export interface ViewsLayoutProps {
   className?: string;
   /**
    * Per-kind component substitutions over `VIEWS_BY_KIND`. The composed
-   * workspace uses it to render its assembled editor for the `editor` kind;
+   * spaces use it to render its assembled editor for the `editor` kind;
    * omitted, every kind renders its registered view.
    */
   components?: Partial<Record<ViewKind, ViewComponent>>;

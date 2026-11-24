@@ -15,7 +15,7 @@ import { HostProvider } from '../host/HostProvider';
 import { makeTestHost } from '../host/testHost';
 import SidebarFilesSection from './SidebarFilesSection';
 
-vi.mock('../services/workspaceFs/backendsExport', () => ({
+vi.mock('../services/projectFolderFs/backendsExport', () => ({
   getProjectFolderFs: vi.fn(),
   listProjectFolderRepos: vi.fn().mockResolvedValue(['octo/sprout']),
 }));
@@ -41,7 +41,7 @@ function renderSection() {
   act(() => {
     root.render(
       <HostProvider host={makeTestHost({ localTerminal: false })}>
-        <SidebarFilesSection workspaceRoot="" />
+        <SidebarFilesSection projectFolder="" />
       </HostProvider>,
     );
   });
@@ -67,32 +67,32 @@ describe('SidebarFilesSection: shell-scoped cwd row', () => {
   it('plain webui: selector hidden, but the + add-repo button stays (only clone affordance)', () => {
     publishShellIdentityForTests('webui');
     renderSection();
-    expect(container.querySelector('[data-testid="workspace-cwd-select"]')).toBeNull();
-    expect(container.querySelector('[data-testid="workspace-cwd-bar"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="workspace-add-repo-btn"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="project-folder-cwd-select"]')).toBeNull();
+    expect(container.querySelector('[data-testid="project-folder-cwd-bar"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="project-folder-add-repo-btn"]')).not.toBeNull();
   });
 
   it('layered layout: no add-repo button (the repository rail opens repos)', () => {
     layoutState.isLayeredLayout = true;
     publishShellIdentityForTests('webui');
     renderSection();
-    expect(container.querySelector('[data-testid="workspace-add-repo-btn"]')).toBeNull();
+    expect(container.querySelector('[data-testid="project-folder-add-repo-btn"]')).toBeNull();
   });
 
   it('studio shell: the full row renders (selector + add button)', () => {
     publishShellIdentityForTests('studio');
     renderSection();
-    expect(container.querySelector('[data-testid="workspace-cwd-select"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="workspace-add-repo-btn"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="project-folder-cwd-select"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="project-folder-add-repo-btn"]')).not.toBeNull();
   });
 
   it('follows a webui→studio transition without remount (handshake lands late)', () => {
     publishShellIdentityForTests('webui');
     renderSection();
-    expect(container.querySelector('[data-testid="workspace-cwd-select"]')).toBeNull();
+    expect(container.querySelector('[data-testid="project-folder-cwd-select"]')).toBeNull();
     act(() => {
       publishShellIdentityForTests('studio');
     });
-    expect(container.querySelector('[data-testid="workspace-cwd-select"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="project-folder-cwd-select"]')).not.toBeNull();
   });
 });

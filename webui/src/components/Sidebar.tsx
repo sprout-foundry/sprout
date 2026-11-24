@@ -23,9 +23,9 @@ import type { SproutInstance } from '../services/api';
 import { NATIVE_GIT_ENABLED } from '../services/nativeGitStubs/nativeGitFlag';
 import type { ViewType } from '../types/app';
 import { debugLog } from '../utils/log';
-import ModeSwitcher from '../workspaces/ModeSwitcher';
-import type { ModeRailProps } from '../workspaces/rail';
-import type { WorkspaceMode, WorkspaceModeId } from '../workspaces/registry';
+import ModeSwitcher from '../spaces/ModeSwitcher';
+import type { ModeRailProps } from '../spaces/rail';
+import type { Space, SpaceId } from '../spaces/registry';
 import AutomationsPanel from './AutomationsPanel';
 import type { SidebarGitPanelProps } from './git/gitPanelProps';
 import LocationSwitcher from './LocationSwitcher';
@@ -94,11 +94,11 @@ interface SidebarProps {
   /** Conversations listed in the layered layout's project sidebar. */
   conversations?: ProjectNavConversations;
   /** Workspace modes offered for the current project folder, in switcher order. */
-  modes?: WorkspaceMode[];
+  modes?: Space[];
   /** The active mode's id. */
-  activeModeId?: WorkspaceModeId;
+  activeModeId?: SpaceId;
   /** Switch modes (the top-left switcher). */
-  onSelectMode?: (id: WorkspaceModeId) => void;
+  onSelectMode?: (id: SpaceId) => void;
   /** The active mode's rail component, or undefined for the Code default. */
   modeRail?: ComponentType<ModeRailProps>;
   /** Active entry id within the mode's rail. */
@@ -196,7 +196,7 @@ function Sidebar({
     automations: supportsAutomations,
     settings: supportsSettings,
     git: supportsGit,
-    workspaceSwitching: supportsWorkspaceSwitching,
+    projectFolderSwitching: supportsProjectFolderSwitching,
   } = useHostCapabilities();
   const staticProjectFolderLabel = repoSlug(useActiveRepoURL()) ?? copy('workspace.none');
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
@@ -431,7 +431,7 @@ function Sidebar({
           <SidebarFilesSection
             ref={fileTreeRef}
             onFileClick={handleFileClick}
-            workspaceRoot={gitPanel?.workspaceRoot}
+            projectFolder={gitPanel?.projectFolder}
           />
         );
       case 'search':
@@ -517,13 +517,13 @@ function Sidebar({
             modeSection={modeSection}
             onModeSectionChange={handleModeSectionChange}
             onSectionChange={onSectionChange}
-            workspaceRoot={gitPanel?.workspaceRoot}
+            projectFolder={gitPanel?.projectFolder}
             instances={instances}
             onInstanceChange={onInstanceChange}
             // Standalone: the title opens other folders and SSH hosts, as the
             // classic sidebar's location switcher does.
             projectSwitcher={
-              supportsWorkspaceSwitching ? (
+              supportsProjectFolderSwitching ? (
                 <LocationSwitcher
                   isConnected={isConnected}
                   instances={instances}
@@ -557,7 +557,7 @@ function Sidebar({
               />
               {!effectiveSidebarCollapsed ? (
                 <>
-                  {supportsWorkspaceSwitching ? (
+                  {supportsProjectFolderSwitching ? (
                     <LocationSwitcher
                       isConnected={isConnected}
                       instances={instances}
@@ -567,9 +567,9 @@ function Sidebar({
                       sidebarCollapsed={effectiveSidebarCollapsed}
                     />
                   ) : (
-                    <div className="sidebar-static-workspace" title={staticProjectFolderLabel}>
-                      <FolderOpen size={14} className="sidebar-static-workspace-icon" />
-                      <span className="sidebar-static-workspace-label">{staticProjectFolderLabel}</span>
+                    <div className="sidebar-static-project-folder" title={staticProjectFolderLabel}>
+                      <FolderOpen size={14} className="sidebar-static-project-folder-icon" />
+                      <span className="sidebar-static-project-folder-label">{staticProjectFolderLabel}</span>
                     </div>
                   )}
                 </>

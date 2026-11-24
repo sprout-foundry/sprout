@@ -32,21 +32,21 @@ function CompareTab({
   const effectiveModified = editedModified ?? modifiedContent;
 
   return (
-    <div className="workspace-tab compare-tab">
-      <div className="workspace-tab-header">
+    <div className="spaces-tab compare-tab">
+      <div className="spaces-tab-header">
         <div>
-          <div className="workspace-tab-eyebrow">{title}</div>
+          <div className="spaces-tab-eyebrow">{title}</div>
           <h2>{fileName}</h2>
         </div>
         <div className="compare-tab-mode-tabs">
           <button
-            className={`workspace-diff-mode-tab ${viewMode === 'side-by-side' ? 'active' : ''}`}
+            className={`spaces-diff-mode-tab ${viewMode === 'side-by-side' ? 'active' : ''}`}
             onClick={() => setViewMode('side-by-side')}
           >
             Side by Side
           </button>
           <button
-            className={`workspace-diff-mode-tab ${viewMode === 'unified' ? 'active' : ''}`}
+            className={`spaces-diff-mode-tab ${viewMode === 'unified' ? 'active' : ''}`}
             onClick={() => setViewMode('unified')}
           >
             Unified

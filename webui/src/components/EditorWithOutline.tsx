@@ -6,7 +6,7 @@ import { isLayeredLayout } from '../config/layout';
 import './EditorWithOutline.css';
 
 interface EditorWithOutlineProps {
-  /** The editor-workspace content (children) */
+  /** The editor-spaces content (children) */
   children: React.ReactNode;
   /** The file content to extract symbols from */
   content: string;
@@ -85,7 +85,7 @@ function EditorWithOutline({
 
   return (
     <div className="editor-with-outline">
-      <div className="editor-workspace-wrapper">{children}</div>
+      <div className="editor-spaces-wrapper">{children}</div>
 
       {isFileOpen && (
         <>

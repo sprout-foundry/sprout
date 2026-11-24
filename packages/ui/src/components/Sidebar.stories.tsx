@@ -21,7 +21,7 @@ export const FilesSection: Story = {
     fileTreeProps: {
       files: mockFileTree,
       rootPath: '.',
-      workspaceRoot: '/home/user/demo',
+      projectFolder: '/home/user/demo',
       onFileSelect: mockFileHandlers.onFileSelect,
       onRefresh: mockFileHandlers.onRefresh,
       onItemCreated: mockFileHandlers.onItemCreated,
@@ -50,7 +50,7 @@ export const GitSection: Story = {
       isReviewLoading: false,
       actionError: null,
       actionWarning: null,
-      workspaceRoot: '/home/user/demo',
+      projectFolder: '/home/user/demo',
       onCommitMessageChange: mockGitHandlers.onCommitMessageChange,
       onGenerateCommitMessage: mockGitHandlers.onGenerateCommitMessage,
       onCommit: mockGitHandlers.onCommit,
@@ -125,7 +125,7 @@ export const WithCustomBranding: Story = {
     fileTreeProps: {
       files: mockFileTree,
       rootPath: '.',
-      workspaceRoot: '/home/user/demo',
+      projectFolder: '/home/user/demo',
       onFileSelect: mockFileHandlers.onFileSelect,
       onRefresh: mockFileHandlers.onRefresh,
       onItemCreated: mockFileHandlers.onItemCreated,
@@ -154,7 +154,7 @@ export const Interactive: Story = {
           fileTreeProps={{
             files: mockFileTree,
             rootPath: '.',
-            workspaceRoot: '/home/user/demo',
+            projectFolder: '/home/user/demo',
             onFileSelect: mockFileHandlers.onFileSelect,
             onRefresh: mockFileHandlers.onRefresh,
             onItemCreated: mockFileHandlers.onItemCreated,
@@ -177,7 +177,7 @@ export const Interactive: Story = {
             isReviewLoading: false,
             actionError: null,
             actionWarning: null,
-            workspaceRoot: '/home/user/demo',
+            projectFolder: '/home/user/demo',
             onCommitMessageChange: mockGitHandlers.onCommitMessageChange,
             onGenerateCommitMessage: mockGitHandlers.onGenerateCommitMessage,
             onCommit: mockGitHandlers.onCommit,
@@ -223,7 +223,7 @@ export const NarrowWidth: Story = {
     fileTreeProps: {
       files: mockFileTree,
       rootPath: '.',
-      workspaceRoot: '/home/user/demo',
+      projectFolder: '/home/user/demo',
       onFileSelect: mockFileHandlers.onFileSelect,
       onRefresh: mockFileHandlers.onRefresh,
       onItemCreated: mockFileHandlers.onItemCreated,
@@ -244,7 +244,7 @@ export const WideWidth: Story = {
     fileTreeProps: {
       files: mockFileTree,
       rootPath: '.',
-      workspaceRoot: '/home/user/demo',
+      projectFolder: '/home/user/demo',
       onFileSelect: mockFileHandlers.onFileSelect,
       onRefresh: mockFileHandlers.onRefresh,
       onItemCreated: mockFileHandlers.onItemCreated,

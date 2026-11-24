@@ -70,7 +70,7 @@ function emptyGitStatus() {
 /**
  * Honest empty GitDiffResponse for the boot-time guard in `executeGitOp`
  * (the `diff` analogue of `emptyGitStatus`): browser git was never wired
- * (the VFS bridge is absent — e.g. an embedded `SproutWorkspace` that
+ * (the VFS bridge is absent — e.g. an embedded `SproutSpaces` that
  * imported a repo via `?repo=` and has no `.git` in the VFS), so there is
  * no history to diff. Return a neutral empty-diff shape (message `success`,
  * no staged/unstaged changes) instead of throwing `browserGit not

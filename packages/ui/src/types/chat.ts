@@ -231,7 +231,7 @@ export interface ChatProps {
    * send-anyway affordance that queues locally (drains on completion).
    * null = gate open.
    */
-  workspaceBusy?: { runningChatId: string; runningChatName: string } | null;
+  projectFolderBusy?: { runningChatId: string; runningChatName: string } | null;
   /** SP-142 §3: the send-anyway action — queue locally behind the runner. */
   onSendAnyway?: (message: string) => void;
   /** SP-142 §3: dismiss the busy notice without queueing. */
@@ -295,7 +295,7 @@ export interface ChatProps {
   // Worktree support
   chatId?: string;
   worktreePath?: string;
-  workspaceRoot?: string;
+  projectFolder?: string;
   onWorktreeChange?: (worktreePath: string) => void;
   // Provider availability
   providerAvailable?: boolean;

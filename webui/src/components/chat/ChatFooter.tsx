@@ -9,7 +9,7 @@ interface ChatFooterProps {
   filteredToolExecutions: ToolExecution[];
   lastError: string | null;
   /** SP-142 §3 busy notice — see ChatProps.projectFolderBusy. */
-  workspaceBusy?: { runningChatId: string; runningChatName: string } | null;
+  projectFolderBusy?: { runningChatId: string; runningChatName: string } | null;
   onSendAnyway?: (message: string) => void;
   onDismissBusy?: () => void;
   /** The composer's current draft — the send-anyway action queues it. */
@@ -24,7 +24,7 @@ export function ChatFooter({
   isProcessing,
   filteredToolExecutions,
   lastError,
-  workspaceBusy: projectFolderBusy,
+  projectFolderBusy,
   onSendAnyway,
   onDismissBusy,
   pendingDraft,
@@ -87,11 +87,11 @@ export function ChatFooter({
 
   if (projectFolderBusy) {
     elements.push(
-      <div key="workspace-busy" className="workspace-busy-indicator" data-testid="workspace-busy-notice">
-        <span className="workspace-busy-icon">
+      <div key="project-folder-busy" className="project-folder-busy-indicator" data-testid="project-folder-busy-notice">
+        <span className="project-folder-busy-icon">
           <Clock size={14} />
         </span>
-        <span className="workspace-busy-text">
+        <span className="project-folder-busy-text">
           {onSendAnyway
             ? `Another chat (${projectFolderBusy.runningChatName}) is working in this project folder — send anyway queues after it.`
             : `Another chat (${projectFolderBusy.runningChatName}) is working in this project folder — your message is queued and sends when it finishes.`}
@@ -99,8 +99,8 @@ export function ChatFooter({
         {onSendAnyway && pendingDraft?.trim() ? (
           <button
             type="button"
-            className="workspace-busy-send-anyway"
-            data-testid="workspace-busy-send-anyway"
+            className="project-folder-busy-send-anyway"
+            data-testid="project-folder-busy-send-anyway"
             onClick={() => onSendAnyway(pendingDraft)}
           >
             Send anyway
@@ -109,8 +109,8 @@ export function ChatFooter({
         {onDismissBusy ? (
           <button
             type="button"
-            className="workspace-busy-dismiss"
-            data-testid="workspace-busy-dismiss"
+            className="project-folder-busy-dismiss"
+            data-testid="project-folder-busy-dismiss"
             aria-label="Dismiss busy notice"
             onClick={onDismissBusy}
           >

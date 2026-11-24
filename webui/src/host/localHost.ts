@@ -98,7 +98,7 @@ export const localHost: SproutHost = {
     ssh: true,
     git: true,
     chat: true,
-    workspaceSwitching: true,
+    projectFolderSwitching: true,
     folderPicker: false,
     export: true,
     instances: false,

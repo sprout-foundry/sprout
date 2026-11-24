@@ -664,7 +664,7 @@ describe('EditorTabs file-path context menu items', () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
     setupFileTab();
-    // Let the workspace-root fetch resolve before clicking.
+    // Let the project-folder-root fetch resolve before clicking.
     await act(async () => {
       await Promise.resolve();
     });

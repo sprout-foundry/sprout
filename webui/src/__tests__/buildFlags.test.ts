@@ -402,7 +402,7 @@ describe('writeCapabilityManifest', () => {
     expect(existsSync(join(outDir, 'capabilities.json'))).toBe(false);
   });
 
-  // ── Studio workspace-gate capability keys ────────────────────────────
+  // ── Studio project-folder-gate capability keys ────────────────────────────
   // The fs-portion dist declares the project folder gate flags so a studio shell
   // reading the manifest can truthfully report them (the native
   // pickWorkspace / createWorkspace ops ship with the fs exclusion).
@@ -410,7 +410,7 @@ describe('writeCapabilityManifest', () => {
   it('declares the workspace gate capabilities for --native-fs', () => {
     const m = mod.buildCapabilityManifest(mod.parseArgs(['--native-fs']));
     expect(m.capabilities).toEqual({
-      supportsWorkspaceSwitching: true,
+      supportsProjectFolderSwitching: true,
       supportsFolderPicker: true,
     });
   });
@@ -429,7 +429,7 @@ describe('writeCapabilityManifest', () => {
     const path = mod.writeCapabilityManifest(outDir, mod.parseArgs(['--native-fs']));
     if (path === null) throw new Error('expected capabilities.json path, got null');
     const parsed = JSON.parse(readFileSync(path, 'utf-8'));
-    expect(parsed.capabilities.supportsWorkspaceSwitching).toBe(true);
+    expect(parsed.capabilities.supportsProjectFolderSwitching).toBe(true);
     expect(parsed.capabilities.supportsFolderPicker).toBe(true);
   });
 });

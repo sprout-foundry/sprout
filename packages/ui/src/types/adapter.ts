@@ -51,7 +51,7 @@ export interface APIAdapter {
   /** Whether AI chat with LLM proxy is available */
   readonly supportsChat: boolean;
   /** Whether project folder switcher/selection is available */
-  readonly supportsWorkspaceSwitching: boolean;
+  readonly supportsProjectFolderSwitching: boolean;
   /**
    * Whether the shell provides a native folder picker + project-create flow
    * (studio shells, bridge `files` channel). Optional: omitted by adapters

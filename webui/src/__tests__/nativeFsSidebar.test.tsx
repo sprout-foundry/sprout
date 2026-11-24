@@ -9,7 +9,7 @@
  *
  *   - gate ACTIVE (compile-time flag on + a capable bridge + ratified fs)
  *       → `onFetchFiles` routes through the bridge's `listWorkspace`,
- *         maps via `mapWorkspaceListing`, and does NOT call `clientFetch`.
+ *         maps via `mapProjectFolderListing`, and does NOT call `clientFetch`.
  *   - gate INACTIVE (default build, env unset)
  *       → `onFetchFiles` falls back to `clientFetch('/api/files?path=...')`
  *         and does NOT call the bridge's `listWorkspace`.
@@ -21,7 +21,7 @@
  * `__resetNativeFsGateForTests()` per case.
  *
  * Why we mount the component at all (rather than just testing the helpers):
- * the helpers (`mapWorkspaceListing`, `workspaceListDepth`, `nativeFsGate`)
+ * the helpers (`mapProjectFolderListing`, `projectFolderListDepth`, `nativeFsGate`)
  * are covered by nativeFsDeferral.test.ts. The thing this file uniquely
  * verifies is the BRANCH SELECTION in `SidebarFilesSection.onFetchFiles`
  * (NATIVE_FS_ENABLED gate → bridge listWorkspace path vs. clientFetch
@@ -187,7 +187,7 @@ describe('onFetchFiles — gate ACTIVE routes through the bridge', () => {
 
     render(
       <HostProvider>
-        <Sidebar onFileClick={() => {}} workspaceRoot="/ws" />
+        <Sidebar onFileClick={() => {}} projectFolder="/ws" />
       </HostProvider>,
     );
     expect(screen.getByTestId('mock-filetree')).toBeTruthy();
@@ -227,7 +227,7 @@ describe('onFetchFiles — gate ACTIVE routes through the bridge', () => {
 
     render(
       <HostProvider>
-        <Sidebar onFileClick={() => {}} workspaceRoot="/ws" />
+        <Sidebar onFileClick={() => {}} projectFolder="/ws" />
       </HostProvider>,
     );
     expect(screen.getByTestId('mock-filetree')).toBeTruthy();
@@ -247,7 +247,7 @@ describe('onFetchFiles — gate ACTIVE routes through the bridge', () => {
     expect(clientFetchMock).not.toHaveBeenCalled();
   });
 
-  it('gate active but listing errors → resolves to [] (mapWorkspaceListing degrades)', async () => {
+  it('gate active but listing errors → resolves to [] (mapProjectFolderListing degrades)', async () => {
     Sidebar = await loadComponent(true);
 
     const bridge = makeBridge({
@@ -257,13 +257,13 @@ describe('onFetchFiles — gate ACTIVE routes through the bridge', () => {
 
     render(
       <HostProvider>
-        <Sidebar onFileClick={() => {}} workspaceRoot="/ws" />
+        <Sidebar onFileClick={() => {}} projectFolder="/ws" />
       </HostProvider>,
     );
     expect(screen.getByTestId('mock-filetree')).toBeTruthy();
     const result = await act(async () => (await getCapturedOnFetchFiles())('.'));
 
-    // NOTE ON ACTUAL BEHAVIOR: `mapWorkspaceListing` returns `[]` (NOT a
+    // NOTE ON ACTUAL BEHAVIOR: `mapProjectFolderListing` returns `[]` (NOT a
     // throw) for a non-ok result — a failed native listing degrades to an
     // empty file tree rather than rejecting. So onFetchFiles RESOLVES to [].
     expect(result).toEqual([]);
@@ -297,7 +297,7 @@ describe('onFetchFiles — gate INACTIVE falls back to clientFetch', () => {
 
     render(
       <HostProvider>
-        <Sidebar onFileClick={() => {}} workspaceRoot="/ws" />
+        <Sidebar onFileClick={() => {}} projectFolder="/ws" />
       </HostProvider>,
     );
     expect(screen.getByTestId('mock-filetree')).toBeTruthy();

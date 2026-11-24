@@ -345,7 +345,7 @@ describe('Storybook 8 Configuration', () => {
       const response = await adapter.fetch('http://localhost/api/project-folder');
       expect(response.status).toBe(200);
       const data = await response.json();
-      expect(data.id).toBe('mock-workspace');
+      expect(data.id).toBe('mock-spaces');
       expect(data.name).toBe('Demo Workspace');
     });
 

@@ -33,7 +33,7 @@ export const WithChanges: Story = {
     isReviewLoading: false,
     actionError: null,
     actionWarning: null,
-    workspaceRoot: '/home/user/demo',
+    projectFolder: '/home/user/demo',
     ...mockGitHandlers,
   },
 };
@@ -51,7 +51,7 @@ export const Clean: Story = {
     isReviewLoading: false,
     actionError: null,
     actionWarning: null,
-    workspaceRoot: '/home/user/demo',
+    projectFolder: '/home/user/demo',
     ...mockGitHandlers,
   },
 };
@@ -69,7 +69,7 @@ export const Loading: Story = {
     isReviewLoading: false,
     actionError: null,
     actionWarning: null,
-    workspaceRoot: '/home/user/demo',
+    projectFolder: '/home/user/demo',
     ...mockGitHandlers,
   },
 };
@@ -87,7 +87,7 @@ export const WithError: Story = {
     isReviewLoading: false,
     actionError: 'Failed to stage files: Permission denied',
     actionWarning: null,
-    workspaceRoot: '/home/user/demo',
+    projectFolder: '/home/user/demo',
     ...mockGitHandlers,
   },
 };
@@ -105,7 +105,7 @@ export const WithWarning: Story = {
     isReviewLoading: false,
     actionError: null,
     actionWarning: 'Some files contain merge conflicts. Please resolve them before committing.',
-    workspaceRoot: '/home/user/demo',
+    projectFolder: '/home/user/demo',
     ...mockGitHandlers,
   },
 };
@@ -139,7 +139,7 @@ export const WithSelectedFiles: Story = {
           isReviewLoading={false}
           actionError={null}
           actionWarning={null}
-          workspaceRoot="/home/user/demo"
+          projectFolder="/home/user/demo"
           onToggleFileSelection={handleToggleFileSelection}
           onClearSelection={() => setSelectedFiles(new Set())}
           onCommitMessageChange={mockGitHandlers.onCommitMessageChange}
@@ -179,7 +179,7 @@ export const GeneratingCommitMessage: Story = {
     isReviewLoading: false,
     actionError: null,
     actionWarning: null,
-    workspaceRoot: '/home/user/demo',
+    projectFolder: '/home/user/demo',
     ...mockGitHandlers,
   },
 };
@@ -197,7 +197,7 @@ export const Reviewing: Story = {
     isReviewLoading: true,
     actionError: null,
     actionWarning: null,
-    workspaceRoot: '/home/user/demo',
+    projectFolder: '/home/user/demo',
     ...mockGitHandlers,
   },
 };
@@ -235,7 +235,7 @@ export const InteractiveDemo: Story = {
             isReviewLoading={false}
             actionError={null}
             actionWarning={null}
-            workspaceRoot="/home/user/demo"
+            projectFolder="/home/user/demo"
             onCommitMessageChange={setCommitMessage}
             onToggleFileSelection={handleToggleFileSelection}
             onClearSelection={() => setSelectedFiles(new Set())}

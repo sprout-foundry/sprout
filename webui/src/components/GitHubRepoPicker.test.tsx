@@ -26,7 +26,7 @@ const { mockCloneRepo, mockConfirm } = vi.hoisted(() => ({
   mockConfirm: vi.fn().mockResolvedValue(true),
 }));
 
-vi.mock('../services/workspaceClone', () => ({
+vi.mock('../services/projectFolderClone', () => ({
   cloneIntoProjectFolder: (...args: unknown[]) => mockCloneRepo(...args),
 }));
 
@@ -292,7 +292,7 @@ describe('GitHubRepoPicker', () => {
       expect(document.querySelector('[data-testid="gh-repo-octocat/Hello-World"]')).not.toBeNull();
     });
 
-    it('clones through the workspaceFs seam with the token and closes on success', async () => {
+    it('clones through the projectFolderFs seam with the token and closes on success', async () => {
       renderPicker();
 
       await act(async () => {

@@ -17,7 +17,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { resolveLanguageId } from '../extensions/languageRegistry';
 import { ApiService } from '../services/api';
 import { setConfigFetcher } from '../services/formatter';
-import { useProjectFolder } from '../services/workspaceStore';
+import { useProjectFolder } from '../services/projectFolderStore';
 import type { EditorBuffer } from '../types/editor';
 import { copyToClipboard } from '../utils/clipboard';
 import { debugLog, warn } from '../utils/log';
@@ -35,7 +35,7 @@ export interface ContextMenuState {
 
 export interface UseEditorContextMenuReturn {
   contextMenu: ContextMenuState | null;
-  workspaceRoot: string;
+  projectFolder: string;
   hideContextMenu: () => void;
   handleEditorContextMenu: (e: React.MouseEvent) => void;
   handleCopySelection: () => void;
@@ -177,7 +177,7 @@ export function useEditorContextMenu(
 
   return {
     contextMenu,
-    workspaceRoot: projectFolder,
+    projectFolder,
     hideContextMenu,
     handleEditorContextMenu,
     handleCopySelection,

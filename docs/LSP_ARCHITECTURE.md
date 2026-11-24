@@ -74,7 +74,7 @@ Use one internal schema for frontend/backend contracts, regardless of underlying
 Core concepts:
 
 1. Session identity
-- workspaceId
+- projectFolderId
 - languageId
 - sessionId
 
@@ -211,7 +211,7 @@ Frontend (new):
 Use these endpoints/events as stable language-agnostic contracts.
 
 1. POST /api/lsp/session/start
-- Input: workspaceId, languageId
+- Input: projectFolderId, languageId
 - Output: sessionId, capabilities
 
 2. POST /api/lsp/session/stop

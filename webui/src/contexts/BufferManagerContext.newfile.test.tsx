@@ -114,7 +114,7 @@ async function openUntitled() {
   renderProvider();
   let bufferId: string | null = null;
   await actAndUpdate(() => {
-    bufferId = ctx().openWorkspaceBuffer({
+    bufferId = ctx().openProjectFolderBuffer({
       kind: 'file',
       path: `__workspace/untitled-${Date.now()}`,
       title: 'Untitled',

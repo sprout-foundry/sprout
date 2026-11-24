@@ -614,18 +614,18 @@ describe('per-chat cache error lifecycle (background chats)', () => {
     const { stateHolder } = setupWithCache('chat-1', { isProcessing: true });
     stateHolder.current = {
       ...stateHolder.current,
-      workspaceBusy: { chatId: 'other-chat', runningChatId: 'chat-1', runningChatName: 'Chat 1' },
+      projectFolderBusy: { chatId: 'other-chat', runningChatId: 'chat-1', runningChatName: 'Chat 1' },
     };
 
     act(() => {
       hookHandleEvent!({ id: 'evt-sub', type: 'query_completed', data: { chat_id: 'chat-1', subagent_depth: 1 } });
     });
-    expect(stateHolder.current.workspaceBusy).not.toBeNull();
+    expect(stateHolder.current.projectFolderBusy).not.toBeNull();
 
     act(() => {
       hookHandleEvent!({ id: 'evt-done', type: 'query_completed', data: { chat_id: 'chat-1', response: 'done' } });
     });
-    expect(stateHolder.current.workspaceBusy).toBeNull();
+    expect(stateHolder.current.projectFolderBusy).toBeNull();
   });
 
   it('clears cached lastError when a background chat starts a new primary query', () => {
@@ -965,10 +965,10 @@ describe('project_folder_changed', () => {
     });
 
     // Track sprout:workspace-changed DOM events.
-    const events: Array<{ workspaceRoot: string; daemonRoot: string }> = [];
+    const events: Array<{ projectFolder: string; daemonRoot: string }> = [];
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      events.push({ workspaceRoot: detail?.workspaceRoot, daemonRoot: detail?.daemonRoot });
+      events.push({ projectFolder: detail?.projectFolder, daemonRoot: detail?.daemonRoot });
     };
     window.addEventListener('sprout:workspace-changed', handler);
 
@@ -1009,7 +1009,7 @@ describe('project_folder_changed', () => {
     });
 
     expect(events).toHaveLength(1);
-    expect(events[0].workspaceRoot).toBe('/new/worktree');
+    expect(events[0].projectFolder).toBe('/new/worktree');
     expect(events[0].daemonRoot).toBe('/home/user');
     cleanup();
   });
@@ -1053,7 +1053,7 @@ describe('project_folder_changed', () => {
     });
 
     expect(events).toHaveLength(1);
-    expect(events[0].workspaceRoot).toBe('/broadcast/path');
+    expect(events[0].projectFolder).toBe('/broadcast/path');
     cleanup();
   });
 });

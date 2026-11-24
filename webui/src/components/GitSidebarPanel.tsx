@@ -49,7 +49,7 @@ export interface GitSidebarPanelProps {
   isReviewLoading: boolean;
   actionError: string | null;
   actionWarning: string | null;
-  workspaceRoot?: string;
+  projectFolder?: string;
   onCommitMessageChange: (value: string) => void;
   onGenerateCommitMessage: () => void;
   onCommit: () => void;
@@ -94,7 +94,7 @@ function GitSidebarPanel({
   isReviewLoading,
   actionError,
   actionWarning,
-  workspaceRoot: projectFolder,
+  projectFolder,
   onCommitMessageChange,
   onGenerateCommitMessage,
   onCommit,
@@ -382,7 +382,7 @@ function GitSidebarPanel({
 
       <GitContextMenu
         contextMenu={contextMenu}
-        workspaceRoot={projectFolder}
+        projectFolder={projectFolder}
         onPreviewFile={onPreviewFile}
         onOpenFile={onOpenFile}
         onStageFile={onStageFile}

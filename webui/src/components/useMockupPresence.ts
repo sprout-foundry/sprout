@@ -14,7 +14,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
 import { useEvents } from '../contexts/EventsContext';
 import type { SproutEvent } from '../types/events';
-import { changesProjectFolderFiles } from '../hooks/workspaceFileEvents';
+import { changesProjectFolderFiles } from '../hooks/projectFolderFileEvents';
 import { MOCKUP_PATH } from './mockupPath';
 
 export interface MockupPresence {

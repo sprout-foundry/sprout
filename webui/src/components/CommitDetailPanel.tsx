@@ -36,7 +36,7 @@ interface CommitDetailPanelProps {
   prevCommit?: GitCommitSummary | null;
   nextCommit?: GitCommitSummary | null;
   onSelectCommit?: (commit: GitCommitSummary) => void;
-  openWorkspaceBuffer: (options: {
+  openProjectFolderBuffer: (options: {
     kind: 'chat' | 'diff' | 'review' | 'compare';
     path: string;
     title: string;
@@ -56,7 +56,7 @@ function CommitDetailPanel({
   prevCommit,
   nextCommit,
   onSelectCommit,
-  openWorkspaceBuffer,
+  openProjectFolderBuffer,
 }: CommitDetailPanelProps): JSX.Element | null {
   const log = useLog();
   const [detail, setDetail] = useState<GitCommitDetail | null>(null);
@@ -119,7 +119,7 @@ function CommitDetailPanel({
           diff.trim().length > 0
             ? diff
             : `# No textual diff available for this file in this commit.\n# Common reasons:\n#   - The file is binary (image, archive, compiled blob)\n#   - The change is a pure rename with identical content\n#   - The commit is a merge that did not modify this path\n`;
-        openWorkspaceBuffer({
+        openProjectFolderBuffer({
           kind: 'diff',
           path: `__workspace/commit/${commit.short_hash}/${filePath}`,
           title: `${commit.short_hash}: ${filePath}`,
@@ -127,7 +127,7 @@ function CommitDetailPanel({
           content,
           metadata: {
             sourcePath: `commit:${commit.hash}:${filePath}`,
-            // WorkspacePane's diff renderer reads metadata.diff as a
+            // SpacesPane's diff renderer reads metadata.diff as a
             // GitDiffResponse object — a bare diff string here renders as
             // "(no diff available)".
             diff: {
@@ -144,7 +144,7 @@ function CommitDetailPanel({
             // Read-only history — open in the text view by default.
             defaultView: 'text',
             // Full before/after contents for the merge view (read-only —
-            // sourcePath is virtual so WorkspacePane's canSave stays false).
+            // sourcePath is virtual so SpacesPane's canSave stays false).
             originalContent: result?.original_content,
             modifiedContent: result?.modified_content,
             contentsTruncated: result?.contents_truncated ?? false,
@@ -156,7 +156,7 @@ function CommitDetailPanel({
         });
       }
     },
-    [commit.hash, commit.short_hash, onLoadCommitFileDiff, openWorkspaceBuffer, log],
+    [commit.hash, commit.short_hash, onLoadCommitFileDiff, openProjectFolderBuffer, log],
   );
 
   const handleViewAllDiffs = useCallback(() => {
@@ -165,7 +165,7 @@ function CommitDetailPanel({
       return;
     }
     const subject = firstLine(detail.subject || commit.message);
-    openWorkspaceBuffer({
+    openProjectFolderBuffer({
       kind: 'diff',
       path: `__workspace/commit/${commit.short_hash}/full-diff`,
       title: `${commit.short_hash}: ${subject}`,
@@ -190,7 +190,7 @@ function CommitDetailPanel({
         defaultView: 'text',
       },
     });
-  }, [detail, commit, openWorkspaceBuffer, log]);
+  }, [detail, commit, openProjectFolderBuffer, log]);
 
   // ── Loading state ──────────────────────────────────────────────
   if (isLoading) {

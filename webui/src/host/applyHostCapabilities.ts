@@ -12,7 +12,7 @@ export const ADAPTER_CAPABILITY_KEYS = [
   'supportsSSH',
   'supportsGit',
   'supportsChat',
-  'supportsWorkspaceSwitching',
+  'supportsProjectFolderSwitching',
   'supportsFolderPicker',
   'supportsExport',
   'supportsInstances',
@@ -25,7 +25,7 @@ const CAPABILITY_FIELD: Record<(typeof ADAPTER_CAPABILITY_KEYS)[number], keyof H
   supportsSSH: 'ssh',
   supportsGit: 'git',
   supportsChat: 'chat',
-  supportsWorkspaceSwitching: 'workspaceSwitching',
+  supportsProjectFolderSwitching: 'projectFolderSwitching',
   supportsFolderPicker: 'folderPicker',
   supportsExport: 'export',
   supportsInstances: 'instances',
@@ -44,7 +44,7 @@ const CAPABILITY_FIELD: Record<(typeof ADAPTER_CAPABILITY_KEYS)[number], keyof H
  * `folderPicker` off. Keys the adapter leaves `undefined` are not touched, so
  * a plain local build (no capabilities declared) keeps today's
  * `localHost.capabilities` byte-identical, and the cloud host is unaffected
- * (its adapter declares no folder-picker/workspace-switching overrides and any
+ * (its adapter declares no folder-picker/project-folder-switching overrides and any
  * change is caught by `hosts.test.ts`).
  *
  * Generic by construction: no platform- or studio-specific branch — every

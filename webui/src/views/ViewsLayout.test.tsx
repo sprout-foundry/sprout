@@ -10,7 +10,7 @@
  * mocked to stubs that render a distinct testid and echo a received prop —
  * they need the webui context stack, which these tests do not provide (and
  * which is not the unit under test). FileTree is stubbed within a partial
- * @sprout/ui mock for the same reason (it fetches a workspace tree when
+ * @sprout/ui mock for the same reason (it fetches a project folder tree when
  * rendered bare). PreviewPane is NOT mocked: it is presentational and
  * renders without providers, so one case pins a real view in a slot.
  */
@@ -31,10 +31,10 @@ vi.mock('../components/PreviewPanel', () => ({
     <div data-testid="views-test-preview-panel" data-open={String(!!props.open)} />
   ),
 }));
-vi.mock('./WorkspaceCommandPalette', () => ({
-  WorkspaceCommandPalette: () => <div data-testid="views-test-command-palette" />,
+vi.mock('./SpacesCommandPalette', () => ({
+  SpacesCommandPalette: () => <div data-testid="views-test-command-palette" />,
 }));
-vi.mock('./WorkspaceTerminalView', () => ({ WorkspaceTerminalView: () => <div data-testid="views-test-terminal" /> }));
+vi.mock('./SpacesTerminalView', () => ({ SpacesTerminalView: () => <div data-testid="views-test-terminal" /> }));
 // Partial mock: FileTree stubbed (it fetches when rendered bare), the rest
 // of the barrel — notably the real PreviewPane — untouched.
 vi.mock('@sprout/ui', async (importOriginal) => {

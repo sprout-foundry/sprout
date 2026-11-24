@@ -228,7 +228,7 @@ describe('gate-active write (string payload)', () => {
 //
 // NOTE ON ACTUAL BEHAVIOR: the public stub API is
 // `writeFileWithConsent(path, content: string)`, which calls
-// `nativeWriteWorkspaceFile(path, content)` → `bridge.writeWorkspaceFile(path,
+// `nativeWriteProjectFolderFile(path, content)` → `bridge.writeWorkspaceFile(path,
 // content)` — i.e. the bridge ALWAYS receives the bare string, never a
 // `{ content }` object. The `{ content }` payload shape is a type the bridge
 // *accepts* but is NOT what this stub produces. This test asserts the actual

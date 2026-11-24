@@ -6,7 +6,7 @@ import type {
   MetricsUpdateData,
   ProviderNoCredentialData,
   RateLimitedData,
-  WorkspaceChangedData,
+  ProjectFolderChangedData,
 } from '@sprout/events';
 import { getWebUIClientId } from '../../services/clientSession';
 import { notifyIfHidden } from '../../services/desktopNotify';
@@ -69,11 +69,11 @@ function endStepParagraph(messages: Message[]): Message[] {
 //   2. Clears the recentLogs cache in React state so stale data
 //      from the previous project folder doesn't linger.
 //   3. Dispatches a `sprout:workspace-changed` DOM event so other components
-//      (WorkspaceBar, FileBrowser, editor tabs, etc.) can re-fetch fresh data
+//      (ProjectFolderBar, FileBrowser, editor tabs, etc.) can re-fetch fresh data
 //      from the server's new project folder.
 export const handleProjectFolderChanged = (ctx: EventHandlerContext): void => {
   const { event, setState } = ctx;
-  const data = (event.data ?? {}) as WorkspaceChangedData;
+  const data = (event.data ?? {}) as ProjectFolderChangedData;
   debugLog('[workspace] Workspace changed:', data);
 
   // Only react to events targeting this client (or broadcasts without a
@@ -108,7 +108,7 @@ export const handleProjectFolderChanged = (ctx: EventHandlerContext): void => {
   window.dispatchEvent(
     new CustomEvent('sprout:workspace-changed', {
       detail: {
-        workspaceRoot: typeof projectFolder === 'string' ? projectFolder : '',
+        projectFolder: typeof projectFolder === 'string' ? projectFolder : '',
         daemonRoot: typeof daemonRoot === 'string' ? daemonRoot : '',
       },
     }),

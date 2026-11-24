@@ -64,7 +64,7 @@ vi.mock('../contexts/EditorManagerContext', () => ({
     setBufferOriginalContent: (...a) => mockSetBufferOriginalContent(...a),
     setBufferExternallyModified: (...a) => mockSetBufferExternallyModified(...a),
     clearBufferExternallyModified: (...a) => mockClearBufferExternallyModified(...a),
-    openWorkspaceBuffer: (...a) => mockOpenProjectFolderBuffer(...a),
+    openProjectFolderBuffer: (...a) => mockOpenProjectFolderBuffer(...a),
   })),
 }));
 

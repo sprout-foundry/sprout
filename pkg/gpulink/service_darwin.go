@@ -30,7 +30,9 @@ func servicePath(slot string) (string, error) {
 }
 
 // InstallService registers `sprout gpu start --name <name>` as a launchd
-// agent that runs at login and restarts if it exits.
+// agent that runs at login and restarts if it exits. The single agent an
+// older sprout installed is left in place here — replacing it is
+// InstallAllServices' job, once every link has an agent.
 func InstallService(name string) (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
@@ -94,9 +96,12 @@ func InstallAllServices(names []string) ([]string, error) {
 		}
 		paths = append(paths, path)
 	}
-	uninstallLegacyService()
-	return paths, nil
+	return paths, uninstallLegacyService()
 }
+
+// ReplaceLegacyService stops and removes the single agent an older sprout
+// installed. Call it only when every link has its own agent.
+func ReplaceLegacyService() error { return uninstallLegacyService() }
 
 // UninstallService stops and removes one link's launchd agent. An empty slot
 // removes every link's agent and the legacy one.
@@ -112,30 +117,34 @@ func UninstallService(slot string) error {
 		}
 		return nil
 	}
-	dir, err := systemdAgentsDir()
-	if err == nil {
-		entries, err := os.ReadDir(dir)
-		if err == nil {
-			for _, e := range entries {
-				if name := strings.TrimSuffix(e.Name(), ".plist"); strings.HasPrefix(name, launchdLabelPrefix) {
-					_ = UninstallService(Slot(strings.TrimPrefix(name, launchdLabelPrefix)))
-				}
-			}
+	dir, err := launchAgentsDir()
+	if err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("reading %s: %w", dir, err)
+	}
+	for _, e := range entries {
+		if name := strings.TrimSuffix(e.Name(), ".plist"); strings.HasPrefix(name, launchdLabelPrefix) {
+			_ = UninstallService(strings.TrimPrefix(name, launchdLabelPrefix))
 		}
 	}
-	uninstallLegacyService()
-	return nil
+	return uninstallLegacyService()
 }
 
 // uninstallLegacyService stops and removes the single launchd agent an older
 // sprout installed; per-link agents have replaced it.
-func uninstallLegacyService() {
+func uninstallLegacyService() error {
 	_ = exec.Command("launchctl", "bootout", "gui/"+strconv.Itoa(os.Getuid())+"/"+legacyLaunchdLabel()).Run() //nolint:gosec // G204: launchctl with the link's own plist
-	home, err := os.UserHomeDir()
+	dir, err := launchAgentsDir()
 	if err != nil {
-		return
+		return err
 	}
-	_ = os.Remove(filepath.Join(home, "Library", "LaunchAgents", legacyLaunchdLabel()+".plist"))
+	if err := os.Remove(filepath.Join(dir, legacyLaunchdLabel()+".plist")); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 // LegacyServiceInstalled reports whether the single launchd agent an older
@@ -149,7 +158,7 @@ func LegacyServiceInstalled() bool {
 	return err == nil
 }
 
-func systemdAgentsDir() (string, error) {
+func launchAgentsDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err

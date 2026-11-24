@@ -14,6 +14,10 @@ func InstallAllServices(names []string) ([]string, error) {
 	return nil, errNoService
 }
 
+// ReplaceLegacyService is unavailable on this OS; there is no legacy single
+// service here.
+func ReplaceLegacyService() error { return nil }
+
 // UninstallService is unavailable on this OS.
 func UninstallService(slot string) error { return errNoService }
 

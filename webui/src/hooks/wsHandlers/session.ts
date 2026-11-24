@@ -6,7 +6,7 @@ import type {
   MetricsUpdateData,
   ProviderNoCredentialData,
   RateLimitedData,
-  WorkspaceChangedData,
+  ProjectFolderChangedData,
 } from '@sprout/events';
 import { getWebUIClientId } from '../../services/clientSession';
 import { notifyIfHidden } from '../../services/desktopNotify';
@@ -73,7 +73,7 @@ function endStepParagraph(messages: Message[]): Message[] {
 //      from the server's new project folder.
 export const handleProjectFolderChanged = (ctx: EventHandlerContext): void => {
   const { event, setState } = ctx;
-  const data = (event.data ?? {}) as WorkspaceChangedData;
+  const data = (event.data ?? {}) as ProjectFolderChangedData;
   debugLog('[workspace] Workspace changed:', data);
 
   // Only react to events targeting this client (or broadcasts without a
@@ -108,7 +108,7 @@ export const handleProjectFolderChanged = (ctx: EventHandlerContext): void => {
   window.dispatchEvent(
     new CustomEvent('sprout:workspace-changed', {
       detail: {
-        workspaceRoot: typeof projectFolder === 'string' ? projectFolder : '',
+        projectFolder: typeof projectFolder === 'string' ? projectFolder : '',
         daemonRoot: typeof daemonRoot === 'string' ? daemonRoot : '',
       },
     }),

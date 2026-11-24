@@ -13,7 +13,7 @@ import { Code2, MonitorPlay } from 'lucide-react';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { vi, beforeAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { configuredDefaultWorkspaceMode, overrideDefaultWorkspaceMode } from '../config/workspaceMode';
+import { configuredDefaultSpace, overrideDefaultSpace } from '../config/workspaceMode';
 import { INSTANCE_PID_STORAGE_KEY } from '../constants/app';
 import CodeShell from './CodeShell';
 import ModeSwitcher from './ModeSwitcher';
@@ -22,25 +22,20 @@ import {
   BUILTIN_WORKSPACE_MODE_IDS,
   WORKSPACE_MODES,
   availableModes,
-  defaultWorkspaceMode,
-  isBuiltinWorkspaceModeId,
-  registerWorkspaceMode,
-  resolveWorkspaceMode,
-  type UnregisterWorkspaceMode,
-  type WorkspaceModeRegistration,
+  defaultSpace,
+  isBuiltinSpaceId,
+  registerSpace,
+  resolveSpace,
+  type UnregisterSpace,
+  type SpaceRegistration,
 } from './registry';
-import {
-  persistWorkspaceMode,
-  readPersistedWorkspaceMode,
-  useWorkspaceMode,
-  workspaceModeStorageKey,
-} from './useWorkspaceMode';
+import { persistSpace, readPersistedSpace, useSpace, spaceStorageKey } from './useWorkspaceMode';
 
 const withMockup = { hasMockup: true };
 const withoutMockup = { hasMockup: false };
 
 /** The test-mode payload the resolution tests register inline. */
-const previewMode: WorkspaceModeRegistration = {
+const previewMode: SpaceRegistration = {
   id: 'preview',
   label: 'Preview',
   icon: MonitorPlay,
@@ -83,7 +78,7 @@ describe('registerWorkspaceMode', () => {
    * them, so a registration can never outlive a test — even one that fails
    * mid-assertion before its own explicit dispose.
    */
-  const disposers: UnregisterWorkspaceMode[] = [];
+  const disposers: UnregisterSpace[] = [];
 
   /** A mode an embedding shell would add — registered through the public API. */
   const testMode = {
@@ -96,8 +91,8 @@ describe('registerWorkspaceMode', () => {
   };
 
   /** Registers through the public API and tracks the disposer for cleanup. */
-  function registerTestMode(definition: WorkspaceModeRegistration = testMode): UnregisterWorkspaceMode {
-    const dispose = registerWorkspaceMode(definition);
+  function registerTestMode(definition: SpaceRegistration = testMode): UnregisterSpace {
+    const dispose = registerSpace(definition);
     disposers.push(dispose);
     return dispose;
   }
@@ -210,9 +205,9 @@ describe('registerWorkspaceMode', () => {
   it('rejects re-registering a built-in id — the built-in keeps its original definition', () => {
     // The ids the public API refuses, via the predicate an embedder checks first.
     expect(BUILTIN_WORKSPACE_MODE_IDS).toEqual(['code']);
-    for (const id of BUILTIN_WORKSPACE_MODE_IDS) expect(isBuiltinWorkspaceModeId(id)).toBe(true);
-    expect(isBuiltinWorkspaceModeId('preview')).toBe(false);
-    expect(isBuiltinWorkspaceModeId(null as unknown as string)).toBe(false);
+    for (const id of BUILTIN_WORKSPACE_MODE_IDS) expect(isBuiltinSpaceId(id)).toBe(true);
+    expect(isBuiltinSpaceId('preview')).toBe(false);
+    expect(isBuiltinSpaceId(null as unknown as string)).toBe(false);
 
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
@@ -287,25 +282,25 @@ describe('registerWorkspaceMode', () => {
 
 describe('resolveWorkspaceMode', () => {
   it('returns the requested mode when available', () => {
-    expect(resolveWorkspaceMode('code', withMockup).id).toBe('code');
-    expect(resolveWorkspaceMode('code', withoutMockup).id).toBe('code');
+    expect(resolveSpace('code', withMockup).id).toBe('code');
+    expect(resolveSpace('code', withoutMockup).id).toBe('code');
   });
 
   it('degrades a persisted design id to Code — the mode no longer exists', () => {
-    expect(resolveWorkspaceMode('design', withMockup).id).toBe('code');
-    expect(resolveWorkspaceMode('design', withoutMockup).id).toBe('code');
+    expect(resolveSpace('design', withMockup).id).toBe('code');
+    expect(resolveSpace('design', withoutMockup).id).toBe('code');
   });
 
   it('falls back to the default when the requested mode is not offered', () => {
     // An unknown mode id degrades to the default experience. With no
     // configuration the default is the built-in baseline.
-    expect(resolveWorkspaceMode('ship', withoutMockup).id).toBe(BUILTIN_DEFAULT_WORKSPACE_MODE);
+    expect(resolveSpace('ship', withoutMockup).id).toBe(BUILTIN_DEFAULT_WORKSPACE_MODE);
   });
 
   it('falls back to the default for an unknown id', () => {
-    expect(resolveWorkspaceMode('ship', withMockup).id).toBe(BUILTIN_DEFAULT_WORKSPACE_MODE);
-    expect(resolveWorkspaceMode(null, withMockup).id).toBe(BUILTIN_DEFAULT_WORKSPACE_MODE);
-    expect(resolveWorkspaceMode(undefined, withMockup).id).toBe(BUILTIN_DEFAULT_WORKSPACE_MODE);
+    expect(resolveSpace('ship', withMockup).id).toBe(BUILTIN_DEFAULT_WORKSPACE_MODE);
+    expect(resolveSpace(null, withMockup).id).toBe(BUILTIN_DEFAULT_WORKSPACE_MODE);
+    expect(resolveSpace(undefined, withMockup).id).toBe(BUILTIN_DEFAULT_WORKSPACE_MODE);
   });
 
   it('returns a real mode for every id a register/dispose sequence can produce', () => {
@@ -313,10 +308,10 @@ describe('resolveWorkspaceMode', () => {
     // is registered and disposed in between, resolution always has the
     // built-ins to fall back on. Registered inline (not via `registerTestMode`,
     // which lives in the other block) and disposed exhaustively.
-    const register = (id: string) => registerWorkspaceMode({ ...previewMode, id });
+    const register = (id: string) => registerSpace({ ...previewMode, id });
     // `?.` fails the assert rather than throwing, if resolution ever broke.
     const assertResolves = (ids: (string | null | undefined)[]) => {
-      for (const id of ids) expect(resolveWorkspaceMode(id, withMockup)?.Shell).toBeTypeOf('function');
+      for (const id of ids) expect(resolveSpace(id, withMockup)?.Shell).toBeTypeOf('function');
     };
     const first = register('preview');
     const second = register('extra');
@@ -325,7 +320,7 @@ describe('resolveWorkspaceMode', () => {
     assertResolves([null, undefined, 'preview', 'design']);
     second();
     expect(availableModes(withMockup).map((m) => m.id)).toEqual(['code']);
-    expect(resolveWorkspaceMode(null, withMockup).id).toBe(BUILTIN_DEFAULT_WORKSPACE_MODE);
+    expect(resolveSpace(null, withMockup).id).toBe(BUILTIN_DEFAULT_WORKSPACE_MODE);
   });
 
   it('yields the registered built-in default when nothing is available, and never undefined', () => {
@@ -338,11 +333,11 @@ describe('resolveWorkspaceMode', () => {
       // built-in default; an emptied registry throws.
       WORKSPACE_MODES.forEach((mode) => (mode.available = () => false));
       expect(availableModes(withMockup)).toEqual([]);
-      expect(resolveWorkspaceMode(null, withMockup)).toBe(snapshot[0]);
-      expect(resolveWorkspaceMode(null, withMockup).id).toBe(BUILTIN_DEFAULT_WORKSPACE_MODE);
+      expect(resolveSpace(null, withMockup)).toBe(snapshot[0]);
+      expect(resolveSpace(null, withMockup).id).toBe(BUILTIN_DEFAULT_WORKSPACE_MODE);
 
       WORKSPACE_MODES.splice(0, WORKSPACE_MODES.length);
-      expect(() => resolveWorkspaceMode(null, withMockup)).toThrow(/no workspace modes registered/);
+      expect(() => resolveSpace(null, withMockup)).toThrow(/no workspace modes registered/);
     } finally {
       WORKSPACE_MODES.splice(0, WORKSPACE_MODES.length, ...snapshot);
       WORKSPACE_MODES.forEach((mode, index) => (mode.available = originals[index]));
@@ -359,29 +354,29 @@ describe('mode persistence', () => {
   });
 
   it('round-trips the active mode', () => {
-    persistWorkspaceMode('design');
-    expect(readPersistedWorkspaceMode()).toBe('design');
+    persistSpace('design');
+    expect(readPersistedSpace()).toBe('design');
   });
 
   it('scopes the key by instance pid', () => {
     window.localStorage.setItem(INSTANCE_PID_STORAGE_KEY, '1111');
-    const first = workspaceModeStorageKey();
-    persistWorkspaceMode('design');
+    const first = spaceStorageKey();
+    persistSpace('design');
 
     window.localStorage.setItem(INSTANCE_PID_STORAGE_KEY, '2222');
-    const second = workspaceModeStorageKey();
+    const second = spaceStorageKey();
 
     expect(first).not.toBe(second);
     // A different instance has no mode of its own yet.
-    expect(readPersistedWorkspaceMode()).toBeNull();
+    expect(readPersistedSpace()).toBeNull();
     // …and the first instance's choice is still there.
     window.localStorage.setItem(INSTANCE_PID_STORAGE_KEY, '1111');
-    expect(readPersistedWorkspaceMode()).toBe('design');
+    expect(readPersistedSpace()).toBe('design');
   });
 
   it('returns null rather than throwing on unreadable storage', () => {
-    window.localStorage.setItem(workspaceModeStorageKey(), 'not json');
-    expect(readPersistedWorkspaceMode()).toBeNull();
+    window.localStorage.setItem(spaceStorageKey(), 'not json');
+    expect(readPersistedSpace()).toBeNull();
   });
 
   it('does not throw when storage rejects the write', () => {
@@ -389,7 +384,7 @@ describe('mode persistence', () => {
     window.localStorage.setItem = () => {
       throw new Error('quota');
     };
-    expect(() => persistWorkspaceMode('design')).not.toThrow();
+    expect(() => persistSpace('design')).not.toThrow();
     window.localStorage.setItem = original;
   });
 });
@@ -398,15 +393,15 @@ describe('useWorkspaceMode contract', () => {
   // The hook is exercised through its returned shape rather than a render,
   // since the shell integration is covered by the e2e specs.
   it('exports a callable hook', () => {
-    expect(typeof useWorkspaceMode).toBe('function');
+    expect(typeof useSpace).toBe('function');
   });
 });
 
 describe('config-driven default mode', () => {
-  const disposers: UnregisterWorkspaceMode[] = [];
+  const disposers: UnregisterSpace[] = [];
 
-  function register(definition: WorkspaceModeRegistration): UnregisterWorkspaceMode {
-    const dispose = registerWorkspaceMode(definition);
+  function register(definition: SpaceRegistration): UnregisterSpace {
+    const dispose = registerSpace(definition);
     disposers.push(dispose);
     return dispose;
   }
@@ -419,42 +414,42 @@ describe('config-driven default mode', () => {
   // state (the build-time base, null in the test env) on both edges so no
   // override leaks into another test.
   beforeEach(() => {
-    overrideDefaultWorkspaceMode(null);
+    overrideDefaultSpace(null);
   });
 
   afterEach(() => {
-    overrideDefaultWorkspaceMode(null);
+    overrideDefaultSpace(null);
     disposeAll();
   });
 
   it('starts in the built-in code mode when nothing is configured', () => {
-    expect(configuredDefaultWorkspaceMode()).toBeNull();
-    expect(defaultWorkspaceMode(withMockup)).toBe('code');
-    expect(defaultWorkspaceMode(withoutMockup)).toBe('code');
+    expect(configuredDefaultSpace()).toBeNull();
+    expect(defaultSpace(withMockup)).toBe('code');
+    expect(defaultSpace(withoutMockup)).toBe('code');
     // A null or unknown request resolves to the built-in default.
-    expect(resolveWorkspaceMode(null, withMockup).id).toBe('code');
-    expect(resolveWorkspaceMode('unknown-id', withoutMockup).id).toBe('code');
+    expect(resolveSpace(null, withMockup).id).toBe('code');
+    expect(resolveSpace('unknown-id', withoutMockup).id).toBe('code');
   });
 
   it('starts in a configured mode when that mode is available', () => {
     register({ ...previewMode });
-    overrideDefaultWorkspaceMode('preview');
-    expect(configuredDefaultWorkspaceMode()).toBe('preview');
+    overrideDefaultSpace('preview');
+    expect(configuredDefaultSpace()).toBe('preview');
     // Registered and always offered, so it is the default either way.
-    expect(defaultWorkspaceMode(withMockup)).toBe('preview');
-    expect(defaultWorkspaceMode(withoutMockup)).toBe('preview');
+    expect(defaultSpace(withMockup)).toBe('preview');
+    expect(defaultSpace(withoutMockup)).toBe('preview');
     // A null or unknown request resolves to the configured default.
-    expect(resolveWorkspaceMode(null, withMockup).id).toBe('preview');
-    expect(resolveWorkspaceMode('unknown-id', withMockup).id).toBe('preview');
+    expect(resolveSpace(null, withMockup).id).toBe('preview');
+    expect(resolveSpace('unknown-id', withMockup).id).toBe('preview');
     // …but an explicitly requested available mode still wins.
-    expect(resolveWorkspaceMode('code', withMockup).id).toBe('code');
+    expect(resolveSpace('code', withMockup).id).toBe('code');
   });
 
   it('falls back to code when the configured default names an unregistered mode', () => {
-    overrideDefaultWorkspaceMode('preview');
+    overrideDefaultSpace('preview');
     // 'preview' is not registered, so it is never in availableModes.
-    expect(defaultWorkspaceMode(withMockup)).toBe('code');
-    expect(resolveWorkspaceMode(null, withMockup).id).toBe('code');
+    expect(defaultSpace(withMockup)).toBe('code');
+    expect(resolveSpace(null, withMockup).id).toBe('code');
   });
 
   it('falls back to code when the configured default names an unavailable mode', () => {
@@ -466,11 +461,11 @@ describe('config-driven default mode', () => {
       available: () => false,
       Shell: () => null,
     });
-    overrideDefaultWorkspaceMode('preview');
+    overrideDefaultSpace('preview');
     // 'preview' is registered but never offered, so it is not the default.
-    expect(defaultWorkspaceMode(withMockup)).toBe('code');
-    expect(defaultWorkspaceMode(withoutMockup)).toBe('code');
-    expect(resolveWorkspaceMode(null, withMockup).id).toBe('code');
+    expect(defaultSpace(withMockup)).toBe('code');
+    expect(defaultSpace(withoutMockup)).toBe('code');
+    expect(resolveSpace(null, withMockup).id).toBe('code');
     // The built-ins are still offered unchanged.
     expect(availableModes(withMockup).map((m) => m.id)).toEqual(['code']);
   });

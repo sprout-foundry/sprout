@@ -40,7 +40,7 @@ vi.mock('../components/EditorPane', async () => {
 });
 
 import { EditorManagerProvider } from '../contexts/EditorManagerContext';
-import { useWorkspaceFileTree } from './useWorkspaceFileTree';
+import { useProjectFolderFileTree } from './useWorkspaceFileTree';
 import { WorkspaceEditorProvider, useWorkspaceEditor, useWorkspaceEditorProps } from './WorkspaceEditorContext';
 import type { WorkspaceEditorValue } from './WorkspaceEditorContext';
 import { WorkspaceEditorView } from './WorkspaceEditorView';
@@ -74,7 +74,7 @@ function Probe(): null {
 /** A tree wired to the editor the way the composed workspace wires it. */
 function Tree(): JSX.Element {
   const { fileTree } = useWorkspaceEditorProps();
-  const props = useWorkspaceFileTree({ ...fileTree, fetchFn: transport.fetch as unknown as typeof fetch });
+  const props = useProjectFolderFileTree({ ...fileTree, fetchFn: transport.fetch as unknown as typeof fetch });
   return <FileTree {...props} />;
 }
 
@@ -126,7 +126,7 @@ describe('WorkspaceEditorProvider', () => {
 
     await waitFor(() => expect(screen.getByTestId('editor-pane')).toHaveAttribute('data-path', 'README.md'));
     expect(screen.getByRole('tab', { name: /README\.md/ })).toHaveAttribute('aria-selected', 'true');
-    expect(editor.activeFile).toMatchObject({ path: 'README.md', workspacePath: 'README.md', name: 'README.md' });
+    expect(editor.activeFile).toMatchObject({ path: 'README.md', projectFolderPath: 'README.md', name: 'README.md' });
     expect(editor.openFiles.map((f) => f.path)).toEqual(['README.md']);
   });
 

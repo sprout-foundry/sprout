@@ -166,7 +166,7 @@ export function useEditorFileIO(
     setBufferOriginalContent,
     setBufferExternallyModified,
     clearBufferExternallyModified,
-    openWorkspaceBuffer,
+    openProjectFolderBuffer,
   } = useEditorManager();
 
   // API service singleton
@@ -932,7 +932,7 @@ export function useEditorFileIO(
               const diffText = generateUnifiedDiff(editorContent, diskContent, 'Editor', 'Disk');
               if (!diffText) return;
 
-              openWorkspaceBuffer({
+              openProjectFolderBuffer({
                 kind: 'diff',
                 path: `diff:${filePath}`,
                 title: `Diff: ${currentBuffer.file.name} (editor ↔ disk)`,
@@ -980,7 +980,7 @@ export function useEditorFileIO(
     applyExternalFileContent,
     clearBufferExternallyModified,
     setBufferExternallyModified,
-    openWorkspaceBuffer,
+    openProjectFolderBuffer,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {

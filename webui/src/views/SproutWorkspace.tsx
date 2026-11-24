@@ -9,19 +9,19 @@ import { backendURLs } from '../host/agentBackend';
 import { SproutProviders } from '../providers';
 import { applyHostThemeOverrides, clearHostThemeOverrides, resolveHostThemeOverrides } from '../themes/hostTheme';
 import type { AppState } from '../types/app';
-import { resolveWorkspaceMode } from '../workspaces/registry';
-import type { WorkspaceModeContext, WorkspaceModeId } from '../workspaces/registry';
-import type { WorkspaceShellProps } from '../workspaces/shell';
+import { resolveSpace } from '../workspaces/registry';
+import type { SpaceContext, SpaceId } from '../workspaces/registry';
+import type { SpacesShellProps } from '../workspaces/shell';
 import { resetHostAgentBackend, wireHostAgentBackend } from './hostAgentBackend';
-import { registerWorkspaceHostTools, type WorkspaceHostTool } from './workspaceHostTools';
-import { useSproutWorkspaceChatTransport } from './SproutWorkspaceChat';
+import { registerSpacesHostTools, type SpacesHostTool } from './workspaceHostTools';
+import { useSproutSpacesChatTransport } from './SproutWorkspaceChat';
 import { ComposedSpaceShell } from './SproutWorkspaceSpaceShell';
 import { ArrangedViews, usePreviewGatedArrangement } from './SproutWorkspaceUnits';
 import { ViewsLayout, resolveViewsArrangement } from './ViewsLayout';
 import type { ViewsArrangement, ViewKind } from './ViewsLayout';
-import { WorkspaceAgentPrompts } from './WorkspaceAgentPrompts';
-import { WorkspaceChatProvider } from './WorkspaceChatContext';
-import { WorkspaceCommandPalette } from './WorkspaceCommandPalette';
+import { SpacesAgentPrompts } from './WorkspaceAgentPrompts';
+import { SpacesChatProvider } from './WorkspaceChatContext';
+import { SpacesCommandPalette } from './WorkspaceCommandPalette';
 import { WorkspaceEditorProvider } from './WorkspaceEditorContext';
 
 /**
@@ -112,11 +112,11 @@ export interface SproutProject {
   repoUrl?: string;
 }
 
-export interface SproutWorkspaceProps {
+export interface SproutSpacesProps {
   /** The project this workspace is for. */
   project: SproutProject;
   /** The space to mount — one of the SP-155 registered spaces; resolved by the registry. */
-  space: WorkspaceModeId;
+  space: SpaceId;
   /**
    * The host contract for this subtree. Supplied through `HostProvider`.
    * Required when `providers` is `"own"`; ignored when `"ambient"` (the
@@ -213,13 +213,13 @@ export interface SproutWorkspaceProps {
    * names change; each call runs the latest handler. A daemon backend's agent
    * runs elsewhere and takes none.
    */
-  hostTools?: WorkspaceHostTool[];
+  hostTools?: SpacesHostTool[];
   /**
    * Called with the resolved space id whenever the mounted space changes after
    * the initial mount. Not called on the initial mount (there is no change
    * yet). See the component note for the exact contract.
    */
-  onSpaceChange?: (space: WorkspaceModeId) => void;
+  onSpaceChange?: (space: SpaceId) => void;
   /**
    * The resolved space shell's props (the data the app root supplies today).
    * Used by the default space-shell path; not used when `layout` is supplied.
@@ -229,7 +229,7 @@ export interface SproutWorkspaceProps {
    * they win and the composition's units and chrome are not mounted. Omitted
    * in ambient mode, the shell renders against empty defaults.
    */
-  shellProps?: WorkspaceShellProps;
+  shellProps?: SpacesShellProps;
   /** Whether the workspace root has a mockup (`design/mockup.html`) — the preview panel's context. */
   hasMockup?: boolean;
   /**
@@ -255,11 +255,11 @@ export interface SproutWorkspaceProps {
 let lastConnectedTarget: string | null = null;
 
 /** Clear the remembered socket target (tests only). */
-export function __resetSproutWorkspaceTransportForTests(): void {
+export function __resetSproutSpacesTransportForTests(): void {
   lastConnectedTarget = null;
 }
 
-const EMPTY_SHELL_PROPS: WorkspaceShellProps = {
+const EMPTY_SHELL_PROPS: SpacesShellProps = {
   isMobile: false,
   isTablet: false,
   isSidebarOpen: false,
@@ -273,9 +273,9 @@ const EMPTY_SHELL_PROPS: WorkspaceShellProps = {
   currentBuffer: null,
   handleOutlineNavigateToSymbol: () => undefined,
   chat: {
-    chatProps: {} as WorkspaceShellProps['chat']['chatProps'],
-    reviewProps: {} as WorkspaceShellProps['chat']['reviewProps'],
-    diffState: {} as WorkspaceShellProps['chat']['diffState'],
+    chatProps: {} as SpacesShellProps['chat']['chatProps'],
+    reviewProps: {} as SpacesShellProps['chat']['reviewProps'],
+    diffState: {} as SpacesShellProps['chat']['diffState'],
   },
   mockup: {
     loading: false,
@@ -284,7 +284,7 @@ const EMPTY_SHELL_PROPS: WorkspaceShellProps = {
   git: {
     gitBranches: { current: '', branches: [] },
     gitStatus: null,
-    workspaceRoot: '',
+    projectFolder: '',
   },
   ship: {
     live: {},
@@ -301,7 +301,7 @@ const EMPTY_SHELL_PROPS: WorkspaceShellProps = {
  * fallback (per `resolveWorkspaceMode`'s contract) and that resolved space is
  * what mounts and what `onSpaceChange` reports.
  */
-export function SproutWorkspace({
+export function SproutSpaces({
   project,
   space,
   host,
@@ -319,16 +319,16 @@ export function SproutWorkspace({
   wasmBase,
   className,
   children,
-}: SproutWorkspaceProps): JSX.Element {
-  const ctx: WorkspaceModeContext = useMemo(() => ({ hasMockup: !!hasMockup }), [hasMockup]);
-  const resolved = useMemo(() => resolveWorkspaceMode(space, ctx), [space, ctx]);
+}: SproutSpacesProps): JSX.Element {
+  const ctx: SpaceContext = useMemo(() => ({ hasMockup: !!hasMockup }), [hasMockup]);
+  const resolved = useMemo(() => resolveSpace(space, ctx), [space, ctx]);
 
   // Report space changes, not the mount. The first render records the resolved
   // id without calling back; a later render whose resolved id differs calls
   // once with the new id. Tracking the resolved id (not the `space` prop) means
   // a request that resolves to the same space — e.g. an unknown id falling back
   // to the one already mounted — is not reported as a change.
-  const previousResolvedId = useRef<WorkspaceModeId | null>(null);
+  const previousResolvedId = useRef<SpaceId | null>(null);
   useEffect(() => {
     if (previousResolvedId.current === null) {
       previousResolvedId.current = resolved.id;
@@ -373,7 +373,7 @@ export function SproutWorkspace({
   // chat). Ambient mode must not build a second provider stack (whose
   // transport would double-subscribe the events the caller already routes) —
   // there the caller owns the chat unit and supplies any view props it wants.
-  const chatTransport = useSproutWorkspaceChatTransport({ initialState: chatInitialState, fetchFn: chatFetch });
+  const chatTransport = useSproutSpacesChatTransport({ initialState: chatInitialState, fetchFn: chatFetch });
 
   // Own mode: register the host for the module-level services (the non-React
   // accessor the client-session fetch and the WebSocket URL read), open the
@@ -440,7 +440,7 @@ export function SproutWorkspace({
         (hostToolsRef.current?.find((t) => t.name === tool.name) ?? tool).handler(args, context),
     }));
     void wiredBackend.current
-      .then(() => registerWorkspaceHostTools(tools))
+      .then(() => registerSpacesHostTools(tools))
       .then((undo) => {
         if (cancelled) undo();
         else withdraw = undo;
@@ -466,7 +466,7 @@ export function SproutWorkspace({
     content = <ResolvedSpaceShell Shell={resolved.Shell} shellProps={shellProps} />;
   } else {
     content = (
-      <WorkspaceChatProvider
+      <SpacesChatProvider
         initialState={chatTransport.initialState}
         eventsProvider={chatTransport.eventsProvider}
         fetchFn={chatTransport.fetchFn}
@@ -483,21 +483,21 @@ export function SproutWorkspace({
                 spaceId={resolved.id}
                 chatOverrides={chatOverrides}
                 hasMockup={hasMockup}
-                workspaceRoot={project.root}
+                projectFolder={project.root}
                 projectName={projectNameOf(project)}
               />
               {/* The layout path mounts the palette through its arrangement
                   (the default overlay); the composed shell mounts it unless
                   the host opted out. */}
-              {commandPalette && <WorkspaceCommandPalette />}
+              {commandPalette && <SpacesCommandPalette />}
             </>
           )}
           {/* The agent's approval, question and password prompts: the chat
               unit records them, and without this the agent waits on a
               request nothing shows. */}
-          <WorkspaceAgentPrompts />
+          <SpacesAgentPrompts />
         </WorkspaceEditorProvider>
-      </WorkspaceChatProvider>
+      </SpacesChatProvider>
     );
   }
 
@@ -546,7 +546,7 @@ function ProjectFolder({
 }: {
   rootClass: string;
   projectId: string;
-  spaceId: WorkspaceModeId;
+  spaceId: SpaceId;
   /**
    * Whether the workspace owns the document it is mounted in. Own mode does
    * (it mounts its own `SproutProviders`, so nothing else in the page is
@@ -628,13 +628,13 @@ function ResolvedSpaceShell({
   Shell,
   shellProps,
 }: {
-  Shell: ComponentType<WorkspaceShellProps>;
-  shellProps?: WorkspaceShellProps;
+  Shell: ComponentType<SpacesShellProps>;
+  shellProps?: SpacesShellProps;
 }): JSX.Element {
   return <Shell {...(shellProps ?? EMPTY_SHELL_PROPS)} />;
 }
 
-SproutWorkspace.displayName = 'SproutWorkspace';
+SproutSpaces.displayName = 'SproutWorkspace';
 
 /**
  * The project a host chat session store keys this workspace's chats by: the
@@ -660,7 +660,7 @@ function projectNameOf(project: SproutProject): string {
   return segments[segments.length - 1] ?? source;
 }
 
-export default SproutWorkspace;
+export default SproutSpaces;
 
 /**
  * The arrangement with the command palette removed from every slot when the

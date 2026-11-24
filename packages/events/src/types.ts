@@ -83,7 +83,7 @@ export interface ErrorData {
 }
 
 /** A warning that the hosting platform is about to stop the project folder. */
-export interface WorkspaceStoppingData {
+export interface ProjectFolderStoppingData {
   /** Why: idle, max_runtime, credits, drain, user, txn_finish. */
   reason: string;
   /** RFC 3339 time the notice was issued. */
@@ -255,7 +255,7 @@ export interface FileContentChangedData {
 }
 
 /** File-change notification payload from WorkspacePatchEvent (no content — see WorkspacePatchEvent). */
-export interface WorkspacePatchData {
+export interface ProjectFolderPatchData {
   file_path: string;
   /**
    * @deprecated No longer transmitted — the event never carried content the
@@ -503,7 +503,7 @@ export interface ProgressCompleteData {
   not_verified_reason?: string;
 }
 
-export interface WorkspaceChangedData {
+export interface ProjectFolderChangedData {
   daemon_root?: string;
   project_folder?: string;
   previous_project_folder?: string;
@@ -717,7 +717,7 @@ export type WsEvent =
   | { type: "error"; data?: ErrorData; id?: string; timestamp?: string }
   | {
       type: "dev_space_stopping";
-      data?: WorkspaceStoppingData;
+      data?: ProjectFolderStoppingData;
       id?: string;
       timestamp?: string;
     }
@@ -796,7 +796,7 @@ export type WsEvent =
     }
   | {
       type: "project_folder_patch";
-      data?: WorkspacePatchData;
+      data?: ProjectFolderPatchData;
       id?: string;
       timestamp?: string;
     }
@@ -814,7 +814,7 @@ export type WsEvent =
     }
   | {
       type: "project_folder_changed";
-      data?: WorkspaceChangedData;
+      data?: ProjectFolderChangedData;
       id?: string;
       timestamp?: string;
     }

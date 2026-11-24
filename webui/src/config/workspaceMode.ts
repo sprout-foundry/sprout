@@ -30,11 +30,11 @@ let runtimeDefault: string | null = BUILD_DEFAULT;
  * build-time value (and, when that is unset, the built-in default). An
  * embedding shell calls this before the shell renders.
  */
-export function overrideDefaultWorkspaceMode(id: string | null): void {
+export function overrideDefaultSpace(id: string | null): void {
   runtimeDefault = id;
 }
 
 /** The configured default project folder mode, or `null` when nothing is set. */
-export function configuredDefaultWorkspaceMode(): string | null {
+export function configuredDefaultSpace(): string | null {
   return runtimeDefault;
 }

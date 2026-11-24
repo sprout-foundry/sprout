@@ -51,7 +51,7 @@ vi.mock('../workspaces/CodeShell', () => ({ default: () => <div data-testid="pro
 import { setActiveHost } from '../host/accessor';
 import { headlessHost } from '../host/HostProvider';
 import type { SproutHost } from '../host/types';
-import { SproutWorkspace } from './SproutWorkspace';
+import { SproutSpaces } from './SproutWorkspace';
 
 const PROJECT = { id: 'acme/widgets', repoUrl: 'https://github.com/acme/widgets' };
 const CHAT_ONLY = { left: [], center: ['chat'], right: [], overlay: [] };
@@ -134,7 +134,7 @@ afterEach(() => {
 
 describe('SproutWorkspace agent prompts', () => {
   it('shows a tool approval in the full space shell and sends the answer back', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={platformDaemonHost()} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={platformDaemonHost()} />);
     await screen.findByTestId('prompts-code-shell');
     await waitFor(() => expect(providers[0]?.onEvent.mock.calls.length).toBeGreaterThan(0));
 
@@ -153,7 +153,7 @@ describe('SproutWorkspace agent prompts', () => {
   });
 
   it('shows a tool approval in an arranged layout too', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={platformDaemonHost()} layout={CHAT_ONLY} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={platformDaemonHost()} layout={CHAT_ONLY} />);
     await screen.findByTestId('prompts-chat');
     await waitFor(() => expect(providers[0]?.onEvent.mock.calls.length).toBeGreaterThan(0));
 
@@ -162,7 +162,7 @@ describe('SproutWorkspace agent prompts', () => {
   });
 
   it('answers an ask_user question from a daemon over the socket', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={platformDaemonHost()} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={platformDaemonHost()} />);
     await screen.findByTestId('prompts-code-shell');
     await waitFor(() => expect(providers[0]?.onEvent.mock.calls.length).toBeGreaterThan(0));
 
@@ -187,7 +187,7 @@ describe('SproutWorkspace agent prompts', () => {
   });
 
   it('shows a shell approval and posts the decision to the backend', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={platformDaemonHost()} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={platformDaemonHost()} />);
     await screen.findByTestId('prompts-code-shell');
     await waitFor(() => expect(providers[0]?.onEvent.mock.calls.length).toBeGreaterThan(0));
 

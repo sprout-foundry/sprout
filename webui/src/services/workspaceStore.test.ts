@@ -10,7 +10,7 @@ import {
   __resetProjectFolderStoreForTests,
   applyProjectFolder,
   ensureProjectFolder,
-  getWorkspaceRoot,
+  getProjectFolder,
   getProjectFolderState,
   refreshProjectFolder,
   subscribeProjectFolder,
@@ -62,7 +62,7 @@ describe('workspaceStore', () => {
 
     await expect(Promise.all([a, b, c])).resolves.toHaveLength(3);
     expect(api.getProjectFolder).toHaveBeenCalledTimes(1);
-    expect(getWorkspaceRoot()).toBe('/home/u/proj');
+    expect(getProjectFolder()).toBe('/home/u/proj');
   });
 
   it('drops a stale response that resolves after a newer request', async () => {
@@ -77,7 +77,7 @@ describe('workspaceStore', () => {
     older.resolve(ws('/home/u'));
 
     await expect(first).resolves.toMatchObject({ project_folder: '/home/u/new' });
-    expect(getWorkspaceRoot()).toBe('/home/u/new');
+    expect(getProjectFolder()).toBe('/home/u/new');
   });
 
   it('discards a GET that started before an applied root', async () => {
@@ -89,7 +89,7 @@ describe('workspaceStore', () => {
     before.resolve(ws('/home/u'));
     await Promise.resolve();
 
-    expect(getWorkspaceRoot()).toBe('/home/u/proj');
+    expect(getProjectFolder()).toBe('/home/u/proj');
   });
 
   it('keeps the last known workspace on failure and retries', async () => {
@@ -99,12 +99,12 @@ describe('workspaceStore', () => {
 
     api.getProjectFolder.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(ws('/home/u/proj2'));
     await expect(refreshProjectFolder({ force: true })).rejects.toThrow('offline');
-    expect(getWorkspaceRoot()).toBe('/home/u/proj');
+    expect(getProjectFolder()).toBe('/home/u/proj');
     expect(getProjectFolderState().error).toBe('offline');
 
     await vi.advanceTimersByTimeAsync(1_000);
     expect(api.getProjectFolder).toHaveBeenCalledTimes(3);
-    expect(getWorkspaceRoot()).toBe('/home/u/proj2');
+    expect(getProjectFolder()).toBe('/home/u/proj2');
     expect(getProjectFolderState().error).toBeNull();
   });
 
@@ -115,9 +115,9 @@ describe('workspaceStore', () => {
     const unsubscribe = subscribeProjectFolder(listener);
 
     window.dispatchEvent(
-      new CustomEvent('sprout:workspace-changed', { detail: { workspaceRoot: '/home/u/b', daemonRoot: '/home/u' } }),
+      new CustomEvent('sprout:workspace-changed', { detail: { projectFolder: '/home/u/b', daemonRoot: '/home/u' } }),
     );
-    expect(getWorkspaceRoot()).toBe('/home/u/b');
+    expect(getProjectFolder()).toBe('/home/u/b');
     await vi.waitFor(() => expect(api.getProjectFolder).toHaveBeenCalledTimes(2));
     expect(listener).toHaveBeenCalled();
     unsubscribe();

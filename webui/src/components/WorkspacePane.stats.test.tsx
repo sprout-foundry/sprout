@@ -19,12 +19,12 @@ vi.mock('./CompareTab', () => ({ default: () => null }));
 vi.mock('./DiffWorkspaceTab', () => ({ default: () => null }));
 vi.mock('./EditorPane', () => ({ default: () => null }));
 
-import WorkspacePane from './WorkspacePane';
+import SpacesPane from './WorkspacePane';
 
 describe('inactive chat pane metrics', () => {
   it("shows the chat's model before it has reported any metrics", () => {
     render(
-      <WorkspacePane
+      <SpacesPane
         paneId="pane-2"
         activeChatId="chat-a"
         perChatCache={{}}
@@ -39,7 +39,7 @@ describe('inactive chat pane metrics', () => {
 
   it("falls back to the default provider and model, without the active chat's figures", () => {
     render(
-      <WorkspacePane
+      <SpacesPane
         paneId="pane-2"
         activeChatId="chat-a"
         perChatCache={{}}

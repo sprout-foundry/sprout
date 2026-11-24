@@ -1,9 +1,9 @@
-import type { UseGitWorkspaceOptions, UseGitProjectFolderResult } from '../../hooks/useGitWorkspace';
+import type { UseGitProjectFolderOptions, UseGitProjectFolderResult } from '../../hooks/useGitWorkspace';
 import type { GitCommitDetail, GitCommitSummary } from '../../types/git-types';
 import type { GitSidebarPanelProps } from '../GitSidebarPanel';
 
 /** Opens a project folder tab (a diff, a review, a compare view) and returns its buffer id. */
-export type OpenWorkspaceBuffer = UseGitWorkspaceOptions['openWorkspaceBuffer'];
+export type OpenProjectFolderBuffer = UseGitProjectFolderOptions['openProjectFolderBuffer'];
 
 /**
  * Everything the git section renders from: the working-tree panel's props
@@ -11,7 +11,7 @@ export type OpenWorkspaceBuffer = UseGitWorkspaceOptions['openWorkspaceBuffer'];
  * for commit diffs.
  */
 export interface SidebarGitPanelProps extends GitSidebarPanelProps {
-  openWorkspaceBuffer: OpenWorkspaceBuffer;
+  openProjectFolderBuffer: OpenProjectFolderBuffer;
   onLoadCommits: (
     limit: number,
     offset: number,
@@ -35,7 +35,7 @@ export interface SidebarGitPanelProps extends GitSidebarPanelProps {
 }
 
 export interface GitPanelPropsExtras {
-  openWorkspaceBuffer: OpenWorkspaceBuffer;
+  openProjectFolderBuffer: OpenProjectFolderBuffer;
   onOpenFile?: (path: string) => void;
 }
 
@@ -46,12 +46,12 @@ export interface GitPanelPropsExtras {
  */
 export function buildGitPanelProps(
   git: UseGitProjectFolderResult,
-  { openWorkspaceBuffer, onOpenFile }: GitPanelPropsExtras,
+  { openProjectFolderBuffer, onOpenFile }: GitPanelPropsExtras,
 ): SidebarGitPanelProps {
   return {
     gitStatus: git.gitStatus,
     gitBranches: git.gitBranches,
-    workspaceRoot: git.workspaceRoot,
+    projectFolder: git.projectFolder,
     selectedFiles: git.selectedFiles,
     activeDiffSelectionKey: git.activeDiffSelectionKey,
     commitMessage: git.commitMessage,
@@ -89,6 +89,6 @@ export function buildGitPanelProps(
     onLoadCommitFileDiff: git.handleLoadCommitFileDiff,
     onCheckoutCommit: git.handleCheckoutCommit,
     onRevertCommit: git.handleRevertCommit,
-    openWorkspaceBuffer,
+    openProjectFolderBuffer,
   };
 }

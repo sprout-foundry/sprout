@@ -16,7 +16,7 @@ vi.mock('./clientSession', () => ({
   },
 }));
 
-import { __resetProjectFolderStoreForTests, getWorkspaceRoot } from './workspaceStore';
+import { __resetProjectFolderStoreForTests, getProjectFolder } from './workspaceStore';
 import {
   consentToHomeProjectFolder,
   installProjectFolderReconnectSync,
@@ -65,7 +65,7 @@ describe('reconcileTabWorkspace', () => {
 
     expect(api.setProjectFolder).toHaveBeenCalledWith('/home/u/proj');
     expect(changed).toHaveBeenCalledTimes(1);
-    await vi.waitFor(() => expect(getWorkspaceRoot()).toBe('/home/u/proj'));
+    await vi.waitFor(() => expect(getProjectFolder()).toBe('/home/u/proj'));
   });
 
   it('follows a deliberate server-side change instead of fighting it', async () => {

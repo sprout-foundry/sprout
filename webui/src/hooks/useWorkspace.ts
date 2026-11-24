@@ -29,7 +29,7 @@ export interface RecentProjectFolder {
   session_count: number;
 }
 
-export interface WorkspaceInfo {
+export interface ProjectFolderInfo {
   daemon_root: string;
   project_folder: string;
   is_project: boolean;
@@ -46,7 +46,7 @@ export interface WorkspaceInfo {
 
 /* ── Helpers ──────────────────────────────────────────────────────── */
 
-function mapProjectFolderResponse(data: ProjectFolderResponse): WorkspaceInfo {
+function mapProjectFolderResponse(data: ProjectFolderResponse): ProjectFolderInfo {
   return {
     daemon_root: data.daemon_root ?? '',
     project_folder: data.project_folder ?? '',
@@ -75,7 +75,7 @@ function mapProjectFolderResponse(data: ProjectFolderResponse): WorkspaceInfo {
 
 /* ── Hook ─────────────────────────────────────────────────────────── */
 
-const EMPTY_WORKSPACE_INFO: WorkspaceInfo = {
+const EMPTY_WORKSPACE_INFO: ProjectFolderInfo = {
   daemon_root: '',
   project_folder: '',
   is_project: false,
@@ -88,7 +88,7 @@ const EMPTY_WORKSPACE_INFO: WorkspaceInfo = {
 };
 
 export interface UseProjectFolderResult {
-  projectFolderInfo: WorkspaceInfo;
+  projectFolderInfo: ProjectFolderInfo;
   homeDir: string;
   isLoading: boolean;
   setProjectFolder: (path: string, consentHome?: boolean) => Promise<void>;
@@ -97,8 +97,8 @@ export interface UseProjectFolderResult {
   refresh: () => Promise<void>;
 }
 
-export function useWorkspace(): UseProjectFolderResult {
-  const { workspace: projectFolder, updatedAt, error } = useProjectFolderState();
+export function useProjectFolder(): UseProjectFolderResult {
+  const { projectFolder: projectFolder, updatedAt, error } = useProjectFolderState();
   const projectFolderInfo = useMemo(
     () => (projectFolder ? mapProjectFolderResponse(projectFolder) : EMPTY_WORKSPACE_INFO),
     [projectFolder],

@@ -353,7 +353,9 @@ export function useWebSocketEventHandler({
           // The chat holding the project folder finished: release the chat whose
           // send was held back behind it (its queue drains next).
           const releaseBusy =
-            endsBackgroundRun && prev.workspaceBusy?.runningChatId === eventChatId ? { workspaceBusy: null } : {};
+            endsBackgroundRun && prev.projectFolderBusy?.runningChatId === eventChatId
+              ? { projectFolderBusy: null }
+              : {};
           const existingCache = prev.perChatCache[eventChatId];
           if (!existingCache) return releaseBusy;
           const pendingEvents = existingCache.pendingEvents ?? [];

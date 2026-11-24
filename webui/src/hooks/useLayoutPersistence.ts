@@ -448,7 +448,7 @@ export function useLayoutPersistence({
   useEffect(() => {
     const handleProjectFolderChanged = (event: Event) => {
       const detail = (event as CustomEvent).detail;
-      const nextRoot = typeof detail?.workspaceRoot === 'string' ? detail.workspaceRoot : '';
+      const nextRoot = typeof detail?.projectFolder === 'string' ? detail.projectFolder : '';
       if (nextRoot) {
         getLSPClientService().setProjectFolder(nextRoot);
         // The server returning to the project folder this tab already shows (a

@@ -88,14 +88,14 @@ vi.mock('../workspaces/CodeShell', () => ({
   default: (props: {
     currentView: string;
     currentBuffer: { file: { path: string } } | null;
-    git: { workspaceRoot: string };
+    git: { projectFolder: string };
     chat: { chatProps: StubChatProps; onCreateChat?: unknown };
   }) => (
     <div
       data-testid="composition-code-shell"
       data-view={props.currentView}
       data-buffer={props.currentBuffer?.file.path ?? ''}
-      data-root={props.git.workspaceRoot}
+      data-root={props.git.projectFolder}
       data-create={typeof props.chat.onCreateChat}
       {...describeChat(props.chat.chatProps)}
     />
@@ -105,8 +105,8 @@ vi.mock('../workspaces/CodeShell', () => ({
 import type { SproutHost } from '../host';
 import { setActiveHost } from '../host/accessor';
 import { headlessHost } from '../host/HostProvider';
-import type { WorkspaceShellProps } from '../workspaces/shell';
-import { SproutWorkspace } from './SproutWorkspace';
+import type { SpacesShellProps } from '../workspaces/shell';
+import { SproutSpaces } from './SproutWorkspace';
 import type { SproutProject } from './SproutWorkspace';
 import type { ViewsArrangement } from './ViewsLayout';
 
@@ -156,7 +156,7 @@ describe('SproutWorkspace chatOverrides', () => {
   it('merges host callbacks over the assembled chat on the layout path', async () => {
     const overrides = { onModelClick: vi.fn(), onRestoreSession: vi.fn() };
     render(
-      <SproutWorkspace project={PROJECT} space="code" host={makeHost()} layout={CHAT_ONLY} chatOverrides={overrides} />,
+      <SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={CHAT_ONLY} chatOverrides={overrides} />,
     );
     const chat = await screen.findByTestId('composition-chat');
     expect(chat).toHaveAttribute('data-send', 'function');
@@ -166,7 +166,7 @@ describe('SproutWorkspace chatOverrides', () => {
 
   it('is ignored when the host replaces the chat through viewProps', async () => {
     render(
-      <SproutWorkspace
+      <SproutSpaces
         project={PROJECT}
         space="code"
         host={makeHost()}
@@ -188,13 +188,13 @@ describe('SproutWorkspace arranged preview panel', () => {
     });
 
   it('is not mounted when the host does not declare capabilities.preview', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} layout={PREVIEW_ONLY} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={PREVIEW_ONLY} />);
     await screen.findByTestId('views-layout');
     expect(screen.queryByTestId('composition-preview')).not.toBeInTheDocument();
   });
 
   it('starts closed, opens from toggle_preview and closes from its own close affordance', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={makePreviewHost()} layout={PREVIEW_ONLY} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={makePreviewHost()} layout={PREVIEW_ONLY} />);
     const preview = await screen.findByTestId('composition-preview');
     expect(preview).toHaveAttribute('data-open', 'false');
     expect(preview).toHaveAttribute('data-close', 'function');
@@ -208,7 +208,7 @@ describe('SproutWorkspace arranged preview panel', () => {
 
   it('merges the host props over the assembled ones', async () => {
     render(
-      <SproutWorkspace
+      <SproutSpaces
         project={PROJECT}
         space="code"
         host={makePreviewHost()}
@@ -224,7 +224,7 @@ describe('SproutWorkspace arranged preview panel', () => {
   it("leaves a host-controlled panel to the host: open and onClose are the host's", async () => {
     const onClose = vi.fn();
     const { rerender } = render(
-      <SproutWorkspace
+      <SproutSpaces
         project={PROJECT}
         space="code"
         host={makePreviewHost()}
@@ -242,7 +242,7 @@ describe('SproutWorkspace arranged preview panel', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
 
     rerender(
-      <SproutWorkspace
+      <SproutSpaces
         project={PROJECT}
         space="code"
         host={makePreviewHost()}
@@ -256,9 +256,7 @@ describe('SproutWorkspace arranged preview panel', () => {
 
 describe('SproutWorkspace space shell in own mode', () => {
   it('feeds the Code shell from the chat and editor units without shellProps', async () => {
-    render(
-      <SproutWorkspace project={PROJECT} space="code" host={makeHost()} chatOverrides={{ onModelClick: vi.fn() }} />,
-    );
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} chatOverrides={{ onModelClick: vi.fn() }} />);
     const shell = await screen.findByTestId('composition-code-shell');
     expect(shell).toHaveAttribute('data-send', 'function');
     expect(shell).toHaveAttribute('data-model-click', 'function');
@@ -277,11 +275,11 @@ describe('SproutWorkspace space shell in own mode', () => {
     const shellProps = {
       currentView: 'git',
       currentBuffer: null,
-      git: { workspaceRoot: '/host/root' },
+      git: { projectFolder: '/host/root' },
       chat: { chatProps: {} },
-    } as unknown as WorkspaceShellProps;
+    } as unknown as SpacesShellProps;
     render(
-      <SproutWorkspace
+      <SproutSpaces
         project={PROJECT}
         space="code"
         host={makeHost()}
@@ -315,7 +313,7 @@ describe('SproutWorkspace chat session load', () => {
     ['the layout path', { layout: CHAT_ONLY }, 'composition-chat'],
     ['the composed space shell', {}, 'composition-code-shell'],
   ])('loads the session list on connect on %s', async (_label, extra, testId) => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} {...extra} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} {...extra} />);
     await screen.findByTestId(testId);
     expect(sessionListCalls()).toHaveLength(0);
 

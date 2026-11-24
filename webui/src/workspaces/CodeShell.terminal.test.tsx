@@ -85,9 +85,9 @@ vi.mock('../components/PreviewPanel', () => ({ default: () => null, PreviewPanel
 import { HostProvider } from '../host';
 import { makeTestHost } from '../host/testHost';
 import CodeShell from './CodeShell';
-import type { WorkspaceShellProps } from './shell';
+import type { SpacesShellProps } from './shell';
 
-function shellProps(overrides: Partial<WorkspaceShellProps>): WorkspaceShellProps {
+function shellProps(overrides: Partial<SpacesShellProps>): SpacesShellProps {
   return {
     isMobile: false,
     isTablet: false,
@@ -108,14 +108,14 @@ function shellProps(overrides: Partial<WorkspaceShellProps>): WorkspaceShellProp
     queryProgress: null,
     currentBuffer: null,
     handleOutlineNavigateToSymbol: vi.fn(),
-    chat: { chatProps: {}, reviewProps: {}, diffState: {} } as unknown as WorkspaceShellProps['chat'],
-    mockup: {} as WorkspaceShellProps['mockup'],
-    git: { gitBranches: { current: '', branches: [] }, gitStatus: null, workspaceRoot: '' },
+    chat: { chatProps: {}, reviewProps: {}, diffState: {} } as unknown as SpacesShellProps['chat'],
+    mockup: {} as SpacesShellProps['mockup'],
+    git: { gitBranches: { current: '', branches: [] }, gitStatus: null, projectFolder: '' },
     ...overrides,
   };
 }
 
-function renderShell(overrides: Partial<WorkspaceShellProps>) {
+function renderShell(overrides: Partial<SpacesShellProps>) {
   return render(
     <HostProvider host={makeTestHost({ localTerminal: false })}>
       <CodeShell {...shellProps(overrides)} />

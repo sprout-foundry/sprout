@@ -53,7 +53,7 @@ all read the same pinned version.
 ## Mount
 
 The minimal mount is one component. In its default `providers="own"` mode
-`SproutWorkspace` builds everything below it — the `HostProvider` for the
+`SproutSpaces` builds everything below it — the `HostProvider` for the
 `host` you pass, the `SproutProviders` stack, the events transport, and the
 chat and editor units — so a host renders it directly, with no provider of its
 own around it:
@@ -61,7 +61,7 @@ own around it:
 ```tsx
 import { useMemo } from "react";
 import "@sprout-foundry/spaces/styles.css";
-import { SproutWorkspace } from "@sprout-foundry/spaces/views";
+import { SproutSpaces } from "@sprout-foundry/spaces/views";
 import type { SproutProject } from "@sprout-foundry/spaces/views";
 import { myHost } from "./myHost"; // a module-level SproutHost
 
@@ -71,7 +71,7 @@ export function ProjectSpace({ repoUrl }: { repoUrl: string }) {
     [repoUrl],
   );
   return (
-    <SproutWorkspace
+    <SproutSpaces
       project={project}
       space="code"
       host={myHost}
@@ -93,7 +93,7 @@ export function ProjectSpace({ repoUrl }: { repoUrl: string }) {
   terminal, status bar — fed from its own chat, editor and git units. This is
   the recommended mount for the code and design spaces; see
   [The full space (no layout)](#the-full-space-no-layout). A host that owns
-  that chrome passes `shellProps` (the full `WorkspaceShellProps`) instead,
+  that chrome passes `shellProps` (the full `SpacesShellProps`) instead,
   and then supplies the chat itself.
 - `layout` (an SP-155 `ViewsArrangement`) replaces the space shell with the
   host's own placement of the individual views, without the space's chrome.
@@ -101,7 +101,7 @@ export function ProjectSpace({ repoUrl }: { repoUrl: string }) {
   in a side panel) — see [The chat unit](#the-chat-unit) and
   [Files and editor](#files-and-editor).
 
-Do not wrap an own-mode `SproutWorkspace` in `SproutProviders` or
+Do not wrap an own-mode `SproutSpaces` in `SproutProviders` or
 `HostProvider`: it builds its own stack, and a second one would open a second
 events transport. A host that needs the stack above the workspace (to render
 its own Sprout views beside it) mounts `HostProvider` + `SproutProviders`
@@ -113,13 +113,13 @@ The package exposes three entry points:
 - `.` — the **host contract** (`SproutHost` and the host types, the
   provider and hooks, `localHost`). It is deliberately thin: importing it
   pulls no view, editor or WASM code.
-- `./views` — the **composition API**: `SproutWorkspace` (mounts one
+- `./views` — the **composition API**: `SproutSpaces` (mounts one
   project's workspace), the registered spaces through the registry
-  (`WORKSPACE_MODES`, `availableModes`, `registerWorkspaceMode`,
-  `resolveWorkspaceMode`, `useWorkspaceMode`), the individual views
+  (`WORKSPACE_MODES`, `availableModes`, `registerSpace`,
+  `resolveSpace`, `useSpace`), the individual views
   (`ChatView`, `AgentChangesPanel`, editor, files, preview, `ViewsLayout`),
   the in-browser workspace's read-only file API
-  (`listBrowserWorkspaceFiles`, `readBrowserWorkspaceFile`), the WASM asset
+  (`listBrowserProjectFolderFiles`, `readBrowserProjectFolderFile`), the WASM asset
   seam, and `SproutProviders` (so a host that already imports the views gets
   the wrapper from the same surface).
 - `./providers` — just `SproutProviders` and its props, for a host that
@@ -128,7 +128,7 @@ The package exposes three entry points:
 
 `SproutProviders` is the provider stack the views need (optionally with an
 `eventsProvider` for the event transport), for a host that composes views
-itself under its own `HostProvider`; an own-mode `SproutWorkspace` mounts it
+itself under its own `HostProvider`; an own-mode `SproutSpaces` mounts it
 for you. `myHost` implements `SproutHost`: identity, entitlements, transport,
 navigation intents, notifications, chrome slots, theme and capabilities.
 React and React DOM are peer dependencies; the host provides them. Heavy
@@ -138,18 +138,18 @@ space opens, not when the package is imported.
 ## The full space (no layout)
 
 Mounted without `layout` (and without `shellProps`), an own-mode
-`SproutWorkspace` renders the space with the standalone app's own components,
+`SproutSpaces` renders the space with the standalone app's own components,
 so a host gets the same IDE the app shows with no wiring:
 
 ```tsx
 import "@sprout-foundry/design/tokens.css";
 import "@sprout-foundry/design/reset.css";
 import "@sprout-foundry/spaces/styles.css";
-import { SproutWorkspace } from "@sprout-foundry/spaces/views";
+import { SproutSpaces } from "@sprout-foundry/spaces/views";
 
 // No `layout`: the full space. It fills the box it is given.
 <div style={{ height: "100%" }}>
-  <SproutWorkspace
+  <SproutSpaces
     project={{ id: repoUrl, repoUrl, name: "widgets" }}
     space="code" // or "design"
     host={myHost}
@@ -217,15 +217,15 @@ type and controls are styled through them (see [Styles](#styles)).
 
 The chat surface is the most stateful part of a workspace, so it ships as one
 reusable unit rather than a view a host has to feed by hand. `./views` exports
-`WorkspaceChatProvider`, `useWorkspaceChat()` and `useWorkspaceChatProps()`:
+`SpacesChatProvider`, `useSpacesChat()` and `useSpacesChatProps()`:
 
 ```tsx
 import {
-  WorkspaceChatProvider,
-  useWorkspaceChatProps,
+  SpacesChatProvider,
+  useSpacesChatProps,
 } from "@sprout-foundry/spaces/views";
 
-<WorkspaceChatProvider
+<SpacesChatProvider
   initialState={initialState}
   eventsProvider={events}
   fetchFn={myFetch}
@@ -243,10 +243,10 @@ manager (list/create/switch/delete/rename) and the send/queue operations. It
 subscribes the events provider to the reducer itself, so a host hands over its
 transport and nothing else.
 
-- `useWorkspaceChat()` reads the unit: `state`, `setState`, `handleEvent`,
+- `useSpacesChat()` reads the unit: `state`, `setState`, `handleEvent`,
   `handleReconnect` and the `chat` session manager. A host composing its own
   chat surface uses these directly.
-- `useWorkspaceChatProps(overrides)` assembles the `chatProps`, `reviewProps`
+- `useSpacesChatProps(overrides)` assembles the `chatProps`, `reviewProps`
   and `diffState` the `ChatView` renders from, mapping the queue to the active
   chat. The `overrides` carry the app-specific callbacks that are not chat
   state (opening a review buffer, the model picker, session restore, fork).
@@ -255,25 +255,25 @@ The standalone app mounts the provider with its own `clientFetch` and
 `LocalEventsProvider`, so its behaviour is unchanged; a host mounts it with
 its host's transport.
 
-**Mount `WorkspaceAgentPrompts` with it.** The agent can stop mid-turn and
+**Mount `SpacesAgentPrompts` with it.** The agent can stop mid-turn and
 wait for the user — a tool approval, a file-access prompt, an `ask_user`
 question, a password, an edit or shell approval. The reducer records each
-request in the chat state; `WorkspaceAgentPrompts` renders the dialog and
-sends the answer back. A host that mounts `WorkspaceChatProvider` itself
-renders `<WorkspaceAgentPrompts />` inside it (and inside `SproutProviders`,
+request in the chat state; `SpacesAgentPrompts` renders the dialog and
+sends the answer back. A host that mounts `SpacesChatProvider` itself
+renders `<SpacesAgentPrompts />` inside it (and inside `SproutProviders`,
 whose events transport the answers go through); without it a request leaves
-the agent waiting with nothing on screen. An own-mode `SproutWorkspace`
+the agent waiting with nothing on screen. An own-mode `SproutSpaces`
 mounts it already, on the layout path and the space-shell path alike.
 
-`WorkspaceChatProvider` must be mounted under a `HostProvider`: it reads the
+`SpacesChatProvider` must be mounted under a `HostProvider`: it reads the
 host to decide whether the host serves the chat session store (see
 `capabilities.chatSessions` in the host contract) and to resolve that store's
-API base. `SproutWorkspace` mounts one in its own mode. Its
+API base. `SproutSpaces` mounts one in its own mode. Its
 `chatSessionsProject` prop scopes a host store's chats to a project (sent as
-`project` on every session call); `SproutWorkspace` passes `project.repoUrl`,
+`project` on every session call); `SproutSpaces` passes `project.repoUrl`,
 else `project.id`. A host mounting the provider itself passes its own.
 
-**The composed workspace mounts the chat for you.** A `SproutWorkspace` that
+**The composed workspace mounts the chat for you.** A `SproutSpaces` that
 renders through a `layout` arrangement (SP-155) mounts the chat unit itself:
 the arranged `chat` view gets props assembled from the unit, so a host's
 layout shows a working chat — the transcript, sending, queueing and the
@@ -288,7 +288,7 @@ a host adds them through `chatOverrides`, a `Partial<ChatProps>` merged over
 the assembled chat props, so the live transcript and send/queue wiring stay:
 
 ```tsx
-<SproutWorkspace
+<SproutSpaces
   /* … */
   chatOverrides={useMemo(
     () => ({
@@ -312,7 +312,7 @@ builds none of this: the caller owns the provider stack and its chat, so
 
 The `./views` and `./providers` subpaths each ship their own self-contained
 type declarations (`dist/views.d.ts`, `dist/providers.d.ts`), so importing
-`SproutWorkspace` or `SproutProviders` type-checks from `dist/` alone —
+`SproutSpaces` or `SproutProviders` type-checks from `dist/` alone —
 no web UI source tree required. They reference only `react` as an external
 (the registry's mode icons and the editor's CodeMirror-typed props are
 inlined).
@@ -320,14 +320,14 @@ inlined).
 ## Files and editor
 
 An arranged workspace is an IDE, not just a chat: in own mode a
-`SproutWorkspace` with a `layout` also assembles the file tree, the editor and
+`SproutSpaces` with a `layout` also assembles the file tree, the editor and
 the changes panel, so a host that arranges them gets working surfaces with no
 extra wiring.
 
 ```tsx
-import { SproutWorkspace } from "@sprout-foundry/spaces/views";
+import { SproutSpaces } from "@sprout-foundry/spaces/views";
 
-<SproutWorkspace
+<SproutSpaces
   project={{ id: repoUrl, repoUrl }}
   space="code"
   host={myHost}
@@ -340,7 +340,7 @@ import { SproutWorkspace } from "@sprout-foundry/spaces/views";
 />;
 ```
 
-- **`fileTree`** gets its callbacks from `useWorkspaceFileTree()`: listing
+- **`fileTree`** gets its callbacks from `useProjectFolderFileTree()`: listing
   through `/api/files`, create/delete/rename through `/api/create`,
   `/api/delete` and `/api/rename`, all on the adapter-aware `clientFetch` —
   so they reach the daemon, the in-browser workspace's VFS (WASM hosts) or the
@@ -374,10 +374,10 @@ fills in by itself; a host needs no refresh of its own.
 
 The editor is a unit like the chat. `./views` exports
 `WorkspaceEditorProvider`, `useWorkspaceEditor()` and
-`useWorkspaceEditorProps()`; `SproutWorkspace` mounts the provider in own
+`useWorkspaceEditorProps()`; `SproutSpaces` mounts the provider in own
 mode, and the standalone app mounts the same provider at its root. It must sit
 under `SproutProviders`, which holds the buffer manager the editor's open files
-live in. An own-mode `SproutWorkspace` builds that stack itself, so the
+live in. An own-mode `SproutSpaces` builds that stack itself, so the
 assembled tree, the editor view and the editor unit share one buffer manager
 with no host wiring; a host does not mount `WorkspaceEditorProvider` for them.
 
@@ -390,14 +390,14 @@ line?)`.
 
 **Overriding.** A kind in `viewProps` replaces the assembled props for that
 kind, as for `chat`. A host that wants its own tree data passes
-`viewProps.fileTree` (a `FileTreeProps`); `useWorkspaceFileTree({ fetchFn,
+`viewProps.fileTree` (a `FileTreeProps`); `useProjectFolderFileTree({ fetchFn,
 rootPath, onFileSelect, selectedFile })` is the starting point and needs no
 provider, so it can be called in the host component that renders the
 workspace. The host's tree sits outside the editor unit, so to open a file in
 the editor it dispatches the open request the workspace listens for:
 
 ```tsx
-const fileTree = useWorkspaceFileTree({
+const fileTree = useProjectFolderFileTree({
   fetchFn: myFetch,
   onFileSelect: (file) =>
     window.dispatchEvent(
@@ -405,7 +405,7 @@ const fileTree = useWorkspaceFileTree({
     ),
 });
 
-<SproutWorkspace /* … */ layout={layout} viewProps={{ fileTree }} />;
+<SproutSpaces /* … */ layout={layout} viewProps={{ fileTree }} />;
 ```
 
 A host-supplied `viewProps.editor` drops the assembled editor: the `editor`
@@ -467,12 +467,12 @@ Two preview kinds can be arranged:
 ## Source control
 
 An arranged `git` view is a working source-control surface: the app's git
-sidebar section (`WorkspaceGitView`), running against the workspace's
+sidebar section (`SpacesGitView`), running against the workspace's
 transport. The standalone app's sidebar and the view build their panel from
-the same state hook (`useGitWorkspace`) and the same panel components.
+the same state hook (`useGitProjectFolder`) and the same panel components.
 
 ```tsx
-<SproutWorkspace
+<SproutSpaces
   project={{ id: repoUrl, repoUrl }}
   space="code"
   host={myHost}
@@ -515,21 +515,21 @@ published on the workspace's request channel, so a host that mounts
 full workspace" escalation the app offers.
 
 **Overriding.** `viewProps.git` replaces the assembled props
-(`WorkspaceGitViewProps`): `onOpenFile(path)` (assembled: the editor unit;
+(`SpacesGitViewProps`): `onOpenFile(path)` (assembled: the editor unit;
 omitted outside a composition: a `sprout:open-in-editor` request) and
 `className`. A host that owns the git state passes `gitPanel`
-(`WorkspaceGitPanelProps`), and the view renders that panel as-is with no git
+(`SpacesGitPanelProps`), and the view renders that panel as-is with no git
 requests of its own.
 
 ## Search
 
 An arranged `search` view is the app's workspace search
-(`WorkspaceSearchView`, the same panel as the app's Search sidebar): a query
+(`SpacesSearchView`, the same panel as the app's Search sidebar): a query
 with case / whole-word / regex options, exclude patterns, and replace-all.
 Clicking a result opens the file in the editor unit at the matched line.
 
 ```tsx
-<SproutWorkspace
+<SproutSpaces
   /* … */
   layout={{ left: ["fileTree", "search"], center: ["editor"], right: ["chat"] }}
 />
@@ -545,7 +545,7 @@ files; the replacement is inserted literally (no backreferences, as on the
 daemon). No capability gates it.
 
 **Overriding.** `viewProps.search` replaces the assembled props
-(`WorkspaceSearchViewProps`): `onFileClick(path, line)` (assembled: the
+(`SpacesSearchViewProps`): `onFileClick(path, line)` (assembled: the
 editor unit's `openFile(path, { line })`), `autoFocus` (default `false` for an
 arranged view; the app's sidebar panel focuses its input) and `className`.
 
@@ -557,7 +557,7 @@ same terminal surface the standalone app docks at the bottom of the page
 in place in its slot and always expanded:
 
 ```tsx
-<SproutWorkspace
+<SproutSpaces
   project={{ id: repoUrl, repoUrl }}
   space="code"
   host={myHost}
@@ -569,7 +569,7 @@ in place in its slot and always expanded:
 />
 ```
 
-What it attaches to follows the host (`resolveWorkspaceTerminalBackend`,
+What it attaches to follows the host (`resolveSpacesTerminalBackend`,
 exported from `./views`):
 
 - **In-browser agent** (`transport.agent.kind: "wasm"`): a terminal on the
@@ -584,11 +584,11 @@ exported from `./views`):
 - **Neither**: the view renders "Terminal not available in this workspace."
   (`data-testid="workspace-terminal-unavailable"`) instead of a dead surface.
 
-`viewProps.terminal` (`WorkspaceTerminalViewProps`) overrides: `backend`
+`viewProps.terminal` (`SpacesTerminalViewProps`) overrides: `backend`
 (`"auto"` by default; `"wasm"`, `"pty"` or `"none"` pins one — `"none"` shows
 the unavailable state), `unavailableMessage` (replaces the default text) and
 `className`. The view fills its slot (with a 240px floor); its size beyond
-that is the host's CSS. `WorkspaceTerminalView` is exported for hosts that
+that is the host's CSS. `SpacesTerminalView` is exported for hosts that
 place it themselves under the provider stack.
 
 Without a `layout`, the composed space shell picks its terminal by the same
@@ -611,7 +611,7 @@ overlay included) and from the composed shell, so Ctrl/Cmd+Shift+P and the
 header search control stay with the host:
 
 ```tsx
-<SproutWorkspace project={project} host={host} commandPalette={false} />
+<SproutSpaces project={project} host={host} commandPalette={false} />
 ```
 
 An arrangement that supplies its own `overlay` without it also leaves it out:
@@ -662,9 +662,9 @@ exports the pieces a composing host mounts — the same two the Sprout app root
 mounts:
 
 These read the host through `HostProvider`, so they must render **inside** the
-workspace's provider. With `SproutWorkspace` in its default `providers="own"`
+workspace's provider. With `SproutSpaces` in its default `providers="own"`
 mode, pass them as its `children` (rendered inside the provider it creates);
-mounted beside `SproutWorkspace` they throw "useHost must be used within a
+mounted beside `SproutSpaces` they throw "useHost must be used within a
 HostProvider". In `providers="ambient"` mode, mount them anywhere under your
 own `HostProvider`.
 
@@ -672,7 +672,7 @@ own `HostProvider`.
 import {
   AgentEscalationBridge,
   EscalationListener,
-  SproutWorkspace,
+  SproutSpaces,
   useEscalationTriggers,
 } from "@sprout-foundry/spaces/views";
 
@@ -683,7 +683,7 @@ function EscalationTriggers({ repoURL }: { repoURL: string }) {
   return null;
 }
 
-<SproutWorkspace host={host} project={{ repoUrl: repoURL }} /* … */>
+<SproutSpaces host={host} project={{ repoUrl: repoURL }} /* … */>
   {/* The detector, and the "Browser limitation reached" affordance for
       the user's own actions (git push, VFS quota, timeouts): */}
   <EscalationTriggers repoURL={repoURL} />
@@ -700,7 +700,7 @@ the one it replaced. A bridge that unmounts while a consent question is open
 answers it "deny", so the agent is told the command did not run.
 
 `AgentEscalationBridge` takes the repository the workspace was imported from —
-the same value `SproutWorkspace`'s `project.repoUrl` carries, so a host threads
+the same value `SproutSpaces`'s `project.repoUrl` carries, so a host threads
 one source of truth to both. The consent question, the host picker (runners or
 cloud) and the progress line are rendered by the bridge; a host that wants its
 own consent UI calls `installEscalationBridge` directly with a
@@ -722,7 +722,7 @@ page-level as before.
 const [pane, setPane] = useState<HTMLElement | null>(null);
 
 <div ref={setPane} style={{ position: "relative" }}>
-  <SproutWorkspace host={host} project={{ repoUrl: repoURL }} /* … */>
+  <SproutSpaces host={host} project={{ repoUrl: repoURL }} /* … */>
     <AgentEscalationBridge repoURL={repoURL} container={pane} />
   </SproutWorkspace>
 </div>;
@@ -754,13 +754,13 @@ exactly that:
 
 ```tsx
 import {
-  listBrowserWorkspaceFiles,
-  readBrowserWorkspaceFile,
+  listBrowserProjectFolderFiles,
+  readBrowserProjectFolderFile,
 } from "@sprout-foundry/spaces/views";
 
-const files = await listBrowserWorkspaceFiles();
+const files = await listBrowserProjectFolderFiles();
 // files: { path, size, mode, differsFromCheckout }[]
-const bytes = await readBrowserWorkspaceFile(files[0].path);
+const bytes = await readBrowserProjectFolderFile(files[0].path);
 ```
 
 Both are gated on the host's `capabilities.browserFiles` (off by default, on
@@ -771,13 +771,13 @@ whose `code` is `'browser_files_unavailable'`. A host that runs its agent in a
 daemon (the local host) never sets the capability, so the API is unavailable
 and the host reads its files from the daemon instead.
 
-- `listBrowserWorkspaceFiles()` returns the project's own files (path, size,
+- `listBrowserProjectFolderFiles()` returns the project's own files (path, size,
   mode) with a `differsFromCheckout` flag: `false` when the bytes already match
   the repository's checkout (the container's clone carries them, skip the
   upload), `true` when the file is new or modified or there is no checkout to
   compare against (carry it). Runtime dirs and `.git` are excluded, and a
   listing never reads file content.
-- `readBrowserWorkspaceFile(path)` returns one file's bytes. A path that
+- `readBrowserProjectFolderFile(path)` returns one file's bytes. A path that
   escapes the workspace root or names a runtime dir is refused.
 
 The platform's consumer is its own `BrowserFileCollector`; the contract only
@@ -795,7 +795,7 @@ values shared by every module in the page, not per-provider instances:
 - the **events transport** (the WebSocket service behind
   `LocalEventsProvider`).
 
-A page therefore hosts **one workspace at a time**. `SproutWorkspace` in its
+A page therefore hosts **one workspace at a time**. `SproutSpaces` in its
 default `providers="own"` mode registers its `host` as the active host while
 it is mounted and restores the previous host on unmount (or keeps its own host
 when there was none, so the services always have a resolvable host), and it
@@ -825,7 +825,7 @@ file is emitted, so a host imports exactly one stylesheet. Import it once,
 before mounting; it is static CSS with no runtime dependency.
 
 **Scoped to the workspace root.** The stylesheet is scoped to the
-`.sprout-workspace` class that `SproutWorkspace`'s root element carries, so
+`.sprout-workspace` class that `SproutSpaces`'s root element carries, so
 it cannot style the host page outside the mounted workspace: there is no
 top-level `:root`, `html`, `body` or `*` selector in the artifact. The
 workspace's token declarations are re-scoped onto that root class rather
@@ -903,7 +903,7 @@ bundler copies the directory somewhere. Tell Sprout that base so the loader
 resolves the manifest and the hashed assets against it:
 
 ```tsx
-<SproutWorkspace
+<SproutSpaces
   project={project}
   space={space}
   host={myHost}

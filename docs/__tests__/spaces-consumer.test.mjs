@@ -6,7 +6,7 @@
 // scratch TypeScript + Vite **React 18** app created outside the repo (in
 // `os.tmpdir()`), and requires:
 //
-//   - `tsc --noEmit` to type-check the app importing `SproutWorkspace` (from
+//   - `tsc --noEmit` to type-check the app importing `SproutSpaces` (from
 //     `@sprout-foundry/spaces/views`), `SproutProviders` (from
 //     `@sprout-foundry/spaces/providers`) and the host types (from
 //     `@sprout-foundry/spaces`) — proving the subpath `exports` map and the
@@ -227,34 +227,34 @@ describe(
       );
 
       // Imports every public path the composition API promises: the views
-      // (SproutWorkspace) and the space registry from `./views`, the provider
+      // (SproutSpaces) and the space registry from `./views`, the provider
       // wrapper from `./providers`, and the host contract types from `.`.
       fs.writeFileSync(
         path.join(srcDir, "main.tsx"),
         [
           'import { createRoot } from "react-dom/client";',
           "import {",
-          "  SproutWorkspace,",
+          "  SproutSpaces,",
           "  SproutProviders,",
           "  availableModes,",
-          "  registerWorkspaceMode,",
+          "  registerSpace,",
           '} from "@sprout-foundry/spaces/views";',
           'import { SproutProviders as ProvidersOnly } from "@sprout-foundry/spaces/providers";',
           'import { localHost } from "@sprout-foundry/spaces";',
           'import type { SproutHost } from "@sprout-foundry/spaces";',
-          'import type { SproutWorkspaceProps } from "@sprout-foundry/spaces/views";',
+          'import type { SproutSpacesProps } from "@sprout-foundry/spaces/views";',
           'import type { SproutProvidersProps } from "@sprout-foundry/spaces/providers";',
           'import "@sprout-foundry/spaces/styles.css";',
           "",
           "const host: SproutHost = localHost;",
-          "void registerWorkspaceMode;",
+          "void registerSpace;",
           "void availableModes({ hasMockup: false });",
           "",
           "const providersProps: SproutProvidersProps = { children: null };",
           "void providersProps;",
           "",
           "function App() {",
-          "  const props: SproutWorkspaceProps = {",
+          "  const props: SproutSpacesProps = {",
           '    project: { id: "demo" },',
           '    space: "code",',
           "    host,",
@@ -262,7 +262,7 @@ describe(
           "  return (",
           "    <ProvidersOnly>",
           "      <SproutProviders>",
-          "        <SproutWorkspace {...props} />",
+          "        <SproutSpaces {...props} />",
           "      </SproutProviders>",
           "    </ProvidersOnly>",
           "  );",

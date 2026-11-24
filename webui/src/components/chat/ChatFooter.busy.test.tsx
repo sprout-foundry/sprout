@@ -27,7 +27,7 @@ describe('ChatFooter workspace-busy notice (SP-142 §3)', () => {
 
   it('renders the busy notice naming the running chat', () => {
     render(
-      <ChatFooter {...baseProps} workspaceBusy={{ runningChatId: 'chat-2', runningChatName: 'Refactor sweep' }} />,
+      <ChatFooter {...baseProps} projectFolderBusy={{ runningChatId: 'chat-2', runningChatName: 'Refactor sweep' }} />,
     );
     expect(screen.getByTestId('workspace-busy-notice')).toBeTruthy();
     expect(screen.getByText(/Refactor sweep/)).toBeTruthy();
@@ -40,7 +40,7 @@ describe('ChatFooter workspace-busy notice (SP-142 §3)', () => {
     const { rerender } = render(
       <ChatFooter
         {...baseProps}
-        workspaceBusy={{ runningChatId: 'chat-2', runningChatName: 'Sweep' }}
+        projectFolderBusy={{ runningChatId: 'chat-2', runningChatName: 'Sweep' }}
         onSendAnyway={onSendAnyway}
         onDismissBusy={onDismissBusy}
         pendingDraft="  fix the flaky test  "
@@ -56,7 +56,7 @@ describe('ChatFooter workspace-busy notice (SP-142 §3)', () => {
     rerender(
       <ChatFooter
         {...baseProps}
-        workspaceBusy={null}
+        projectFolderBusy={null}
         onSendAnyway={onSendAnyway}
         onDismissBusy={onDismissBusy}
         pendingDraft=""
@@ -71,7 +71,7 @@ describe('ChatFooter workspace-busy notice (SP-142 §3)', () => {
     render(
       <ChatFooter
         {...baseProps}
-        workspaceBusy={{ runningChatId: 'chat-2', runningChatName: 'Sweep' }}
+        projectFolderBusy={{ runningChatId: 'chat-2', runningChatName: 'Sweep' }}
         onSendAnyway={onSendAnyway}
         onDismissBusy={onDismissBusy}
         pendingDraft="draft"
@@ -86,7 +86,7 @@ describe('ChatFooter workspace-busy notice (SP-142 §3)', () => {
     render(
       <ChatFooter
         {...baseProps}
-        workspaceBusy={{ runningChatId: 'chat-2', runningChatName: 'Sweep' }}
+        projectFolderBusy={{ runningChatId: 'chat-2', runningChatName: 'Sweep' }}
         onSendAnyway={() => {}}
         onDismissBusy={() => {}}
         pendingDraft="   "
@@ -99,10 +99,10 @@ describe('ChatFooter workspace-busy notice (SP-142 §3)', () => {
 
   it('clearing on completion: the notice disappears when workspaceBusy clears', async () => {
     const { rerender } = render(
-      <ChatFooter {...baseProps} workspaceBusy={{ runningChatId: 'c', runningChatName: 'Runner' }} />,
+      <ChatFooter {...baseProps} projectFolderBusy={{ runningChatId: 'c', runningChatName: 'Runner' }} />,
     );
     expect(screen.getByTestId('workspace-busy-notice')).toBeTruthy();
-    rerender(<ChatFooter {...baseProps} workspaceBusy={null} />);
+    rerender(<ChatFooter {...baseProps} projectFolderBusy={null} />);
     await waitFor(() => {
       expect(screen.queryByTestId('workspace-busy-notice')).toBeNull();
     });

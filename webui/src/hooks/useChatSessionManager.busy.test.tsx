@@ -38,7 +38,7 @@ function setup() {
     isProcessing: false,
     inputValue: '',
     perChatCache: {},
-    workspaceBusy: null,
+    projectFolderBusy: null,
   } as unknown as AppState;
   const queuedMessagesRef = { current: [] as QueuedMessage[] };
   const utils = renderHook(() => {
@@ -52,7 +52,7 @@ function setup() {
       activeChatIdRef: { current: 'chat-b' },
       queuedMessagesRef,
       isProcessing: state.isProcessing,
-      workspaceBusy: state.workspaceBusy,
+      projectFolderBusy: state.projectFolderBusy,
     });
   });
   return {
@@ -60,7 +60,7 @@ function setup() {
     queuedMessagesRef,
     getState: () => state,
     setBusy: (v: AppState['workspaceBusy']) => {
-      state = { ...state, workspaceBusy: v };
+      state = { ...state, projectFolderBusy: v };
       utils.rerender();
     },
   };
@@ -76,7 +76,7 @@ describe('send held back by another chat (project_folder_busy)', () => {
     });
     h.rerender();
 
-    expect(h.getState().workspaceBusy).toMatchObject({ chatId: 'chat-b', runningChatId: 'chat-a' });
+    expect(h.getState().projectFolderBusy).toMatchObject({ chatId: 'chat-b', runningChatId: 'chat-a' });
     expect(h.getState().messages).toEqual([]);
     expect(h.queuedMessagesRef.current).toEqual([{ message: 'what codeword?', chatId: 'chat-b' }]);
     expect(apiDouble.sendQuery).toHaveBeenCalledTimes(1);

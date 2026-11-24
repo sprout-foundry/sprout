@@ -118,9 +118,9 @@ import type { SproutHost } from '../host';
 import { getActiveHost, setActiveHost } from '../host/accessor';
 import { HostProvider, headlessHost } from '../host/HostProvider';
 import { SproutProviders } from '../providers/SproutProviders';
-import { registerWorkspaceMode } from '../workspaces/registry';
-import type { WorkspaceShellProps } from '../workspaces/shell';
-import { SproutWorkspace } from './SproutWorkspace';
+import { registerSpace } from '../workspaces/registry';
+import type { SpacesShellProps } from '../workspaces/shell';
+import { SproutSpaces } from './SproutWorkspace';
 import type { SproutProject } from './SproutWorkspace';
 import { DEFAULT_VIEWS_ARRANGEMENT } from './ViewsLayout';
 
@@ -185,7 +185,7 @@ afterEach(() => {
 
 describe('SproutWorkspace', () => {
   it('mounts the requested project and space', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} />);
 
     const projectFolder = await screen.findByTestId('sprout-workspace');
     expect(projectFolder).toHaveAttribute('data-project', PROJECT.id);
@@ -198,8 +198,8 @@ describe('SproutWorkspace', () => {
     const base = makeHost();
     const host: SproutHost = { ...base, capabilities: { ...base.capabilities, chat: true, chatSessions: true } };
     const repoProject: SproutProject = { id: 'proj-1', repoUrl: 'https://github.com/acme/widgets' };
-    const { unmount } = render(<SproutWorkspace project={repoProject} space="code" host={host} />);
-    render(<SproutWorkspace project={{ id: 'acme-gadgets' }} space="code" host={host} />);
+    const { unmount } = render(<SproutSpaces project={repoProject} space="code" host={host} />);
+    render(<SproutSpaces project={{ id: 'acme-gadgets' }} space="code" host={host} />);
     await screen.findAllByTestId('sprout-workspace');
 
     const projects = createHostChatSessionsApiSpy.mock.calls.map((call) => call[1]);
@@ -211,20 +211,20 @@ describe('SproutWorkspace', () => {
 
   it('does not use the host session store for a host without one', async () => {
     createHostChatSessionsApiSpy.mockClear();
-    render(<SproutWorkspace project={{ id: 'acme-gadgets' }} space="code" host={makeHost()} />);
+    render(<SproutSpaces project={{ id: 'acme-gadgets' }} space="code" host={makeHost()} />);
     await screen.findByTestId('sprout-workspace');
     expect(createHostChatSessionsApiSpy).not.toHaveBeenCalled();
   });
 
   it('mounts a different space through the registry', async () => {
-    registeredSpaceDisposer = registerWorkspaceMode({
+    registeredSpaceDisposer = registerSpace({
       id: 'other-space',
       label: 'Other space',
       icon: (() => null) as never,
       available: () => true,
       Shell: () => <div data-testid="sprout-workspace-other-shell" />,
     });
-    render(<SproutWorkspace project={PROJECT} space="other-space" host={makeHost()} />);
+    render(<SproutSpaces project={PROJECT} space="other-space" host={makeHost()} />);
 
     const projectFolder = await screen.findByTestId('sprout-workspace');
     expect(projectFolder).toHaveAttribute('data-space', 'other-space');
@@ -233,7 +233,7 @@ describe('SproutWorkspace', () => {
   });
 
   it('resolves an unknown space to the registry fallback (the built-in default)', async () => {
-    render(<SproutWorkspace project={PROJECT} space="not-a-space" host={makeHost()} />);
+    render(<SproutSpaces project={PROJECT} space="not-a-space" host={makeHost()} />);
 
     // resolveWorkspaceMode's contract: an unknown id degrades to the built-in
     // default (`code`), never to nothing.
@@ -245,9 +245,9 @@ describe('SproutWorkspace', () => {
   it('supplies the host prop to every consumer below', async () => {
     const host = makeHost();
     render(
-      <SproutWorkspace project={PROJECT} space="code" host={host}>
+      <SproutSpaces project={PROJECT} space="code" host={host}>
         <HostProbe />
-      </SproutWorkspace>,
+      </SproutSpaces>,
     );
 
     const probe = await screen.findByTestId('host-probe');
@@ -257,7 +257,7 @@ describe('SproutWorkspace', () => {
 
   it('honours a supplied layout: the space content renders through ViewsLayout', async () => {
     render(
-      <SproutWorkspace
+      <SproutSpaces
         project={PROJECT}
         space="code"
         host={makeHost()}
@@ -276,7 +276,7 @@ describe('SproutWorkspace', () => {
   it('mounts a working chat in own mode: an enabled chat whose send reaches the fake backend', async () => {
     const { fetchFn, calls } = createChatFetch();
     render(
-      <SproutWorkspace
+      <SproutSpaces
         project={PROJECT}
         space="code"
         host={makeHost()}
@@ -307,7 +307,7 @@ describe('SproutWorkspace', () => {
     // host that mounts a workspace gets a live event stream with no extra
     // wiring. The mocked LocalEventsProvider records the connect call.
     const { LocalEventsProvider } = await import('../services/localEventsProvider');
-    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} layout={DEFAULT_VIEWS_ARRANGEMENT} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={DEFAULT_VIEWS_ARRANGEMENT} />);
     await screen.findByTestId('sprout-workspace');
     const instances = (LocalEventsProvider as unknown as { instances?: Array<{ connect: ReturnType<typeof vi.fn> }> })
       .instances;
@@ -328,7 +328,7 @@ describe('SproutWorkspace', () => {
       },
     });
     const project: SproutProject = { ...PROJECT, repoUrl: 'https://github.com/acme/widgets' };
-    render(<SproutWorkspace project={project} space="code" host={host} layout={DEFAULT_VIEWS_ARRANGEMENT} />);
+    render(<SproutSpaces project={project} space="code" host={host} layout={DEFAULT_VIEWS_ARRANGEMENT} />);
     await screen.findByTestId('sprout-workspace');
 
     expect(wireHostAgentBackend).toHaveBeenCalledWith(host, 'https://github.com/acme/widgets');
@@ -346,14 +346,14 @@ describe('SproutWorkspace', () => {
         agent: { kind: 'daemon', apiBaseURL: 'https://daemon.test', wsURL: 'wss://daemon.test/ws' },
       },
     });
-    render(<SproutWorkspace project={PROJECT} space="code" host={host} layout={DEFAULT_VIEWS_ARRANGEMENT} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={host} layout={DEFAULT_VIEWS_ARRANGEMENT} />);
     await screen.findByTestId('sprout-workspace');
 
     expect(wireHostAgentBackend).toHaveBeenCalledWith(host, undefined);
   });
 
   it('wires the backend for a host that names no backend too (it retires any in-browser adapter)', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} layout={DEFAULT_VIEWS_ARRANGEMENT} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={DEFAULT_VIEWS_ARRANGEMENT} />);
     await screen.findByTestId('sprout-workspace');
 
     // A host that names no backend goes through the same wiring call as any
@@ -375,7 +375,7 @@ describe('SproutWorkspace', () => {
       },
     });
     const { unmount } = render(
-      <SproutWorkspace project={PROJECT} space="code" host={host} layout={DEFAULT_VIEWS_ARRANGEMENT} />,
+      <SproutSpaces project={PROJECT} space="code" host={host} layout={DEFAULT_VIEWS_ARRANGEMENT} />,
     );
     await screen.findByTestId('sprout-workspace');
     expect(resetHostAgentBackend).not.toHaveBeenCalled();
@@ -394,7 +394,7 @@ describe('SproutWorkspace', () => {
       },
     });
     const { unmount } = render(
-      <SproutWorkspace project={PROJECT} space="code" host={host} layout={DEFAULT_VIEWS_ARRANGEMENT} />,
+      <SproutSpaces project={PROJECT} space="code" host={host} layout={DEFAULT_VIEWS_ARRANGEMENT} />,
     );
     await screen.findByTestId('sprout-workspace');
 
@@ -414,7 +414,7 @@ describe('SproutWorkspace', () => {
     render(
       <HostProvider host={ambientHost}>
         <SproutProviders>
-          <SproutWorkspace providers="ambient" project={PROJECT} space="code" />
+          <SproutSpaces providers="ambient" project={PROJECT} space="code" />
         </SproutProviders>
       </HostProvider>,
     );
@@ -434,7 +434,7 @@ describe('SproutWorkspace', () => {
     render(
       <HostProvider host={ambientHost}>
         <SproutProviders>
-          <SproutWorkspace providers="ambient" project={PROJECT} space="code" />
+          <SproutSpaces providers="ambient" project={PROJECT} space="code" />
         </SproutProviders>
       </HostProvider>,
     );
@@ -449,7 +449,7 @@ describe('SproutWorkspace', () => {
   it('lets a host override the assembled chat props per kind (the host wins for that kind)', async () => {
     const hostSend = vi.fn();
     render(
-      <SproutWorkspace
+      <SproutSpaces
         project={PROJECT}
         space="code"
         host={makeHost()}
@@ -470,7 +470,7 @@ describe('SproutWorkspace', () => {
 
   it('keeps the changes view when the host overrides only chat', async () => {
     render(
-      <SproutWorkspace
+      <SproutSpaces
         project={PROJECT}
         space="code"
         host={makeHost()}
@@ -489,7 +489,7 @@ describe('SproutWorkspace', () => {
   it('calls onSpaceChange only when the mounted space changes, not on mount', async () => {
     const onSpaceChange = vi.fn();
 
-    registeredSpaceDisposer = registerWorkspaceMode({
+    registeredSpaceDisposer = registerSpace({
       id: 'other-space',
       label: 'Other space',
       icon: (() => null) as never,
@@ -504,7 +504,7 @@ describe('SproutWorkspace', () => {
           <button type="button" data-testid="to-other" onClick={() => setSpace('other-space')}>
             other
           </button>
-          <SproutWorkspace project={PROJECT} space={space} host={makeHost()} onSpaceChange={onSpaceChange} />
+          <SproutSpaces project={PROJECT} space={space} host={makeHost()} onSpaceChange={onSpaceChange} />
         </>
       );
     }
@@ -531,7 +531,7 @@ describe('SproutWorkspace', () => {
           <button type="button" data-testid="to-unknown" onClick={() => setSpace('mystery')}>
             mystery
           </button>
-          <SproutWorkspace project={PROJECT} space={space} host={makeHost()} onSpaceChange={onSpaceChange} />
+          <SproutSpaces project={PROJECT} space={space} host={makeHost()} onSpaceChange={onSpaceChange} />
         </>
       );
     }
@@ -549,7 +549,7 @@ describe('SproutWorkspace', () => {
   });
 
   it('mounts the resolved space behind the app provider stack (real SproutProviders)', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} />);
     // SproutProviders renders nothing until its events transport resolves;
     // the workspace appearing proves the stack mounted around the space.
     expect(await screen.findByTestId('sprout-workspace')).toBeInTheDocument();
@@ -558,12 +558,12 @@ describe('SproutWorkspace', () => {
   it('warns when both layout and shellProps are supplied (layout wins, shellProps is dropped)', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     render(
-      <SproutWorkspace
+      <SproutSpaces
         project={PROJECT}
         space="code"
         host={makeHost()}
         layout={{ left: [], center: ['previewPane'], right: [], overlay: [] }}
-        shellProps={{ currentView: 'chat' } as WorkspaceShellProps}
+        shellProps={{ currentView: 'chat' } as SpacesShellProps}
       />,
     );
     await screen.findByTestId('sprout-workspace');
@@ -587,9 +587,9 @@ describe('SproutWorkspace', () => {
     render(
       <HostProvider host={ambientHost}>
         <SproutProviders>
-          <SproutWorkspace providers="ambient" project={PROJECT} space="code">
+          <SproutSpaces providers="ambient" project={PROJECT} space="code">
             <HostProbe />
-          </SproutWorkspace>
+          </SproutSpaces>
         </SproutProviders>
       </HostProvider>,
     );
@@ -606,7 +606,7 @@ describe('SproutWorkspace', () => {
     render(
       <HostProvider host={makeHost()}>
         <SproutProviders>
-          <SproutWorkspace providers="ambient" project={PROJECT} space="code" host={makeHost()} wasmBase="/wasm" />
+          <SproutSpaces providers="ambient" project={PROJECT} space="code" host={makeHost()} wasmBase="/wasm" />
         </SproutProviders>
       </HostProvider>,
     );
@@ -623,7 +623,7 @@ describe('SproutWorkspace', () => {
     render(
       <HostProvider host={makeHost()}>
         <SproutProviders>
-          <SproutWorkspace
+          <SproutSpaces
             providers="ambient"
             project={PROJECT}
             space="code"
@@ -650,7 +650,7 @@ describe('SproutWorkspace rules', () => {
     // — not this component — decides what an unregistered id means, and it
     // always resolves to something renderable. Break the rule by having this
     // component render nothing (or throw) for an unknown id and this fails.
-    render(<SproutWorkspace project={PROJECT} space="totally-unknown" host={makeHost()} />);
+    render(<SproutSpaces project={PROJECT} space="totally-unknown" host={makeHost()} />);
     const projectFolder = await screen.findByTestId('sprout-workspace');
     expect(projectFolder).toHaveAttribute('data-space', 'code');
     expect(screen.getByTestId('sprout-workspace-code-shell')).toBeInTheDocument();
@@ -661,13 +661,13 @@ describe('SproutWorkspace rules', () => {
     // a headless host (or throws without a provider). Break the rule by
     // dropping HostProvider and the probe's URL stops matching.
     render(
-      <SproutWorkspace
+      <SproutSpaces
         project={PROJECT}
         space="code"
         host={makeHost({ transport: { apiBaseURL: 'https://real.test', wsURL: '', authMode: 'bearer' } })}
       >
         <HostProbe />
-      </SproutWorkspace>,
+      </SproutSpaces>,
     );
     const probe = await screen.findByTestId('host-probe');
     expect(probe).toHaveAttribute('data-api', 'https://real.test');
@@ -677,7 +677,7 @@ describe('SproutWorkspace rules', () => {
   it('rule: onSpaceChange is not fired for mount, and fires exactly once per resolved-space change', async () => {
     const onSpaceChange = vi.fn();
 
-    registeredSpaceDisposer = registerWorkspaceMode({
+    registeredSpaceDisposer = registerSpace({
       id: 'other-space',
       label: 'Other space',
       icon: (() => null) as never,
@@ -695,7 +695,7 @@ describe('SproutWorkspace rules', () => {
           <button type="button" data-testid="same-other" onClick={() => setSpace('other-space')}>
             other again
           </button>
-          <SproutWorkspace project={PROJECT} space={space} host={makeHost()} onSpaceChange={onSpaceChange} />
+          <SproutSpaces project={PROJECT} space={space} host={makeHost()} onSpaceChange={onSpaceChange} />
         </>
       );
     }
@@ -723,14 +723,14 @@ describe('SproutWorkspace rules', () => {
     // creates is tracked at describe scope and disposed in `afterEach` — an
     // assertion failure must not leave a stray `test-space` behind for later
     // tests.
-    registeredSpaceDisposer = registerWorkspaceMode({
+    registeredSpaceDisposer = registerSpace({
       id: 'test-space',
       label: 'Test space',
       icon: (() => null) as never,
       available: () => true,
       Shell: () => <div data-testid="sprout-workspace-test-shell" />,
     });
-    render(<SproutWorkspace project={PROJECT} space="test-space" host={makeHost()} />);
+    render(<SproutSpaces project={PROJECT} space="test-space" host={makeHost()} />);
     const projectFolder = await screen.findByTestId('sprout-workspace');
     expect(projectFolder).toHaveAttribute('data-space', 'test-space');
     expect(screen.getByTestId('sprout-workspace-test-shell')).toBeInTheDocument();
@@ -741,7 +741,7 @@ describe('SproutWorkspace rules', () => {
     // root so it cannot leak onto the host page. That scope is only real if the
     // root element actually bears the class the stylesheet targets — this test
     // is the DOM side of that contract (the artifact test asserts the CSS side).
-    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} />);
 
     const projectFolder = await screen.findByTestId('sprout-workspace');
     expect(projectFolder).toHaveClass('sprout-workspace');
@@ -752,14 +752,14 @@ describe('SproutWorkspace rules', () => {
     // to `.sprout-workspace[data-theme]`, so the attribute must live on the
     // workspace root for those rules to match. Without it the scoped guards are
     // dead.
-    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} />);
 
     const projectFolder = await screen.findByTestId('sprout-workspace');
     expect(projectFolder).toHaveAttribute('data-theme', 'dark');
   });
 
   it('rule: a supplied className extends the workspace root, never replaces the scope class', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} className="host-shell" />);
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} className="host-shell" />);
 
     const projectFolder = await screen.findByTestId('sprout-workspace');
     expect(projectFolder).toHaveClass('sprout-workspace');
@@ -771,7 +771,7 @@ describe('SproutWorkspace rules', () => {
     // active host through the module singleton. Own mode must register the
     // host prop there while mounted, and restore the previous host on unmount
     // so an unmounted workspace leaves no stale host behind.
-    const { unmount } = render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} />);
+    const { unmount } = render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} />);
     await screen.findByTestId('sprout-workspace');
     expect(getActiveHost()?.transport.apiBaseURL).toBe('https://host.test/api');
 
@@ -789,7 +789,7 @@ describe('SproutWorkspace rules', () => {
     render(
       <HostProvider host={ambientHost}>
         <SproutProviders>
-          <SproutWorkspace providers="ambient" project={PROJECT} space="code" />
+          <SproutSpaces providers="ambient" project={PROJECT} space="code" />
         </SproutProviders>
       </HostProvider>,
     );

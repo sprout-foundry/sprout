@@ -57,20 +57,20 @@ import { OPEN_COMMAND_PALETTE_EVENT } from '../config/layout';
 import { setActiveHost } from '../host/accessor';
 import { headlessHost } from '../host/HostProvider';
 import { __resetCommandHandlersForTests, registerCommandHandler } from '../services/commandHandlers';
-import { SproutWorkspace } from './SproutWorkspace';
-import type { SproutWorkspaceProps } from './SproutWorkspace';
+import { SproutSpaces } from './SproutWorkspace';
+import type { SproutSpacesProps } from './SproutWorkspace';
 import type { ViewsArrangement } from './ViewsLayout';
 
 const CHAT_ONLY: ViewsArrangement = { left: [], center: ['chat'], right: [] };
 const PALETTE_SHORTCUT = { key: 'P', code: 'KeyP', ctrlKey: true, shiftKey: true };
 
-function Page(props: Partial<SproutWorkspaceProps>) {
+function Page(props: Partial<SproutSpacesProps>) {
   return (
     <>
       <input data-testid="host-input" />
       <div data-testid="host-panel" tabIndex={0} />
       <LayeredSearchButton />
-      <SproutWorkspace
+      <SproutSpaces
         project={{ id: 'acme/widgets', root: '/work/widgets' }}
         space="code"
         host={headlessHost()}
@@ -112,7 +112,7 @@ beforeEach(() => {
       ok: true,
       status: 200,
       headers: new Headers(),
-      json: async () => ({ files: [], workspace: '/work/widgets' }),
+      json: async () => ({ files: [], projectFolder: '/work/widgets' }),
       text: async () => '',
     })),
   );

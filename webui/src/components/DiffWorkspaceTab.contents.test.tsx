@@ -2,7 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NotificationProvider } from '@sprout/ui';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import DiffWorkspaceTab from './DiffWorkspaceTab';
+import DiffSpacesTab from './DiffWorkspaceTab';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -85,7 +85,7 @@ const baseProps = {
 describe('DiffWorkspaceTab merge-mode content and save gating', () => {
   it('uses full contents when available (not the fragment reconstruction)', () => {
     render(
-      <DiffWorkspaceTab
+      <DiffSpacesTab
         {...baseProps}
         defaultView="merge"
         fullOriginal={'full original\nline2\nline3\n'}
@@ -99,7 +99,7 @@ describe('DiffWorkspaceTab merge-mode content and save gating', () => {
   });
 
   it('falls back to fragment documents when full contents are absent, read-only', () => {
-    render(<DiffWorkspaceTab {...baseProps} defaultView="merge" />);
+    render(<DiffSpacesTab {...baseProps} defaultView="merge" />);
     const view = container!.querySelector('[data-testid="merge-view"]')!;
     // Fragment reconstruction: context + added lines only (no removed).
     expect(view.getAttribute('data-original')).toBe('ctx\nold');
@@ -109,28 +109,28 @@ describe('DiffWorkspaceTab merge-mode content and save gating', () => {
   });
 
   it('is read-only when canSave is false even with full contents (commit diffs)', () => {
-    render(<DiffWorkspaceTab {...baseProps} defaultView="merge" fullOriginal="a" fullModified="b" canSave={false} />);
+    render(<DiffSpacesTab {...baseProps} defaultView="merge" fullOriginal="a" fullModified="b" canSave={false} />);
     const view = container!.querySelector('[data-testid="merge-view"]')!;
     expect(view.getAttribute('data-readonly')).toBe('true');
     expect(view.getAttribute('data-has-onsave')).toBe('false');
   });
 
   it('wires save only when editable (canSave + full contents)', () => {
-    render(<DiffWorkspaceTab {...baseProps} defaultView="merge" fullOriginal="a" fullModified="b" canSave />);
+    render(<DiffSpacesTab {...baseProps} defaultView="merge" fullOriginal="a" fullModified="b" canSave />);
     const view = container!.querySelector('[data-testid="merge-view"]')!;
     expect(view.getAttribute('data-readonly')).toBe('false');
     expect(view.getAttribute('data-has-onsave')).toBe('true');
   });
 
   it('treats empty-string full contents as available (new/deleted files)', () => {
-    render(<DiffWorkspaceTab {...baseProps} defaultView="merge" fullOriginal="" fullModified="brand new" />);
+    render(<DiffSpacesTab {...baseProps} defaultView="merge" fullOriginal="" fullModified="brand new" />);
     const view = container!.querySelector('[data-testid="merge-view"]')!;
     expect(view.getAttribute('data-original')).toBe('');
     expect(view.getAttribute('data-modified')).toBe('brand new');
   });
 
   it('never calls writeFileWithConsent directly (save goes through MergeView onSave)', () => {
-    render(<DiffWorkspaceTab {...baseProps} defaultView="merge" fullOriginal="a" fullModified="b" canSave />);
+    render(<DiffSpacesTab {...baseProps} defaultView="merge" fullOriginal="a" fullModified="b" canSave />);
     expect(writeFileWithConsent).not.toHaveBeenCalled();
   });
 });

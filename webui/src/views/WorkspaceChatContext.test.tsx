@@ -18,12 +18,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { HostProvider, headlessHost } from '../host';
 import type { SproutHost } from '../host';
 import type { AppState } from '../types/app';
-import {
-  WorkspaceChatProvider,
-  createEmptyChatState,
-  useWorkspaceChat,
-  useWorkspaceChatProps,
-} from './WorkspaceChatContext';
+import { SpacesChatProvider, createEmptyChatState, useSpacesChat, useSpacesChatProps } from './WorkspaceChatContext';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -83,7 +78,7 @@ function createInitialState(): AppState {
     logs: [],
     isProcessing: false,
     lastError: null,
-    workspaceBusy: null,
+    projectFolderBusy: null,
     currentView: 'chat',
     toolExecutions: [],
     queryProgress: null,
@@ -150,9 +145,9 @@ function createFetch() {
 }
 
 /** Renders the unit and exposes its value + assembled view props. */
-function Harness({ onValue }: { onValue: (value: ReturnType<typeof useWorkspaceChat>) => void }) {
-  const value = useWorkspaceChat();
-  const { chatProps, reviewProps, diffState } = useWorkspaceChatProps({
+function Harness({ onValue }: { onValue: (value: ReturnType<typeof useSpacesChat>) => void }) {
+  const value = useSpacesChat();
+  const { chatProps, reviewProps, diffState } = useSpacesChatProps({
     review: { review: null, reviewError: null } as never,
     diff: { activeDiffPath: null, activeDiff: null, diffMode: 'combined' } as never,
   });
@@ -207,9 +202,9 @@ const DEFAULT_TEST_HOST: SproutHost = headlessHost();
 function renderUnit(overrides: { fetchFn?: typeof fetch; host?: SproutHost; chatSessionsProject?: string } = {}) {
   const events = createEventsProvider();
   const fetch = createFetch();
-  let value: ReturnType<typeof useWorkspaceChat> | null = null;
+  let value: ReturnType<typeof useSpacesChat> | null = null;
   const tree = (
-    <WorkspaceChatProvider
+    <SpacesChatProvider
       initialState={createInitialState()}
       eventsProvider={events.provider}
       fetchFn={overrides.fetchFn ?? fetch.fetchFn}
@@ -220,7 +215,7 @@ function renderUnit(overrides: { fetchFn?: typeof fetch; host?: SproutHost; chat
           value = v;
         }}
       />
-    </WorkspaceChatProvider>
+    </SpacesChatProvider>
   );
   const utils = render(<HostProvider host={overrides.host ?? DEFAULT_TEST_HOST}>{tree}</HostProvider>);
   return { ...utils, events, fetch, getValue: () => value! };
@@ -307,7 +302,7 @@ describe('WorkspaceChatProvider', () => {
     // would be delivered twice. Source-shape assertion, matching the app's
     // composition test.
     const appSource = readFileSync(resolve(here, '../App.tsx'), 'utf-8');
-    expect(appSource).toContain('<WorkspaceChatProvider');
+    expect(appSource).toContain('<SpacesChatProvider');
     expect(appSource).toMatch(/fetchFn=\{clientFetch\}/);
     expect(appSource).toMatch(/manageEventSubscription:\s*false/);
   });

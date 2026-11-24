@@ -774,7 +774,7 @@ describe(
       // the host's DOM outside the mounted workspace. No selector may survive
       // that would match a host-owned element — the app's token block, its
       // theme guards, its element resets and its bare-attribute rules are all
-      // re-scoped to the workspace root class the `SproutWorkspace` root
+      // re-scoped to the workspace root class the `SproutSpaces` root
       // renders. The predicate is the scoping pass's own, so a new leak form is
       // reported here rather than passing silently.
       const leaks = await globalLeaks(readSheet());

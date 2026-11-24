@@ -27,14 +27,14 @@ export interface WorkspaceEditorFile {
   /** The file's path as the editor holds it (absolute when the workspace root is known). */
   path: string;
   /** The path relative to the workspace root — the form the file tree uses. */
-  workspacePath: string;
+  projectFolderPath: string;
   /** The file name. */
   name: string;
   /** Whether the buffer has unsaved edits. */
   isModified: boolean;
 }
 
-export interface OpenWorkspaceFileOptions {
+export interface OpenProjectFolderFileOptions {
   /** A 1-based line to move the cursor to once the file is shown. */
   line?: number;
 }
@@ -48,7 +48,7 @@ export interface WorkspaceEditorValue {
    * Open a file (or switch to it when already open) and make it the active
    * one. Returns the buffer id.
    */
-  openFile: (path: string, options?: OpenWorkspaceFileOptions) => string;
+  openFile: (path: string, options?: OpenProjectFolderFileOptions) => string;
   /** Close an open file. Unknown paths are ignored. */
   closeFile: (path: string) => Promise<void>;
   /**
@@ -94,7 +94,7 @@ function toEditorFile(buffer: EditorBuffer): WorkspaceEditorFile {
   return {
     bufferId: buffer.id,
     path: buffer.file.path,
-    workspacePath: toProjectFolderPath(buffer.file.path),
+    projectFolderPath: toProjectFolderPath(buffer.file.path),
     name: buffer.file.name,
     isModified: buffer.isModified,
   };
@@ -118,7 +118,7 @@ export function WorkspaceEditorProvider({ children }: WorkspaceEditorProviderPro
   );
 
   const openFile = useCallback(
-    (path: string, options?: OpenWorkspaceFileOptions) => {
+    (path: string, options?: OpenProjectFolderFileOptions) => {
       const name = fileNameOf(path);
       const bufferId = openBuffer({ path, name, isDir: false, size: 0, modified: 0, ext: extensionOf(name) });
       const line = options?.line;
@@ -197,7 +197,7 @@ export function useWorkspaceEditorProps(): WorkspaceEditorProps {
     },
     [openFile],
   );
-  const selectedFile = activeFile?.workspacePath;
+  const selectedFile = activeFile?.projectFolderPath;
   return useMemo(
     () => ({ fileTree: { onFileSelect, selectedFile }, onFileClick }),
     [onFileSelect, selectedFile, onFileClick],

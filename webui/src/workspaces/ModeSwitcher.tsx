@@ -22,7 +22,7 @@ import { Check } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { copy } from '../config/copy';
-import type { WorkspaceMode, WorkspaceModeId } from './registry';
+import type { Space, SpaceId } from './registry';
 import './ModeSwitcher.css';
 
 const MENU_GAP = 6;
@@ -46,11 +46,11 @@ function positionMenu(triggerRect: DOMRect, menuWidth: number, menuHeight: numbe
 
 export interface ModeSwitcherProps {
   /** Modes offered for the current workspace, in switcher order. */
-  modes: WorkspaceMode[];
+  modes: Space[];
   /** The active mode's id. */
-  activeId: WorkspaceModeId;
+  activeId: SpaceId;
   /** Fired when the user picks a mode. */
-  onSelect: (id: WorkspaceModeId) => void;
+  onSelect: (id: SpaceId) => void;
   /** Renders the trigger's content; the shell supplies the brand mark. */
   trigger: (state: { open: boolean }) => ReactNode;
   /** Accessible name for the trigger. */

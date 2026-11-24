@@ -3,11 +3,11 @@ import type { ElementType } from 'react';
 import AgentChangesPanel from '../components/AgentChangesPanel';
 import ChatView from '../components/ChatView';
 import { PreviewPanel } from '../components/PreviewPanel';
-import { WorkspaceCommandPalette } from './WorkspaceCommandPalette';
-import { WorkspaceTerminalView } from './WorkspaceTerminalView';
+import { SpacesCommandPalette } from './WorkspaceCommandPalette';
+import { SpacesTerminalView } from './WorkspaceTerminalView';
 import './ViewsLayout.css';
-import { WorkspaceGitView } from './WorkspaceGitView';
-import { WorkspaceSearchView } from './WorkspaceSearchView';
+import { SpacesGitView } from './WorkspaceGitView';
+import { SpacesSearchView } from './WorkspaceSearchView';
 
 /**
  * Layout configuration + arrangement renderer.
@@ -113,10 +113,10 @@ export const VIEWS_BY_KIND: Record<ViewKind, ViewComponent> = {
   editor: Editor,
   previewPane: PreviewPane,
   previewPanel: PreviewPanel,
-  git: WorkspaceGitView,
-  search: WorkspaceSearchView,
-  terminal: WorkspaceTerminalView,
-  commandPalette: WorkspaceCommandPalette,
+  git: SpacesGitView,
+  search: SpacesSearchView,
+  terminal: SpacesTerminalView,
+  commandPalette: SpacesCommandPalette,
 };
 
 /**

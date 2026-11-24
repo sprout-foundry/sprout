@@ -32,7 +32,7 @@ import { homeRoute, normalizeHomePath } from '../../services/homeView';
 const ICONS: Record<string, LucideIcon> = {
   Dashboard: LayoutDashboard,
   Tasks: ListChecks,
-  Workspaces: Monitor,
+  ProjectFolders: Monitor,
   'Usage & billing': CreditCard,
   Team: Users,
   Runners: Server,

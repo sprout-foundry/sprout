@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HostProvider } from '../host/HostProvider';
 import { makeTestHost } from '../host/testHost';
-import WorkspaceBar from './WorkspaceBar';
+import SpacesBar from './WorkspaceBar';
 
 vi.mock('../services/api', () => ({
   ApiService: {
@@ -37,12 +37,12 @@ afterEach(() => {
 // scope for this early-return flip.
 describe('WorkspaceBar host-name early return', () => {
   it('renders nothing in a hosted build, even with workspace switching', () => {
-    const host = makeTestHost({ workspaceSwitching: true });
+    const host = makeTestHost({ projectFolderSwitching: true });
     host.transport = { ...host.transport, authMode: 'bearer' };
     act(() => {
       root.render(
         <HostProvider host={host}>
-          <WorkspaceBar isConnected={false} />
+          <SpacesBar isConnected={false} />
         </HostProvider>,
       );
     });
@@ -52,8 +52,8 @@ describe('WorkspaceBar host-name early return', () => {
   it('renders nothing on a shell with no workspace switching', () => {
     act(() => {
       root.render(
-        <HostProvider host={makeTestHost({ workspaceSwitching: false })}>
-          <WorkspaceBar isConnected={false} />
+        <HostProvider host={makeTestHost({ projectFolderSwitching: false })}>
+          <SpacesBar isConnected={false} />
         </HostProvider>,
       );
     });
@@ -63,8 +63,8 @@ describe('WorkspaceBar host-name early return', () => {
   it('renders the local host name on a workspace-switching shell', () => {
     act(() => {
       root.render(
-        <HostProvider host={makeTestHost({ workspaceSwitching: true })}>
-          <WorkspaceBar isConnected={false} />
+        <HostProvider host={makeTestHost({ projectFolderSwitching: true })}>
+          <SpacesBar isConnected={false} />
         </HostProvider>,
       );
     });

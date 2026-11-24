@@ -119,7 +119,7 @@ describe('event helpers', () => {
 });
 
 describe('mockup events', () => {
-  const ctx = { workspaceRoot: '/workspace', readFile: () => null };
+  const ctx = { projectFolder: '/workspace', readFile: () => null };
 
   it('maps the streamed mockup phases', async () => {
     const { mapAgentEvent } = await import('./events');

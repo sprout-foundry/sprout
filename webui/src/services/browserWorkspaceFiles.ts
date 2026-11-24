@@ -39,7 +39,7 @@ import type { WasmShell } from './wasmShell';
  * `false` means the container's clone already carries the same bytes (skip
  * it); a `true` (or an absent checkout) means carry it along.
  */
-export interface WorkspaceFileEntry {
+export interface ProjectFolderFileEntry {
   /** Workspace-relative slash path, e.g. 'src/a.ts'. */
   path: string;
   /** The file's size in bytes, or 0 when the listing carried no size. */
@@ -101,7 +101,7 @@ function resolveActiveShell(): WasmShell {
  * Rejects with the stable gate error when the API is unavailable (see
  * `BrowserFilesUnavailableError`).
  */
-export async function listBrowserWorkspaceFiles(): Promise<WorkspaceFileEntry[]> {
+export async function listBrowserProjectFolderFiles(): Promise<ProjectFolderFileEntry[]> {
   const shell = resolveActiveShell();
   const entries = listVfsFileEntries(shell);
   const paths = entries.map((e) => e.path);
@@ -118,7 +118,7 @@ export async function listBrowserWorkspaceFiles(): Promise<WorkspaceFileEntry[]>
  * Rejects with the stable gate error when the API is unavailable, and with
  * an error naming the path when the file is unknown or unreadable.
  */
-export async function readBrowserWorkspaceFile(path: string): Promise<Uint8Array> {
+export async function readBrowserProjectFolderFile(path: string): Promise<Uint8Array> {
   const shell = resolveActiveShell();
   const root = projectFolderOf(shell);
   const abs = resolveProjectFolderPath(path, root, (p) => !shell.listDir(p).error);

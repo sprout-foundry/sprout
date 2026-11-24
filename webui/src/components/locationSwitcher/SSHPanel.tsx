@@ -7,7 +7,7 @@ import type { SwitchingState, SSHFailureState, RemoteProjectFolderContext, Proje
 
 export interface SSHPanelProps {
   remoteContext: RemoteProjectFolderContext | null;
-  workspaceRoot: string;
+  projectFolder: string;
   switchingState: SwitchingState;
   sshFailure: SSHFailureState | null;
   showExpiredSessionRecovery: boolean;
@@ -41,7 +41,7 @@ export interface SSHPanelProps {
 
 export const SSHPanel: React.FC<SSHPanelProps> = ({
   remoteContext,
-  workspaceRoot: projectFolder,
+  projectFolder: projectFolder,
   switchingState,
   sshFailure,
   showExpiredSessionRecovery,

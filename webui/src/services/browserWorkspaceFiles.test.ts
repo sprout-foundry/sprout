@@ -14,11 +14,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { setActiveHost } from '../host/accessor';
 import type { HostAgentBackend, SproutHost } from '../host/types';
 import {
-  listBrowserWorkspaceFiles,
-  readBrowserWorkspaceFile,
+  listBrowserProjectFolderFiles,
+  readBrowserProjectFolderFile,
   BrowserFilesUnavailableError,
 } from './browserWorkspaceFiles';
-import type { WorkspaceFileEntry } from './browserWorkspaceFiles';
+import type { ProjectFolderFileEntry } from './browserWorkspaceFiles';
 import type { WasmDirEntry, WasmShell } from './wasmShell';
 
 // ── Mocks (hoisted — must resolve before the service's imports) ─────────
@@ -113,7 +113,7 @@ function makeHost(overrides: { browserFiles?: boolean; agent?: HostAgentBackend 
       ssh: false,
       git: true,
       chat: true,
-      workspaceSwitching: false,
+      projectFolderSwitching: false,
       folderPicker: false,
       export: false,
       instances: true,
@@ -160,8 +160,8 @@ describe('listBrowserWorkspaceFiles', () => {
       ]),
     );
 
-    const result = await listBrowserWorkspaceFiles();
-    const byPath = new Map<string, WorkspaceFileEntry>(result.map((e) => [e.path, e]));
+    const result = await listBrowserProjectFolderFiles();
+    const byPath = new Map<string, ProjectFolderFileEntry>(result.map((e) => [e.path, e]));
     expect(result).toHaveLength(2);
     expect(byPath.get('src/a.ts')).toEqual({
       path: 'src/a.ts',
@@ -187,7 +187,7 @@ describe('listBrowserWorkspaceFiles', () => {
     setActiveHost(makeHost());
     mockGitCheckoutDiffers.mockResolvedValue(new Map()); // no entry for x.txt
 
-    const result = await listBrowserWorkspaceFiles();
+    const result = await listBrowserProjectFolderFiles();
     expect(result).toEqual([{ path: 'x.txt', size: 1, mode: MODE_FILE, differsFromCheckout: true }]);
   });
 });
@@ -204,7 +204,7 @@ describe('readBrowserWorkspaceFile', () => {
     installAdapterWithShell(shell);
     setActiveHost(makeHost());
 
-    const bytes = await readBrowserWorkspaceFile('src/a.ts');
+    const bytes = await readBrowserProjectFolderFile('src/a.ts');
     expect(Array.from(bytes)).toEqual(Array.from(payload));
   });
 
@@ -213,26 +213,26 @@ describe('readBrowserWorkspaceFile', () => {
     installAdapterWithShell(shell);
     setActiveHost(makeHost());
 
-    const bytes = await readBrowserWorkspaceFile('src/a.ts');
+    const bytes = await readBrowserProjectFolderFile('src/a.ts');
     expect(new TextDecoder().decode(bytes)).toBe('hello a.ts');
   });
 
   it('refuses a runtime-dir path', async () => {
     installAdapterWithShell(makeShell());
     setActiveHost(makeHost());
-    await expect(readBrowserWorkspaceFile('/home/user/.sprout/config')).rejects.toThrow(/runtime path/i);
+    await expect(readBrowserProjectFolderFile('/home/user/.sprout/config')).rejects.toThrow(/runtime path/i);
   });
 
   it('refuses a path that escapes the workspace root', async () => {
     installAdapterWithShell(makeShell());
     setActiveHost(makeHost());
-    await expect(readBrowserWorkspaceFile('/etc/passwd')).rejects.toThrow(/outside the project folder/i);
+    await expect(readBrowserProjectFolderFile('/etc/passwd')).rejects.toThrow(/outside the project folder/i);
   });
 
   it('rejects an unknown file with an error naming the path', async () => {
     installAdapterWithShell(makeShell());
     setActiveHost(makeHost());
-    await expect(readBrowserWorkspaceFile('src/missing.ts')).rejects.toThrow(/src\/missing\.ts/);
+    await expect(readBrowserProjectFolderFile('src/missing.ts')).rejects.toThrow(/src\/missing\.ts/);
   });
 });
 
@@ -246,8 +246,8 @@ describe('the capability gate', () => {
   it('rejects when the capability is off', async () => {
     installAdapterWithShell(makeShell());
     setActiveHost(makeHost({ browserFiles: false }));
-    await expect(listBrowserWorkspaceFiles()).rejects.toMatchObject({ code: 'browser_files_unavailable' });
-    await expect(readBrowserWorkspaceFile('src/a.ts')).rejects.toMatchObject({
+    await expect(listBrowserProjectFolderFiles()).rejects.toMatchObject({ code: 'browser_files_unavailable' });
+    await expect(readBrowserProjectFolderFile('src/a.ts')).rejects.toMatchObject({
       code: 'browser_files_unavailable',
     });
   });
@@ -255,14 +255,14 @@ describe('the capability gate', () => {
   it('rejects when the agent is not the in-browser agent', async () => {
     installAdapterWithShell(makeShell());
     setActiveHost(makeHost({ agent: { kind: 'daemon', apiBaseURL: '', wsURL: '' } }));
-    await expect(listBrowserWorkspaceFiles()).rejects.toMatchObject({ code: 'browser_files_unavailable' });
+    await expect(listBrowserProjectFolderFiles()).rejects.toMatchObject({ code: 'browser_files_unavailable' });
   });
 
   it('rejects when the browser shell is not reachable (no adapter)', async () => {
     mockGetAdapter.mockReturnValue(null); // the adapter never supplied a shell
     setActiveHost(makeHost()); // capability on, wasm agent
-    await expect(listBrowserWorkspaceFiles()).rejects.toThrow(BrowserFilesUnavailableError);
-    await expect(readBrowserWorkspaceFile('src/a.ts')).rejects.toThrow(BrowserFilesUnavailableError);
+    await expect(listBrowserProjectFolderFiles()).rejects.toThrow(BrowserFilesUnavailableError);
+    await expect(readBrowserProjectFolderFile('src/a.ts')).rejects.toThrow(BrowserFilesUnavailableError);
   });
 
   it('works when the capability is on, the agent is wasm and a shell is present', async () => {
@@ -271,7 +271,7 @@ describe('the capability gate', () => {
     setActiveHost(makeHost());
     mockGitCheckoutDiffers.mockResolvedValue(new Map([['a.ts', true]]));
 
-    const result = await listBrowserWorkspaceFiles();
+    const result = await listBrowserProjectFolderFiles();
     expect(result.map((e) => e.path)).toEqual(['a.ts']);
   });
 });

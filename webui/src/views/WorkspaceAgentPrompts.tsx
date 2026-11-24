@@ -35,16 +35,16 @@ import SecurityPromptDialog from '../components/SecurityPromptDialog';
 import ShellApprovalPanel from '../components/ShellApprovalPanel';
 import { useSecurityHandlers } from '../hooks/useSecurityHandlers';
 import { clientFetch } from '../services/clientSession';
-import { useWorkspaceChat } from './WorkspaceChatContext';
+import { useSpacesChat } from './WorkspaceChatContext';
 
 /**
  * Render the agent's pending prompts from the chat unit's state. Renders
  * nothing while no request is pending. Must be mounted inside
  * `WorkspaceChatProvider` and the provider stack (`SproutProviders`).
  */
-export function WorkspaceAgentPrompts(): JSX.Element {
+export function SpacesAgentPrompts(): JSX.Element {
   const events = useEvents();
-  const { state, setState } = useWorkspaceChat();
+  const { state, setState } = useSpacesChat();
 
   const {
     handleSecurityApprovalResponse,
@@ -199,4 +199,4 @@ export function WorkspaceAgentPrompts(): JSX.Element {
   );
 }
 
-export default WorkspaceAgentPrompts;
+export default SpacesAgentPrompts;

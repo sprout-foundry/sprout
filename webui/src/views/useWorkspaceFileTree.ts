@@ -31,7 +31,7 @@ import {
 } from '../services/nativeFs';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 
-export interface UseWorkspaceFileTreeOptions {
+export interface UseProjectFolderFileTreeOptions {
   /** Called when a file is selected in the tree. Omitted, selection does nothing. */
   onFileSelect?: (file: FileInfo) => void;
   /** The selected file path, for a controlled selection. */
@@ -39,7 +39,7 @@ export interface UseWorkspaceFileTreeOptions {
   /** The directory the tree roots at; defaults to the workspace root (`.`). */
   rootPath?: string;
   /** The workspace's absolute root, used when the tree copies absolute paths. */
-  workspaceRoot?: string;
+  projectFolder?: string;
   /** The fetch the file calls go through; defaults to the adapter-aware `clientFetch`. */
   fetchFn?: typeof fetch;
 }
@@ -101,7 +101,7 @@ function compareEntries(a: FileInfo, b: FileInfo): number {
 }
 
 /** List one directory of the workspace. */
-export async function fetchWorkspaceFiles(
+export async function fetchProjectFolderFiles(
   path: string,
   fetchFn: typeof fetch = clientFetch,
   projectFolder?: string,
@@ -131,12 +131,12 @@ function childPath(parentPath: string, name: string): string {
 }
 
 /** The `FileTreeProps` for a tree backed by the workspace's file API. */
-export function useWorkspaceFileTree(options: UseWorkspaceFileTreeOptions = {}): FileTreeProps {
-  const { onFileSelect, selectedFile, rootPath = '.', workspaceRoot: projectFolder, fetchFn = clientFetch } = options;
+export function useProjectFolderFileTree(options: UseProjectFolderFileTreeOptions = {}): FileTreeProps {
+  const { onFileSelect, selectedFile, rootPath = '.', projectFolder: projectFolder, fetchFn = clientFetch } = options;
   const bufferManager = useOptionalBufferManager();
 
   const onFetchFiles = useCallback(
-    (path: string) => fetchWorkspaceFiles(path, fetchFn, projectFolder),
+    (path: string) => fetchProjectFolderFiles(path, fetchFn, projectFolder),
     [fetchFn, projectFolder],
   );
   const onCreateFile = useCallback(
@@ -172,7 +172,7 @@ export function useWorkspaceFileTree(options: UseWorkspaceFileTreeOptions = {}):
       onFileSelect: handleFileSelect,
       selectedFile,
       rootPath,
-      workspaceRoot: projectFolder,
+      projectFolder: projectFolder,
       onFetchFiles,
       onCreateFile,
       onCreateFolder,

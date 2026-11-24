@@ -41,7 +41,7 @@ vi.mock('../workspaces/CodeShell', () => ({
 }));
 import { HostProvider, localHost } from '../host';
 import { SproutProviders } from '../providers';
-import { SproutWorkspace } from '../views';
+import { SproutSpaces } from '../views';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string) => readFileSync(resolve(here, rel), 'utf-8');
@@ -62,27 +62,27 @@ const PUBLIC_COMPOSITION_IMPORTS: Array<{ entry: string; privates: RegExp[] }> =
 
 describe('the local app composes its workspace through SproutWorkspace', () => {
   it('renders the space through <SproutWorkspace>, not the registry shell directly', () => {
-    expect(appContentSource).toContain('<SproutWorkspace');
+    expect(appContentSource).toContain('<SproutSpaces');
     // The app used to resolve and render the registry shell itself
     // (`const ModeShell = workspaceMode.Shell; … <ModeShell/>`). That assembly
     // is now SproutWorkspace's, so the app must not render the shell directly.
     expect(appContentSource).not.toMatch(/<ModeShell\b/);
-    expect(appContentSource).not.toMatch(/<\s*workspaceMode\.Shell\b/);
+    expect(appContentSource).not.toMatch(/<\s*space\.Shell\b/);
   });
 
   it('uses ambient providers — the app root owns the single host + stack', () => {
     // Exactly one SproutProviders must exist: the app-level one in App.tsx. The
     // space composition reuses it (`providers="ambient"`) rather than forking a
     // second events transport and a second set of buffer/notification contexts.
-    expect(appContentSource).toMatch(/<SproutWorkspace[\s\S]*?providers="ambient"/);
+    expect(appContentSource).toMatch(/<SproutSpaces[\s\S]*?providers="ambient"/);
     expect(appContentSource).not.toContain('<SproutProviders');
     expect(appSource.match(/<SproutProviders\b/g)).toHaveLength(1);
   });
 
   it('feeds the resolved space and shell props down, and syncs space changes back', () => {
-    expect(appContentSource).toMatch(/space=\{workspaceMode\.id\}/);
+    expect(appContentSource).toMatch(/space=\{space\.id\}/);
     expect(appContentSource).toMatch(/shellProps=\{shellProps\}/);
-    expect(appContentSource).toMatch(/onSpaceChange=\{selectWorkspaceMode\}/);
+    expect(appContentSource).toMatch(/onSpaceChange=\{selectSpace\}/);
     expect(appContentSource).toMatch(/hasMockup=\{hasMockup\}/);
   });
 });
@@ -106,10 +106,10 @@ describe('the local app imports composition pieces from the public entries', () 
     // The views entry is where the composition lives; the app must not reach
     // into `../workspaces/registry`, `../workspaces/shell` or
     // `../workspaces/useWorkspaceMode` for these — they are re-exported.
-    expect(appContentSource).toMatch(/import \{[^}]*SproutWorkspace[^}]*\} from '\.\.\/views';/);
-    expect(appContentSource).toMatch(/import \{[^}]*useWorkspaceMode[^}]*\} from '\.\.\/views';/);
-    expect(appContentSource).toMatch(/import type \{[^}]*WorkspaceShellProps[^}]*\} from '\.\.\/views';/);
-    expect(appContentSource).toMatch(/import type \{[^}]*WorkspaceModeId[^}]*\} from '\.\.\/views';/);
+    expect(appContentSource).toMatch(/import \{[^}]*SproutSpaces[^}]*\} from '\.\.\/views';/);
+    expect(appContentSource).toMatch(/import \{[^}]*useSpace[^}]*\} from '\.\.\/views';/);
+    expect(appContentSource).toMatch(/import type \{[^}]*SpacesShellProps[^}]*\} from '\.\.\/views';/);
+    expect(appContentSource).toMatch(/import type \{[^}]*SpaceId[^}]*\} from '\.\.\/views';/);
     expect(appContentSource).not.toMatch(/from '\.\.\/workspaces\/registry'/);
     expect(appContentSource).not.toMatch(/from '\.\.\/workspaces\/shell'/);
     expect(appContentSource).not.toMatch(/from '\.\.\/workspaces\/useWorkspaceMode'/);
@@ -117,10 +117,10 @@ describe('the local app imports composition pieces from the public entries', () 
 
   it('the views entry actually re-exports the pieces the app imports', () => {
     const viewsEntry = read('../views/index.ts');
-    expect(viewsEntry).toMatch(/export \{ SproutWorkspace \} from '\.\/SproutWorkspace';/);
-    expect(viewsEntry).toMatch(/export \{ useWorkspaceMode \} from '\.\.\/workspaces\/useWorkspaceMode';/);
-    expect(viewsEntry).toMatch(/WorkspaceShellProps/);
-    expect(viewsEntry).toMatch(/WorkspaceModeId/);
+    expect(viewsEntry).toMatch(/export \{ SproutSpaces \} from '\.\/SproutWorkspace';/);
+    expect(viewsEntry).toMatch(/export \{ useSpace \} from '\.\.\/workspaces\/useWorkspaceMode';/);
+    expect(viewsEntry).toMatch(/SpacesShellProps/);
+    expect(viewsEntry).toMatch(/SpaceId/);
   });
 });
 
@@ -132,7 +132,7 @@ describe('the app composition renders the registry shell under the ambient local
     render(
       <HostProvider host={localHost}>
         <SproutProviders eventsProvider={makeEvents()} isConnected>
-          <SproutWorkspace providers="ambient" project={{ id: '/workspace/project' }} space="code" />
+          <SproutSpaces providers="ambient" project={{ id: '/workspace/project' }} space="code" />
         </SproutProviders>
       </HostProvider>,
     );

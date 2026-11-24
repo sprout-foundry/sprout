@@ -7,7 +7,7 @@
 import type { FileInfo } from '@sprout/ui';
 import { renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { fetchWorkspaceFiles, useWorkspaceFileTree } from './useWorkspaceFileTree';
+import { fetchProjectFolderFiles, useProjectFolderFileTree } from './useWorkspaceFileTree';
 
 function jsonResponse(body: unknown, ok = true): Response {
   return {
@@ -36,7 +36,7 @@ describe('fetchWorkspaceFiles', () => {
       ],
     });
 
-    const files = await fetchWorkspaceFiles('src', fetchFn);
+    const files = await fetchProjectFolderFiles('src', fetchFn);
 
     expect(fn).toHaveBeenCalledWith('/api/files?path=src');
     expect(files.map((f) => f.path)).toEqual(['src/lib', 'src/dist', 'src/b.ts', 'src/Makefile', 'src/a.log']);
@@ -55,10 +55,10 @@ describe('fetchWorkspaceFiles', () => {
 
   it('rejects on a failed response or a non-success message', async () => {
     const failing = vi.fn(async () => jsonResponse({}, false)) as unknown as typeof fetch;
-    await expect(fetchWorkspaceFiles('.', failing)).rejects.toThrow(/Failed to fetch files/);
+    await expect(fetchProjectFolderFiles('.', failing)).rejects.toThrow(/Failed to fetch files/);
 
     const { fetchFn } = fakeFetch({ message: 'path outside workspace' });
-    await expect(fetchWorkspaceFiles('.', fetchFn)).rejects.toThrow('path outside workspace');
+    await expect(fetchProjectFolderFiles('.', fetchFn)).rejects.toThrow('path outside workspace');
   });
 
   // The daemon sends BOTH spellings: `path` is absolute, `relative` is the
@@ -75,7 +75,7 @@ describe('fetchWorkspaceFiles', () => {
       ],
     });
 
-    const files = await fetchWorkspaceFiles('src', fetchFn, '/w');
+    const files = await fetchProjectFolderFiles('src', fetchFn, '/w');
 
     expect(files.map((f) => f.path)).toEqual(['src/lib', 'src/a.ts']);
   });
@@ -86,7 +86,7 @@ describe('fetchWorkspaceFiles', () => {
       files: [{ name: 'a.ts', path: '/w/src/a.ts', size: 1 }],
     });
 
-    const files = await fetchWorkspaceFiles('src', fetchFn, '/w');
+    const files = await fetchProjectFolderFiles('src', fetchFn, '/w');
 
     expect(files[0].path).toBe('src/a.ts');
   });
@@ -97,7 +97,7 @@ describe('fetchWorkspaceFiles', () => {
       files: [{ name: 'a.ts', path: 'src/a.ts', size: 1 }],
     });
 
-    const files = await fetchWorkspaceFiles('src', fetchFn);
+    const files = await fetchProjectFolderFiles('src', fetchFn);
 
     expect(files[0].path).toBe('src/a.ts');
   });
@@ -106,7 +106,7 @@ describe('fetchWorkspaceFiles', () => {
 describe('useWorkspaceFileTree', () => {
   it('returns FileTreeProps rooted at the workspace root by default, without a provider', async () => {
     const { fn, fetchFn } = fakeFetch({ message: 'success', files: [] });
-    const { result } = renderHook(() => useWorkspaceFileTree({ fetchFn }));
+    const { result } = renderHook(() => useProjectFolderFileTree({ fetchFn }));
 
     expect(result.current.rootPath).toBe('.');
     expect(result.current.selectedFile).toBeUndefined();
@@ -116,7 +116,7 @@ describe('useWorkspaceFileTree', () => {
 
   it('creates, deletes and renames through the file API', async () => {
     const { fn, fetchFn } = fakeFetch({ message: 'ok' });
-    const { result } = renderHook(() => useWorkspaceFileTree({ fetchFn }));
+    const { result } = renderHook(() => useProjectFolderFileTree({ fetchFn }));
 
     await result.current.onCreateFile?.('.', 'new.txt');
     await result.current.onCreateFolder?.('src', 'pkg');
@@ -136,13 +136,19 @@ describe('useWorkspaceFileTree', () => {
     const onFileSelect = vi.fn();
     const { fetchFn } = fakeFetch();
     const { result, rerender } = renderHook(() =>
-      useWorkspaceFileTree({ fetchFn, onFileSelect, selectedFile: 'a.ts', rootPath: 'repos/x', workspaceRoot: '/w' }),
+      useProjectFolderFileTree({
+        fetchFn,
+        onFileSelect,
+        selectedFile: 'a.ts',
+        rootPath: 'repos/x',
+        projectFolder: '/w',
+      }),
     );
     const file: FileInfo = { name: 'a.ts', path: 'a.ts', size: 0, modified: 0, isDir: false, ext: '.ts' };
     result.current.onFileSelect(file);
 
     expect(onFileSelect).toHaveBeenCalledWith(file);
-    expect(result.current).toMatchObject({ selectedFile: 'a.ts', rootPath: 'repos/x', workspaceRoot: '/w' });
+    expect(result.current).toMatchObject({ selectedFile: 'a.ts', rootPath: 'repos/x', projectFolder: '/w' });
 
     const first = result.current;
     rerender();

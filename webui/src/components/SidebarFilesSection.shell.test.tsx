@@ -41,7 +41,7 @@ function renderSection() {
   act(() => {
     root.render(
       <HostProvider host={makeTestHost({ localTerminal: false })}>
-        <SidebarFilesSection workspaceRoot="" />
+        <SidebarFilesSection projectFolder="" />
       </HostProvider>,
     );
   });

@@ -30,7 +30,7 @@ interface WebuiStatusBarProps {
    * project folder basename is shown as a clickable indicator on the left
    * side of the status bar (before the SproutStatusBar content).
    */
-  workspacePath?: string;
+  projectFolderPath?: string;
   /**
    * Overrides the project folder indicator's label. An embedding host's project
    * name, shown instead of a basename derived from `workspacePath`.
@@ -73,11 +73,11 @@ function StatusBar({
   buffer,
   encoding,
   indentation,
-  workspacePath: projectFolderPath,
+  projectFolderPath: projectFolderPath,
   projectName,
   onProjectFolderClick,
 }: WebuiStatusBarProps): JSX.Element {
-  const { git: supportsGit, workspaceSwitching: projectFolderSwitching, localTerminal } = useHostCapabilities();
+  const { git: supportsGit, projectFolderSwitching: projectFolderSwitching, localTerminal } = useHostCapabilities();
   // The hosted build's platform chooses the model for lower tiers; the badge
   // names that. host.8: the hosted transport authenticates against a platform
   // (authMode 'bearer') — the former isCloud branch.

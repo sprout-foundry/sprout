@@ -32,7 +32,7 @@ import type { SproutHost } from '../host';
 import { setActiveHost } from '../host/accessor';
 import { headlessHost } from '../host/HostProvider';
 import { ADAPTER_INSTALLED_EVENT } from '../services/apiAdapter';
-import { SproutWorkspace } from './SproutWorkspace';
+import { SproutSpaces } from './SproutWorkspace';
 import type { SproutProject } from './SproutWorkspace';
 import type { ViewsArrangement } from './ViewsLayout';
 
@@ -98,7 +98,7 @@ async function clickTreeRow(name: string): Promise<void> {
 
 describe('SproutWorkspace tree selection, as the package mounts it', () => {
   it('opens a selected file in the arranged editor: the file is read and gets a tab', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} layout={WITH_EDITOR} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={WITH_EDITOR} />);
     await clickTreeRow('README.md');
 
     await waitFor(() => expect(requested('/api/file')).toContain('/api/file?path=README.md'));
@@ -108,7 +108,7 @@ describe('SproutWorkspace tree selection, as the package mounts it', () => {
   });
 
   it('with no editor arranged, shows the editor in the center slot while a file is open', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} layout={NO_EDITOR} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={NO_EDITOR} />);
     await screen.findByText('README.md');
     expect(screen.queryByTestId('workspace-editor')).not.toBeInTheDocument();
 
@@ -131,7 +131,7 @@ describe('SproutWorkspace tree selection, as the package mounts it', () => {
 
   it('lists again when an agent adapter is installed and when the startup repo import completes', async () => {
     listing = [];
-    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} layout={NO_EDITOR} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={NO_EDITOR} />);
     await waitFor(() => expect(requested('/api/files')).toHaveLength(1));
     expect(screen.queryByText('README.md')).not.toBeInTheDocument();
 

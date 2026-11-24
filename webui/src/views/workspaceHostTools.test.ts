@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { installAdapter, uninstallAdapter, type APIAdapter } from '../services/apiAdapter';
-import { registerWorkspaceHostTools } from './workspaceHostTools';
+import { registerSpacesHostTools } from './workspaceHostTools';
 
 function fakeAdapter() {
   const handlers = new Map<string, (argsJSON: string, context: { chatId?: string }) => Promise<string> | string>();
@@ -26,7 +26,7 @@ describe('registerWorkspaceHostTools', () => {
     const { adapter, shell, handlers } = fakeAdapter();
     installAdapter(adapter);
     const handler = vi.fn(async (args: Record<string, unknown>) => ({ cards: [args.project] }));
-    const withdraw = await registerWorkspaceHostTools([
+    const withdraw = await registerSpacesHostTools([
       { name: 'list_board', description: 'Lists the board', handler },
       { name: 'read_file', description: 'clashes with a built-in', handler },
     ]);
@@ -42,7 +42,7 @@ describe('registerWorkspaceHostTools', () => {
   });
 
   it('offers nothing without an in-browser agent', async () => {
-    const withdraw = await registerWorkspaceHostTools([{ name: 'list_board', description: 'x', handler: () => '' }]);
+    const withdraw = await registerSpacesHostTools([{ name: 'list_board', description: 'x', handler: () => '' }]);
     expect(() => withdraw()).not.toThrow();
   });
 });

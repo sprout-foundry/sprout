@@ -36,7 +36,7 @@ export function useLivePreview(
   isSvgFile: boolean,
   isHtmlFile: boolean,
   splitPane: (paneId: string, direction: 'horizontal' | 'vertical') => string | null,
-  openWorkspaceBuffer: (buffer: {
+  openProjectFolderBuffer: (buffer: {
     kind: 'file';
     path: string;
     title: string;
@@ -56,7 +56,7 @@ export function useLivePreview(
     const buf = bufferRef.current;
     if (!buf || !buf.file) return;
     const lang = isSvgFile ? 'svg' : 'html';
-    openWorkspaceBuffer({
+    openProjectFolderBuffer({
       kind: 'file',
       path: `__workspace/live-preview:${buf.file.path}`,
       title: `${buf.file.name} Live Preview`,
@@ -68,7 +68,7 @@ export function useLivePreview(
         sourceName: buf.file.name,
       },
     });
-  }, [isSvgFile, isHtmlFile, openWorkspaceBuffer]);
+  }, [isSvgFile, isHtmlFile, openProjectFolderBuffer]);
 
   const openLivePreviewInSplit = useCallback(() => {
     const buf = bufferRef.current;
@@ -80,7 +80,7 @@ export function useLivePreview(
       return;
     }
     setTimeout(() => {
-      openWorkspaceBuffer({
+      openProjectFolderBuffer({
         kind: 'file',
         path: `__workspace/live-preview:${buf.file.path}`,
         title: `${buf.file.name} Live Preview`,
@@ -93,7 +93,7 @@ export function useLivePreview(
         },
       });
     }, 100);
-  }, [isSvgFile, isHtmlFile, openWorkspaceBuffer, splitPane, paneId, openLivePreview]);
+  }, [isSvgFile, isHtmlFile, openProjectFolderBuffer, splitPane, paneId, openLivePreview]);
 
   return {
     openLivePreview,

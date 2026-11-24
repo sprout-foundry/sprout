@@ -43,7 +43,7 @@ interface BufferManagerContextValue {
    *  re-subscribing (used by the beforeunload unsaved-changes guard). */
   buffersRef: React.MutableRefObject<Map<string, EditorBuffer>>;
   openFile: (file: EditorFileEntry) => string;
-  openWorkspaceBuffer: (options: {
+  openProjectFolderBuffer: (options: {
     kind: 'chat' | 'diff' | 'review' | 'file' | 'compare' | 'preview';
     path: string;
     title: string;
@@ -356,7 +356,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
   );
 
   // Open project folder buffer
-  const openWorkspaceBuffer = useCallback(
+  const openProjectFolderBuffer = useCallback(
     (options: {
       kind: 'chat' | 'diff' | 'review' | 'file' | 'compare' | 'preview';
       path: string;
@@ -528,7 +528,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       const bufferTitle = options.title || `Compare: ${options.fileName}`;
       const bufferPath = `__workspace/compare/${options.fileName}-${Date.now()}`;
 
-      return openWorkspaceBuffer({
+      return openProjectFolderBuffer({
         kind: 'compare',
         path: bufferPath,
         title: bufferTitle,
@@ -542,7 +542,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
         },
       });
     },
-    [openWorkspaceBuffer],
+    [openProjectFolderBuffer],
   );
 
   // Update buffer operations
@@ -1191,7 +1191,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       buffers,
       buffersRef,
       openFile,
-      openWorkspaceBuffer,
+      openProjectFolderBuffer,
       openCompareBuffer,
       closeBuffer,
       reorderBuffers,
@@ -1220,7 +1220,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       buffers,
       buffersRef,
       openFile,
-      openWorkspaceBuffer,
+      openProjectFolderBuffer,
       openCompareBuffer,
       closeBuffer,
       reorderBuffers,

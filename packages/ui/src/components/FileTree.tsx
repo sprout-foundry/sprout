@@ -69,7 +69,7 @@ export interface FileTreeProps {
   /** Callback after an item is deleted */
   onDeleteItem?: (path: string) => void;
   /** Workspace root path (for absolute path copying) */
-  workspaceRoot?: string;
+  projectFolder?: string;
   /** Optional pre-loaded file tree data. When provided, this takes priority over internal fetch for initial load.
    *  Consumers should memoize this prop (e.g., with useMemo) to avoid unnecessary re-renders. */
   files?: FileInfo[];
@@ -110,7 +110,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       onRefresh,
       onItemCreated,
       onDeleteItem,
-      workspaceRoot: projectFolder,
+      projectFolder: projectFolder,
       files: filesProp,
       onFetchFiles,
       onCreateFile,

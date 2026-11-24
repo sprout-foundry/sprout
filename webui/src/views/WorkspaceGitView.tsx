@@ -1,7 +1,7 @@
 import { FileCode, GitBranch, RefreshCw, X } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { DiffView } from '../components/DiffView';
-import type { OpenWorkspaceBuffer, SidebarGitPanelProps } from '../components/git/gitPanelProps';
+import type { OpenProjectFolderBuffer, SidebarGitPanelProps } from '../components/git/gitPanelProps';
 import { buildGitPanelProps } from '../components/git/gitPanelProps';
 import SidebarGitSection from '../components/SidebarGitSection';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
@@ -13,9 +13,9 @@ import { requestOpenInEditor } from './openInEditor';
 import '../components/Sidebar.css';
 import './WorkspaceGitView.css';
 
-export type { SidebarGitPanelProps as WorkspaceGitPanelProps } from '../components/git/gitPanelProps';
+export type { SidebarGitPanelProps as SpacesGitPanelProps } from '../components/git/gitPanelProps';
 
-export interface WorkspaceGitViewProps {
+export interface SpacesGitViewProps {
   /** Additional class on the view root, alongside `sprout-workspace-git`. */
   className?: string;
   /**
@@ -56,7 +56,7 @@ const noop = (): void => undefined;
  * assembled editor does not show (it holds file buffers only). Opening a
  * changed file goes to the editor unit.
  */
-export function WorkspaceGitView({ className, onOpenFile, gitPanel }: WorkspaceGitViewProps): JSX.Element {
+export function SpacesGitView({ className, onOpenFile, gitPanel }: SpacesGitViewProps): JSX.Element {
   const { git } = useHostCapabilities();
   const rootClass = className ? `sprout-workspace-git ${className}` : 'sprout-workspace-git';
   if (gitPanel) {
@@ -90,7 +90,7 @@ function ConnectedGitView({
 
   // Diff tabs become the view's inline diff; the other tab kinds (review,
   // compare) have no surface here and are not offered.
-  const openWorkspaceBuffer = useCallback<OpenWorkspaceBuffer>((options) => {
+  const openProjectFolderBuffer = useCallback<OpenProjectFolderBuffer>((options) => {
     if (options.kind === 'diff') {
       const metadata = options.metadata ?? {};
       const response = metadata.diff as Partial<GitDiffResponse> | undefined;
@@ -113,21 +113,21 @@ function ConnectedGitView({
     onGitStage: handlers.handleGitStage,
     onGitUnstage: handlers.handleGitUnstage,
     onGitDiscard: handlers.handleGitDiscard,
-    openWorkspaceBuffer,
+    openProjectFolderBuffer,
   });
 
   const openFile = useCallback((path: string) => onOpenFile(path), [onOpenFile]);
   // The review opens as an editor tab the assembled editor does not show, so
   // the view leaves it out.
   const panel: SidebarGitPanelProps = {
-    ...buildGitPanelProps(gitProjectFolder, { openWorkspaceBuffer, onOpenFile: openFile }),
+    ...buildGitPanelProps(gitProjectFolder, { openProjectFolderBuffer, onOpenFile: openFile }),
     onRunReview: undefined,
   };
 
   if (isMissingRepository(gitProjectFolder)) {
     return (
       <div className={rootClass} data-testid="workspace-git">
-        <MissingRepositoryState workspace={gitProjectFolder} />
+        <MissingRepositoryState projectFolder={gitProjectFolder} />
       </div>
     );
   }
@@ -179,7 +179,11 @@ function isMissingRepository(projectFolder: UseGitProjectFolderResult): boolean 
   return projectFolder.hasLoadedGitStatus && !projectFolder.isGitLoading && !projectFolder.gitStatus;
 }
 
-function MissingRepositoryState({ workspace: projectFolder }: { workspace: UseGitProjectFolderResult }): JSX.Element {
+function MissingRepositoryState({
+  projectFolder: projectFolder,
+}: {
+  projectFolder: UseGitProjectFolderResult;
+}): JSX.Element {
   return (
     <GitEmptyState
       title="No git repository"
@@ -195,17 +199,17 @@ function MissingRepositoryState({ workspace: projectFolder }: { workspace: UseGi
  * the editor's diff tabs): the app's git section, or a clear empty state
  * once the backend reports no repository.
  */
-export function WorkspaceGitStatusPanel({
-  workspace: projectFolder,
+export function SpacesGitStatusPanel({
+  projectFolder: projectFolder,
   panel,
 }: {
-  workspace: UseGitProjectFolderResult;
+  projectFolder: UseGitProjectFolderResult;
   panel: SidebarGitPanelProps;
 }): JSX.Element {
   if (isMissingRepository(projectFolder)) {
     return (
       <div className="sprout-workspace-git" data-testid="workspace-git">
-        <MissingRepositoryState workspace={projectFolder} />
+        <MissingRepositoryState projectFolder={projectFolder} />
       </div>
     );
   }
@@ -242,4 +246,4 @@ function GitEmptyState({
   );
 }
 
-export default WorkspaceGitView;
+export default SpacesGitView;

@@ -52,7 +52,7 @@ vi.mock('../contexts/EditorManagerContext', () => ({
     paneSizes: {},
     updatePaneSize: vi.fn(),
     maxPanes: 6,
-    openWorkspaceBuffer: vi.fn(),
+    openProjectFolderBuffer: vi.fn(),
     isAutoSaveEnabled: false,
     whitespaceRenderingMode: 'boundary',
     isFormatOnSaveEnabled: false,
@@ -77,7 +77,7 @@ vi.mock('@sprout/ui', () => ({
 }));
 
 // SP-140-3: EditorWorkspace gates the design route on design/ presence.
-import EditorWorkspace from './EditorWorkspace';
+import EditorSpaces from './EditorWorkspace';
 
 const minimalProps = {
   currentView: 'chat' as const,
@@ -90,7 +90,7 @@ const minimalProps = {
 describe('P4.2 mobile peer-buffer topology', () => {
   it('renders the peer-surfaces container with chat as the visible surface when chat is active', () => {
     activeBufferKind.current = 'chat';
-    render(<EditorWorkspace {...minimalProps} />);
+    render(<EditorSpaces {...minimalProps} />);
 
     expect(screen.getByTestId('mobile-peer-surfaces')).toBeInTheDocument();
     const chat = screen.getByTestId('mobile-chat-surface');
@@ -103,7 +103,7 @@ describe('P4.2 mobile peer-buffer topology', () => {
 
   it('editor surface is the visible one when a file is active', () => {
     activeBufferKind.current = 'file';
-    render(<EditorWorkspace {...minimalProps} />);
+    render(<EditorSpaces {...minimalProps} />);
 
     const editor = screen.getByTestId('mobile-editor-surface');
     expect(editor).toBeInTheDocument();
@@ -113,7 +113,7 @@ describe('P4.2 mobile peer-buffer topology', () => {
 
   it('chat surface stays MOUNTED (keep-alive) while the editor surface is visible', () => {
     activeBufferKind.current = 'file';
-    render(<EditorWorkspace {...minimalProps} />);
+    render(<EditorSpaces {...minimalProps} />);
 
     const chat = screen.getByTestId('mobile-chat-surface');
     expect(chat).toBeInTheDocument();
@@ -130,7 +130,7 @@ describe('phone chat switcher', () => {
     activeBufferKind.current = 'chat';
     const onActiveChatChange = vi.fn();
     render(
-      <EditorWorkspace
+      <EditorSpaces
         {...minimalProps}
         activeChatId="c1"
         onActiveChatChange={onActiveChatChange}

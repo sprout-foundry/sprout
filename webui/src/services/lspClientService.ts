@@ -11,7 +11,7 @@ import type { EditorView } from '@codemirror/view';
 import { debugLog } from '../utils/log';
 import { clientFetch } from './clientSession';
 import { getProjectFolderCwd, normalizeProjectFolderCwd, resolveProjectFolderPath } from './workspaceCwd';
-import { ensureProjectFolder, getWorkspaceRoot } from './workspaceStore';
+import { ensureProjectFolder, getProjectFolder } from './workspaceStore';
 
 // Types from @codemirror/lsp-client
 
@@ -33,7 +33,7 @@ export interface LSPLanguageInfo {
 export interface LSPStatusResponse {
   servers: LSPServerInfo[];
   active: number;
-  workspace: string;
+  projectFolder: string;
 }
 
 export interface LSPServerInfo {
@@ -264,7 +264,7 @@ function privateUriToFilePath(uri: string): string {
  * 3. Finally invokes the global callback to open the file (if not already open)
  *
  * This is called after client creation because we can't extend the
- * internal DefaultProjectFolder class (it's not exported).
+ * internal DefaultWorkspace class (it's not exported).
  *
  * @param client - The LSP client to patch
  */
@@ -330,7 +330,7 @@ class LSPClientService {
   private pendingClients: Map<string, Promise<LSPClient | null>> = new Map();
 
   /** Workspace root path */
-  private workspacePath: string = '';
+  private projectFolderPath: string = '';
 
   /** Connection state for each language */
   private clientStates: Map<string, LSPConnectionState> = new Map();
@@ -372,11 +372,11 @@ class LSPClientService {
   async getProjectFolderPath(): Promise<string> {
     try {
       const projectFolder = await ensureProjectFolder();
-      this.workspacePath = projectFolder.project_folder;
-      return this.workspacePath;
+      this.projectFolderPath = projectFolder.project_folder;
+      return this.projectFolderPath;
     } catch (err) {
       console.error('[LSPClientService] Failed to get workspace:', err);
-      return getWorkspaceRoot() || this.workspacePath;
+      return getProjectFolder() || this.projectFolderPath;
     }
   }
 
@@ -385,7 +385,7 @@ class LSPClientService {
    * Returns empty if not yet fetched.
    */
   getProjectFolderPathSync(): string {
-    return this.workspacePath;
+    return this.projectFolderPath;
   }
   /**
    * Seed the cached project folder path without a network round-trip.
@@ -393,7 +393,7 @@ class LSPClientService {
    * use this so path resolution works before the first LSP connect.
    */
   setProjectFolder(path: string): void {
-    this.workspacePath = path;
+    this.projectFolderPath = path;
   }
 
   /**
@@ -826,7 +826,7 @@ class LSPClientService {
  * relative node paths stops matching.
  */
 export function getProjectFolderPath(): string {
-  return LSPClientService.getInstance().getProjectFolderPathSync() || getWorkspaceRoot();
+  return LSPClientService.getInstance().getProjectFolderPathSync() || getProjectFolder();
 }
 
 /**

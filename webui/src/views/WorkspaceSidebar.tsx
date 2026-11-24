@@ -22,14 +22,14 @@ import type { ReactNode } from 'react';
 import ProjectNav, { NAV_ICONS } from '../components/layered/ProjectNav';
 import type { ProjectNavConversations, ProjectNavTarget } from '../components/layered/ProjectNav';
 import ResizeHandle from '../components/ResizeHandle';
-import { useWorkspaceKeyDown } from '../contexts/HotkeyContext';
+import { useSpacesKeyDown } from '../contexts/HotkeyContext';
 import { SIDEBAR_DEFAULT_WIDTH, clampSidebarWidth } from '../hooks/useSidebarState';
 import { useCommandHandler } from '../services/commandHandlers';
-import { useWorkspaceFileTree } from './useWorkspaceFileTree';
+import { useProjectFolderFileTree } from './useWorkspaceFileTree';
 import type { ProjectFolderGitState } from './useWorkspaceGitState';
-import { WorkspaceFileTreeView } from './WorkspaceFileTreeView';
-import { WorkspaceGitStatusPanel } from './WorkspaceGitView';
-import { WorkspaceSearchView } from './WorkspaceSearchView';
+import { SpacesFileTreeView } from './WorkspaceFileTreeView';
+import { SpacesGitStatusPanel } from './WorkspaceGitView';
+import { SpacesSearchView } from './WorkspaceSearchView';
 import '../components/Sidebar.css';
 
 const CODE_SIDEBAR_COMMANDS: readonly string[] = ['open_search', 'toggle_sidebar', 'toggle_explorer'];
@@ -40,7 +40,7 @@ const SECTION_TITLES: Record<string, string> = {
   git: 'Source control',
 };
 
-export interface WorkspaceSidebarProps {
+export interface SpacesSidebarProps {
   /** The project's display name, the sidebar's title. */
   title: string;
   collapsed: boolean;
@@ -49,7 +49,7 @@ export interface WorkspaceSidebarProps {
   /** The git state, or null when the host has no git (no Source control entry). */
   git: ProjectFolderGitState | null;
   /** The workspace's absolute root, for the tree's absolute-path copies. */
-  workspaceRoot?: string;
+  projectFolder?: string;
   /** The path of the file the editor shows, selected in the tree. */
   selectedFile?: string;
   /** Open a workspace file in the editor, optionally at a line. */
@@ -58,17 +58,17 @@ export interface WorkspaceSidebarProps {
   onToggleTerminal?: () => void;
 }
 
-export function WorkspaceSidebar({
+export function SpacesSidebar({
   title,
   collapsed,
   onCollapsedChange,
   conversations,
   git,
-  workspaceRoot: projectFolder,
+  projectFolder: projectFolder,
   selectedFile,
   onOpenFile,
   onToggleTerminal,
-}: WorkspaceSidebarProps): JSX.Element {
+}: SpacesSidebarProps): JSX.Element {
   const [open, setOpen] = useState<ProjectNavTarget | null>({ kind: 'section', id: 'files' });
   const [width, setWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
@@ -84,7 +84,7 @@ export function WorkspaceSidebar({
   );
 
   // Ctrl/Cmd+\ collapses and expands it, as in the app.
-  useWorkspaceKeyDown((event) => {
+  useSpacesKeyDown((event) => {
     if (event.key === '\\' && (event.ctrlKey || event.metaKey)) {
       event.preventDefault();
       toggleCollapsed();
@@ -181,7 +181,7 @@ export function WorkspaceSidebar({
                       id={open.id}
                       git={git}
                       treeRef={treeRef}
-                      workspaceRoot={projectFolder}
+                      projectFolder={projectFolder}
                       selectedFile={selectedFile}
                       onOpenFile={onOpenFile}
                     />
@@ -209,14 +209,14 @@ function SidebarSection({
   id,
   git,
   treeRef,
-  workspaceRoot: projectFolder,
+  projectFolder: projectFolder,
   selectedFile,
   onOpenFile,
 }: {
   id: string;
   git: ProjectFolderGitState | null;
   treeRef: React.RefObject<FileTreeHandle>;
-  workspaceRoot?: string;
+  projectFolder?: string;
   selectedFile?: string;
   onOpenFile: (path: string, line?: number) => void;
 }): JSX.Element | null {
@@ -225,27 +225,27 @@ function SidebarSection({
     content = (
       <FilesSection
         treeRef={treeRef}
-        workspaceRoot={projectFolder}
+        projectFolder={projectFolder}
         selectedFile={selectedFile}
         onOpenFile={onOpenFile}
       />
     );
   } else if (id === 'search') {
-    content = <WorkspaceSearchView onFileClick={onOpenFile} autoFocus />;
+    content = <SpacesSearchView onFileClick={onOpenFile} autoFocus />;
   } else if (id === 'git' && git) {
-    content = <WorkspaceGitStatusPanel workspace={git.workspace} panel={git.panel} />;
+    content = <SpacesGitStatusPanel projectFolder={git.projectFolder} panel={git.panel} />;
   }
   return <>{content}</>;
 }
 
 function FilesSection({
   treeRef,
-  workspaceRoot: projectFolder,
+  projectFolder: projectFolder,
   selectedFile,
   onOpenFile,
 }: {
   treeRef: React.RefObject<FileTreeHandle>;
-  workspaceRoot?: string;
+  projectFolder?: string;
   selectedFile?: string;
   onOpenFile: (path: string, line?: number) => void;
 }): JSX.Element {
@@ -255,6 +255,6 @@ function FilesSection({
     },
     [onOpenFile],
   );
-  const tree = useWorkspaceFileTree({ onFileSelect, selectedFile, workspaceRoot: projectFolder });
-  return <WorkspaceFileTreeView ref={treeRef} {...tree} />;
+  const tree = useProjectFolderFileTree({ onFileSelect, selectedFile, projectFolder: projectFolder });
+  return <SpacesFileTreeView ref={treeRef} {...tree} />;
 }

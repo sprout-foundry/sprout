@@ -12,7 +12,7 @@ import { getAdapter } from '../services/apiAdapter';
 import type { WasmShell } from '../services/wasmShell';
 
 /** A tool the host implements and offers to the workspace's agent. */
-export interface WorkspaceHostTool {
+export interface SpacesHostTool {
   /** Function name the model calls: letters, digits, `_`, `-`; at most 64. */
   name: string;
   /** What the tool does, for the model. */
@@ -44,7 +44,7 @@ function resultText(value: unknown): string {
  * the function that withdraws them. A runtime without an in-browser adapter,
  * or one that predates host tools, takes none (with a warning).
  */
-export async function registerWorkspaceHostTools(tools: WorkspaceHostTool[]): Promise<() => void> {
+export async function registerSpacesHostTools(tools: SpacesHostTool[]): Promise<() => void> {
   const adapter = getAdapter() as Partial<ShellSource> | null;
   if (!tools.length || typeof adapter?.agentShell !== 'function') return () => {};
   const shell = await adapter.agentShell();

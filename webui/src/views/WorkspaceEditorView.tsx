@@ -46,7 +46,7 @@ export function WorkspaceEditorView({ className }: WorkspaceEditorViewProps): JS
                     className={`tab${active ? ' active focused' : ''}`}
                     role="tab"
                     aria-selected={active}
-                    title={file.workspacePath}
+                    title={file.projectFolderPath}
                     onClick={() => openFile(file.path)}
                   >
                     <span className="tab-name">{file.name}</span>

@@ -101,7 +101,7 @@ vi.mock('@sprout/ui', async (importOriginal) => {
 import type { SproutHost } from '../host';
 import { setActiveHost } from '../host/accessor';
 import { headlessHost } from '../host/HostProvider';
-import { SproutWorkspace } from './SproutWorkspace';
+import { SproutSpaces } from './SproutWorkspace';
 import type { SproutProject } from './SproutWorkspace';
 import type { ViewsArrangement } from './ViewsLayout';
 
@@ -145,7 +145,7 @@ afterEach(() => {
 
 describe('SproutWorkspace files and editor', () => {
   it('assembles a working file tree against the host transport', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} layout={IDE} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={IDE} />);
     const tree = await screen.findByTestId('files-test-tree');
     expect(tree).toHaveAttribute('data-has-fetch', 'true');
 
@@ -157,7 +157,7 @@ describe('SproutWorkspace files and editor', () => {
   });
 
   it('renders the assembled editor for an arranged editor, and a file picked in the tree opens in it', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} layout={IDE} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={IDE} />);
     const projectFolder = await screen.findByTestId('sprout-workspace');
     expect(within(projectFolder).getByTestId('workspace-editor')).toBeInTheDocument();
     expect(within(projectFolder).queryByTestId('files-test-primitive-editor')).not.toBeInTheDocument();
@@ -173,7 +173,7 @@ describe('SproutWorkspace files and editor', () => {
   });
 
   it('shows the editor in the center slot for a file picked in a tree arranged without one', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} layout={NO_EDITOR} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={NO_EDITOR} />);
     await screen.findByTestId('files-test-tree');
     expect(screen.queryByTestId('workspace-editor')).not.toBeInTheDocument();
 
@@ -189,7 +189,7 @@ describe('SproutWorkspace files and editor', () => {
   });
 
   it('closes the open file when the tree deletes it, through the same buffer manager', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} layout={NO_EDITOR} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={NO_EDITOR} />);
     await screen.findByTestId('files-test-tree');
     act(() => {
       screen.getByTestId('files-test-tree-select').click();
@@ -204,7 +204,7 @@ describe('SproutWorkspace files and editor', () => {
   });
 
   it('opens a changed file in the editor from the changes panel and from an open-in-editor request', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} layout={IDE} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={IDE} />);
     await screen.findByTestId('sprout-workspace');
 
     act(() => {
@@ -223,7 +223,7 @@ describe('SproutWorkspace files and editor', () => {
   it('lets the host replace the tree and the editor through viewProps', async () => {
     const onFileSelect = vi.fn();
     render(
-      <SproutWorkspace
+      <SproutSpaces
         project={PROJECT}
         space="code"
         host={makeHost()}

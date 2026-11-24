@@ -49,7 +49,7 @@ import type { SproutHost } from '../host';
 import { setActiveHost } from '../host/accessor';
 import { headlessHost } from '../host/HostProvider';
 import { __resetCommandHandlersForTests, hasCommandHandler } from '../services/commandHandlers';
-import { SproutWorkspace } from './SproutWorkspace';
+import { SproutSpaces } from './SproutWorkspace';
 import type { SproutProject } from './SproutWorkspace';
 
 const PROJECT: SproutProject = { id: 'acme/widgets', root: '/work/widgets' };
@@ -93,7 +93,7 @@ afterEach(() => {
 
 describe('SproutWorkspace preview panel safety', () => {
   it('mounts no panel and never requests /api/preview on the default arrangement without the capability', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={BASE_HOST} layout={{}} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={BASE_HOST} layout={{}} />);
     await screen.findByTestId('preview-test-chat');
     expect(hasCommandHandler('toggle_preview')).toBe(false);
 
@@ -109,7 +109,7 @@ describe('SproutWorkspace preview panel safety', () => {
   });
 
   it('starts closed with the capability and polls only once toggle_preview opens it', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={PREVIEW_HOST} layout={{}} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={PREVIEW_HOST} layout={{}} />);
     await screen.findByTestId('preview-test-chat');
     await waitFor(() => expect(hasCommandHandler('toggle_preview')).toBe(true));
     await act(async () => {

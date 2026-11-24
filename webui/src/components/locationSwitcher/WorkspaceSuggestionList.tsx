@@ -4,7 +4,7 @@ import { collapseHomePath } from './pathUtils';
 import type { ProjectFolderDirectory, RemoteProjectFolderContext } from './types';
 
 export interface ProjectFolderSuggestionListProps {
-  workspaceRoot: string;
+  projectFolder: string;
   remoteContext: RemoteProjectFolderContext | null;
   suggestions: ProjectFolderDirectory[];
   suggestionsLoading: boolean;
@@ -14,7 +14,7 @@ export interface ProjectFolderSuggestionListProps {
 }
 
 export const ProjectFolderSuggestionList: React.FC<ProjectFolderSuggestionListProps> = ({
-  workspaceRoot: projectFolder,
+  projectFolder: projectFolder,
   remoteContext,
   suggestions,
   suggestionsLoading,

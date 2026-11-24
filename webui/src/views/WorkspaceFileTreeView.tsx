@@ -24,8 +24,8 @@ const REPO_IMPORTED_EVENT = 'sprout:repo-imported';
  *
  * The ref is the tree's handle (`refresh`, `revealFile`).
  */
-export const WorkspaceFileTreeView = forwardRef<FileTreeHandle, FileTreeProps>(
-  function WorkspaceFileTreeView(props, ref): JSX.Element {
+export const SpacesFileTreeView = forwardRef<FileTreeHandle, FileTreeProps>(
+  function SpacesFileTreeView(props, ref): JSX.Element {
     const treeRef = useRef<FileTreeHandle>(null);
     useImperativeHandle(
       ref,
@@ -51,4 +51,4 @@ export const WorkspaceFileTreeView = forwardRef<FileTreeHandle, FileTreeProps>(
   },
 );
 
-export default WorkspaceFileTreeView;
+export default SpacesFileTreeView;

@@ -4,13 +4,13 @@ import { useHostCapabilities } from '../../host';
 import type { SproutInstance } from '../../services/api';
 import { normalizePath } from './pathUtils';
 import type { ProjectFolderDirectory, SwitchingState, SSHFailureState, RemoteProjectFolderContext } from './types';
-import { WorkspaceInstances } from './WorkspaceInstances';
+import { SpacesInstances } from './WorkspaceInstances';
 import { ProjectFolderRecentList } from './WorkspaceRecentList';
 import { ProjectFolderSSHFavorites } from './WorkspaceSSHFavorites';
 import { ProjectFolderSuggestionList } from './WorkspaceSuggestionList';
 
 export interface ProjectFolderPopoverProps {
-  workspaceRoot: string;
+  projectFolder: string;
   daemonRoot: string;
   remoteContext: RemoteProjectFolderContext | null;
   switchingState: SwitchingState;
@@ -50,7 +50,7 @@ export interface ProjectFolderPopoverProps {
 }
 
 export const ProjectFolderPopover: React.FC<ProjectFolderPopoverProps> = ({
-  workspaceRoot: projectFolder,
+  projectFolder: projectFolder,
   daemonRoot,
   remoteContext,
   switchingState,
@@ -193,7 +193,7 @@ export const ProjectFolderPopover: React.FC<ProjectFolderPopoverProps> = ({
         </div>
 
         <ProjectFolderSuggestionList
-          workspaceRoot={projectFolder}
+          projectFolder={projectFolder}
           remoteContext={remoteContext}
           suggestions={suggestions}
           suggestionsLoading={suggestionsLoading}
@@ -206,7 +206,7 @@ export const ProjectFolderPopover: React.FC<ProjectFolderPopoverProps> = ({
         {remoteContext ? (
           <ProjectFolderSSHFavorites
             remoteContext={remoteContext}
-            workspaceRoot={projectFolder}
+            projectFolder={projectFolder}
             favorites={remoteHostFavorites}
             isSwitching={switchingState.isSwitching}
             onSelectFavorite={submitProjectFolderChange}
@@ -229,7 +229,7 @@ export const ProjectFolderPopover: React.FC<ProjectFolderPopoverProps> = ({
 
         {/* Instances section */}
         {supportsInstances && !remoteContext ? (
-          <WorkspaceInstances
+          <SpacesInstances
             instances={instances}
             selectedInstancePID={selectedInstancePID}
             isSwitching={switchingState.isSwitching}

@@ -3,7 +3,7 @@ import type { SearchViewProps } from '../components/search/types';
 import { requestOpenInEditor } from './openInEditor';
 import './WorkspaceSearchView.css';
 
-export interface WorkspaceSearchViewProps extends SearchViewProps {
+export interface SpacesSearchViewProps extends SearchViewProps {
   /** Additional class on the view root, alongside `sprout-workspace-search`. */
   className?: string;
 }
@@ -20,11 +20,7 @@ export interface WorkspaceSearchViewProps extends SearchViewProps {
  * unit's opener. Unlike the app's sidebar panel, an arranged view does not
  * take focus on mount unless `autoFocus` is set.
  */
-export function WorkspaceSearchView({
-  className,
-  onFileClick,
-  autoFocus = false,
-}: WorkspaceSearchViewProps): JSX.Element {
+export function SpacesSearchView({ className, onFileClick, autoFocus = false }: SpacesSearchViewProps): JSX.Element {
   const rootClass = className ? `sprout-workspace-search ${className}` : 'sprout-workspace-search';
   return (
     <div className={rootClass} data-testid="workspace-search">
@@ -33,4 +29,4 @@ export function WorkspaceSearchView({
   );
 }
 
-export default WorkspaceSearchView;
+export default SpacesSearchView;

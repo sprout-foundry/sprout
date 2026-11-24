@@ -601,7 +601,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
       init?.method === 'POST'
         ? jsonResponse({ url: 'https://ws-1.fly.dev', session_token: 'tok' }, { status: 201 })
-        : jsonResponse({ workspaces: [] }),
+        : jsonResponse({ projectFolders: [] }),
     );
     vi.stubGlobal('fetch', fetchMock);
     renderListener();
@@ -618,7 +618,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
   it('explains a failed workspace start inline instead of leaving the editor', async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === 'POST') throw new TypeError('network down');
-      return jsonResponse({ workspaces: [] });
+      return jsonResponse({ projectFolders: [] });
     });
     vi.stubGlobal('fetch', fetchMock);
     renderListener();

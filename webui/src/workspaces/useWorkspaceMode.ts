@@ -17,11 +17,11 @@ import { repoScopedKey } from '../services/repoScope';
 import {
   BUILTIN_DEFAULT_WORKSPACE_MODE,
   availableModes,
-  defaultWorkspaceMode,
-  resolveWorkspaceMode,
-  type WorkspaceMode,
-  type WorkspaceModeContext,
-  type WorkspaceModeId,
+  defaultSpace,
+  resolveSpace,
+  type Space,
+  type SpaceContext,
+  type SpaceId,
 } from './registry';
 
 /** The UI-context scope, mirroring services/appStatePersistence's rule. */
@@ -32,7 +32,7 @@ export function uiContextScope(): string {
 }
 
 /** Storage key for the current instance + UI context. */
-export function workspaceModeStorageKey(): string {
+export function spaceStorageKey(): string {
   if (typeof window === 'undefined' || !window.localStorage) {
     return `${WORKSPACE_MODE_STORAGE_KEY}:default:local`;
   }
@@ -41,34 +41,34 @@ export function workspaceModeStorageKey(): string {
 }
 
 /** The persisted mode id for this instance, or null when unset/unreadable. */
-export function readPersistedWorkspaceMode(): WorkspaceModeId | null {
+export function readPersistedSpace(): SpaceId | null {
   if (typeof window === 'undefined' || !window.localStorage) return null;
   try {
-    const raw = window.localStorage.getItem(workspaceModeStorageKey());
-    return raw ? (JSON.parse(raw) as WorkspaceModeId) : null;
+    const raw = window.localStorage.getItem(spaceStorageKey());
+    return raw ? (JSON.parse(raw) as SpaceId) : null;
   } catch {
     return null;
   }
 }
 
 /** Persist the mode id for this instance. Failures are swallowed by design. */
-export function persistWorkspaceMode(id: WorkspaceModeId): void {
+export function persistSpace(id: SpaceId): void {
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
-    window.localStorage.setItem(workspaceModeStorageKey(), JSON.stringify(id));
+    window.localStorage.setItem(spaceStorageKey(), JSON.stringify(id));
   } catch {
     // Storage unavailable (private mode, quota). The mode still works for this
     // session; only the preference is lost.
   }
 }
 
-export interface UseWorkspaceModeResult {
+export interface UseSpaceResult {
   /** The active mode, resolved against what this workspace offers. */
-  mode: WorkspaceMode;
+  mode: Space;
   /** Modes to list in the switcher, in order. */
-  modes: WorkspaceMode[];
+  modes: Space[];
   /** Switch modes. */
-  select: (id: WorkspaceModeId) => void;
+  select: (id: SpaceId) => void;
   /** True when the workspace offers more than one mode. */
   canSwitch: boolean;
 }
@@ -80,28 +80,28 @@ export interface UseWorkspaceModeResult {
  * so a persisted id this build no longer registers degrades to Code instead of
  * rendering a mode with nothing to show.
  */
-export function useWorkspaceMode(ctx: WorkspaceModeContext): UseWorkspaceModeResult {
-  const [requested, setRequested] = useState<WorkspaceModeId | null>(() => readPersistedWorkspaceMode());
+export function useSpace(ctx: SpaceContext): UseSpaceResult {
+  const [requested, setRequested] = useState<SpaceId | null>(() => readPersistedSpace());
   const { hasMockup } = ctx;
 
   // Depend on the primitive, not the context object: a caller passing an inline
   // object literal would otherwise get a new identity every render and rebuild
   // the mode list each time.
   const modes = useMemo(() => availableModes({ hasMockup }), [hasMockup]);
-  const mode = useMemo(() => resolveWorkspaceMode(requested, { hasMockup }), [requested, hasMockup]);
+  const mode = useMemo(() => resolveSpace(requested, { hasMockup }), [requested, hasMockup]);
 
   // Re-persist when availability changes the resolved mode: a workspace that
   // no longer offers the mode should come back on Code, not keep it stale.
   useEffect(() => {
-    if (requested !== null && requested !== mode.id) persistWorkspaceMode(mode.id);
+    if (requested !== null && requested !== mode.id) persistSpace(mode.id);
   }, [requested, mode.id]);
 
-  const select = useCallback((id: WorkspaceModeId) => {
+  const select = useCallback((id: SpaceId) => {
     setRequested(id);
-    persistWorkspaceMode(id);
+    persistSpace(id);
   }, []);
 
   return { mode, modes, select, canSwitch: modes.length > 1 };
 }
 
-export { BUILTIN_DEFAULT_WORKSPACE_MODE, defaultWorkspaceMode };
+export { BUILTIN_DEFAULT_WORKSPACE_MODE, defaultSpace };

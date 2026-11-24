@@ -3,7 +3,7 @@
 // A host installs the tarball and builds its app with Vite, which re-processes
 // dist/. This packs the package, installs the tarball into a scratch app (React
 // and Vite come from this repository's node_modules, so no network is needed),
-// builds an app that mounts `SproutWorkspace` from `./views` with host bits from
+// builds an app that mounts `SproutSpaces` from `./views` with host bits from
 // `.`, and inspects the emitted code for the failure mode of a namespace
 // accessor surviving into the host's build: Vite rewrites
 // `const { x } = await import(...)` into a preload wrapper that returns `{ x }`,
@@ -41,7 +41,7 @@ export function consumerOutputProblems(files) {
   const problems = [];
   const all = Object.values(files).join("\n");
   // Every check below looks for a defect; an empty output would pass them all.
-  if (!all.includes("SproutWorkspace") && !all.includes("createRoot")) {
+  if (!all.includes("SproutSpaces") && !all.includes("createRoot")) {
     problems.push("the re-bundled output does not contain the mounted app");
   }
   for (const [file, source] of Object.entries(files)) {
@@ -98,11 +98,11 @@ async function main() {
         'import { createElement } from "react";',
         'import { createRoot } from "react-dom/client";',
         'import { localHost } from "@sprout-foundry/spaces";',
-        'import { SproutWorkspace } from "@sprout-foundry/spaces/views";',
+        'import { SproutSpaces } from "@sprout-foundry/spaces/views";',
         "",
         'const host = { ...localHost, transport: { ...localHost.transport, agent: { kind: "wasm" } } };',
         'createRoot(document.getElementById("root")).render(',
-        '  createElement(SproutWorkspace, { host, project: { repoUrl: "https://github.com/example/repo" }, space: "code" }),',
+        '  createElement(SproutSpaces, { host, project: { repoUrl: "https://github.com/example/repo" }, space: "code" }),',
         ");",
         "",
       ].join("\n"),

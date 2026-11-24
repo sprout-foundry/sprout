@@ -35,7 +35,7 @@ vi.mock('../services/cloudAdapter', async () => {
       supportsSSH = false;
       supportsGit = false;
       supportsChat = true;
-      supportsWorkspaceSwitching = false;
+      supportsProjectFolderSwitching = false;
       supportsExport = false;
       supportsInstances = false;
       supportsLocalTerminal = false;
@@ -63,7 +63,7 @@ import type { SproutHost } from '../host';
 import { setActiveHost } from '../host/accessor';
 import { headlessHost } from '../host/HostProvider';
 import { WebSocketService } from '../services/websocket';
-import { SproutWorkspace } from './SproutWorkspace';
+import { SproutSpaces } from './SproutWorkspace';
 import type { ViewsArrangement } from './ViewsLayout';
 
 const CHAT_ONLY: ViewsArrangement = { left: [], center: ['chat'], right: [], overlay: [] };
@@ -118,7 +118,7 @@ afterEach(() => {
 describe('SproutWorkspace with a wasm agent backend', () => {
   it('loads the provider catalog and the session list once the adapter is installed, not before', async () => {
     render(
-      <SproutWorkspace project={{ id: 'acme/widgets', root: '' }} space="code" host={wasmHost()} layout={CHAT_ONLY} />,
+      <SproutSpaces project={{ id: 'acme/widgets', root: '' }} space="code" host={wasmHost()} layout={CHAT_ONLY} />,
     );
     await screen.findByTestId('wasm-chat');
 

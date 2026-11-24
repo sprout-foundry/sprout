@@ -16,7 +16,7 @@ interface GitDiffResponse {
   diff: string;
 }
 
-interface DiffWorkspaceTabProps {
+interface DiffSpacesTabProps {
   path: string;
   diff: GitDiffResponse | null;
   diffMode: 'combined' | 'staged' | 'unstaged';
@@ -52,7 +52,7 @@ const getDiffText = (diff: GitDiffResponse | null, diffMode: 'combined' | 'stage
   }
 };
 
-const DiffWorkspaceTab = React.memo(function DiffWorkspaceTab({
+const DiffSpacesTab = React.memo(function DiffSpacesTab({
   path,
   diff,
   diffMode,
@@ -65,7 +65,7 @@ const DiffWorkspaceTab = React.memo(function DiffWorkspaceTab({
   fullModified,
   canSave = false,
   defaultView = 'text',
-}: DiffWorkspaceTabProps): JSX.Element {
+}: DiffSpacesTabProps): JSX.Element {
   const [viewMode, setViewMode] = useState<'merge' | 'text'>(defaultView);
   const [collapseUnchanged, setCollapseUnchanged] = useState(true);
   // User-made merge-state edits (chunk reverts / typing in pane B). Lifted
@@ -279,4 +279,4 @@ const DiffWorkspaceTab = React.memo(function DiffWorkspaceTab({
   );
 });
 
-export default DiffWorkspaceTab;
+export default DiffSpacesTab;

@@ -17,12 +17,12 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'r
 import type { PreviewPanelProps } from '../components/PreviewPanel';
 import { useTogglePreviewCommand } from '../hooks/useTogglePreviewCommand';
 import { HostContext } from '../host';
-import { useSproutWorkspaceViewProps } from './SproutWorkspaceChat';
+import { useSproutSpacesViewProps } from './SproutWorkspaceChat';
 import { resolveViewsArrangement, SLOT_ORDER, ViewsLayout } from './ViewsLayout';
 import type { ViewComponent, ViewsArrangement, ViewKind } from './ViewsLayout';
 import { useWorkspaceEditor } from './WorkspaceEditorContext';
 import { WorkspaceEditorView } from './WorkspaceEditorView';
-import { WorkspaceFileTreeView } from './WorkspaceFileTreeView';
+import { SpacesFileTreeView } from './WorkspaceFileTreeView';
 
 /**
  * The components the composition renders in place of the primitives: the
@@ -31,11 +31,11 @@ import { WorkspaceFileTreeView } from './WorkspaceFileTreeView';
  */
 const ASSEMBLED_VIEW_COMPONENTS: Partial<Record<ViewKind, ViewComponent>> = {
   editor: WorkspaceEditorView,
-  fileTree: WorkspaceFileTreeView,
+  fileTree: SpacesFileTreeView,
 };
 
 /** With a host-supplied `viewProps.editor`, the `editor` kind keeps the bare primitive. */
-const HOST_EDITOR_VIEW_COMPONENTS: Partial<Record<ViewKind, ViewComponent>> = { fileTree: WorkspaceFileTreeView };
+const HOST_EDITOR_VIEW_COMPONENTS: Partial<Record<ViewKind, ViewComponent>> = { fileTree: SpacesFileTreeView };
 
 /** The editor shown in the center slot while files are open in an arrangement without one. */
 function OnDemandEditorView(): JSX.Element {
@@ -90,7 +90,7 @@ export function ArrangedViews({
     () => ({ open: previewOpen, onClose: closePreview }),
     [previewOpen, closePreview],
   );
-  const props = useSproutWorkspaceViewProps(viewProps, { chatOverrides, previewPanel });
+  const props = useSproutSpacesViewProps(viewProps, { chatOverrides, previewPanel });
   useOpenInEditorRequests();
   const { openFiles } = useWorkspaceEditor();
   const onDemandEditor = !viewProps?.editor && !arrangementHas(resolved, 'editor') && openFiles.length > 0;

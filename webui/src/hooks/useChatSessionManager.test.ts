@@ -13,7 +13,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import type { AppState } from '../types/app';
 import { onChatReplay } from '../utils/chatReplay';
-import { persistWorkspaceMode, useWorkspaceMode, workspaceModeStorageKey } from '../workspaces/useWorkspaceMode';
+import { persistSpace, useSpace, spaceStorageKey } from '../workspaces/useWorkspaceMode';
 import { useChatSessionManager } from './useChatSessionManager';
 
 const apiDouble = vi.hoisted(() => ({

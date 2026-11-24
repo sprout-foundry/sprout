@@ -13,13 +13,13 @@
 
 import { Menu, MessageSquare, SquareTerminal } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import EditorWorkspace from '../components/EditorWorkspace';
+import EditorSpaces from '../components/EditorWorkspace';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { CreditsChip } from '../components/CreditsChip';
 import HeaderBar from '../components/HeaderBar';
 import StatusBar from '../components/StatusBar';
 import Terminal from '../components/Terminal';
-import type { WorkspaceShellProps } from './shell';
+import type { SpacesShellProps } from './shell';
 import { isLayeredLayout } from '../config/layout';
 import { copy } from '../config/copy';
 import { TOGGLE_PREVIEW_COMMAND, useTogglePreviewCommand } from '../hooks/useTogglePreviewCommand';
@@ -34,7 +34,7 @@ const PREVIEW_TOGGLE_COMMANDS: readonly string[] = [TOGGLE_PREVIEW_COMMAND];
 /** The preview buffer's key — one preview per workspace, reopened not duplicated. */
 const PREVIEW_BUFFER_PATH = '__workspace/preview';
 
-const CodeShell: React.FC<WorkspaceShellProps> = ({
+const CodeShell: React.FC<SpacesShellProps> = ({
   isMobile,
   isTablet,
   isSidebarOpen,
@@ -81,7 +81,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   // the toggle stays inert rather than throwing.
   const editor = useOptionalEditorManager();
   const buffers = editor?.buffers;
-  const openWorkspaceBuffer = editor?.openWorkspaceBuffer;
+  const openProjectFolderBuffer = editor?.openProjectFolderBuffer;
   const closeBuffer = editor?.closeBuffer;
   const splitPane = editor?.splitPane;
   const closePane = editor?.closePane;
@@ -106,7 +106,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   const previewPaneIdRef = useRef<string | null>(null);
   const setPreviewOpen = useCallback(
     (update: (open: boolean) => boolean, focusPreview = true) => {
-      if (!openWorkspaceBuffer || !closeBuffer) return;
+      if (!openProjectFolderBuffer || !closeBuffer) return;
       const current = previewBufferIdRef.current;
       const next = update(current !== null);
       if (next && current === null) {
@@ -118,7 +118,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
         const previousBufferId = activeBufferId;
         const previousPaneId = activePaneId;
         const openInto = (paneId?: string) => {
-          previewBufferIdRef.current = openWorkspaceBuffer({
+          previewBufferIdRef.current = openProjectFolderBuffer({
             kind: 'preview',
             path: PREVIEW_BUFFER_PATH,
             title: 'Preview',
@@ -168,7 +168,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
       }
     },
     [
-      openWorkspaceBuffer,
+      openProjectFolderBuffer,
       closeBuffer,
       splitPane,
       closePane,
@@ -207,7 +207,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   const activeRepoSlug = repoSlug(useActiveRepoURL());
   const projectTitle = hosted
     ? (activeRepoSlug ?? copy('workspace.none'))
-    : (git.workspaceRoot?.split('/').filter(Boolean).pop() ?? '');
+    : (git.projectFolder?.split('/').filter(Boolean).pop() ?? '');
 
   return (
     <main
@@ -264,7 +264,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
             </div>
           )}
           <ErrorBoundary panelName="Editor">
-            <EditorWorkspace
+            <EditorSpaces
               currentView={currentView}
               perChatCache={perChatCache}
               activeChatId={activeChatId}
@@ -286,7 +286,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
       </div>
       <StatusBar
         branch={git.gitBranches.current || git.gitStatus?.branch}
-        workspacePath={git.workspaceRoot}
+        projectFolderPath={git.projectFolder}
         projectName={git.projectName}
         onProjectFolderClick={() => onToggleSidebar()}
         buffer={

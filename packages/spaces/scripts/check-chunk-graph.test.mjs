@@ -4,7 +4,7 @@ import { chunkGraphProblems } from "./check-chunk-graph.mjs";
 
 test("a dynamic import of a shared chunk through a namespace accessor is rejected", () => {
   const problems = chunkGraphProblems({
-    "views.js": 'export { a as SproutWorkspace } from "./chunks/viewsChunk-1.js";\n',
+    "views.js": 'export { a as SproutSpaces } from "./chunks/viewsChunk-1.js";\n',
     "chunks/viewsChunk-1.js": [
       'import { a as b } from "./cloudAdapter-1.js";',
       "async function wire() {",
@@ -22,7 +22,7 @@ test("a dynamic import of a shared chunk through a namespace accessor is rejecte
 test("a chunk that is only dynamically imported passes", () => {
   assert.deepEqual(
     chunkGraphProblems({
-      "views.js": 'export { a as SproutWorkspace } from "./chunks/viewsChunk-1.js";\n',
+      "views.js": 'export { a as SproutSpaces } from "./chunks/viewsChunk-1.js";\n',
       "chunks/viewsChunk-1.js":
         'const lazy = () => import("./ReviewWorkspaceTab-1.js");\nconst { CloudAdapter: c } = await import("./cloudAdapter-1.js");\n',
       "chunks/cloudAdapter-1.js": "export { C as CloudAdapter };\n",

@@ -59,7 +59,7 @@ vi.mock('../components/HeaderBar', () => ({
 // identity.
 const fakeEditor = {
   buffers: new Map<string, { kind: string }>(),
-  openWorkspaceBuffer: vi.fn((options: { kind: string }) => {
+  openProjectFolderBuffer: vi.fn((options: { kind: string }) => {
     const id = `buffer-${options.kind}`;
     fakeEditor.buffers = new Map(fakeEditor.buffers).set(id, { kind: options.kind });
     return id;
@@ -125,7 +125,7 @@ beforeEach(() => {
   fakeEditor.switchToBuffer.mockClear();
   fakeEditor.switchPane.mockClear();
   fakeEditor.activeBufferId = 'buffer-chat';
-  fakeEditor.openWorkspaceBuffer.mockClear();
+  fakeEditor.openProjectFolderBuffer.mockClear();
   fakeEditor.closeBuffer.mockClear();
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -157,7 +157,7 @@ function makeShellProps(overrides = {}) {
     handleOutlineNavigateToSymbol: vi.fn(),
     chat: { chatProps: {}, reviewProps: {}, diffState: {} },
     mockup: { loading: false, present: false },
-    git: { gitBranches: { current: 'main', branches: [] }, gitStatus: null, workspaceRoot: '/tmp/repo' },
+    git: { gitBranches: { current: 'main', branches: [] }, gitStatus: null, projectFolder: '/tmp/repo' },
     ...overrides,
   };
 }
@@ -173,7 +173,7 @@ describe('CodeShell preview buffer', () => {
     });
 
     expect(container.querySelector('[data-testid="preview-panel-toggle"]')).not.toBeNull();
-    expect(fakeEditor.openWorkspaceBuffer).not.toHaveBeenCalled();
+    expect(fakeEditor.openProjectFolderBuffer).not.toHaveBeenCalled();
     expect(container.querySelector('[data-testid="preview-panel-toggle"]')).toHaveAttribute('aria-pressed', 'false');
   });
 
@@ -188,7 +188,7 @@ describe('CodeShell preview buffer', () => {
       await new Promise((r) => setTimeout(r, 0));
     });
 
-    expect(fakeEditor.openWorkspaceBuffer).toHaveBeenCalledWith(
+    expect(fakeEditor.openProjectFolderBuffer).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'preview', path: '__workspace/preview' }),
     );
   });
@@ -225,7 +225,7 @@ describe('CodeShell preview buffer', () => {
     });
 
     expect(fakeEditor.splitPane).toHaveBeenCalledWith('pane-1', 'vertical');
-    expect(fakeEditor.openWorkspaceBuffer).toHaveBeenCalledWith(
+    expect(fakeEditor.openProjectFolderBuffer).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'preview', paneId: 'pane-2' }),
     );
   });
@@ -258,7 +258,7 @@ describe('CodeShell preview buffer', () => {
     // The mockup auto-open must not steal focus, but the buffer still has to
     // attach to a pane or nothing renders it — so it opens activated and the
     // previous buffer is restored.
-    expect(fakeEditor.openWorkspaceBuffer).toHaveBeenCalledWith(expect.objectContaining({ activate: true }));
+    expect(fakeEditor.openProjectFolderBuffer).toHaveBeenCalledWith(expect.objectContaining({ activate: true }));
     // Both the pane and the buffer are handed back: leaving the preview's pane
     // active let the next background chat open land on top of it.
     expect(fakeEditor.switchPane).toHaveBeenCalledWith('pane-1');
@@ -277,7 +277,7 @@ describe('CodeShell preview buffer', () => {
     // The mockup still opens the buffer, but a pane created here would never
     // be rendered by the phone's peer-surface layout.
     expect(fakeEditor.splitPane).not.toHaveBeenCalled();
-    expect(fakeEditor.openWorkspaceBuffer).toHaveBeenCalledWith(expect.objectContaining({ kind: 'preview' }));
+    expect(fakeEditor.openProjectFolderBuffer).toHaveBeenCalledWith(expect.objectContaining({ kind: 'preview' }));
   });
 
   it('leaves a split the user already had alone', async () => {
@@ -318,7 +318,7 @@ describe('CodeShell preview buffer', () => {
     await act(async () => {
       await new Promise((r) => setTimeout(r, 10));
     });
-    expect(fakeEditor.openWorkspaceBuffer).toHaveBeenCalledWith(expect.objectContaining({ kind: 'preview' }));
+    expect(fakeEditor.openProjectFolderBuffer).toHaveBeenCalledWith(expect.objectContaining({ kind: 'preview' }));
   });
 
   it('offers no toggle and opens no buffer when the preview is unavailable', () => {

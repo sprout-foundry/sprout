@@ -3,7 +3,7 @@
 import { act, createElement, Fragment, useEffect, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { EditorManagerProvider, useEditorManager } from '../contexts/EditorManagerContext';
-import EditorWorkspace from './EditorWorkspace';
+import EditorSpaces from './EditorWorkspace';
 
 vi.mock('../contexts/NotificationContext', () => ({
   NotificationProvider: ({ children }) => children,
@@ -77,7 +77,7 @@ function Harness() {
     null,
     createElement('div', { 'data-testid': 'sizes' }, JSON.stringify(paneSizes)),
     createElement('div', { 'data-testid': 'update' }, String(typeof updatePaneSize)),
-    createElement(EditorWorkspace, {
+    createElement(EditorSpaces, {
       currentView: 'chat',
       chatProps,
       reviewProps,

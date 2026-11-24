@@ -68,7 +68,7 @@ vi.mock('../config/mode', () => ({
   supportsSettings: true,
   supportsLocalTerminal: false,
   supportsGit: true,
-  supportsWorkspaceSwitching: false,
+  supportsProjectFolderSwitching: false,
   supportsAutomations: true,
 }));
 
@@ -164,7 +164,7 @@ const sidebarHost = makeTestHost({
   git: true,
   automations: true,
   localTerminal: false,
-  workspaceSwitching: false,
+  projectFolderSwitching: false,
 });
 
 function makeModelState(overrides = {}) {

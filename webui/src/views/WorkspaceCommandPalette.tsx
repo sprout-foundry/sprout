@@ -11,7 +11,7 @@ import {
   useEventHandlerRegistration,
 } from '../services/commandHandlers';
 
-export interface WorkspaceCommandPaletteProps {
+export interface SpacesCommandPaletteProps {
   /**
    * Host commands to list alongside the built-in ones. They run through
    * `onExecuteCommand`, so a host-defined command needs no registration.
@@ -56,7 +56,7 @@ const MODE_FOR_COMMAND: Record<string, PaletteMode> = {
  * In the standalone app the app root owns the palette (and the whole page's
  * shortcuts), so this unit renders nothing there.
  */
-export function WorkspaceCommandPalette(props: WorkspaceCommandPaletteProps): JSX.Element | null {
+export function SpacesCommandPalette(props: SpacesCommandPaletteProps): JSX.Element | null {
   const [appShell] = useState(isAppShell);
   if (appShell) return null;
   return <ScopedCommandPalette {...props} />;
@@ -66,7 +66,7 @@ function openInEditor(path: string, line?: number): void {
   window.dispatchEvent(new CustomEvent('sprout:open-in-editor', { detail: { path, lineNumber: line } }));
 }
 
-function ScopedCommandPalette({ commands, onExecuteCommand, onOpenChange }: WorkspaceCommandPaletteProps): JSX.Element {
+function ScopedCommandPalette({ commands, onExecuteCommand, onOpenChange }: SpacesCommandPaletteProps): JSX.Element {
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState<PaletteMode>('all');
 
@@ -133,7 +133,7 @@ function ScopedCommandPalette({ commands, onExecuteCommand, onOpenChange }: Work
       commands={listed}
       isLoading={sources.isLoading}
       recentFiles={sources.recentFiles}
-      workspaceRoot={sources.workspaceRoot}
+      projectFolder={sources.projectFolder}
       onSearchFiles={sources.onSearchFiles}
       onSearchSymbols={sources.onSearchSymbols}
       onSearchWorkspaceSymbols={sources.onSearchWorkspaceSymbols}
@@ -143,4 +143,4 @@ function ScopedCommandPalette({ commands, onExecuteCommand, onOpenChange }: Work
   );
 }
 
-export default WorkspaceCommandPalette;
+export default SpacesCommandPalette;

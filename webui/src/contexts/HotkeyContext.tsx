@@ -27,14 +27,14 @@ const apiService = ApiService.getInstance();
 
 const HotkeyContext = createContext<HotkeyContextValue | null>(null);
 
-type WorkspaceKeyListener = (event: KeyboardEvent) => void;
+type SpacesKeyListener = (event: KeyboardEvent) => void;
 
 /**
  * Key listeners for presses inside the project folder, fed by an embed's
  * HotkeyProvider scope. Null when the provider owns the whole document
  * (standalone) or there is no provider.
  */
-const WorkspaceKeyScopeContext = createContext<Set<WorkspaceKeyListener> | null>(null);
+const SpacesKeyScopeContext = createContext<Set<SpacesKeyListener> | null>(null);
 
 /**
  * Listen for keydowns that belong to the project folder. In the standalone app
@@ -44,12 +44,12 @@ const WorkspaceKeyScopeContext = createContext<Set<WorkspaceKeyListener> | null>
  * the app and any HotkeyProvider nothing is the project folder's, so it listens to
  * nothing.
  */
-export function useWorkspaceKeyDown(listener: WorkspaceKeyListener): void {
-  const scope = useContext(WorkspaceKeyScopeContext);
+export function useSpacesKeyDown(listener: SpacesKeyListener): void {
+  const scope = useContext(SpacesKeyScopeContext);
   const listenerRef = useRef(listener);
   listenerRef.current = listener;
   useEffect(() => {
-    const forward: WorkspaceKeyListener = (event) => listenerRef.current(event);
+    const forward: SpacesKeyListener = (event) => listenerRef.current(event);
     if (scope) {
       scope.add(forward);
       return () => {
@@ -316,7 +316,7 @@ function HotkeyProviderRoot({ children }: HotkeyProviderProps): JSX.Element {
 
   // Workspace-scoped keydown handler (embeds): React's synthetic keydown on the
   // scope wrapper sees exactly the keys pressed inside the project folder tree.
-  const [scopedKeyListeners] = useState(() => new Set<WorkspaceKeyListener>());
+  const [scopedKeyListeners] = useState(() => new Set<SpacesKeyListener>());
   const handleScopedKeyDown = useCallback(
     (event: ReactKeyboardEvent) => {
       // Workspace-level key listeners (useWorkspaceKeyDown) see every key
@@ -403,11 +403,11 @@ function HotkeyProviderRoot({ children }: HotkeyProviderProps): JSX.Element {
   }
   return (
     <HotkeyContext.Provider value={value}>
-      <WorkspaceKeyScopeContext.Provider value={scopedKeyListeners}>
+      <SpacesKeyScopeContext.Provider value={scopedKeyListeners}>
         <div className="sprout-hotkey-scope" style={{ display: 'contents' }} onKeyDown={handleScopedKeyDown}>
           {children}
         </div>
-      </WorkspaceKeyScopeContext.Provider>
+      </SpacesKeyScopeContext.Provider>
     </HotkeyContext.Provider>
   );
 }

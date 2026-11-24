@@ -23,20 +23,20 @@ import { clientFetch } from '../services/clientSession';
 import { LocalEventsProvider } from '../services/localEventsProvider';
 import type { AppState } from '../types/app';
 import type { ViewKind } from './ViewsLayout';
-import { useWorkspaceFileTree } from './useWorkspaceFileTree';
-import { createEmptyChatState, useWorkspaceChatProps } from './WorkspaceChatContext';
-import type { WorkspaceChatViewProps } from './WorkspaceChatContext';
+import { useProjectFolderFileTree } from './useWorkspaceFileTree';
+import { createEmptyChatState, useSpacesChatProps } from './WorkspaceChatContext';
+import type { SpacesChatViewProps } from './WorkspaceChatContext';
 import { useWorkspaceEditorProps } from './WorkspaceEditorContext';
 
 /** The transport + fetch the chat unit and the provider stack share. */
-export interface SproutWorkspaceChatTransport {
+export interface SproutSpacesChatTransport {
   eventsProvider: EventsProvider;
   fetchFn: typeof fetch;
   /** The chat state the unit starts from (empty unless the host supplies one). */
   initialState: AppState;
 }
 
-export interface SproutWorkspaceChatOptions {
+export interface SproutSpacesChatOptions {
   /** The chat state to start from; defaults to an empty chat. */
   initialState?: AppState;
   /** The host's fetch; defaults to the app's adapter-aware `clientFetch`. */
@@ -48,10 +48,10 @@ export interface SproutWorkspaceChatOptions {
  * is created once and never replaced, so the provider stack and the chat unit
  * share one identity across re-renders.
  */
-export function useSproutWorkspaceChatTransport({
+export function useSproutSpacesChatTransport({
   initialState,
   fetchFn,
-}: SproutWorkspaceChatOptions = {}): SproutWorkspaceChatTransport {
+}: SproutSpacesChatOptions = {}): SproutSpacesChatTransport {
   const eventsProvider = useMemo(() => new LocalEventsProvider(), []);
   const initial = useMemo(() => initialState ?? createEmptyChatState(), [initialState]);
   return { eventsProvider, fetchFn: fetchFn ?? clientFetch, initialState: initial };
@@ -63,8 +63,8 @@ export function useSproutWorkspaceChatTransport({
  * values (the model picker, session restore, fork, …) that the unit does not
  * own; anything they set wins over the unit's value for that prop.
  */
-export function useSproutWorkspaceChatViewProps(chatOverrides?: Partial<ChatProps>): WorkspaceChatViewProps {
-  const { chatProps, reviewProps, diffState } = useWorkspaceChatProps();
+export function useSproutSpacesChatViewProps(chatOverrides?: Partial<ChatProps>): SpacesChatViewProps {
+  const { chatProps, reviewProps, diffState } = useSpacesChatProps();
   const merged = useMemo(
     () => (chatOverrides ? { ...chatProps, ...chatOverrides } : chatProps),
     [chatProps, chatOverrides],
@@ -73,7 +73,7 @@ export function useSproutWorkspaceChatViewProps(chatOverrides?: Partial<ChatProp
 }
 
 /** What the composition assembles beyond the units' own props. */
-export interface SproutWorkspaceViewAssembly {
+export interface SproutSpacesViewAssembly {
   /** Merged over the assembled chat props (see `useSproutWorkspaceChatViewProps`). */
   chatOverrides?: Partial<ChatProps>;
   /** The preview panel's open state and close handler, owned by the composition. */
@@ -104,13 +104,13 @@ export interface SproutWorkspaceViewAssembly {
  * The `editor` kind takes no props here: the composition renders the
  * assembled editor view for it (see `SproutWorkspace`).
  */
-export function useSproutWorkspaceViewProps(
+export function useSproutSpacesViewProps(
   overrides?: Partial<Record<ViewKind, object>>,
-  { chatOverrides, previewPanel }: SproutWorkspaceViewAssembly = {},
+  { chatOverrides, previewPanel }: SproutSpacesViewAssembly = {},
 ): Partial<Record<ViewKind, object>> {
-  const { chatProps } = useSproutWorkspaceChatViewProps(chatOverrides);
+  const { chatProps } = useSproutSpacesChatViewProps(chatOverrides);
   const editor = useWorkspaceEditorProps();
-  const fileTree = useWorkspaceFileTree({
+  const fileTree = useProjectFolderFileTree({
     onFileSelect: editor.fileTree.onFileSelect,
     selectedFile: editor.fileTree.selectedFile,
   });

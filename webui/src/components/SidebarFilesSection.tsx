@@ -16,7 +16,7 @@ import { getProjectFolderFs, listProjectFolderRepos } from '../services/workspac
 import type { FsEntry } from '../services/workspaceFs/types';
 import { parseRepoRef, repoDir } from '../services/workspaceFs/workspaceGit';
 import { repoSlug } from '../host/repoName';
-import { useWorkspaceFileTree } from '../views/useWorkspaceFileTree';
+import { useProjectFolderFileTree } from '../views/useWorkspaceFileTree';
 import GitHubRepoPicker from './GitHubRepoPicker';
 import { showThemedAlert, showThemedPrompt } from './ThemedDialog';
 import ProjectFolderCwdBar from './WorkspaceCwdBar';
@@ -48,13 +48,13 @@ async function findClonedReadme(repoDir: string): Promise<string | undefined> {
 
 interface SidebarFilesSectionProps {
   onFileClick?: (filePath: string, lineNumber?: number) => void;
-  workspaceRoot?: string;
+  projectFolder?: string;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
 
 const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>(
-  ({ onFileClick, workspaceRoot: projectFolder }, ref) => {
+  ({ onFileClick, projectFolder: projectFolder }, ref) => {
     const fileTreeRef = useRef<FileTreeHandle | null>(null);
     // Files the agent or a shell command creates or deletes show up without
     // a manual refresh; in place, so the tree doesn't flash.
@@ -80,9 +80,9 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
     const cwd = useProjectFolderCwd();
     const treeRoot = cwd === '' ? '.' : cwd;
     const handleFileSelect = useCallback((file: FileInfo) => onFileClick?.(file.path), [onFileClick]);
-    const treeProps = useWorkspaceFileTree({
+    const treeProps = useProjectFolderFileTree({
       rootPath: treeRoot,
-      workspaceRoot: projectFolder,
+      projectFolder: projectFolder,
       onFileSelect: handleFileSelect,
     });
 

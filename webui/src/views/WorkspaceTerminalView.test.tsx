@@ -99,7 +99,7 @@ import type { SproutHost } from '../host';
 import { setActiveHost } from '../host/accessor';
 import { HostProvider } from '../host/HostProvider';
 import { makeTestHost } from '../host/testHost';
-import { resolveWorkspaceTerminalBackend, WorkspaceTerminalView } from './WorkspaceTerminalView';
+import { resolveSpacesTerminalBackend, SpacesTerminalView } from './WorkspaceTerminalView';
 
 /** Records the URL of every socket the terminal opens; none ever connects. */
 class RecordingWebSocket {
@@ -138,7 +138,7 @@ function renderView(host: SproutHost) {
   setActiveHost(host);
   return render(
     <HostProvider host={host}>
-      <WorkspaceTerminalView />
+      <SpacesTerminalView />
     </HostProvider>,
   );
 }
@@ -158,9 +158,9 @@ afterEach(() => {
 
 describe('resolveWorkspaceTerminalBackend', () => {
   it('prefers the in-browser shell, then a declared local terminal, else none', () => {
-    expect(resolveWorkspaceTerminalBackend(wasmHost())).toBe('wasm');
-    expect(resolveWorkspaceTerminalBackend(ptyHost())).toBe('pty');
-    expect(resolveWorkspaceTerminalBackend(makeTestHost({ localTerminal: false }))).toBe('none');
+    expect(resolveSpacesTerminalBackend(wasmHost())).toBe('wasm');
+    expect(resolveSpacesTerminalBackend(ptyHost())).toBe('pty');
+    expect(resolveSpacesTerminalBackend(makeTestHost({ localTerminal: false }))).toBe('none');
   });
 });
 
@@ -209,7 +209,7 @@ describe('WorkspaceTerminalView', () => {
     setActiveHost(ptyHost());
     render(
       <HostProvider host={ptyHost()}>
-        <WorkspaceTerminalView backend="none" unavailableMessage="No shell here" />
+        <SpacesTerminalView backend="none" unavailableMessage="No shell here" />
       </HostProvider>,
     );
     expect(screen.getByTestId('workspace-terminal-unavailable')).toHaveTextContent('No shell here');

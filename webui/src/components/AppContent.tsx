@@ -17,7 +17,7 @@ import { useShallowStable } from '../hooks/useShallowStable';
 import { useInstances } from '../hooks/useInstances';
 import { type SectionTab } from '../hooks/useSidebarState';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
-import { useWorkspace } from '../hooks/useWorkspace';
+import { useProjectFolder } from '../hooks/useWorkspace';
 import { requestComposerFocus } from '../hooks/useComposerFocusRequest';
 import { ApiService } from '../services/api';
 import type { ChatSession } from '../services/chatSessions';
@@ -27,8 +27,8 @@ import { clientFetch } from '../services/clientSession';
 import { notificationBus } from '../services/notificationBus';
 import type { AppState, PerChatState, ViewType } from '../types/app';
 import { useLog } from '../utils/log';
-import type { WorkspaceModeId, WorkspaceShellProps } from '../views';
-import { SproutWorkspace, useWorkspaceMode, useWorkspaceChatProps, useWorkspaceEditor } from '../views';
+import type { SpaceId, SpacesShellProps } from '../views';
+import { SproutSpaces, useSpace, useSpacesChatProps, useWorkspaceEditor } from '../views';
 import { closeBuffersMatching } from './closeBuffers';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import { useCommandPaletteSources } from './CommandPalette/useCommandPaletteSources';
@@ -156,7 +156,7 @@ const AppContent: React.FC<AppContentProps> = ({
     activeBufferId,
     activePaneId,
     openFile,
-    openWorkspaceBuffer,
+    openProjectFolderBuffer,
     updateBufferTitle,
     updateBufferMetadata,
     closeBuffer,
@@ -176,7 +176,7 @@ const AppContent: React.FC<AppContentProps> = ({
   // resolved project folder is the user's home directory without consent, a
   // blocking overlay renders on top of the normal UI until the user either
   // selects a project folder or explicitly consents to running in home.
-  const { projectFolderInfo, setProjectFolder: setProjectFolderViaHook, consentHome } = useWorkspace();
+  const { projectFolderInfo, setProjectFolder: setProjectFolderViaHook, consentHome } = useProjectFolder();
   const handleConsentHome = useCallback(async () => {
     // Re-reads the project folder first; a successful consent reloads the page,
     // and a project restored meanwhile closes the modal through the store.
@@ -223,7 +223,7 @@ const AppContent: React.FC<AppContentProps> = ({
           params.autoSwitch,
         );
         if (chatId) {
-          openWorkspaceBuffer({
+          openProjectFolderBuffer({
             kind: 'chat',
             path: `__workspace/chat/${chatId}`,
             title: 'Worktree Chat',
@@ -241,7 +241,7 @@ const AppContent: React.FC<AppContentProps> = ({
         setWorktreeCreating(false);
       }
     },
-    [onCreateChatInWorktree, openWorkspaceBuffer],
+    [onCreateChatInWorktree, openProjectFolderBuffer],
   );
 
   const setAppState = useAppStoreSetState();
@@ -284,7 +284,7 @@ const AppContent: React.FC<AppContentProps> = ({
   // the merge view).
   const handleReviewChange = useCallback(
     (path: string, diff: { stats?: string; diff?: string }) => {
-      openWorkspaceBuffer({
+      openProjectFolderBuffer({
         kind: 'diff',
         path: `__workspace/changes/${path}`,
         title: `Agent change: ${path.split('/').pop() || path}`,
@@ -306,7 +306,7 @@ const AppContent: React.FC<AppContentProps> = ({
         },
       });
     },
-    [openWorkspaceBuffer],
+    [openProjectFolderBuffer],
   );
 
   // Opens the ModelSelectionModal for the currently active provider when
@@ -372,7 +372,7 @@ const AppContent: React.FC<AppContentProps> = ({
   // preview panel. A mockup is a view of the work, not a mode: `draw_mockup`
   // writes `design/mockup.html` and the panel shows it beside the code.
   const { present: hasMockup, loading: mockupLoading } = useMockupPresence();
-  const { mode: workspaceMode, modes: workspaceModes, select: selectWorkspaceMode } = useWorkspaceMode({ hasMockup });
+  const { mode: space, modes: spaces, select: selectSpace } = useSpace({ hasMockup });
 
   useChatSessionsSync({
     chatSessions,
@@ -382,7 +382,7 @@ const AppContent: React.FC<AppContentProps> = ({
     setBufferPinned,
     setBufferClosable,
     closeBuffer,
-    openWorkspaceBuffer,
+    openProjectFolderBuffer,
   });
   // Tab-driven switches (clicking a chat tab) must record the
   // mode pin too — the raw handler would switch without recording, leaving
@@ -398,7 +398,7 @@ const AppContent: React.FC<AppContentProps> = ({
         const ownTab = Array.from(buffersRef.current?.values() ?? []).find(
           (b) => b.kind === 'chat' && activeChatId && b.metadata?.chatId === activeChatId,
         );
-        openWorkspaceBuffer({
+        openProjectFolderBuffer({
           kind: 'chat',
           path: ownTab?.file.path ?? '__workspace/chat',
           title: ownTab?.file.name ?? 'Chat',
@@ -408,7 +408,7 @@ const AppContent: React.FC<AppContentProps> = ({
       }
       onViewChange(view);
     },
-    [onViewChange, openWorkspaceBuffer, buffersRef, activeChatId],
+    [onViewChange, openProjectFolderBuffer, buffersRef, activeChatId],
   );
 
   const { handleFileClick } = useFileHandler({ onViewChange, openFile: openProjectFolderFile });
@@ -428,7 +428,7 @@ const AppContent: React.FC<AppContentProps> = ({
       if (existing) {
         switchToBuffer(existing.id);
       } else {
-        openWorkspaceBuffer({
+        openProjectFolderBuffer({
           kind: 'chat',
           path: `__workspace/chat/${id}`,
           title: title ?? chatSessions?.find((c) => c.id === id)?.name ?? 'Chat',
@@ -442,7 +442,7 @@ const AppContent: React.FC<AppContentProps> = ({
       // A phone keyboard would cover the conversation being opened.
       if (!isMobile) void switched.finally(() => requestComposerFocus(id));
     },
-    [chatSessions, isMobile, onActiveChatChange, onViewChange, openWorkspaceBuffer, switchToBuffer],
+    [chatSessions, isMobile, onActiveChatChange, onViewChange, openProjectFolderBuffer, switchToBuffer],
   );
 
   /**
@@ -452,8 +452,8 @@ const AppContent: React.FC<AppContentProps> = ({
    * rather than each mode re-deriving it.
    */
   const handleSelectMode = useCallback(
-    (id: WorkspaceModeId) => {
-      selectWorkspaceMode(id);
+    (id: SpaceId) => {
+      selectSpace(id);
       // Reset the view only when it belongs to a surface the target mode does
       // not own (a mode that has since been unregistered). chat/editor/git and
       // plugin views are Code's own routes and must not be yanked.
@@ -461,7 +461,7 @@ const AppContent: React.FC<AppContentProps> = ({
         onViewChange('chat');
       }
     },
-    [selectWorkspaceMode, onViewChange, state.currentView],
+    [selectSpace, onViewChange, state.currentView],
   );
 
   const handleOutlineNavigateToSymbol = useCallback((line: number) => {
@@ -491,7 +491,7 @@ const AppContent: React.FC<AppContentProps> = ({
     onSidebarToggle,
     onTerminalExpandedChange,
     isTerminalExpanded,
-    openWorkspaceBuffer,
+    openProjectFolderBuffer,
     onViewChange,
     handlePrimaryViewChange,
     closeBuffer,
@@ -544,7 +544,7 @@ const AppContent: React.FC<AppContentProps> = ({
     commands: paletteCommands,
     isLoading: paletteIsLoading,
     recentFiles: paletteRecentFiles,
-    workspaceRoot: paletteProjectFolder,
+    projectFolder: paletteProjectFolder,
     onSearchFiles: handlePaletteSearchFiles,
     onSearchSymbols: handlePaletteSearchSymbols,
     onSearchWorkspaceSymbols: handlePaletteSearchWorkspaceSymbols,
@@ -617,13 +617,13 @@ const AppContent: React.FC<AppContentProps> = ({
     onGitStage,
     onGitUnstage,
     onGitDiscard,
-    openWorkspaceBuffer,
+    openProjectFolderBuffer,
   });
 
   const {
     gitStatus,
     gitBranches,
-    workspaceRoot: projectFolder,
+    projectFolder: projectFolder,
     activeDiffPath,
     activeDiff,
     diffMode,
@@ -692,7 +692,7 @@ const AppContent: React.FC<AppContentProps> = ({
   // The chat unit assembles the view props from its own chat state and the
   // app-specific callbacks below; the queue mapping and the input value live
   // there too, so the app no longer threads them through props.
-  const { chatProps, reviewProps, diffState } = useWorkspaceChatProps({
+  const { chatProps, reviewProps, diffState } = useSpacesChatProps({
     activeToolDetail,
     onToolDetailToggle: handleToolDetailToggle,
     onChatCleared: handleChatCleared,
@@ -726,7 +726,7 @@ const AppContent: React.FC<AppContentProps> = ({
   // The active mode's shell (workspaceMode.Shell) owns the <main> column and
   // the chrome that belongs to that mode — see workspaces/shell.ts. Each
   // shell reads only the slice of this object its mode renders.
-  const shellProps: WorkspaceShellProps = {
+  const shellProps: SpacesShellProps = {
     isMobile,
     isTablet,
     isSidebarOpen,
@@ -760,7 +760,7 @@ const AppContent: React.FC<AppContentProps> = ({
     git: {
       gitBranches,
       gitStatus,
-      workspaceRoot: projectFolder,
+      projectFolder: projectFolder,
     },
     // Ship payload. The deploy data source is the backend deploy API via the
     // app's services; until it is wired, Ship renders its not-yet-deployed
@@ -865,7 +865,7 @@ const AppContent: React.FC<AppContentProps> = ({
   // rebuild them each render (no stale closures) and keep the identity only
   // when they are unchanged.
   const gitPanel = useShallowStable(
-    buildGitPanelProps(gitProjectFolder, { openWorkspaceBuffer, onOpenFile: handleFileClick }),
+    buildGitPanelProps(gitProjectFolder, { openProjectFolderBuffer, onOpenFile: handleFileClick }),
   );
 
   return (
@@ -905,8 +905,8 @@ const AppContent: React.FC<AppContentProps> = ({
             sidebarCollapsed={sidebarCollapsed}
             onSidebarToggle={onSidebarToggle}
             conversations={conversations}
-            modes={workspaceModes}
-            activeModeId={workspaceMode.id}
+            modes={spaces}
+            activeModeId={space.id}
             onSelectMode={handleSelectMode}
             selectedSection={selectedSection}
             onSectionChange={onSectionChange}
@@ -919,13 +919,13 @@ const AppContent: React.FC<AppContentProps> = ({
             gitPanel={gitPanel}
           />
         </ErrorBoundary>
-        <SproutWorkspace
+        <SproutSpaces
           providers="ambient"
           project={project}
-          space={workspaceMode.id}
+          space={space.id}
           shellProps={shellProps}
           hasMockup={hasMockup}
-          onSpaceChange={selectWorkspaceMode}
+          onSpaceChange={selectSpace}
           className="app-workspace"
         />
       </>
@@ -966,7 +966,7 @@ const AppContent: React.FC<AppContentProps> = ({
         commands={paletteCommands}
         isLoading={paletteIsLoading}
         recentFiles={paletteRecentFiles}
-        workspaceRoot={paletteProjectFolder}
+        projectFolder={paletteProjectFolder}
         onSearchFiles={handlePaletteSearchFiles}
         onSearchSymbols={handlePaletteSearchSymbols}
         onSearchWorkspaceSymbols={handlePaletteSearchWorkspaceSymbols}

@@ -35,20 +35,20 @@ import { useHost, useHostCapabilities } from '../host';
 import { ADAPTER_INSTALLED_EVENT } from '../services/apiAdapter';
 import { useCommandHandler } from '../services/commandHandlers';
 import type { ToolExecution, ViewType } from '../types/app';
-import type { WorkspaceModeId } from '../workspaces/registry';
-import type { WorkspaceShellProps } from '../workspaces/shell';
+import type { SpaceId } from '../workspaces/registry';
+import type { SpacesShellProps } from '../workspaces/shell';
 import { useOpenInEditorRequests } from './SproutWorkspaceUnits';
 import { useProjectFolderGitState } from './useWorkspaceGitState';
 import type { ProjectFolderGitState } from './useWorkspaceGitState';
-import { useWorkspaceChat, useWorkspaceChatProps } from './WorkspaceChatContext';
-import { WorkspaceDockedTerminal, useToggleTerminalCommand } from './WorkspaceDockedTerminal';
+import { useSpacesChat, useSpacesChatProps } from './WorkspaceChatContext';
+import { SpacesDockedTerminal, useToggleTerminalCommand } from './WorkspaceDockedTerminal';
 import { useWorkspaceEditor } from './WorkspaceEditorContext';
-import { WorkspaceSidebar } from './WorkspaceSidebar';
-import { resolveWorkspaceTerminalBackend } from './WorkspaceTerminalView';
+import { SpacesSidebar } from './WorkspaceSidebar';
+import { resolveSpacesTerminalBackend } from './WorkspaceTerminalView';
 import './WorkspaceSpaceShell.css';
 
-const NO_GIT: WorkspaceShellProps['git']['gitBranches'] = { current: '', branches: [] };
-const NO_SHIP: WorkspaceShellProps['ship'] = { live: {}, availability: { canDeploy: false }, history: [] };
+const NO_GIT: SpacesShellProps['git']['gitBranches'] = { current: '', branches: [] };
+const NO_SHIP: SpacesShellProps['ship'] = { live: {}, availability: { canDeploy: false }, history: [] };
 
 /** The chat's own tab (the buffer manager opens it with the editor). */
 const CHAT_TAB = { kind: 'chat' as const, path: '__workspace/chat', title: 'Chat', ext: '.chat', isClosable: false };
@@ -98,12 +98,12 @@ const EDITOR_COMMANDS: readonly string[] = [
 const isEditorCommand = (id: string): boolean => EDITOR_COMMANDS.includes(id) || /^focus_tab_[1-9]$/.test(id);
 
 export interface ComposedSpaceShellProps {
-  Shell: ComponentType<WorkspaceShellProps>;
-  spaceId: WorkspaceModeId;
+  Shell: ComponentType<SpacesShellProps>;
+  spaceId: SpaceId;
   chatOverrides?: Partial<ChatProps>;
   hasMockup?: boolean;
   /** The project's workspace root (local/daemon hosts). */
-  workspaceRoot?: string;
+  projectFolder?: string;
   /** The project's display name, the sidebar's title. */
   projectName: string;
 }
@@ -129,15 +129,15 @@ function SpaceShellLayout({
   spaceId,
   chatOverrides,
   hasMockup,
-  workspaceRoot: projectFolder,
+  projectFolder: projectFolder,
   projectName,
   git,
 }: ComposedSpaceShellProps & { git: ProjectFolderGitState | null }): JSX.Element {
-  const { state, chat } = useWorkspaceChat();
-  const { buffers, activeBufferId, openWorkspaceBuffer } = useEditorManager();
+  const { state, chat } = useSpacesChat();
+  const { buffers, activeBufferId, openProjectFolderBuffer } = useEditorManager();
   const { openFile, activeFile } = useWorkspaceEditor();
   const host = useHost();
-  const terminalBackend = resolveWorkspaceTerminalBackend(host);
+  const terminalBackend = resolveSpacesTerminalBackend(host);
 
   const [currentView, setCurrentView] = useState<ViewType>('chat');
   const [isTerminalExpanded, setTerminalExpanded] = useState(false);
@@ -158,9 +158,9 @@ function SpaceShellLayout({
   );
 
   const showConversation = useCallback(() => {
-    openWorkspaceBuffer(CHAT_TAB);
+    openProjectFolderBuffer(CHAT_TAB);
     setCurrentView('chat');
-  }, [openWorkspaceBuffer]);
+  }, [openProjectFolderBuffer]);
 
   // The tool whose inline detail is open in the chat; a chat switch closes it.
   const [activeToolDetailId, setActiveToolDetailId] = useState<string | null>(null);
@@ -177,7 +177,7 @@ function SpaceShellLayout({
   // A turn's change strip opens the agent's change as a diff tab, as in the app.
   const onReviewChange = useCallback(
     (path: string, diff: { stats?: string; diff?: string }) => {
-      openWorkspaceBuffer({
+      openProjectFolderBuffer({
         kind: 'diff',
         path: `__workspace/changes/${path}`,
         title: `Agent change: ${path.split('/').pop() || path}`,
@@ -200,13 +200,13 @@ function SpaceShellLayout({
       });
       setCurrentView('editor');
     },
-    [openWorkspaceBuffer],
+    [openProjectFolderBuffer],
   );
 
   // A new untitled buffer: the Save As prompt on first save gives it a real
   // path. Ctrl+N / File▸New File reach this through the editor commands.
   const newFile = useCallback(() => {
-    openWorkspaceBuffer({
+    openProjectFolderBuffer({
       kind: 'file',
       path: `__workspace/untitled-${Date.now()}`,
       title: 'Untitled',
@@ -214,13 +214,13 @@ function SpaceShellLayout({
       isClosable: true,
     });
     setCurrentView('editor');
-  }, [openWorkspaceBuffer]);
+  }, [openProjectFolderBuffer]);
 
   const chatViewOverrides = useMemo(
     () => ({ activeToolDetail, onToolDetailToggle, onReviewChange, review: git?.review, diff: git?.diff }),
     [activeToolDetail, onToolDetailToggle, onReviewChange, git?.review, git?.diff],
   );
-  const assembled = useWorkspaceChatProps(chatViewOverrides);
+  const assembled = useSpacesChatProps(chatViewOverrides);
   const chatProps = useMemo(
     () => (chatOverrides ? { ...assembled.chatProps, ...chatOverrides } : assembled.chatProps),
     [assembled.chatProps, chatOverrides],
@@ -228,7 +228,7 @@ function SpaceShellLayout({
 
   useShellCommands({ showConversation, setCurrentView });
 
-  const shellChat = useMemo<WorkspaceShellProps['chat']>(
+  const shellChat = useMemo<SpacesShellProps['chat']>(
     () => ({
       perChatCache: state.perChatCache,
       activeChatId: state.activeChatId,
@@ -295,20 +295,20 @@ function SpaceShellLayout({
   );
 
   const mockupPresence = useMockupPresenceProbe();
-  const resolvedRoot = git?.workspace.workspaceRoot || projectFolder || '';
+  const resolvedRoot = git?.projectFolder.projectFolder || projectFolder || '';
 
   return (
     <>
       <div className="sprout-workspace-shell" data-testid="workspace-space-shell">
         <ErrorBoundary panelName="Sidebar">
-          <WorkspaceSidebar
+          <SpacesSidebar
             title={projectName}
             collapsed={sidebarCollapsed}
             onCollapsedChange={setSidebarCollapsed}
             conversations={conversations}
             git={git}
-            workspaceRoot={resolvedRoot || undefined}
-            selectedFile={activeFile?.workspacePath}
+            projectFolder={resolvedRoot || undefined}
+            selectedFile={activeFile?.projectFolderPath}
             onOpenFile={handleOpenFile}
             onToggleTerminal={
               terminalBackend !== 'none' ? () => setTerminalExpanded((expanded) => !expanded) : undefined
@@ -341,9 +341,9 @@ function SpaceShellLayout({
               present: mockupPresence.present || !!hasMockup,
             }}
             git={{
-              gitBranches: git?.workspace.gitBranches ?? NO_GIT,
-              gitStatus: git?.workspace.gitStatus ?? null,
-              workspaceRoot: resolvedRoot,
+              gitBranches: git?.projectFolder.gitBranches ?? NO_GIT,
+              gitStatus: git?.projectFolder.gitStatus ?? null,
+              projectFolder: resolvedRoot,
               projectName,
             }}
             ship={NO_SHIP}
@@ -353,7 +353,7 @@ function SpaceShellLayout({
               {/* Keyed by backend: when the agent moves (the in-browser shell
                   to a workspace daemon, in place), the terminal starts over on
                   the new transport rather than keeping sessions on the old. */}
-              <WorkspaceDockedTerminal
+              <SpacesDockedTerminal
                 key={terminalBackend}
                 backend={terminalBackend}
                 expanded={isTerminalExpanded}

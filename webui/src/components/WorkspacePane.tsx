@@ -7,7 +7,7 @@ import type { PerChatState } from '../types/app';
 import { previewWithPending, processingAfter } from '../utils/chatReplay';
 import Chat from './ChatView';
 import CompareTab from './CompareTab';
-import DiffWorkspaceTab from './DiffWorkspaceTab';
+import DiffSpacesTab from './DiffWorkspaceTab';
 import EditorPane from './EditorPane';
 import { PreviewSurface } from './PreviewPanel';
 import { useMockupPresence } from './useMockupPresence';
@@ -17,7 +17,7 @@ import './WorkspacePane.css';
 // plus its dependencies). Code-split so the chat-mode initial load doesn't
 // include it; the chunk is fetched only when the user opens the review
 // surface.
-const ReviewWorkspaceTab = lazy(() => import('./ReviewWorkspaceTab'));
+const ReviewSpacesTab = lazy(() => import('./ReviewWorkspaceTab'));
 
 // Re-export PerChatState for downstream consumers
 export type { PerChatState };
@@ -54,7 +54,7 @@ function defaultModel(stats: unknown): Record<string, unknown> {
   return typeof s.provider === 'string' && s.provider ? { provider: s.provider, model: s.model } : {};
 }
 
-interface WorkspacePaneProps {
+interface SpacesPaneProps {
   paneId: string;
   perChatCache?: Record<string, PerChatState>;
   /** Chat list entries, for a pane's model line before its chat reports metrics. */
@@ -100,7 +100,7 @@ const PreviewPaneContent: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   return <PreviewSurface showMockup={mockup.present} onClose={onClose} />;
 };
 
-const WorkspacePane: React.FC<WorkspacePaneProps> = React.memo(
+const SpacesPane: React.FC<SpacesPaneProps> = React.memo(
   ({ paneId, chatProps, reviewProps, diffState, perChatCache, activeChatId, chatSessions }) => {
     const { panes, buffers, closeBuffer } = useEditorManager();
     const pane = panes.find((item) => item.id === paneId);
@@ -181,7 +181,7 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = React.memo(
           fullModified !== undefined &&
           !contentsTruncated;
         return (
-          <DiffWorkspaceTab
+          <DiffSpacesTab
             path={diffPath || diffState.activeDiffPath || buffer.file.name}
             diff={isActiveDiff ? diffState.activeDiff : (buffer.metadata?.diff as GitDiffResponse | null) || null}
             diffMode={
@@ -210,7 +210,7 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = React.memo(
               </div>
             }
           >
-            <ReviewWorkspaceTab {...reviewProps} />
+            <ReviewSpacesTab {...reviewProps} />
           </Suspense>
         );
       case 'compare': {
@@ -245,6 +245,6 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = React.memo(
   },
 );
 
-WorkspacePane.displayName = 'WorkspacePane';
+SpacesPane.displayName = 'WorkspacePane';
 
-export default WorkspacePane;
+export default SpacesPane;

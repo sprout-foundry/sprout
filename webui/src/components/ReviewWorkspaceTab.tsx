@@ -19,7 +19,7 @@ interface DeepReviewResult {
   warnings?: string[];
 }
 
-interface ReviewWorkspaceTabProps {
+interface ReviewSpacesTabProps {
   review: DeepReviewResult | null;
   reviewError: string | null;
   reviewFixResult: string | null;
@@ -81,7 +81,7 @@ const compactReviewFixLogs = (logs: string[]): string[] => {
   return compacted;
 };
 
-function ReviewWorkspaceTab({
+function ReviewSpacesTab({
   review,
   reviewError,
   reviewFixResult,
@@ -90,7 +90,7 @@ function ReviewWorkspaceTab({
   isReviewLoading,
   isReviewFixing,
   onFixFromReview,
-}: ReviewWorkspaceTabProps): JSX.Element {
+}: ReviewSpacesTabProps): JSX.Element {
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
   const [fixPrompt, setFixPrompt] = useState('');
   const [fixPromptExpanded, setFixPromptExpanded] = useState(false);
@@ -593,4 +593,4 @@ function ReviewWorkspaceTab({
   );
 }
 
-export default ReviewWorkspaceTab;
+export default ReviewSpacesTab;

@@ -7,7 +7,7 @@
 // element selectors such as `select.styled-select`. Loaded on a host page
 // that stylesheet would leak onto the host's own DOM outside the mounted
 // workspace. This pass rewrites it so every rule applies only inside the
-// workspace root (`.sprout-workspace`, the class `SproutWorkspace` renders)
+// workspace root (`.sprout-workspace`, the class `SproutSpaces` renders)
 // and writes the result to the package's declared `dist/spaces.css`.
 //
 // The rewrite is textual and deliberately conservative: it rewrites only the
@@ -29,7 +29,7 @@ const packageDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const dist = resolve(packageDir, "dist");
 const chunksDir = resolve(dist, "chunks");
 
-/** The workspace root class `SproutWorkspace` renders (webui `sprout-workspace`). */
+/** The workspace root class `SproutSpaces` renders (webui `sprout-workspace`). */
 export const WORKSPACE_ROOT_CLASS = ".sprout-workspace";
 /** The stable artifact path the package ships and its `exports` map declares. */
 export const STYLESHEET_PATH = "dist/spaces.css";

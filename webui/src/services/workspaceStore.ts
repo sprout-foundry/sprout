@@ -28,7 +28,7 @@ import { setProjectFolderCwdScope } from './workspaceCwd';
 
 export interface ProjectFolderStoreState {
   /** Last successfully fetched project folder; kept across errors and disconnects. */
-  workspace: ProjectFolderResponse | null;
+  projectFolder: ProjectFolderResponse | null;
   loading: boolean;
   /** Message of the most recent failed fetch; cleared by the next success. */
   error: string | null;
@@ -42,7 +42,7 @@ const RETRY_BASE_MS = 1_000;
 const RETRY_MAX_MS = 30_000;
 const RETRY_MAX_ATTEMPTS = 8;
 
-const INITIAL_STATE: ProjectFolderStoreState = { workspace: null, loading: false, error: null, updatedAt: 0 };
+const INITIAL_STATE: ProjectFolderStoreState = { projectFolder: null, loading: false, error: null, updatedAt: 0 };
 
 let state: ProjectFolderStoreState = INITIAL_STATE;
 let sequence = 0;
@@ -87,7 +87,7 @@ function scheduleRetry(): void {
 function accept(projectFolder: ProjectFolderResponse): void {
   clearRetry();
   retryAttempt = 0;
-  emit({ workspace: projectFolder, loading: false, error: null, updatedAt: Date.now() });
+  emit({ projectFolder: projectFolder, loading: false, error: null, updatedAt: Date.now() });
   setProjectFolderCwdScope(projectFolder.project_folder);
 }
 
@@ -96,8 +96,8 @@ export function getProjectFolderState(): ProjectFolderStoreState {
 }
 
 /** The last known project folder ('' until the first successful fetch). */
-export function getWorkspaceRoot(): string {
-  return state.workspace?.project_folder ?? '';
+export function getProjectFolder(): string {
+  return state.projectFolder?.project_folder ?? '';
 }
 
 export function subscribeProjectFolder(listener: () => void): () => void {
@@ -131,7 +131,7 @@ export function refreshProjectFolder(options: { force?: boolean } = {}): Promise
       },
       (err: unknown) => {
         if (seq !== sequence) {
-          if (state.workspace) return latestOr(state.workspace);
+          if (state.projectFolder) return latestOr(state.projectFolder);
           throw err;
         }
         inflight = null;
@@ -147,7 +147,7 @@ export function refreshProjectFolder(options: { force?: boolean } = {}): Promise
 /** A superseded request hands its caller the newer result instead. */
 function latestOr(fallback: ProjectFolderResponse): Promise<ProjectFolderResponse> | ProjectFolderResponse {
   if (inflight) return inflight.promise;
-  return state.workspace ?? fallback;
+  return state.projectFolder ?? fallback;
 }
 
 /**
@@ -156,8 +156,8 @@ function latestOr(fallback: ProjectFolderResponse): Promise<ProjectFolderRespons
  * request.
  */
 export function ensureProjectFolder(maxAgeMs = WORKSPACE_STALE_AFTER_MS): Promise<ProjectFolderResponse> {
-  if (state.workspace && !inflight && Date.now() - state.updatedAt < maxAgeMs) {
-    return Promise.resolve(state.workspace);
+  if (state.projectFolder && !inflight && Date.now() - state.updatedAt < maxAgeMs) {
+    return Promise.resolve(state.projectFolder);
   }
   return refreshProjectFolder();
 }
@@ -174,12 +174,12 @@ export function applyProjectFolder(projectFolder: string, daemonRoot?: string): 
   if (!root) return refreshProjectFolder({ force: true }).catch(() => null);
   // The same root applied twice in a row (the caller, then the DOM event it
   // announced) shares the refetch the first apply started.
-  if (inflight && state.workspace?.project_folder === root && inflight.seq === lastApplySeq) {
+  if (inflight && state.projectFolder?.project_folder === root && inflight.seq === lastApplySeq) {
     return inflight.promise.catch(() => null);
   }
   sequence += 1;
   inflight = null;
-  const base: ProjectFolderResponse = state.workspace ?? {
+  const base: ProjectFolderResponse = state.projectFolder ?? {
     daemon_root: '',
     project_folder: '',
     is_project: false,
@@ -206,7 +206,7 @@ export function applyProjectFolder(projectFolder: string, daemonRoot?: string): 
 export function announceProjectFolderChanged(projectFolder: string, daemonRoot = ''): void {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(
-    new CustomEvent('sprout:workspace-changed', { detail: { workspaceRoot: projectFolder, daemonRoot } }),
+    new CustomEvent('sprout:workspace-changed', { detail: { projectFolder: projectFolder, daemonRoot } }),
   );
 }
 
@@ -221,8 +221,8 @@ function installWindowListeners(): void {
 }
 
 function onProjectFolderChangedEvent(event: Event): void {
-  const detail = (event as CustomEvent<{ workspaceRoot?: string; daemonRoot?: string }>).detail;
-  const root = typeof detail?.workspaceRoot === 'string' ? detail.workspaceRoot : '';
+  const detail = (event as CustomEvent<{ projectFolder?: string; daemonRoot?: string }>).detail;
+  const root = typeof detail?.projectFolder === 'string' ? detail.projectFolder : '';
   const daemonRoot = typeof detail?.daemonRoot === 'string' ? detail.daemonRoot : '';
   void applyProjectFolder(root, daemonRoot);
 }
@@ -233,7 +233,7 @@ function onVisibilityChange(): void {
 
 function refreshIfStale(): void {
   if (inflight) return;
-  if (state.workspace && Date.now() - state.updatedAt < WORKSPACE_STALE_AFTER_MS) return;
+  if (state.projectFolder && Date.now() - state.updatedAt < WORKSPACE_STALE_AFTER_MS) return;
   refreshProjectFolder().catch(() => {
     // best-effort: recorded in state and retried.
   });
@@ -253,7 +253,7 @@ export function useProjectFolderState(): ProjectFolderStoreState {
 
 /** Reactive project folder ('' until known; the last known root while disconnected). */
 export function useProjectFolder(): string {
-  return useProjectFolderState().workspace?.project_folder ?? '';
+  return useProjectFolderState().projectFolder?.project_folder ?? '';
 }
 
 export function __resetProjectFolderStoreForTests(): void {

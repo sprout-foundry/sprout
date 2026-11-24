@@ -2,7 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NotificationProvider } from '@sprout/ui';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import DiffWorkspaceTab from './DiffWorkspaceTab';
+import DiffSpacesTab from './DiffWorkspaceTab';
 
 vi.mock('../services/fileAccess', () => ({
   writeFileWithConsent: vi.fn().mockResolvedValue(new Response('ok', { status: 200 })),
@@ -69,7 +69,7 @@ const baseProps = {
 
 describe('DiffWorkspaceTab default view seeding', () => {
   it('defaults to text view for working-tree diffs', () => {
-    render(<DiffWorkspaceTab {...baseProps} fullOriginal="a\n" fullModified="b\n" canSave />);
+    render(<DiffSpacesTab {...baseProps} fullOriginal="a\n" fullModified="b\n" canSave />);
     expect(container!.querySelector('[data-testid="diff-surface"]')).not.toBeNull();
     expect(container!.querySelector('[data-testid="merge-view"]')).toBeNull();
     // The deferred/expensive CodeMirror mount never happens for text-first.
@@ -77,13 +77,13 @@ describe('DiffWorkspaceTab default view seeding', () => {
   });
 
   it('opens in merge view when defaultView="merge"', () => {
-    render(<DiffWorkspaceTab {...baseProps} defaultView="merge" fullOriginal="a\n" fullModified="b\n" canSave />);
+    render(<DiffSpacesTab {...baseProps} defaultView="merge" fullOriginal="a\n" fullModified="b\n" canSave />);
     expect(container!.querySelector('[data-testid="merge-view"]')).not.toBeNull();
     expect(container!.querySelector('[data-testid="diff-surface"]')).toBeNull();
   });
 
   it('opens in text view when defaultView="text" (commit/history diffs)', () => {
-    render(<DiffWorkspaceTab {...baseProps} defaultView="text" />);
+    render(<DiffSpacesTab {...baseProps} defaultView="text" />);
     expect(container!.querySelector('[data-testid="diff-surface"]')).not.toBeNull();
     expect(container!.querySelector('[data-testid="merge-view"]')).toBeNull();
     // The deferred/expensive CodeMirror mount never happens for text-first.

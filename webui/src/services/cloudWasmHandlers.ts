@@ -494,7 +494,7 @@ function handleWasmFileIndex(shell: WasmShell, _fullUrl: string): Response {
       }
       return jsonOk({
         message: 'success',
-        workspace: root,
+        projectFolder: root,
         files: (parsed.files ?? []).map((f) => ({
           name: f.name,
           path: f.path,
@@ -547,7 +547,7 @@ function handleWasmFileIndex(shell: WasmShell, _fullUrl: string): Response {
 
   return jsonOk({
     message: 'success',
-    workspace: root,
+    projectFolder: root,
     files,
     truncated,
     file_count: files.length,

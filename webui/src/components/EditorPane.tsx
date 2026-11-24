@@ -86,7 +86,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     updateBufferScroll,
     setBufferModified,
     splitPane,
-    openWorkspaceBuffer,
+    openProjectFolderBuffer,
     setBufferLanguageOverride,
     isLinkedScrollEnabled,
     toggleLinkedScroll,
@@ -209,12 +209,12 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   // assignment, a stale value from the first render would persist. The
   // legacy code used `useRef(openWorkspaceBuffer)` which silently *never*
   // updated; that's the bug we're fixing here.
-  const openProjectFolderBufferRef = useRef<OpenProjectFolderBufferFn>(openWorkspaceBuffer);
-  openProjectFolderBufferRef.current = openWorkspaceBuffer;
+  const openProjectFolderBufferRef = useRef<OpenProjectFolderBufferFn>(openProjectFolderBuffer);
+  openProjectFolderBufferRef.current = openProjectFolderBuffer;
 
   const { semanticHandlerRefs, buildKeymaps } = useEditorKeymaps(hotkeys, viewRef, bufferRef);
 
-  const semantic = useEditorSemantic(viewRef, bufferRef, localContent, isSemanticLanguage, openWorkspaceBuffer);
+  const semantic = useEditorSemantic(viewRef, bufferRef, localContent, isSemanticLanguage, openProjectFolderBuffer);
 
   useEffect(() => {
     semanticHandlerRefs.handleGoToDefinition.current = semantic.handleGoToDefinition;
@@ -446,7 +446,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     fileType.isSvgFile,
     fileType.isHtmlFile,
     splitPane,
-    openWorkspaceBuffer,
+    openProjectFolderBuffer,
     paneId,
   );
 
@@ -582,7 +582,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         saving={saving}
         breadcrumbProps={{
           filePath: buffer.file.path,
-          workspaceRoot: contextMenu.workspaceRoot,
+          projectFolder: contextMenu.projectFolder,
           // Phones have no tab strip to name the file or mark it unsaved.
           showFileName: isMobileViewport,
           modified: isMobileViewport && buffer.isModified,

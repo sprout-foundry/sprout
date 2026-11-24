@@ -12,7 +12,7 @@ export interface RawAgentEvent {
 
 /** Context the translation needs: how to read a file and where the workspace is. */
 export interface EventMappingContext {
-  workspaceRoot: string;
+  projectFolder: string;
   readFile(path: string): string | null;
 }
 
@@ -84,7 +84,7 @@ function mapMockupEvent(
 ): MockupEvent {
   const event: MockupEvent = { type: 'mockup', phase, data };
   const path = str(data.path) ?? str(data.file_path);
-  if (path) event.path = toProjectFolderPath(toAbsolutePath(path, ctx.workspaceRoot), ctx.workspaceRoot);
+  if (path) event.path = toProjectFolderPath(toAbsolutePath(path, ctx.projectFolder), ctx.projectFolder);
   if (phase === 'chunk') event.chunk = str(data.chunk) ?? str(data.html) ?? str(data.content) ?? '';
   if (phase === 'done') {
     const html = str(data.html) ?? str(data.content);
@@ -151,10 +151,10 @@ export function mapAgentEvent(raw: RawAgentEvent, ctx: EventMappingContext): Age
       const absolute = str(data.file_path);
       if (!absolute) return null;
       const action = str(data.action) ?? 'write';
-      const abs = toAbsolutePath(absolute, ctx.workspaceRoot);
+      const abs = toAbsolutePath(absolute, ctx.projectFolder);
       return {
         type: 'file_written',
-        path: toProjectFolderPath(abs, ctx.workspaceRoot),
+        path: toProjectFolderPath(abs, ctx.projectFolder),
         action,
         content: action === 'deleted' ? null : ctx.readFile(abs),
       };
@@ -218,7 +218,7 @@ export class FileWriteTracker {
       const id = String(raw.data?.tool_call_id ?? '');
       if (!spec) return [];
       const args = parseArgs(raw.data?.arguments) ?? partialPathArgs(raw.data?.arguments);
-      const paths = spec.paths(args).map((p) => toProjectFolderPath(toAbsolutePath(p, this.ctx.workspaceRoot), this.ctx.workspaceRoot));
+      const paths = spec.paths(args).map((p) => toProjectFolderPath(toAbsolutePath(p, this.ctx.projectFolder), this.ctx.projectFolder));
       if (paths.length) this.pending.set(id, { action: spec.action, paths });
       return [];
     }
@@ -230,7 +230,7 @@ export class FileWriteTracker {
       const out: AgentEvent[] = [];
       for (const path of call.paths) {
         if (this.reported.delete(path)) continue;
-        const content = this.ctx.readFile(toAbsolutePath(path, this.ctx.workspaceRoot));
+        const content = this.ctx.readFile(toAbsolutePath(path, this.ctx.projectFolder));
         if (content === null) continue;
         out.push({ type: 'file_written', path, action: call.action, content });
       }

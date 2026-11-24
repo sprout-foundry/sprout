@@ -71,7 +71,7 @@ vi.mock('../services/cloudAdapter', async () => {
       supportsSSH = false;
       supportsGit = true;
       supportsChat = true;
-      supportsWorkspaceSwitching = false;
+      supportsProjectFolderSwitching = false;
       supportsExport = false;
       supportsInstances = false;
       supportsLocalTerminal = false;
@@ -116,7 +116,7 @@ import type { SproutHost } from '../host';
 import { setActiveHost } from '../host/accessor';
 import { headlessHost } from '../host/HostProvider';
 import { WebSocketService } from '../services/websocket';
-import { SproutWorkspace } from './SproutWorkspace';
+import { SproutSpaces } from './SproutWorkspace';
 import type { ViewsArrangement } from './ViewsLayout';
 
 const SOURCE_CONTROL: ViewsArrangement = { left: ['git'], center: ['editor'], right: ['search'], overlay: [] };
@@ -179,7 +179,7 @@ const pageCalls = (fragment: string) => pageFetch.mock.calls.filter(([input]) =>
 describe('SproutWorkspace source control and search views (wasm host)', () => {
   it('shows status from browser git, commits through it, and opens a changed file in the editor', async () => {
     render(
-      <SproutWorkspace
+      <SproutSpaces
         project={{ id: 'acme/widgets', root: '' }}
         space="code"
         host={wasmHost()}
@@ -230,7 +230,7 @@ describe('SproutWorkspace source control and search views (wasm host)', () => {
     document.addEventListener('editor-goto-line', onGoto);
     try {
       render(
-        <SproutWorkspace
+        <SproutSpaces
           project={{ id: 'acme/widgets', root: '' }}
           space="code"
           host={wasmHost()}

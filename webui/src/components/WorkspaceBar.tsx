@@ -5,7 +5,7 @@ import { getSSHProxyContext } from '../services/clientSession';
 import { refreshProjectFolder, useProjectFolderState } from '../services/workspaceStore';
 import { debugLog } from '../utils/log';
 
-interface WorkspaceBarProps {
+interface SpacesBarProps {
   isConnected: boolean;
   /** Hide on mobile when sidebar is open */
   isMobileMenuOpen?: boolean;
@@ -17,12 +17,12 @@ interface BarState {
   isRemote: boolean;
 }
 
-const WorkspaceBar: React.FC<WorkspaceBarProps> = ({ isConnected, isMobileMenuOpen = false, isMobile = false }) => {
-  const { workspaceSwitching: projectFolderSwitching } = useHostCapabilities();
+const SpacesBar: React.FC<SpacesBarProps> = ({ isConnected, isMobileMenuOpen = false, isMobile = false }) => {
+  const { projectFolderSwitching: projectFolderSwitching } = useHostCapabilities();
   // A hosted build (bearer auth) runs on the host's machines, so "Local" would
   // be wrong; it names a host only when attached to a remote one.
   const hosted = useHost().transport.authMode === 'bearer';
-  const { workspace: projectFolder } = useProjectFolderState();
+  const { projectFolder: projectFolder } = useProjectFolderState();
 
   useEffect(() => {
     if (!isConnected) return;
@@ -63,4 +63,4 @@ const WorkspaceBar: React.FC<WorkspaceBarProps> = ({ isConnected, isMobileMenuOp
   );
 };
 
-export default WorkspaceBar;
+export default SpacesBar;

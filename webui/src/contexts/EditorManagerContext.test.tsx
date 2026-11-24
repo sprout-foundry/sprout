@@ -195,7 +195,7 @@ describe('EditorManager tab pane management', () => {
     // Open a diff project folder buffer (non-chat kind → targets activePaneId)
     let diffId: string;
     await actAndUpdateWithDelay(() => {
-      diffId = ctx().openWorkspaceBuffer({
+      diffId = ctx().openProjectFolderBuffer({
         kind: 'diff',
         path: '__workspace/diff-deactivate-test',
         title: 'Diff Test',
@@ -230,7 +230,7 @@ describe('EditorManager tab pane management', () => {
 
     let buf1Id: string;
     await actAndUpdateWithDelay(() => {
-      buf1Id = ctx().openWorkspaceBuffer({
+      buf1Id = ctx().openProjectFolderBuffer({
         kind: 'review',
         path,
         title: 'Review Test',
@@ -242,7 +242,7 @@ describe('EditorManager tab pane management', () => {
     // Open again with the same path – must find the existing buffer
     let buf2Id: string;
     await actAndUpdateWithDelay(() => {
-      buf2Id = ctx().openWorkspaceBuffer({
+      buf2Id = ctx().openProjectFolderBuffer({
         kind: 'review',
         path,
         title: 'Review Test Updated',
@@ -481,7 +481,7 @@ describe('paneId preservation fix', () => {
     // Open a review project folder buffer (non-chat targets activePaneId)
     let reviewId: string;
     await actAndUpdateWithDelay(() => {
-      reviewId = ctx().openWorkspaceBuffer({
+      reviewId = ctx().openProjectFolderBuffer({
         kind: 'review',
         path: '__workspace/review-preserve-test',
         title: 'Review',

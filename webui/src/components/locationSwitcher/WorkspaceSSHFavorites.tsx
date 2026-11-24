@@ -4,7 +4,7 @@ import type { RemoteProjectFolderContext } from './types';
 
 export interface ProjectFolderSSHFavoritesProps {
   remoteContext: RemoteProjectFolderContext;
-  workspaceRoot: string;
+  projectFolder: string;
   favorites: string[];
   isSwitching: boolean;
   onSelectFavorite: (path: string) => Promise<void>;
@@ -15,7 +15,7 @@ export interface ProjectFolderSSHFavoritesProps {
 
 export const ProjectFolderSSHFavorites: React.FC<ProjectFolderSSHFavoritesProps> = ({
   remoteContext,
-  workspaceRoot: projectFolder,
+  projectFolder: projectFolder,
   favorites,
   isSwitching,
   onSelectFavorite,

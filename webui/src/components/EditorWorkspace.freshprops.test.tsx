@@ -25,7 +25,7 @@ vi.mock('../contexts/EditorManagerContext', () => ({
     paneSizes: {},
     updatePaneSize: vi.fn(),
     maxPanes: 6,
-    openWorkspaceBuffer: vi.fn(),
+    openProjectFolderBuffer: vi.fn(),
     isAutoSaveEnabled: false,
     whitespaceRenderingMode: 'boundary',
     isFormatOnSaveEnabled: false,
@@ -48,7 +48,7 @@ vi.mock('@sprout/ui', () => ({
   SkeletonText: () => null,
   CommandInput: () => null,
 }));
-import EditorWorkspace from './EditorWorkspace';
+import EditorSpaces from './EditorWorkspace';
 
 const baseProps = {
   currentView: 'chat' as const,
@@ -59,10 +59,10 @@ const baseProps = {
 
 describe('EditorWorkspace pane props', () => {
   it('hands the pane the chat state of the current render, not the previous one', () => {
-    const { rerender } = render(<EditorWorkspace {...baseProps} chatProps={{ messages: [] }} />);
+    const { rerender } = render(<EditorSpaces {...baseProps} chatProps={{ messages: [] }} />);
     expect(screen.getByTestId('pane-messages').textContent).toBe('0');
 
-    rerender(<EditorWorkspace {...baseProps} chatProps={{ messages: [{ id: 'm1' }] }} />);
+    rerender(<EditorSpaces {...baseProps} chatProps={{ messages: [{ id: 'm1' }] }} />);
     expect(screen.getByTestId('pane-messages').textContent).toBe('1');
   });
 });

@@ -167,7 +167,7 @@ export async function createAgent(options: CreateAgentOptions): Promise<Headless
     // Several chats share the module; keep only this chat's events.
     const eventChat = raw.data?.chat_id;
     if (typeof eventChat === 'string' && eventChat !== '' && eventChat !== chatId) return;
-    const ctx = { workspaceRoot: projectFolderOf(bridge), readFile: (p: string) => readProjectFolderFile(bridge, p) };
+    const ctx = { projectFolder: projectFolderOf(bridge), readFile: (p: string) => readProjectFolderFile(bridge, p) };
     const event = mapAgentEvent(raw, ctx);
     if (event?.type === 'steer_delivered') {
       steers.shift();

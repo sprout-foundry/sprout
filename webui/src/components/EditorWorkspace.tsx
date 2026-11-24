@@ -6,7 +6,7 @@ import type { PerChatState, ViewType } from '../types/app';
 import EditorTabs from './EditorTabs';
 import EditorWithOutline from './EditorWithOutline';
 import ResizeHandle from './ResizeHandle';
-import WorkspacePane from './WorkspacePane';
+import SpacesPane from './WorkspacePane';
 import Chat from './ChatView';
 import { useIsMobileViewport } from '../hooks/useMobileSheets';
 import { MobileChatSwitcher } from './chat/MobileChatSwitcher';
@@ -25,7 +25,7 @@ const SPLIT_COMMANDS = new Map<string, 'vertical' | 'horizontal'>([
 const isPaneCommand = (commandId: string): boolean =>
   /^focus_split_\d+$/.test(commandId) || SPLIT_COMMANDS.has(commandId);
 
-export interface EditorWorkspaceProps {
+export interface EditorSpacesProps {
   currentView: ViewType;
   perChatCache?: Record<string, PerChatState>;
   activeChatId?: string | null;
@@ -48,9 +48,9 @@ export interface EditorWorkspaceProps {
   onDeleteChat?: (id: string, options?: { removeWorktree?: boolean }) => Promise<void> | void;
   onDeleteAllChats?: () => void;
   onRenameChat?: (id: string, name: string) => void;
-  chatProps: React.ComponentProps<typeof WorkspacePane>['chatProps'];
-  reviewProps: React.ComponentProps<typeof WorkspacePane>['reviewProps'];
-  diffState: React.ComponentProps<typeof WorkspacePane>['diffState'];
+  chatProps: React.ComponentProps<typeof SpacesPane>['chatProps'];
+  reviewProps: React.ComponentProps<typeof SpacesPane>['reviewProps'];
+  diffState: React.ComponentProps<typeof SpacesPane>['diffState'];
   handleOutlineNavigateToSymbol: (line: number) => void;
   /** Called when the user clicks Back from a non-chat view. */
   onViewChange?: (view: ViewType) => void;
@@ -109,14 +109,14 @@ const EditorPaneComponent: React.FC<{
   onClick?: () => void;
   perChatCache?: Record<string, PerChatState>;
   activeChatId?: string | null;
-  chatProps: React.ComponentProps<typeof WorkspacePane>['chatProps'];
-  reviewProps: React.ComponentProps<typeof WorkspacePane>['reviewProps'];
-  diffState: React.ComponentProps<typeof WorkspacePane>['diffState'];
-  chatSessions?: React.ComponentProps<typeof WorkspacePane>['chatSessions'];
+  chatProps: React.ComponentProps<typeof SpacesPane>['chatProps'];
+  reviewProps: React.ComponentProps<typeof SpacesPane>['reviewProps'];
+  diffState: React.ComponentProps<typeof SpacesPane>['diffState'];
+  chatSessions?: React.ComponentProps<typeof SpacesPane>['chatSessions'];
 }> = ({ paneId, onClick, perChatCache, activeChatId, chatProps, reviewProps, diffState, chatSessions }) => {
   return (
     <div className="editor-pane-host" onClick={onClick}>
-      <WorkspacePane
+      <SpacesPane
         paneId={paneId}
         perChatCache={perChatCache}
         activeChatId={activeChatId}
@@ -129,7 +129,7 @@ const EditorPaneComponent: React.FC<{
   );
 };
 
-const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
+const EditorSpaces: React.FC<EditorSpacesProps> = ({
   currentView,
   perChatCache,
   activeChatId,
@@ -165,7 +165,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     paneSizes,
     updatePaneSize,
     maxPanes,
-    openWorkspaceBuffer,
+    openProjectFolderBuffer,
     closeBuffer,
   } = useEditorManager();
 
@@ -377,7 +377,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
                 // spinner; on resolve open the real (path-keyed) buffer and
                 // drop the placeholder — mutating the placeholder in place
                 // races the session-list sync and can double-tab the chat.
-                const placeholderId = openWorkspaceBuffer({
+                const placeholderId = openProjectFolderBuffer({
                   kind: 'chat',
                   path: `__workspace/chat/creating-${Date.now()}`,
                   title: 'Creating…',
@@ -386,7 +386,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
                   metadata: { creating: true },
                 });
                 const swapInReal = (newId: string) => {
-                  openWorkspaceBuffer({
+                  openProjectFolderBuffer({
                     kind: 'chat',
                     path: `__workspace/chat/${newId}`,
                     title: 'New Chat',
@@ -451,7 +451,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
         </div>
       );
     },
-    [onCreateChat, canCloseSplit, canSplit, switchPane, openWorkspaceBuffer, closeBuffer, onActiveChatChange],
+    [onCreateChat, canCloseSplit, canSplit, switchPane, openProjectFolderBuffer, closeBuffer, onActiveChatChange],
   );
 
   const renderPaneById = useCallback(
@@ -728,7 +728,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
         </div>
         {!chatBufferOpen && (
           <div className="mobile-peer-surface" data-active={true} data-testid="mobile-editor-surface">
-            <WorkspacePane
+            <SpacesPane
               paneId={activePaneId ?? panes[0]?.id ?? ''}
               perChatCache={perChatCache}
               activeChatId={activeChatId}
@@ -759,4 +759,4 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   );
 };
 
-export default EditorWorkspace;
+export default EditorSpaces;

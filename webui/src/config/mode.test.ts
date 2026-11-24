@@ -61,7 +61,7 @@ describe('mode config (default / local mode)', () => {
   });
 
   it('exports supportsWorkspaceSwitching as true in local mode', () => {
-    expect(modeModule.supportsWorkspaceSwitching).toBe(true);
+    expect(modeModule.supportsProjectFolderSwitching).toBe(true);
   });
 
   it('exports supportsExport as true in local mode', () => {
@@ -126,7 +126,7 @@ describe('mode config (cloud mode)', () => {
   });
 
   it('exports supportsWorkspaceSwitching as true in cloud mode with no host (local default)', () => {
-    expect(modeModule.supportsWorkspaceSwitching).toBe(true);
+    expect(modeModule.supportsProjectFolderSwitching).toBe(true);
   });
 
   it('exports supportsExport as true in cloud mode with no host (local default)', () => {
@@ -159,7 +159,7 @@ describe('mode config (invalid env var value)', () => {
     expect(modeModule.supportsSSH).toBe(true);
     expect(modeModule.supportsGit).toBe(true);
     expect(modeModule.supportsChat).toBe(true);
-    expect(modeModule.supportsWorkspaceSwitching).toBe(true);
+    expect(modeModule.supportsProjectFolderSwitching).toBe(true);
     expect(modeModule.supportsExport).toBe(true);
     expect(modeModule.supportsInstances).toBe(false);
     expect(modeModule.supportsLocalTerminal).toBe(true);
@@ -235,7 +235,7 @@ describe('mode config flag invariants', () => {
     });
 
     it('supportsWorkspaceSwitching is true without an adapter (local default)', () => {
-      expect(modeModule.supportsWorkspaceSwitching).toBe(true);
+      expect(modeModule.supportsProjectFolderSwitching).toBe(true);
     });
 
     it('supportsExport is true without an adapter (local default)', () => {
@@ -311,7 +311,7 @@ describe('with CloudAdapter installed', () => {
     expect(modeModule.supportsSSH).toBe(false);
     expect(modeModule.supportsGit).toBe(true);
     expect(modeModule.supportsChat).toBe(true);
-    expect(modeModule.supportsWorkspaceSwitching).toBe(false);
+    expect(modeModule.supportsProjectFolderSwitching).toBe(false);
     expect(modeModule.supportsExport).toBe(false);
     expect(modeModule.supportsInstances).toBe(true);
     expect(modeModule.supportsLocalTerminal).toBe(false);
@@ -352,7 +352,7 @@ describe('with custom adapter installed', () => {
       supportsSSH: false,
       supportsGit: false,
       supportsChat: true,
-      supportsWorkspaceSwitching: false,
+      supportsProjectFolderSwitching: false,
       supportsExport: false,
       supportsInstances: true,
       supportsLocalTerminal: true,
@@ -365,7 +365,7 @@ describe('with custom adapter installed', () => {
     expect(modeModule.supportsSSH).toBe(false);
     expect(modeModule.supportsGit).toBe(false);
     expect(modeModule.supportsChat).toBe(true);
-    expect(modeModule.supportsWorkspaceSwitching).toBe(false);
+    expect(modeModule.supportsProjectFolderSwitching).toBe(false);
     expect(modeModule.supportsExport).toBe(false);
     expect(modeModule.supportsInstances).toBe(true);
     expect(modeModule.supportsLocalTerminal).toBe(true);
@@ -399,7 +399,7 @@ describe('live capability refresh (adapter installs AFTER mode.ts loads)', () =>
   // install BEFORE import).
   it('flags re-evaluate when ADAPTER_INSTALLED_EVENT fires post-load', async () => {
     const modeModule = await import('./mode');
-    expect(modeModule.supportsWorkspaceSwitching).toBe(true); // local default
+    expect(modeModule.supportsProjectFolderSwitching).toBe(true); // local default
     expect(modeModule.supportsLocalTerminal).toBe(true);
 
     const { installAdapter } = await import('../services/apiAdapter');
@@ -413,7 +413,7 @@ describe('live capability refresh (adapter installs AFTER mode.ts loads)', () =>
       supportsSSH: false,
       supportsGit: false,
       supportsChat: true,
-      supportsWorkspaceSwitching: false,
+      supportsProjectFolderSwitching: false,
       supportsExport: false,
       supportsInstances: true,
       supportsLocalTerminal: false,
@@ -421,7 +421,7 @@ describe('live capability refresh (adapter installs AFTER mode.ts loads)', () =>
     });
 
     // Live bindings: importers see the new values with no re-import.
-    expect(modeModule.supportsWorkspaceSwitching).toBe(false);
+    expect(modeModule.supportsProjectFolderSwitching).toBe(false);
     expect(modeModule.supportsLocalTerminal).toBe(false);
     expect(modeModule.supportsSSH).toBe(false);
     expect(modeModule.supportsGit).toBe(false);
@@ -445,7 +445,7 @@ describe('live capability refresh (adapter installs AFTER mode.ts loads)', () =>
       // deliberately omitted (undefined) — capability() falls back per-key.
       supportsGit: undefined,
       supportsChat: undefined,
-      supportsWorkspaceSwitching: undefined,
+      supportsProjectFolderSwitching: undefined,
       supportsExport: undefined,
       supportsInstances: undefined,
       supportsLocalTerminal: undefined,

@@ -43,7 +43,7 @@ import { clientFetch } from '../services/clientSession';
 import { createHostChatSessionsApi, registerActiveChatSessionsProject } from '../services/hostChatSessions';
 import { reportInterruptedInPageRuns } from '../services/inPageRunGuard';
 import type { AppState } from '../types/app';
-import type { WorkspaceShellChat } from '../workspaces/shell';
+import type { SpacesShellChat } from '../workspaces/shell';
 
 // ── The context ──────────────────────────────────────────────────────────
 
@@ -53,7 +53,7 @@ import type { WorkspaceShellChat } from '../workspaces/shell';
  * compose its own chat surface reads these directly; the assembled view props
  * come from `useWorkspaceChatProps`.
  */
-export interface WorkspaceChatValue {
+export interface SpacesChatValue {
   /** The chat slice of the app state (transcript, caches, sessions, …). */
   state: AppState;
   setState: AppStoreSetState;
@@ -64,14 +64,14 @@ export interface WorkspaceChatValue {
   /** The session manager: list/create/switch/delete/rename and send/queue. */
   chat: UseChatSessionManagerReturn;
   /** Refs the app shares with its own handlers (provider-change tracking). */
-  refs: WorkspaceChatRefs;
+  refs: SpacesChatRefs;
 }
 
 /**
  * The refs the chat unit owns. `pendingProviderRef` is shared with the app's
  * model/provider handlers, so it is exposed rather than kept private.
  */
-export interface WorkspaceChatRefs {
+export interface SpacesChatRefs {
   activeRequestsRef: React.MutableRefObject<number>;
   activeChatIdRef: React.MutableRefObject<string | null>;
   queuedMessagesRef: React.MutableRefObject<QueuedMessage[]>;
@@ -82,7 +82,7 @@ export interface WorkspaceChatRefs {
   lastConnectionStateRef: React.MutableRefObject<boolean>;
 }
 
-const WorkspaceChatContext = createContext<WorkspaceChatValue | null>(null);
+const SpacesChatContext = createContext<SpacesChatValue | null>(null);
 
 /**
  * A blank chat state — no transcript, no sessions, nothing processing. The
@@ -102,7 +102,7 @@ export function createEmptyChatState(): AppState {
     logs: [],
     isProcessing: false,
     lastError: null,
-    workspaceBusy: null,
+    projectFolderBusy: null,
     currentView: 'chat',
     toolExecutions: [],
     queryProgress: null,
@@ -125,7 +125,7 @@ export function createEmptyChatState(): AppState {
   };
 }
 
-export interface WorkspaceChatProviderProps {
+export interface SpacesChatProviderProps {
   /** The initial app state the chat store starts from. */
   initialState: AppState;
   /** The events transport the chat reducer subscribes to. */
@@ -166,25 +166,25 @@ export interface WorkspaceChatProviderProps {
  * and to resolve the store's API base. `SproutWorkspace` mounts one in its own
  * mode; a host that composes its own stack supplies it.
  */
-export function WorkspaceChatProvider({
+export function SpacesChatProvider({
   initialState,
   eventsProvider,
   fetchFn = clientFetch,
   loadSessionsOnConnect = false,
   chatSessionsProject,
   children,
-}: WorkspaceChatProviderProps): JSX.Element {
+}: SpacesChatProviderProps): JSX.Element {
   const store = useMemo(() => createAppStore(initialState), [initialState]);
   return (
     <AppStoreProvider store={store}>
-      <WorkspaceChatRuntime
+      <SpacesChatRuntime
         eventsProvider={eventsProvider}
         fetchFn={fetchFn}
         loadSessionsOnConnect={loadSessionsOnConnect}
         chatSessionsProject={chatSessionsProject?.trim() ?? ''}
       >
         {children}
-      </WorkspaceChatRuntime>
+      </SpacesChatRuntime>
     </AppStoreProvider>
   );
 }
@@ -194,7 +194,7 @@ export function WorkspaceChatProvider({
  * Split from the provider so the hooks run inside the `AppStoreProvider` they
  * depend on.
  */
-function WorkspaceChatRuntime({
+function SpacesChatRuntime({
   eventsProvider,
   fetchFn,
   loadSessionsOnConnect,
@@ -256,7 +256,7 @@ function WorkspaceChatRuntime({
     activeChatIdRef,
     queuedMessagesRef,
     isProcessing: state.isProcessing,
-    workspaceBusy: state.workspaceBusy,
+    projectFolderBusy: state.projectFolderBusy,
     api: useMemo(
       () => ({
         sendQuery: (query: string, chatId?: string) => sendQuery(fetchFn, query, chatId),
@@ -318,7 +318,7 @@ function WorkspaceChatRuntime({
     void loadChatSessions();
   }, [loadSessionsOnConnect, state.isConnected, loadChatSessions]);
 
-  const value = useMemo<WorkspaceChatValue>(
+  const value = useMemo<SpacesChatValue>(
     () => ({
       state,
       setState,
@@ -339,7 +339,7 @@ function WorkspaceChatRuntime({
     [state, setState, handleEvent, handleReconnect, chat],
   );
 
-  return <WorkspaceChatContext.Provider value={value}>{children}</WorkspaceChatContext.Provider>;
+  return <SpacesChatContext.Provider value={value}>{children}</SpacesChatContext.Provider>;
 }
 
 /**
@@ -373,8 +373,8 @@ function useSubscribeEvents(
  * Read the chat unit. Throws outside `WorkspaceChatProvider` so a mis-mounted
  * chat surface fails loudly rather than rendering an empty transcript.
  */
-export function useWorkspaceChat(): WorkspaceChatValue {
-  const value = useContext(WorkspaceChatContext);
+export function useSpacesChat(): SpacesChatValue {
+  const value = useContext(SpacesChatContext);
   if (!value) {
     throw new Error('useWorkspaceChat must be used within a WorkspaceChatProvider');
   }
@@ -384,7 +384,7 @@ export function useWorkspaceChat(): WorkspaceChatValue {
 // ── View props assembly ──────────────────────────────────────────────────
 
 /** The app-specific inputs to the chat view props that are not chat state. */
-export interface WorkspaceChatPropsOverrides {
+export interface SpacesChatPropsOverrides {
   /** The tool execution whose inline detail is open (app-owned). */
   activeToolDetail?: ToolExecution | null;
   onToolDetailToggle?: (toolId: string | null) => void;
@@ -406,21 +406,21 @@ export interface WorkspaceChatPropsOverrides {
   /** The per-turn change summaries shown in the transcript. */
   fileEdits?: FileEdit[];
   /** The review surface state (owned by the app's git workspace). */
-  review?: WorkspaceChatReviewProps;
+  review?: SpacesChatReviewProps;
   /** The diff surface state (owned by the app's git workspace). */
-  diff?: WorkspaceChatDiffState;
+  diff?: SpacesChatDiffState;
 }
 
 /** The review surface props the chat's change strip drives (the shell's shape). */
-export type WorkspaceChatReviewProps = WorkspaceShellChat['reviewProps'];
+export type SpacesChatReviewProps = SpacesShellChat['reviewProps'];
 
 /** The diff surface state the chat's change strip drives (the shell's shape). */
-export type WorkspaceChatDiffState = WorkspaceShellChat['diffState'];
+export type SpacesChatDiffState = SpacesShellChat['diffState'];
 
-export interface WorkspaceChatViewProps {
+export interface SpacesChatViewProps {
   chatProps: ChatProps;
-  reviewProps: WorkspaceChatReviewProps;
-  diffState: WorkspaceChatDiffState;
+  reviewProps: SpacesChatReviewProps;
+  diffState: SpacesChatDiffState;
 }
 
 /**
@@ -429,8 +429,8 @@ export interface WorkspaceChatViewProps {
  * mapped from every chat's held-back entries to this chat's, translating the
  * view's indices back to queue positions.
  */
-export function useWorkspaceChatProps(overrides: WorkspaceChatPropsOverrides = {}): WorkspaceChatViewProps {
-  const { state, setState, chat } = useWorkspaceChat();
+export function useSpacesChatProps(overrides: SpacesChatPropsOverrides = {}): SpacesChatViewProps {
+  const { state, setState, chat } = useSpacesChat();
   const inputValue = state.inputValue;
   const activeChatId = state.activeChatId;
   const { queuedMessages } = chat;
@@ -446,7 +446,7 @@ export function useWorkspaceChatProps(overrides: WorkspaceChatPropsOverrides = {
   );
 
   const handleDismissBusy = useCallback(() => {
-    setState((prev) => ({ ...prev, workspaceBusy: null }));
+    setState((prev) => ({ ...prev, projectFolderBusy: null }));
   }, [setState]);
 
   const currentTodos = useCurrentTodos(state.currentTodos, state.toolExecutions);
@@ -496,7 +496,7 @@ export function useWorkspaceChatProps(overrides: WorkspaceChatPropsOverrides = {
       lastError: state.lastError,
       // The notice belongs to the chat whose send was held back, not whichever
       // chat is on screen.
-      workspaceBusy: state.workspaceBusy?.chatId === (activeChatId ?? '') ? state.workspaceBusy : null,
+      projectFolderBusy: state.projectFolderBusy?.chatId === (activeChatId ?? '') ? state.projectFolderBusy : null,
       chatId: activeChatId ?? undefined,
       onDismissBusy: overrides.onDismissBusy ?? handleDismissBusy,
       pendingDraft: inputValue,
@@ -525,14 +525,11 @@ export function useWorkspaceChatProps(overrides: WorkspaceChatPropsOverrides = {
     [state, chat, chatQueue, inputValue, setInputValue, activeChatId, currentTodos, handleDismissBusy, overrides],
   );
 
-  const reviewProps = useMemo<WorkspaceChatReviewProps>(
-    () => overrides.review ?? ({} as WorkspaceChatReviewProps),
+  const reviewProps = useMemo<SpacesChatReviewProps>(
+    () => overrides.review ?? ({} as SpacesChatReviewProps),
     [overrides.review],
   );
-  const diffState = useMemo<WorkspaceChatDiffState>(
-    () => overrides.diff ?? ({} as WorkspaceChatDiffState),
-    [overrides.diff],
-  );
+  const diffState = useMemo<SpacesChatDiffState>(() => overrides.diff ?? ({} as SpacesChatDiffState), [overrides.diff]);
 
   return { chatProps, reviewProps, diffState };
 }

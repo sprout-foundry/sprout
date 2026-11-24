@@ -27,7 +27,7 @@ interface GitHistoryPanelProps {
   onCheckoutCommit: (commitHash: string) => Promise<{ message: string }>;
   onRevertCommit: (commitHash: string) => Promise<{ message: string }>;
   isActing: boolean;
-  openWorkspaceBuffer: (options: {
+  openProjectFolderBuffer: (options: {
     kind: 'chat' | 'diff' | 'review' | 'compare';
     path: string;
     title: string;
@@ -48,7 +48,7 @@ function GitHistoryPanel({
   onCheckoutCommit,
   onRevertCommit,
   isActing,
-  openWorkspaceBuffer,
+  openProjectFolderBuffer,
 }: GitHistoryPanelProps): JSX.Element {
   // Browser git cannot revert.
   const browserGit = transportUsesBrowserGit(useHost().transport);
@@ -208,7 +208,7 @@ function GitHistoryPanel({
           prevCommit={prevCommit}
           nextCommit={nextCommit}
           onSelectCommit={(c) => setSelectedCommit(c)}
-          openWorkspaceBuffer={openWorkspaceBuffer}
+          openProjectFolderBuffer={openProjectFolderBuffer}
         />
       </div>
     );

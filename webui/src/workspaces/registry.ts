@@ -37,16 +37,16 @@
 
 import { Code2, type LucideIcon } from 'lucide-react';
 import type { ComponentType } from 'react';
-import { configuredDefaultWorkspaceMode } from '../config/workspaceMode';
+import { configuredDefaultSpace } from '../config/workspaceMode';
 import CodeShell from './CodeShell';
-import type { WorkspaceShellProps } from './shell';
+import type { SpacesShellProps } from './shell';
 
 /** Stable identifier for a mode. Persisted, so treat these as a wire format. */
 // The open union mirrors `ViewType` (types/app.ts): known ids complete, and a
 // future mode can register without a type change.
-export type WorkspaceModeId = 'code' | (string & {}); // eslint-disable-line @typescript-eslint/ban-types
+export type SpaceId = 'code' | (string & {}); // eslint-disable-line @typescript-eslint/ban-types
 
-export interface WorkspaceModeContext {
+export interface SpaceContext {
   /**
    * Whether the workspace root has a mockup (`design/mockup.html`). The Code
    * shell's preview panel reads it to decide between the mockup and a dev
@@ -55,8 +55,8 @@ export interface WorkspaceModeContext {
   hasMockup: boolean;
 }
 
-export interface WorkspaceMode {
-  id: WorkspaceModeId;
+export interface Space {
+  id: SpaceId;
   /** Label in the switcher. */
   label: string;
   icon: LucideIcon;
@@ -71,13 +71,13 @@ export interface WorkspaceMode {
    * the workspace cannot render is how a user ends up staring at an empty view
    * wondering what broke.
    */
-  available: (ctx: WorkspaceModeContext) => boolean;
+  available: (ctx: SpaceContext) => boolean;
   /**
    * The mode's shell: the content column plus the chrome that belongs to it.
    * The app renders the active mode's shell directly, so a mode's chrome is
    * composed by the mode instead of suppressed out of shared components.
    */
-  Shell: ComponentType<WorkspaceShellProps>;
+  Shell: ComponentType<SpacesShellProps>;
 }
 
 /**
@@ -90,20 +90,20 @@ export interface WorkspaceMode {
  * the only optional field: the switcher's secondary text is a hint, and a
  * mode without one simply renders none.
  */
-export interface WorkspaceModeRegistration {
-  id: WorkspaceModeId;
+export interface SpaceRegistration {
+  id: SpaceId;
   label: string;
   icon: LucideIcon;
   /** Switcher secondary text. Optional — defaults to empty. */
   hint?: string;
   /** Whether this mode is offered for the given workspace. */
-  available: (ctx: WorkspaceModeContext) => boolean;
+  available: (ctx: SpaceContext) => boolean;
   /** The mode's shell component. */
-  Shell: ComponentType<WorkspaceShellProps>;
+  Shell: ComponentType<SpacesShellProps>;
 }
 
 /** Removes the registration created by `registerWorkspaceMode`. */
-export type UnregisterWorkspaceMode = () => void;
+export type UnregisterSpace = () => void;
 
 /**
  * The built-in baseline: the mode every workspace offers, and the last resort
@@ -111,7 +111,7 @@ export type UnregisterWorkspaceMode = () => void;
  * sessions start in the configured default — see
  * `defaultWorkspaceMode` — which falls back to this when unset or unusable.
  */
-export const BUILTIN_DEFAULT_WORKSPACE_MODE: WorkspaceModeId = 'code';
+export const BUILTIN_DEFAULT_WORKSPACE_MODE: SpaceId = 'code';
 
 /**
  * The built-in mode ids. These entries are part of the app's contract with
@@ -121,10 +121,10 @@ export const BUILTIN_DEFAULT_WORKSPACE_MODE: WorkspaceModeId = 'code';
  * returned disposers refuse to remove it — so no embedding shell or
  * accidental double-registration can leave the app without a usable mode.
  */
-export const BUILTIN_WORKSPACE_MODE_IDS: readonly WorkspaceModeId[] = ['code'];
+export const BUILTIN_WORKSPACE_MODE_IDS: readonly SpaceId[] = ['code'];
 
 /** True when `id` names a built-in mode that cannot be replaced or removed. */
-export function isBuiltinWorkspaceModeId(id: WorkspaceModeId): boolean {
+export function isBuiltinSpaceId(id: SpaceId): boolean {
   return (BUILTIN_WORKSPACE_MODE_IDS as readonly string[]).includes(id);
 }
 
@@ -142,7 +142,7 @@ export function isBuiltinWorkspaceModeId(id: WorkspaceModeId): boolean {
  * a memoized mode list (e.g. inside `useWorkspaceMode`) picks up
  * late registrations on its next recomputation, not mid-render.
  */
-export const WORKSPACE_MODES: WorkspaceMode[] = [];
+export const WORKSPACE_MODES: Space[] = [];
 
 /**
  * Public mode registration API.
@@ -163,8 +163,8 @@ export const WORKSPACE_MODES: WorkspaceMode[] = [];
  * identity, so a disposer held across a re-registration of the same id removes
  * nothing — the newer definition stays.
  */
-export function registerWorkspaceMode(definition: WorkspaceModeRegistration): UnregisterWorkspaceMode {
-  if (isBuiltinWorkspaceModeId(definition.id)) {
+export function registerSpace(definition: SpaceRegistration): UnregisterSpace {
+  if (isBuiltinSpaceId(definition.id)) {
     console.warn(`registerWorkspaceMode: '${definition.id}' is a built-in mode and cannot be replaced; ignoring.`);
     return () => {};
   }
@@ -176,8 +176,8 @@ export function registerWorkspaceMode(definition: WorkspaceModeRegistration): Un
  * in place, and return the matching disposer. Both registration entries point
  * here, so the public and built-in paths cannot drift.
  */
-function registerMode(definition: WorkspaceModeRegistration): UnregisterWorkspaceMode {
-  const mode: WorkspaceMode = {
+function registerMode(definition: SpaceRegistration): UnregisterSpace {
+  const mode: Space = {
     id: definition.id,
     label: definition.label,
     icon: definition.icon,
@@ -197,7 +197,7 @@ function registerMode(definition: WorkspaceModeRegistration): UnregisterWorkspac
     // same id must remove nothing, so the newest definition stays. Refusing to
     // remove a built-in entry keeps the baseline in place even if a built-in
     // disposer is somehow invoked.
-    if (index !== -1 && !isBuiltinWorkspaceModeId(WORKSPACE_MODES[index].id)) WORKSPACE_MODES.splice(index, 1);
+    if (index !== -1 && !isBuiltinSpaceId(WORKSPACE_MODES[index].id)) WORKSPACE_MODES.splice(index, 1);
   };
 }
 
@@ -219,7 +219,7 @@ registerMode({
 });
 
 /** Modes offered for a workspace, in switcher order. */
-export function availableModes(ctx: WorkspaceModeContext): WorkspaceMode[] {
+export function availableModes(ctx: SpaceContext): Space[] {
   return WORKSPACE_MODES.filter((mode) => mode.available(ctx));
 }
 
@@ -232,8 +232,8 @@ export function availableModes(ctx: WorkspaceModeContext): WorkspaceMode[] {
  * session in a mode with nothing to render. With no configuration, this is the
  * built-in default.
  */
-export function defaultWorkspaceMode(ctx: WorkspaceModeContext): WorkspaceModeId {
-  const configured = configuredDefaultWorkspaceMode();
+export function defaultSpace(ctx: SpaceContext): SpaceId {
+  const configured = configuredDefaultSpace();
   if (configured !== null && availableModes(ctx).some((mode) => mode.id === configured)) {
     return configured;
   }
@@ -241,7 +241,7 @@ export function defaultWorkspaceMode(ctx: WorkspaceModeContext): WorkspaceModeId
 }
 
 /** Look up a mode, falling back to the default when an id is unknown or unavailable. */
-export function resolveWorkspaceMode(id: WorkspaceModeId | null | undefined, ctx: WorkspaceModeContext): WorkspaceMode {
+export function resolveSpace(id: SpaceId | null | undefined, ctx: SpaceContext): Space {
   const modes = availableModes(ctx);
   const match = modes.find((mode) => mode.id === id);
   if (match) return match;
@@ -249,9 +249,9 @@ export function resolveWorkspaceMode(id: WorkspaceModeId | null | undefined, ctx
   // then the built-in baseline, then any registered built-in, then the first
   // mode at all — each rung guarantees a usable mode rather than `undefined`
   // (whose return type forbids and whose dereference would crash the shell).
-  const fallback = modes.find((mode) => mode.id === defaultWorkspaceMode(ctx));
+  const fallback = modes.find((mode) => mode.id === defaultSpace(ctx));
   if (fallback) return fallback;
-  const builtin = modes.find((mode) => isBuiltinWorkspaceModeId(mode.id));
+  const builtin = modes.find((mode) => isBuiltinSpaceId(mode.id));
   if (builtin) return builtin;
   if (modes[0]) return modes[0];
   // Unreachable while the built-ins are registered and always available, but

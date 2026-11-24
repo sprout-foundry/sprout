@@ -52,7 +52,7 @@ vi.mock('../services/cloudAdapter', () => ({
     supportsSSH = false;
     supportsGit = false;
     supportsChat = true;
-    supportsWorkspaceSwitching = false;
+    supportsProjectFolderSwitching = false;
     supportsExport = false;
     supportsInstances = false;
     supportsLocalTerminal = false;
@@ -96,7 +96,7 @@ import { setActiveHost } from '../host/accessor';
 import { headlessHost } from '../host/HostProvider';
 import { getAdapter } from '../services/apiAdapter';
 import { WebSocketService } from '../services/websocket';
-import { SproutWorkspace } from './SproutWorkspace';
+import { SproutSpaces } from './SproutWorkspace';
 import type { SproutProject } from './SproutWorkspace';
 import type { ViewsArrangement } from './ViewsLayout';
 import { createEmptyChatState } from './WorkspaceChatContext';
@@ -160,7 +160,7 @@ describe('SproutWorkspace in-place backend swap', () => {
     seed.messages = [USER_MSG, ASSISTANT_MSG];
 
     const { rerender } = render(
-      <SproutWorkspace project={PROJECT} space="code" host={wasmHost()} layout={LAYOUT} chatInitialState={seed} />,
+      <SproutSpaces project={PROJECT} space="code" host={wasmHost()} layout={LAYOUT} chatInitialState={seed} />,
     );
     // Wait for the in-browser adapter to install (the wasm wiring is async).
     await vi.waitFor(() => expect(getAdapter()).not.toBeNull());
@@ -181,7 +181,7 @@ describe('SproutWorkspace in-place backend swap', () => {
     // Swap to the daemon backend in place: a new `host` with a new `agent` and
     // a new socket URL. The project, the layout and the chat seed are unchanged.
     rerender(
-      <SproutWorkspace project={PROJECT} space="code" host={daemonHost()} layout={LAYOUT} chatInitialState={seed} />,
+      <SproutSpaces project={PROJECT} space="code" host={daemonHost()} layout={LAYOUT} chatInitialState={seed} />,
     );
 
     // The editor tabs survived (the buffer manager was not re-mounted).
@@ -207,15 +207,13 @@ describe('SproutWorkspace in-place backend swap', () => {
     // cannot rely on a per-instance "no socket yet".
     const seed = createEmptyChatState();
     const first = render(
-      <SproutWorkspace project={PROJECT} space="code" host={wasmHost()} layout={LAYOUT} chatInitialState={seed} />,
+      <SproutSpaces project={PROJECT} space="code" host={wasmHost()} layout={LAYOUT} chatInitialState={seed} />,
     );
     await vi.waitFor(() => expect(getAdapter()).not.toBeNull());
     first.unmount();
     wsUrls.length = 0;
 
-    render(
-      <SproutWorkspace project={PROJECT} space="code" host={daemonHost()} layout={LAYOUT} chatInitialState={seed} />,
-    );
+    render(<SproutSpaces project={PROJECT} space="code" host={daemonHost()} layout={LAYOUT} chatInitialState={seed} />);
     const daemonSocket = wsUrls.find((url) => url.startsWith('wss://daemon.test/ws'));
     expect(daemonSocket).toBeDefined();
   });
@@ -243,18 +241,12 @@ describe('SproutWorkspace in-place swap to a proxied daemon', () => {
     const seed = createEmptyChatState();
 
     const { rerender } = render(
-      <SproutWorkspace project={PROJECT} space="code" host={wasmHost()} layout={LAYOUT} chatInitialState={seed} />,
+      <SproutSpaces project={PROJECT} space="code" host={wasmHost()} layout={LAYOUT} chatInitialState={seed} />,
     );
     await vi.waitFor(() => expect(getAdapter()).not.toBeNull());
 
     rerender(
-      <SproutWorkspace
-        project={PROJECT}
-        space="code"
-        host={platformDaemonHost}
-        layout={LAYOUT}
-        chatInitialState={seed}
-      />,
+      <SproutSpaces project={PROJECT} space="code" host={platformDaemonHost} layout={LAYOUT} chatInitialState={seed} />,
     );
 
     await vi.waitFor(() => expect(getAdapter()).toBeNull());

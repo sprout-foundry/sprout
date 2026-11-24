@@ -42,7 +42,7 @@ vi.mock('../workspaces/CodeShell', () => ({ default: () => <div data-testid="dae
 import { setActiveHost } from '../host/accessor';
 import { headlessHost } from '../host/HostProvider';
 import type { SproutHost } from '../host/types';
-import { SproutWorkspace } from './SproutWorkspace';
+import { SproutSpaces } from './SproutWorkspace';
 
 const PROJECT = { id: 'acme/widgets', root: '/work/widgets' };
 const CHAT_AND_CHANGES = { left: [], center: ['chat'], right: ['changes'], overlay: [] };
@@ -133,7 +133,7 @@ afterEach(() => {
 
 describe('SproutWorkspace on a daemon backend', () => {
   it('restores the conversation from the host store when it connects', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={platformDaemonHost()} layout={CHAT_AND_CHANGES} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={platformDaemonHost()} layout={CHAT_AND_CHANGES} />);
     await screen.findByTestId('daemon-chat');
 
     await act(async () => {
@@ -149,7 +149,7 @@ describe('SproutWorkspace on a daemon backend', () => {
   });
 
   it('writes each daemon turn back to the host store', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={platformDaemonHost()} layout={CHAT_AND_CHANGES} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={platformDaemonHost()} layout={CHAT_AND_CHANGES} />);
     await screen.findByTestId('daemon-chat');
     const onEvent = handler();
 
@@ -168,7 +168,7 @@ describe('SproutWorkspace on a daemon backend', () => {
   });
 
   it("sends the change tracker's calls to the daemon, not the platform", async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={platformDaemonHost()} layout={CHAT_AND_CHANGES} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={platformDaemonHost()} layout={CHAT_AND_CHANGES} />);
     await screen.findByTestId('daemon-changes');
     await settle();
 

@@ -9,7 +9,7 @@ interface ChatFooterProps {
   filteredToolExecutions: ToolExecution[];
   lastError: string | null;
   /** SP-142 §3 busy notice — see ChatProps.projectFolderBusy. */
-  workspaceBusy?: { runningChatId: string; runningChatName: string } | null;
+  projectFolderBusy?: { runningChatId: string; runningChatName: string } | null;
   onSendAnyway?: (message: string) => void;
   onDismissBusy?: () => void;
   /** The composer's current draft — the send-anyway action queues it. */
@@ -24,7 +24,7 @@ export function ChatFooter({
   isProcessing,
   filteredToolExecutions,
   lastError,
-  workspaceBusy: projectFolderBusy,
+  projectFolderBusy: projectFolderBusy,
   onSendAnyway,
   onDismissBusy,
   pendingDraft,

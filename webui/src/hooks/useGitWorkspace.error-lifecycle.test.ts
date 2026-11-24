@@ -35,9 +35,9 @@ vi.mock('../utils/log', () => ({
   warn: vi.fn(),
 }));
 
-import { useGitProjectFolder, type UseGitWorkspaceOptions } from './useGitWorkspace';
+import { useGitProjectFolder, type UseGitProjectFolderOptions } from './useGitWorkspace';
 
-function makeOptions(): UseGitWorkspaceOptions {
+function makeOptions(): UseGitProjectFolderOptions {
   const noop = () => undefined;
   return {
     fetchFn: fetch,
@@ -49,7 +49,7 @@ function makeOptions(): UseGitWorkspaceOptions {
     onGitStage: noop,
     onGitUnstage: noop,
     onGitDiscard: noop,
-    openWorkspaceBuffer: noop,
+    openProjectFolderBuffer: noop,
   };
 }
 

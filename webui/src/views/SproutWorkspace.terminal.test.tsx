@@ -37,7 +37,7 @@ vi.mock('../services/localEventsProvider', () => ({
   },
 }));
 vi.mock('./hostAgentBackend', () => ({ wireHostAgentBackend: vi.fn(), resetHostAgentBackend: vi.fn() }));
-vi.mock('./WorkspaceCommandPalette', () => ({ WorkspaceCommandPalette: () => null }));
+vi.mock('./WorkspaceCommandPalette', () => ({ SpacesCommandPalette: () => null }));
 vi.mock('../services/api', () => {
   const instance = {
     getHotkeys: async () => {
@@ -53,7 +53,7 @@ vi.mock('../services/api', () => {
 });
 vi.mock('./WorkspaceDockedTerminal', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./WorkspaceDockedTerminal')>()),
-  WorkspaceDockedTerminal: function DockedStub(props: { backend: string; expanded: boolean }) {
+  SpacesDockedTerminal: function DockedStub(props: { backend: string; expanded: boolean }) {
     const React = require('react') as typeof import('react');
     React.useEffect(() => {
       dockedMounts.count += 1;
@@ -79,7 +79,7 @@ import type { SproutHost } from '../host';
 import { setActiveHost } from '../host/accessor';
 import { makeTestHost } from '../host/testHost';
 import { __resetCommandHandlersForTests, hasCommandHandler } from '../services/commandHandlers';
-import { SproutWorkspace } from './SproutWorkspace';
+import { SproutSpaces } from './SproutWorkspace';
 
 const TOGGLE_TERMINAL = { key: '`', code: 'Backquote', ctrlKey: true };
 
@@ -92,8 +92,8 @@ function wasmHost(): SproutHost {
   return { ...host, transport: { ...host.transport, agent: { kind: 'wasm', modelEndpoint: '' } } };
 }
 
-function renderWorkspace(host: SproutHost) {
-  return render(<SproutWorkspace project={{ id: 'acme/widgets' }} space="code" host={host} />);
+function renderSpaces(host: SproutHost) {
+  return render(<SproutSpaces project={{ id: 'acme/widgets' }} space="code" host={host} />);
 }
 
 beforeAll(() => {
@@ -125,7 +125,7 @@ afterEach(() => {
 describe('SproutWorkspace composed shell terminal', () => {
   it('docks the PTY terminal for a local-terminal host and toggles it with Ctrl+` inside the workspace', async () => {
     setActiveHost(ptyHost());
-    renderWorkspace(ptyHost());
+    renderSpaces(ptyHost());
     const shell = await screen.findByTestId('composed-code-shell');
     expect(shell).toHaveAttribute('data-local-terminal', 'true');
     expect(shell).toHaveAttribute('data-in-browser-terminal', 'false');
@@ -149,7 +149,7 @@ describe('SproutWorkspace composed shell terminal', () => {
 
   it('docks the in-browser terminal for a host whose agent runs in the browser', async () => {
     setActiveHost(wasmHost());
-    renderWorkspace(wasmHost());
+    renderSpaces(wasmHost());
     const shell = await screen.findByTestId('composed-code-shell');
     expect(shell).toHaveAttribute('data-local-terminal', 'false');
     expect(shell).toHaveAttribute('data-in-browser-terminal', 'false');
@@ -174,7 +174,7 @@ describe('SproutWorkspace composed shell terminal', () => {
       },
     };
     setActiveHost(host);
-    renderWorkspace(host);
+    renderSpaces(host);
     const shell = await screen.findByTestId('composed-code-shell');
     expect(shell).toHaveAttribute('data-local-terminal', 'true');
     expect(screen.getByTestId('composed-docked-terminal')).toHaveAttribute('data-backend', 'pty');
@@ -196,12 +196,12 @@ describe('SproutWorkspace composed shell terminal', () => {
       },
     };
     setActiveHost(wasm);
-    const view = render(<SproutWorkspace project={{ id: 'acme/widgets' }} space="code" host={wasm} />);
+    const view = render(<SproutSpaces project={{ id: 'acme/widgets' }} space="code" host={wasm} />);
     await screen.findByTestId('composed-code-shell');
     expect(screen.getByTestId('composed-docked-terminal')).toHaveAttribute('data-backend', 'wasm');
     const before = dockedMounts.count;
     setActiveHost(daemon);
-    view.rerender(<SproutWorkspace project={{ id: 'acme/widgets' }} space="code" host={daemon} />);
+    view.rerender(<SproutSpaces project={{ id: 'acme/widgets' }} space="code" host={daemon} />);
     await waitFor(() => expect(screen.getByTestId('composed-docked-terminal')).toHaveAttribute('data-backend', 'pty'));
     expect(dockedMounts.count).toBe(before + 1);
   });
@@ -209,7 +209,7 @@ describe('SproutWorkspace composed shell terminal', () => {
   it('mounts no terminal and no toggle for a host with neither', async () => {
     const host = makeTestHost({ localTerminal: false });
     setActiveHost(host);
-    renderWorkspace(host);
+    renderSpaces(host);
     const shell = await screen.findByTestId('composed-code-shell');
     expect(shell).toHaveAttribute('data-local-terminal', 'false');
     expect(shell).toHaveAttribute('data-in-browser-terminal', 'false');

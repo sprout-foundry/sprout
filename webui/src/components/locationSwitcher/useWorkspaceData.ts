@@ -20,7 +20,7 @@ export interface UseProjectFolderDataProps {
 }
 
 export interface UseProjectFolderDataResult {
-  workspaceRoot: string;
+  projectFolder: string;
   daemonRoot: string;
   remoteContext: RemoteProjectFolderContext | null;
   switchingState: SwitchingState;
@@ -51,7 +51,7 @@ export interface UseProjectFolderDataResult {
 export function useProjectFolderData({ isConnected }: UseProjectFolderDataProps): UseProjectFolderDataResult {
   // The shared store keeps the last known project folder across disconnects, so
   // the switcher never blanks the path while the connection recovers.
-  const { workspace: folderInfo, error: projectFolderError } = useProjectFolderState();
+  const { projectFolder: folderInfo, error: projectFolderError } = useProjectFolderState();
   const projectFolder = normalizePath(folderInfo?.project_folder || '');
   const daemonRoot = normalizePath(folderInfo?.daemon_root || '');
   const [remoteContext, setRemoteContext] = useState<RemoteProjectFolderContext | null>(null);
@@ -307,7 +307,7 @@ export function useProjectFolderData({ isConnected }: UseProjectFolderDataProps)
   }, [switchingState.error]);
 
   return {
-    workspaceRoot: projectFolder,
+    projectFolder: projectFolder,
     daemonRoot,
     remoteContext,
     switchingState,

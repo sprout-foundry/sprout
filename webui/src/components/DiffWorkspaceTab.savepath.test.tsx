@@ -2,7 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NotificationProvider } from '@sprout/ui';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import DiffWorkspaceTab from './DiffWorkspaceTab';
+import DiffSpacesTab from './DiffWorkspaceTab';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -98,7 +98,7 @@ describe('DiffWorkspaceTab save path (Cmd+S through merge view)', () => {
       return new Response('ok', { status: 200 });
     });
 
-    render(<DiffWorkspaceTab {...baseProps} />);
+    render(<DiffSpacesTab {...baseProps} />);
 
     const beforeS = Math.floor(Date.now() / 1000);
     await act(async () => {
@@ -128,7 +128,7 @@ describe('DiffWorkspaceTab save path (Cmd+S through merge view)', () => {
 
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      render(<DiffWorkspaceTab {...baseProps} />);
+      render(<DiffSpacesTab {...baseProps} />);
       await act(async () => {
         onSaveCapture('content');
       });
@@ -141,7 +141,7 @@ describe('DiffWorkspaceTab save path (Cmd+S through merge view)', () => {
 
   it('never wires a save when canSave is false', async () => {
     vi.spyOn(document, 'dispatchEvent').mockReturnValue(true);
-    render(<DiffWorkspaceTab {...baseProps} canSave={false} />);
+    render(<DiffSpacesTab {...baseProps} canSave={false} />);
     await act(async () => {
       onSaveCapture('content');
     });

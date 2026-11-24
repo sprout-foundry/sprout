@@ -1,7 +1,7 @@
 import { AlertTriangle, FolderPlus, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useHostCapabilities } from '../host';
-import type { WorkspaceInfo } from '../hooks/useWorkspace';
+import type { ProjectFolderInfo } from '../hooks/useWorkspace';
 import { ApiService, type Starter } from '../services/api';
 import { createProjectFolderNative, pickProjectFolderNative } from '../services/nativeFs';
 import { setProjectFolderGateOpen } from '../services/workspaceGate';
@@ -34,7 +34,7 @@ import './WorkspaceGateModal.css';
  * as an inline error here — a toast would be invisible behind the scrim.
  */
 interface ProjectFolderGateModalProps {
-  projectFolderInfo: WorkspaceInfo;
+  projectFolderInfo: ProjectFolderInfo;
   onSelectProjectFolder: (path: string) => void;
   onConsentHome: () => void;
 }
@@ -50,7 +50,8 @@ function ProjectFolderGateModal({
   onSelectProjectFolder,
   onConsentHome,
 }: ProjectFolderGateModalProps): JSX.Element | null {
-  const { folderPicker: supportsFolderPicker, workspaceSwitching: supportsWorkspaceSwitching } = useHostCapabilities();
+  const { folderPicker: supportsFolderPicker, projectFolderSwitching: supportsProjectFolderSwitching } =
+    useHostCapabilities();
   // Browsing happens inside the modal. Delegating to the chrome's location
   // switcher (as this used to) opened that popover *behind* the gate — it sits
   // far below this overlay in the stacking order, anchored to a trigger the
@@ -97,7 +98,7 @@ function ProjectFolderGateModal({
   );
 
   useEffect(() => {
-    if (!supportsWorkspaceSwitching) return undefined;
+    if (!supportsProjectFolderSwitching) return undefined;
     setProjectFolderGateOpen(true);
     return () => setProjectFolderGateOpen(false);
   }, []);
@@ -124,7 +125,7 @@ function ProjectFolderGateModal({
   }, [creating]);
 
   // Cloud mode (and any mode without project folder switching) is never gated.
-  if (!supportsWorkspaceSwitching) return null;
+  if (!supportsProjectFolderSwitching) return null;
 
   // Studio variant — native folder picker + project create instead of the
   // desktop picker/browser. Sits AFTER the cloud short-circuit so a studio

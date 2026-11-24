@@ -17,7 +17,7 @@
  */
 
 import { Rocket } from 'lucide-react';
-import { registerWorkspaceMode, type UnregisterWorkspaceMode } from './registry';
+import { registerSpace, type UnregisterSpace } from './registry';
 import ShipShell from './ShipShell';
 
 /**
@@ -25,8 +25,8 @@ import ShipShell from './ShipShell';
  * load; the exported function lets a test (or an embedding shell that wants a
  * different Ship definition) register or re-register it explicitly.
  */
-export function registerShipMode(): UnregisterWorkspaceMode {
-  return registerWorkspaceMode({
+export function registerShipMode(): UnregisterSpace {
+  return registerSpace({
     id: 'ship',
     label: 'Ship',
     icon: Rocket,

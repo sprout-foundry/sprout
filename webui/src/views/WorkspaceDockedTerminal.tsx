@@ -11,7 +11,7 @@ import { usePersistedNumber } from '../hooks/usePersistedPref';
 import { useTerminalWorkbench } from '../hooks/useTerminalWorkbench';
 import { useVerticalDragResize } from '../hooks/useVerticalDragResize';
 import { useCommandHandler } from '../services/commandHandlers';
-import type { WorkspaceTerminalBackend } from './WorkspaceTerminalView';
+import type { SpacesTerminalBackend } from './WorkspaceTerminalView';
 import '../components/Terminal.css';
 
 const TERMINAL_COMMANDS: readonly string[] = ['toggle_terminal'];
@@ -24,8 +24,8 @@ const PTY_TERMINAL_COMMANDS: readonly string[] = [
 ];
 const NO_COMMANDS: readonly string[] = [];
 
-export interface WorkspaceDockedTerminalProps {
-  backend: Exclude<WorkspaceTerminalBackend, 'none'>;
+export interface SpacesDockedTerminalProps {
+  backend: Exclude<SpacesTerminalBackend, 'none'>;
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
 }
@@ -43,11 +43,7 @@ export interface WorkspaceDockedTerminalProps {
  * starts until it is first opened, and the workbench stays mounted while
  * collapsed, so sessions survive a toggle.
  */
-export function WorkspaceDockedTerminal({
-  backend,
-  expanded,
-  onExpandedChange,
-}: WorkspaceDockedTerminalProps): JSX.Element {
+export function SpacesDockedTerminal({ backend, expanded, onExpandedChange }: SpacesDockedTerminalProps): JSX.Element {
   const [height, setHeight] = usePersistedNumber(
     TERMINAL_HEIGHT_STORAGE_KEY,
     defaultTerminalHeight(),
@@ -132,7 +128,7 @@ export function WorkspaceDockedTerminal({
  */
 export function useToggleTerminalCommand(
   setExpanded: (update: (expanded: boolean) => boolean) => void,
-  backend: WorkspaceTerminalBackend,
+  backend: SpacesTerminalBackend,
 ): void {
   useCommandHandler(backend === 'pty' ? PTY_TERMINAL_COMMANDS : backend === 'wasm' ? TERMINAL_COMMANDS : NO_COMMANDS);
   const enabled = backend !== 'none';

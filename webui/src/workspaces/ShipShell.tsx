@@ -14,9 +14,9 @@ import { Menu } from 'lucide-react';
 import React from 'react';
 import ErrorBoundary from '../components/ErrorBoundary';
 import ShipSurface from '../components/ship/ShipSurface';
-import type { WorkspaceShellProps } from './shell';
+import type { SpacesShellProps } from './shell';
 
-const ShipShell: React.FC<WorkspaceShellProps> = ({ isMobile, isSidebarOpen, onToggleSidebar, ship }) => (
+const ShipShell: React.FC<SpacesShellProps> = ({ isMobile, isSidebarOpen, onToggleSidebar, ship }) => (
   <main className={`main-content ship-shell ${isMobile && isSidebarOpen ? 'sidebar-open' : ''}`}>
     {isMobile && (
       <div className="pane-controls pane-controls-mobile">

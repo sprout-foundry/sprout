@@ -46,7 +46,7 @@ import type { SproutHost } from '../host';
 import { setActiveHost } from '../host/accessor';
 import { headlessHost } from '../host/HostProvider';
 import { onProjectFolderResponse } from '../services/workspaceResponses';
-import { SproutWorkspace } from './SproutWorkspace';
+import { SproutSpaces } from './SproutWorkspace';
 import type { ViewsArrangement } from './ViewsLayout';
 
 const PROJECT = { id: 'acme/widgets', repoUrl: 'https://github.com/acme/widgets' };
@@ -158,7 +158,7 @@ afterEach(() => {
 
 describe('SproutWorkspace source control view (daemon host)', () => {
   it('shows the working tree status from the host and commits through it', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={daemonHost()} layout={SOURCE_CONTROL} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={daemonHost()} layout={SOURCE_CONTROL} />);
     const view = await screen.findByTestId('workspace-git');
     await within(view).findByTitle('src/changed.ts');
     expect(within(view).getByTitle('src/staged.ts')).toBeInTheDocument();
@@ -179,7 +179,7 @@ describe('SproutWorkspace source control view (daemon host)', () => {
   });
 
   it("shows a changed file's diff and opens the file in the editor unit", async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={daemonHost()} layout={SOURCE_CONTROL} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={daemonHost()} layout={SOURCE_CONTROL} />);
     const view = await screen.findByTestId('workspace-git');
     const row = await within(view).findByTitle('src/changed.ts');
 
@@ -202,7 +202,7 @@ describe('SproutWorkspace source control view (daemon host)', () => {
 
   it('offers worktrees only when the host declares serverGit', async () => {
     const { unmount } = render(
-      <SproutWorkspace project={PROJECT} space="code" host={daemonHost()} layout={SOURCE_CONTROL} />,
+      <SproutSpaces project={PROJECT} space="code" host={daemonHost()} layout={SOURCE_CONTROL} />,
     );
     let view = await screen.findByTestId('workspace-git');
     await within(view).findByTitle('src/changed.ts');
@@ -211,7 +211,7 @@ describe('SproutWorkspace source control view (daemon host)', () => {
     unmount();
 
     render(
-      <SproutWorkspace project={PROJECT} space="code" host={daemonHost({ serverGit: true })} layout={SOURCE_CONTROL} />,
+      <SproutSpaces project={PROJECT} space="code" host={daemonHost({ serverGit: true })} layout={SOURCE_CONTROL} />,
     );
     view = await screen.findByTestId('workspace-git');
     await within(view).findByTitle('src/changed.ts');
@@ -223,7 +223,7 @@ describe('SproutWorkspace source control view (daemon host)', () => {
     const seen: Array<{ url: string; ok: boolean }> = [];
     const stop = onProjectFolderResponse((url, response) => seen.push({ url, ok: response.ok }));
     try {
-      render(<SproutWorkspace project={PROJECT} space="code" host={daemonHost()} layout={SOURCE_CONTROL} />);
+      render(<SproutSpaces project={PROJECT} space="code" host={daemonHost()} layout={SOURCE_CONTROL} />);
       const view = await screen.findByTestId('workspace-git');
       await within(view).findByTitle('src/changed.ts');
       await act(async () => {
@@ -238,15 +238,13 @@ describe('SproutWorkspace source control view (daemon host)', () => {
 
   it('shows the empty state for a workspace that is not a repository', async () => {
     inRepo = false;
-    render(<SproutWorkspace project={PROJECT} space="code" host={daemonHost()} layout={SOURCE_CONTROL} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={daemonHost()} layout={SOURCE_CONTROL} />);
     const empty = await screen.findByTestId('workspace-git-empty');
     expect(empty).toHaveTextContent('No git repository');
   });
 
   it('shows the empty state and makes no git requests for a host without git', async () => {
-    render(
-      <SproutWorkspace project={PROJECT} space="code" host={daemonHost({ git: false })} layout={SOURCE_CONTROL} />,
-    );
+    render(<SproutSpaces project={PROJECT} space="code" host={daemonHost({ git: false })} layout={SOURCE_CONTROL} />);
     const empty = await screen.findByTestId('workspace-git-empty');
     expect(empty).toHaveTextContent("Source control isn't available");
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -269,7 +267,7 @@ describe('SproutWorkspace source control view (daemon host)', () => {
     };
     const callbacks = new Proxy({}, { get: () => vi.fn() });
     render(
-      <SproutWorkspace
+      <SproutSpaces
         project={PROJECT}
         space="code"
         host={daemonHost()}
@@ -290,7 +288,7 @@ describe('SproutWorkspace search view (daemon host)', () => {
     const onGoto = (event: Event) => gotoLines.push((event as CustomEvent<{ line: number }>).detail.line);
     document.addEventListener('editor-goto-line', onGoto);
     try {
-      render(<SproutWorkspace project={PROJECT} space="code" host={daemonHost()} layout={SOURCE_CONTROL} />);
+      render(<SproutSpaces project={PROJECT} space="code" host={daemonHost()} layout={SOURCE_CONTROL} />);
       const view = await screen.findByTestId('workspace-search');
       fireEvent.change(within(view).getByPlaceholderText('Search...'), { target: { value: 'needle' } });
 
@@ -312,7 +310,7 @@ describe('SproutWorkspace search view (daemon host)', () => {
   it('lets the host replace the search view props', async () => {
     const onFileClick = vi.fn();
     render(
-      <SproutWorkspace
+      <SproutSpaces
         project={PROJECT}
         space="code"
         host={daemonHost()}

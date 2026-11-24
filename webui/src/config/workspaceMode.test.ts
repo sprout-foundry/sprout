@@ -9,32 +9,32 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { configuredDefaultWorkspaceMode, overrideDefaultWorkspaceMode } from './workspaceMode';
+import { configuredDefaultSpace, overrideDefaultSpace } from './workspaceMode';
 
 describe('configured default workspace mode', () => {
   // The config module is a module singleton; clear any override so a test
   // cannot leak a configured default into the next one.
   afterEach(() => {
-    overrideDefaultWorkspaceMode(null);
+    overrideDefaultSpace(null);
   });
 
   it('is unset (null) when the build does not configure a default', () => {
-    expect(configuredDefaultWorkspaceMode()).toBeNull();
+    expect(configuredDefaultSpace()).toBeNull();
   });
 
   it('reports a runtime override', () => {
-    overrideDefaultWorkspaceMode('design');
-    expect(configuredDefaultWorkspaceMode()).toBe('design');
+    overrideDefaultSpace('design');
+    expect(configuredDefaultSpace()).toBe('design');
   });
 
   it('clears back to the build-time base with a null override', () => {
-    overrideDefaultWorkspaceMode('design');
-    overrideDefaultWorkspaceMode(null);
-    expect(configuredDefaultWorkspaceMode()).toBeNull();
+    overrideDefaultSpace('design');
+    overrideDefaultSpace(null);
+    expect(configuredDefaultSpace()).toBeNull();
   });
 
   it('accepts an arbitrary (extension-registered) mode id', () => {
-    overrideDefaultWorkspaceMode('preview');
-    expect(configuredDefaultWorkspaceMode()).toBe('preview');
+    overrideDefaultSpace('preview');
+    expect(configuredDefaultSpace()).toBe('preview');
   });
 });

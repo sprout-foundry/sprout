@@ -17,18 +17,18 @@ Two parts are exported:
 ## Status
 
 Published and in use. Four entry points: `.` (the host contract),
-`./views` (`SproutWorkspace`, the space registry, the individual views, the
+`./views` (`SproutSpaces`, the space registry, the individual views, the
 chat and editor units), `./providers` (`SproutProviders`) and `./agent` (the
 headless agent, below). The minimal
-mount is `SproutWorkspace` with a `project`, a `space` and a `host`; in its
+mount is `SproutSpaces` with a `project`, a `space` and a `host`; in its
 default own mode it builds the provider stack itself, so the host does not
 wrap it:
 
 ```tsx
 import "@sprout-foundry/spaces/styles.css";
-import { SproutWorkspace } from "@sprout-foundry/spaces/views";
+import { SproutSpaces } from "@sprout-foundry/spaces/views";
 
-<SproutWorkspace
+<SproutSpaces
   project={{ id: repoUrl, repoUrl }}
   space="code"
   host={myHost}
@@ -87,7 +87,7 @@ the `./wasm/` subpath export and in the `files` allowlist.
 A host serves that directory at a URL it owns and tells Sprout where it is:
 
 ```tsx
-<SproutWorkspace
+<SproutSpaces
   project={project}
   space={space}
   host={myHost}

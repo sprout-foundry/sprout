@@ -128,7 +128,7 @@ async function renderTree(props: Partial<React.ComponentProps<typeof FileTree>> 
       <FileTree
         onFileSelect={props.onFileSelect ?? defaultOnFileSelect}
         rootPath={props.rootPath ?? '.'}
-        workspaceRoot={props.workspaceRoot}
+        projectFolder={props.projectFolder}
         selectedFile={props.selectedFile}
         onRefresh={props.onRefresh}
         onItemCreated={props.onItemCreated}
@@ -238,7 +238,7 @@ describe('FileTree context menu – file items', () => {
   });
 
   it('shows "Copy absolute path" when workspaceRoot is provided', async () => {
-    await renderTree({ workspaceRoot: '/home/user/project' });
+    await renderTree({ projectFolder: '/home/user/project' });
 
     fireContextMenuOnFile('main.go');
     await flushPromises();
@@ -248,7 +248,7 @@ describe('FileTree context menu – file items', () => {
   });
 
   it('does NOT show "Copy absolute path" when workspaceRoot is not provided', async () => {
-    await renderTree({ workspaceRoot: undefined });
+    await renderTree({ projectFolder: undefined });
 
     fireContextMenuOnFile('main.go');
     await flushPromises();
@@ -283,7 +283,7 @@ describe('FileTree context menu – clipboard & editor actions', () => {
   });
 
   it('"Copy absolute path" calls clipboard with workspaceRoot/file.path', async () => {
-    await renderTree({ workspaceRoot: '/home/user/project', onFileSelect });
+    await renderTree({ projectFolder: '/home/user/project', onFileSelect });
 
     fireContextMenuOnFile('main.go');
     await flushPromises();

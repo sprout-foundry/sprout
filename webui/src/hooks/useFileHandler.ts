@@ -1,11 +1,11 @@
 import { useCallback, useEffect } from 'react';
 import type { ViewType } from '../types/app';
-import type { OpenWorkspaceFileOptions } from '../views/WorkspaceEditorContext';
+import type { OpenProjectFolderFileOptions } from '../views/WorkspaceEditorContext';
 
 export interface UseFileHandlerParams {
   onViewChange: (view: ViewType) => void;
   /** The editor unit's open (`useWorkspaceEditor().openFile`), which also moves to the line. */
-  openFile: (path: string, options?: OpenWorkspaceFileOptions) => void;
+  openFile: (path: string, options?: OpenProjectFolderFileOptions) => void;
 }
 
 export const useFileHandler = ({ onViewChange, openFile }: UseFileHandlerParams) => {

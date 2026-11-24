@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { ViewsLayout, availableModes, resolveWorkspaceMode } from '../../views/index';
-import type { ViewsArrangement, WorkspaceModeId } from '../../views/index';
+import { ViewsLayout, availableModes, resolveSpace } from '../../views/index';
+import type { ViewsArrangement, SpaceId } from '../../views/index';
 import { HostProvider, useHost } from '../index';
 import type { HostNotification, HostNavigationIntent, SproutHost } from '../index';
 import './chrome.css';
@@ -34,7 +34,7 @@ export interface ExampleHostState {
   /** Navigation intents the host has resolved, newest last. */
   intents: HostNavigationIntent[];
   /** The space currently mounted (a registered workspace-mode id). */
-  activeSpaceId: WorkspaceModeId;
+  activeSpaceId: SpaceId;
 }
 
 /**
@@ -93,7 +93,7 @@ export function createExampleHost(state: ExampleHostState): SproutHost {
       ssh: false,
       git: true,
       chat: true,
-      workspaceSwitching: true,
+      projectFolderSwitching: true,
       folderPicker: false,
       export: false,
       instances: false,
@@ -133,8 +133,8 @@ function ExampleChrome({
 }: {
   state: ExampleHostState;
   spaces: string[];
-  activeSpaceId: WorkspaceModeId;
-  onSwitchSpace: (id: WorkspaceModeId) => void;
+  activeSpaceId: SpaceId;
+  onSwitchSpace: (id: SpaceId) => void;
 }): JSX.Element {
   return (
     <>
@@ -206,7 +206,7 @@ export interface ExampleHostProps {
    */
   onIntent?: (intent: HostNavigationIntent) => void;
   /** The space to mount first; defaults to the first available space. */
-  initialSpace?: WorkspaceModeId;
+  initialSpace?: SpaceId;
 }
 
 /**
@@ -227,9 +227,9 @@ export function ExampleHostRoot({
   onIntent?: (i: HostNavigationIntent) => void;
 }): JSX.Element {
   const host = useHost();
-  const [activeSpaceId, setActiveSpaceId] = useState<WorkspaceModeId>(state.activeSpaceId);
+  const [activeSpaceId, setActiveSpaceId] = useState<SpaceId>(state.activeSpaceId);
   const spaces = availableModes({ hasMockup: false }).map((mode) => String(mode.id));
-  const active = resolveWorkspaceMode(activeSpaceId, { hasMockup: false });
+  const active = resolveSpace(activeSpaceId, { hasMockup: false });
   // Each space renders its own primitive view; switching moves the mounted
   // shell's view so the switch is visible in the rendered output.
   const isCodeSpace = activeSpaceId === 'code';

@@ -21,7 +21,7 @@ let root: ReturnType<typeof createRoot>;
 function renderBreadcrumb(
   props: Partial<{
     filePath: string;
-    workspaceRoot: string;
+    projectFolder: string;
     showFileName: boolean;
     onNavigate?: (path: string) => void;
     symbols?: BreadcrumbSymbol[];
@@ -30,7 +30,7 @@ function renderBreadcrumb(
 ) {
   const {
     filePath = 'src/components/App.tsx',
-    workspaceRoot: projectFolder,
+    projectFolder: projectFolder,
     showFileName,
     onNavigate,
     symbols,
@@ -42,7 +42,7 @@ function renderBreadcrumb(
     root.render(
       <EditorBreadcrumb
         filePath={filePath}
-        workspaceRoot={projectFolder}
+        projectFolder={projectFolder}
         showFileName={showFileName}
         onNavigate={onNavigate}
         symbols={symbols}
@@ -102,9 +102,9 @@ describe('EditorBreadcrumb null rendering', () => {
   });
 
   test('shows a file inside the workspace relative to it', () => {
-    renderBreadcrumb({ filePath: '/home/ada/app/api/client.go', workspaceRoot: '/home/ada/app' });
+    renderBreadcrumb({ filePath: '/home/ada/app/api/client.go', projectFolder: '/home/ada/app' });
     expect(container.querySelector('.editor-breadcrumb')?.textContent).toBe('apiclient.go');
-    renderBreadcrumb({ filePath: '/home/ada/app/README.md', workspaceRoot: '/home/ada/app/', showFileName: true });
+    renderBreadcrumb({ filePath: '/home/ada/app/README.md', projectFolder: '/home/ada/app/', showFileName: true });
     expect(container.querySelector('.editor-breadcrumb')?.textContent).toBe('README.md');
   });
 

@@ -99,7 +99,7 @@ export function useTabOpen({
     }, paneList[0]);
   }, []);
 
-  const openWorkspaceBuffer = useCallback(
+  const openProjectFolderBuffer = useCallback(
     (options: {
       kind: 'chat' | 'diff' | 'review' | 'file' | 'welcome' | 'compare';
       path: string;
@@ -198,5 +198,5 @@ export function useTabOpen({
     ],
   );
 
-  return { openFile, openWorkspaceBuffer };
+  return { openFile, openProjectFolderBuffer };
 }

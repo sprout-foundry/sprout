@@ -18,7 +18,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import CodeShell from './CodeShell';
-import { WORKSPACE_MODES, availableModes, registerWorkspaceMode, type WorkspaceModeRegistration } from './registry';
+import { WORKSPACE_MODES, availableModes, registerSpace, type SpaceRegistration } from './registry';
 import { SHIP_MODE_ID, registerShipMode } from './ship-mode';
 import ShipShell from './ShipShell';
 
@@ -48,7 +48,7 @@ function makeShellProps(overrides = {}) {
     handleOutlineNavigateToSymbol: vi.fn(),
     chat: { chatProps: {}, reviewProps: {}, diffState: {} },
     mockup: { loading: false, present: true },
-    git: { gitBranches: { current: 'main', branches: [] }, gitStatus: null, workspaceRoot: '/tmp/repo' },
+    git: { gitBranches: { current: 'main', branches: [] }, gitStatus: null, projectFolder: '/tmp/repo' },
     ship: {
       live: { url: 'https://example.pages.dev', version: 'v1.0.0', deployedAt: '2026-01-02T03:04:05Z', state: 'ready' },
       availability: { canDeploy: true },
@@ -94,7 +94,7 @@ describe('Ship mode registration', () => {
   });
 
   it('accepts an override payload through the public API', () => {
-    const override: WorkspaceModeRegistration = {
+    const override: SpaceRegistration = {
       id: SHIP_MODE_ID,
       label: 'Ship (override)',
       icon: () => null,
@@ -103,7 +103,7 @@ describe('Ship mode registration', () => {
       Shell: ShipShell,
     };
     // The public API is idempotent for a non-built-in id: register + dispose.
-    const dispose = registerWorkspaceMode(override);
+    const dispose = registerSpace(override);
     expect(WORKSPACE_MODES.find((mode) => mode.id === SHIP_MODE_ID)?.label).toBe('Ship (override)');
     dispose();
     // Restore the module's definition for the remaining tests.

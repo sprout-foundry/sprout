@@ -54,7 +54,7 @@ export interface SproutStudioCapabilities {
 }
 
 /** One entry in a `listWorkspace` result. */
-export interface WorkspaceFileEntry {
+export interface ProjectFolderFileEntry {
   path: string;
   size: number;
   isDir: boolean;
@@ -74,7 +74,9 @@ export type SproutStudioFsBridge = {
     path: string,
     payload: string | { content?: string; contentBase64?: string },
   ): Promise<{ ok: true; path: string } | { ok: false; error: string }>;
-  listWorkspace(maxDepth?: number): Promise<{ ok: true; files: WorkspaceFileEntry[] } | { ok: false; error: string }>;
+  listWorkspace(
+    maxDepth?: number,
+  ): Promise<{ ok: true; files: ProjectFolderFileEntry[] } | { ok: false; error: string }>;
 };
 
 /**
@@ -82,7 +84,7 @@ export type SproutStudioFsBridge = {
  * variant (bridge files channel, §10.1). Same never-reject contract as above:
  * user-cancel and failures resolve `{ ok: false, error: "<code>" }`.
  */
-export type SproutStudioWorkspaceBridge = {
+export type SproutStudioProjectFolderBridge = {
   /** Presents the system folder picker; persists the chosen root. */
   pickWorkspace(): Promise<{ ok: true; rootName: string } | { ok: false; error: string }>;
   /** Creates a fresh project folder and makes it the project folder. */
@@ -101,7 +103,7 @@ export type NativeProjectFolderResult = { ok: true; rootName: string } | { ok: f
  * `hasSproutStudioFsBridge` — the gate must not render the studio variant
  * against a bridge that only implements the file ops.
  */
-export function hasSproutStudioWorkspaceBridge(obj: unknown): obj is SproutStudioWorkspaceBridge {
+export function hasSproutStudioProjectFolderBridge(obj: unknown): obj is SproutStudioProjectFolderBridge {
   if (!obj || typeof obj !== 'object') return false;
   const c = obj as Record<string, unknown>;
   return typeof c.pickWorkspace === 'function' && typeof c.createWorkspace === 'function';
@@ -441,7 +443,7 @@ export function sortNativeFileInfo(items: NativeFileInfo[]): NativeFileInfo[] {
  * The result is returned already sorted (dirs first, then by name).
  */
 export function mapProjectFolderListing(result: unknown, requestedPath: string): NativeFileInfo[] {
-  const r = result as { ok?: boolean; files?: WorkspaceFileEntry[]; error?: string };
+  const r = result as { ok?: boolean; files?: ProjectFolderFileEntry[]; error?: string };
   if (!r || r.ok !== true || !Array.isArray(r.files)) {
     return [];
   }
@@ -559,12 +561,12 @@ function projectFolderResult(result: unknown): NativeProjectFolderResult {
  */
 export async function pickProjectFolderNative(): Promise<NativeProjectFolderResult> {
   const bridge = detectSproutStudio();
-  const workspaceBridge = hasSproutStudioWorkspaceBridge(bridge) ? bridge : null;
-  if (!workspaceBridge) {
+  const projectFolderBridge = hasSproutStudioProjectFolderBridge(bridge) ? bridge : null;
+  if (!projectFolderBridge) {
     return { ok: false, error: 'ioFailed' };
   }
   try {
-    return projectFolderResult(await workspaceBridge.pickWorkspace());
+    return projectFolderResult(await projectFolderBridge.pickWorkspace());
   } catch {
     return { ok: false, error: 'ioFailed' };
   }
@@ -577,8 +579,8 @@ export async function pickProjectFolderNative(): Promise<NativeProjectFolderResu
  */
 export async function createProjectFolderNative(name: string): Promise<NativeProjectFolderResult> {
   const bridge = detectSproutStudio();
-  const workspaceBridge = hasSproutStudioWorkspaceBridge(bridge) ? bridge : null;
-  if (!workspaceBridge) {
+  const projectFolderBridge = hasSproutStudioProjectFolderBridge(bridge) ? bridge : null;
+  if (!projectFolderBridge) {
     return { ok: false, error: 'ioFailed' };
   }
   const trimmed = typeof name === 'string' ? name.trim() : '';
@@ -586,7 +588,7 @@ export async function createProjectFolderNative(name: string): Promise<NativePro
     return { ok: false, error: 'invalidName' };
   }
   try {
-    return projectFolderResult(await workspaceBridge.createWorkspace(trimmed));
+    return projectFolderResult(await projectFolderBridge.createWorkspace(trimmed));
   } catch {
     return { ok: false, error: 'ioFailed' };
   }

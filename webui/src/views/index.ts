@@ -132,22 +132,16 @@ export type { CopyKey, CopyOverrides } from '../config/copy';
 // the built-in shells, so importing this entry pulls the shell graph with it —
 // the price of making the spaces reachable from the one documented import
 // point rather than through a private module path.
-export { WORKSPACE_MODES, availableModes, registerWorkspaceMode, resolveWorkspaceMode } from '../workspaces/registry';
-export type {
-  UnregisterWorkspaceMode,
-  WorkspaceMode,
-  WorkspaceModeContext,
-  WorkspaceModeId,
-  WorkspaceModeRegistration,
-} from '../workspaces/registry';
+export { WORKSPACE_MODES, availableModes, registerSpace, resolveSpace } from '../workspaces/registry';
+export type { UnregisterSpace, Space, SpaceContext, SpaceId, SpaceRegistration } from '../workspaces/registry';
 
 // The active-space state a host drives with its own switcher: it reads the
 // resolved mode and the offered modes, and calls `select`. A host that owns
 // its chrome (Sprout's own app root does) keeps the requested-space state here
 // and feeds the resolved id to `SproutWorkspace`'s `space` prop, so the
 // switcher and the mounted space cannot disagree.
-export { useWorkspaceMode } from '../workspaces/useWorkspaceMode';
-export type { UseWorkspaceModeResult } from '../workspaces/useWorkspaceMode';
+export { useSpace } from '../workspaces/useWorkspaceMode';
+export type { UseSpaceResult } from '../workspaces/useWorkspaceMode';
 
 // The provider wrapper a host wraps the composed views in, so it does not
 // assemble the web UI context stack by hand. Its own entry point and chunk
@@ -176,29 +170,24 @@ export type { WasmAssets, WasmAssetsProviderProps } from '../contexts/WasmAssets
 // host contract, the provider stack and one registered space, behind the
 // props a host holds. It is the composition the app root performs, exposed so
 // an embedding host does not assemble a workspace from internals.
-export { SproutWorkspace } from './SproutWorkspace';
-export type { SproutWorkspaceProps, SproutProject } from './SproutWorkspace';
-export type { WorkspaceHostTool } from './workspaceHostTools';
+export { SproutSpaces } from './SproutWorkspace';
+export type { SproutSpacesProps, SproutProject } from './SproutWorkspace';
+export type { SpacesHostTool } from './workspaceHostTools';
 
 // The chat unit: the chat state, its WebSocket event reducer, the chat
 // session manager and the queue, plus the chat/review/diff view props. A host
 // mounts `WorkspaceChatProvider` with a fetch function and an events provider
 // and reads the chat through `useWorkspaceChat()` / `useWorkspaceChatProps()`;
 // the standalone app mounts it with its own transport, unchanged.
-export {
-  WorkspaceChatProvider,
-  useWorkspaceChat,
-  useWorkspaceChatProps,
-  createEmptyChatState,
-} from './WorkspaceChatContext';
+export { SpacesChatProvider, useSpacesChat, useSpacesChatProps, createEmptyChatState } from './WorkspaceChatContext';
 export type {
-  WorkspaceChatProviderProps,
-  WorkspaceChatValue,
-  WorkspaceChatRefs,
-  WorkspaceChatViewProps,
-  WorkspaceChatPropsOverrides,
-  WorkspaceChatReviewProps,
-  WorkspaceChatDiffState,
+  SpacesChatProviderProps,
+  SpacesChatValue,
+  SpacesChatRefs,
+  SpacesChatViewProps,
+  SpacesChatPropsOverrides,
+  SpacesChatReviewProps,
+  SpacesChatDiffState,
 } from './WorkspaceChatContext';
 
 // The agent's blocking prompts: the tool-approval dialog (with its elevation
@@ -208,7 +197,7 @@ export type {
 // `WorkspaceChatProvider` wherever the chat unit is mounted — without it a
 // request leaves the agent waiting with nothing on screen. An own-mode
 // `SproutWorkspace` and Sprout's app root mount it already.
-export { WorkspaceAgentPrompts } from './WorkspaceAgentPrompts';
+export { SpacesAgentPrompts } from './WorkspaceAgentPrompts';
 
 // The editor unit: the open files, the active file, and opening, closing and
 // saving them by path, over the buffer manager `SproutProviders` mounts. A
@@ -224,7 +213,7 @@ export type {
   WorkspaceEditorValue,
   WorkspaceEditorFile,
   WorkspaceEditorProps,
-  OpenWorkspaceFileOptions,
+  OpenProjectFolderFileOptions,
 } from './WorkspaceEditorContext';
 export { WorkspaceEditorView } from './WorkspaceEditorView';
 export type { WorkspaceEditorViewProps } from './WorkspaceEditorView';
@@ -233,13 +222,13 @@ export type { WorkspaceEditorViewProps } from './WorkspaceEditorView';
 // and the create/delete/rename calls through `clientFetch`): the one
 // implementation the app's sidebar and the composed workspace's `fileTree`
 // view use. A host building `viewProps.fileTree` itself starts from it.
-export { useWorkspaceFileTree, fetchWorkspaceFiles } from './useWorkspaceFileTree';
-export type { UseWorkspaceFileTreeOptions } from './useWorkspaceFileTree';
+export { useProjectFolderFileTree, fetchProjectFolderFiles } from './useWorkspaceFileTree';
+export type { UseProjectFolderFileTreeOptions } from './useWorkspaceFileTree';
 
 // The space shell contract a host supplies through SproutWorkspace's
 // `shellProps` (the data the app root assembles today), so mounting a space's
 // registered shell is typed from this one entry point.
-export type { WorkspaceShellProps } from '../workspaces/shell';
+export type { SpacesShellProps } from '../workspaces/shell';
 
 // The escalation seam: when an agent command cannot run in the browser (exit
 // 127, a git push the browser can't do, the VFS quota), the WASM shell calls
@@ -290,18 +279,18 @@ export type { EscalationTriggerEvent, UseEscalationTriggersOptions } from '../ho
 // worktrees gated on `serverGit`; `WorkspaceSearchView` is the app's search
 // panel over `/api/search`. Both open files through `onOpenFile` /
 // `onFileClick`, which the composed workspace wires to the editor unit.
-export { WorkspaceGitView } from './WorkspaceGitView';
-export type { WorkspaceGitViewProps, WorkspaceGitPanelProps } from './WorkspaceGitView';
-export { WorkspaceSearchView } from './WorkspaceSearchView';
-export type { WorkspaceSearchViewProps } from './WorkspaceSearchView';
+export { SpacesGitView } from './WorkspaceGitView';
+export type { SpacesGitViewProps, SpacesGitPanelProps } from './WorkspaceGitView';
+export { SpacesSearchView } from './WorkspaceSearchView';
+export type { SpacesSearchViewProps } from './WorkspaceSearchView';
 
 // The terminal view (composite — reads the host): the app's terminal surface,
 // rendered in place for an arranged `terminal`. It attaches to the host's
 // in-browser WASM shell (`transport.agent.kind: 'wasm'`) or, for a host that
 // declares `capabilities.localTerminal`, to the PTY on its backend; with
 // neither it renders an unavailable notice.
-export { WorkspaceTerminalView, resolveWorkspaceTerminalBackend } from './WorkspaceTerminalView';
-export type { WorkspaceTerminalViewProps, WorkspaceTerminalBackend } from './WorkspaceTerminalView';
+export { SpacesTerminalView, resolveSpacesTerminalBackend } from './WorkspaceTerminalView';
+export type { SpacesTerminalViewProps, SpacesTerminalBackend } from './WorkspaceTerminalView';
 
 // The in-browser workspace's read-only file API: the host contract's
 // move-to-container seam. A host that moves a project off the in-browser WASM
@@ -315,11 +304,11 @@ export type { WorkspaceTerminalViewProps, WorkspaceTerminalBackend } from './Wor
 // never runs the in-browser agent (a daemon backend) leaves the capability off
 // and never calls these.
 export {
-  listBrowserWorkspaceFiles,
-  readBrowserWorkspaceFile,
+  listBrowserProjectFolderFiles,
+  readBrowserProjectFolderFile,
   BrowserFilesUnavailableError,
 } from '../services/browserWorkspaceFiles';
-export type { WorkspaceFileEntry } from '../services/browserWorkspaceFiles';
+export type { ProjectFolderFileEntry } from '../services/browserWorkspaceFiles';
 
 // The command palette unit (composite — requires the webui context stack):
 // the app's palette as an overlay an arrangement places (the default overlay
@@ -328,8 +317,8 @@ export type { WorkspaceFileEntry } from '../services/browserWorkspaceFiles';
 // host registers handlers for built-in command ids with
 // `registerCommandHandler` or passes its own commands through
 // `viewProps.commandPalette`.
-export { WorkspaceCommandPalette } from './WorkspaceCommandPalette';
-export type { WorkspaceCommandPaletteProps } from './WorkspaceCommandPalette';
+export { SpacesCommandPalette } from './WorkspaceCommandPalette';
+export type { SpacesCommandPaletteProps } from './WorkspaceCommandPalette';
 export type { CommandDef } from '../components/CommandPalette';
 export { OPEN_COMMAND_PALETTE_EVENT } from '../config/layout';
 export { registerCommandHandler } from '../services/commandHandlers';

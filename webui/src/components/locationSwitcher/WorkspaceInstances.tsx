@@ -2,7 +2,7 @@ import { Monitor } from 'lucide-react';
 import React from 'react';
 import type { SproutInstance } from '../../services/api';
 
-export interface WorkspaceInstancesProps {
+export interface SpacesInstancesProps {
   instances: SproutInstance[];
   selectedInstancePID: number;
   isSwitching: boolean;
@@ -10,7 +10,7 @@ export interface WorkspaceInstancesProps {
   onInstanceChange: ((pid: number) => void) | undefined;
 }
 
-export const WorkspaceInstances: React.FC<WorkspaceInstancesProps> = ({
+export const SpacesInstances: React.FC<SpacesInstancesProps> = ({
   instances,
   selectedInstancePID,
   isSwitching,

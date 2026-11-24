@@ -446,7 +446,7 @@ describe('FileTree', () => {
         ref,
         onFileSelect: vi.fn(),
         onFetchFiles: slowFetch,
-        workspaceRoot: '/Users/dev/proj',
+        projectFolder: '/Users/dev/proj',
       }));
     });
 
@@ -795,7 +795,7 @@ describe('FileTree', () => {
         ref,
         onFileSelect: vi.fn(),
         files: makeFiles(),
-        workspaceRoot: '/home/user/project',
+        projectFolder: '/home/user/project',
       }));
     });
     const readmeItem = container.querySelector('[data-ext=".md"]')!;

@@ -95,7 +95,7 @@ import { headlessHost, HostProvider } from '../host/HostProvider';
 import type { SproutHost } from '../host/types';
 import { SproutProviders } from '../providers/SproutProviders';
 import { THEME_PACKS } from '../themes/themePacks';
-import { SproutWorkspace } from './SproutWorkspace';
+import { SproutSpaces } from './SproutWorkspace';
 import type { SproutProject } from './SproutWorkspace';
 
 const WEBUI_SRC = path.resolve(__dirname, '..');
@@ -282,11 +282,11 @@ function lightHost(): SproutHost {
  * is NOT (the host owns its document), so a token the light pack omits falls
  * through to the package's dark `:root` default.
  */
-function ArrangedWorkspace(): JSX.Element {
+function ArrangedSpaces(): JSX.Element {
   return (
     <HostProvider host={lightHost()}>
       <SproutProviders>
-        <SproutWorkspace
+        <SproutSpaces
           providers="ambient"
           project={PROJECT}
           space="code"
@@ -337,14 +337,14 @@ describe('a light workspace resolves the composer and the change list light', ()
     // The premise of the whole bug: in a host-embedded mount the workspace root
     // is themed and the host's `documentElement` is not, so an omitted pack
     // token falls through to the package's dark `:root` default.
-    render(<ArrangedWorkspace />);
+    render(<ArrangedSpaces />);
     const projectFolder = await screen.findByTestId('sprout-workspace');
     await waitFor(() => expect(projectFolder.getAttribute('data-theme')).toBe('light'));
     expect(document.documentElement.getAttribute('data-theme')).toBeNull();
   });
 
   it('resolves the change list tokens to the light pack, not the package dark defaults', async () => {
-    render(<ArrangedWorkspace />);
+    render(<ArrangedSpaces />);
     const panel = await waitFor(() => {
       const found = document.querySelector('.sprout-workspace .agent-changes-panel');
       expect(found).not.toBeNull();
@@ -360,7 +360,7 @@ describe('a light workspace resolves the composer and the change list light', ()
 
   it('resolves the composer tokens to the light pack, not the package dark defaults', async () => {
     // The composer is @sprout/ui's CommandInput, rendered by the chat view.
-    render(<ArrangedWorkspace />);
+    render(<ArrangedSpaces />);
     const composer = await waitFor(() => {
       const found = document.querySelector('.sprout-workspace .command-input');
       expect(found).not.toBeNull();
@@ -381,7 +381,7 @@ describe('a light workspace resolves the composer and the change list light', ()
     const original = lightPack!.variables['--bg-secondary'];
     delete lightPack!.variables['--bg-secondary'];
     try {
-      render(<ArrangedWorkspace />);
+      render(<ArrangedSpaces />);
       const composer = await waitFor(() => {
         const found = document.querySelector('.sprout-workspace .command-input');
         expect(found).not.toBeNull();

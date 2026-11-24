@@ -64,7 +64,7 @@ export function useEditorSemantic(
   bufferRef: React.MutableRefObject<EditorBuffer | null | undefined>,
   localContent: string,
   isSemanticLanguage: (languageId: string) => boolean,
-  openWorkspaceBuffer: (buffer: {
+  openProjectFolderBuffer: (buffer: {
     kind: 'file' | 'diff';
     path: string;
     title: string;
@@ -177,7 +177,7 @@ export function useEditorSemantic(
       const dotIndex = fileName.lastIndexOf('.');
       const ext = dotIndex >= 0 ? fileName.slice(dotIndex) : undefined;
 
-      openWorkspaceBuffer({
+      openProjectFolderBuffer({
         kind: 'file',
         path: def.path,
         title: fileName,
@@ -191,7 +191,7 @@ export function useEditorSemantic(
       debugLog('[useEditorSemantic] Go to definition failed:', err);
       notificationBus.notify('warning', 'Go to Definition', 'Failed to resolve definition.');
     }
-  }, [apiService, openWorkspaceBuffer, handleGoToLine, isSemanticLanguage]);
+  }, [apiService, openProjectFolderBuffer, handleGoToLine, isSemanticLanguage]);
 
   // ---------------------------------------------------------------------------
   // Find all references
@@ -279,7 +279,7 @@ export function useEditorSemantic(
       const dotIndex = fileName.lastIndexOf('.');
       const ext = dotIndex >= 0 ? fileName.slice(dotIndex) : undefined;
 
-      openWorkspaceBuffer({
+      openProjectFolderBuffer({
         kind: 'file',
         path: filePath,
         title: fileName,
@@ -290,7 +290,7 @@ export function useEditorSemantic(
         document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }));
       });
     },
-    [handleGoToLine, openWorkspaceBuffer],
+    [handleGoToLine, openProjectFolderBuffer],
   );
 
   // ---------------------------------------------------------------------------
@@ -303,7 +303,7 @@ export function useEditorSemantic(
       const dotIndex = fileName.lastIndexOf('.');
       const ext = dotIndex >= 0 ? fileName.slice(dotIndex) : undefined;
 
-      openWorkspaceBuffer({
+      openProjectFolderBuffer({
         kind: 'file',
         path: filePath,
         title: fileName,
@@ -316,7 +316,7 @@ export function useEditorSemantic(
         });
       }
     },
-    [openWorkspaceBuffer],
+    [openProjectFolderBuffer],
   );
 
   return {

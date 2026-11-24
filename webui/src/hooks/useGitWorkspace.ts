@@ -44,7 +44,7 @@ export interface DeepReviewResult {
   warnings?: string[];
 }
 
-export interface UseGitWorkspaceOptions {
+export interface UseGitProjectFolderOptions {
   fetchFn: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   gitRefreshToken: number;
   selectedGitFilePath?: string | null;
@@ -54,7 +54,7 @@ export interface UseGitWorkspaceOptions {
   onGitStage: (files: string[]) => Promise<void>;
   onGitUnstage: (files: string[]) => Promise<void>;
   onGitDiscard: (files: string[]) => Promise<void>;
-  openWorkspaceBuffer: (options: {
+  openProjectFolderBuffer: (options: {
     kind: 'chat' | 'diff' | 'review' | 'compare';
     path: string;
     title: string;
@@ -76,8 +76,8 @@ export const useGitProjectFolder = ({
   onGitStage,
   onGitUnstage,
   onGitDiscard,
-  openWorkspaceBuffer,
-}: UseGitWorkspaceOptions) => {
+  openProjectFolderBuffer,
+}: UseGitProjectFolderOptions) => {
   const log = useLog();
   const events = useEvents();
 
@@ -258,7 +258,7 @@ export const useGitProjectFolder = ({
               ? 'unstaged'
               : 'combined';
         setDiffMode(nextMode);
-        openWorkspaceBuffer({
+        openProjectFolderBuffer({
           kind: 'diff',
           path: `__workspace/diff/${filePath}`,
           title: `Diff: ${filePath.split('/').pop() || filePath}`,
@@ -282,7 +282,7 @@ export const useGitProjectFolder = ({
         setIsDiffLoading(false);
       }
     },
-    [fetchFn, openWorkspaceBuffer, log],
+    [fetchFn, openProjectFolderBuffer, log],
   );
 
   useEffect(() => {
@@ -533,7 +533,7 @@ export const useGitProjectFolder = ({
     try {
       const response = await miscApi.generateDeepReview(fetchFn);
       setDeepReview(response);
-      openWorkspaceBuffer({
+      openProjectFolderBuffer({
         kind: 'review',
         path: '__workspace/review',
         title: 'Review',
@@ -548,7 +548,7 @@ export const useGitProjectFolder = ({
     } finally {
       setIsReviewLoading(false);
     }
-  }, [fetchFn, onViewChange, openWorkspaceBuffer]);
+  }, [fetchFn, onViewChange, openProjectFolderBuffer]);
 
   const handleFixFromReview = useCallback(
     async (options?: { fixPrompt?: string; selectedItems?: string[] }) => {
@@ -608,7 +608,7 @@ export const useGitProjectFolder = ({
         return;
       }
 
-      openWorkspaceBuffer({
+      openProjectFolderBuffer({
         kind: 'diff',
         path: `__workspace/diff/${activeDiffPath}`,
         title: `Diff: ${activeDiffPath.split('/').pop() || activeDiffPath}`,
@@ -623,7 +623,7 @@ export const useGitProjectFolder = ({
         },
       });
     },
-    [activeDiff, activeDiffPath, openWorkspaceBuffer],
+    [activeDiff, activeDiffPath, openProjectFolderBuffer],
   );
 
   const currentBranch = gitBranches.current;
@@ -750,7 +750,7 @@ export const useGitProjectFolder = ({
   return {
     gitStatus,
     gitBranches,
-    workspaceRoot: projectFolder,
+    projectFolder: projectFolder,
     commitMessage,
     setCommitMessage,
     selectedFiles,

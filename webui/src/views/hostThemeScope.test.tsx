@@ -61,7 +61,7 @@ import { useHost } from '../host';
 import { headlessHost } from '../host/HostProvider';
 import type { SproutHost } from '../host/types';
 import { THEME_PACKS } from '../themes/themePacks';
-import { SproutWorkspace } from './SproutWorkspace';
+import { SproutSpaces } from './SproutWorkspace';
 import type { SproutProject } from './SproutWorkspace';
 
 const PROJECT: SproutProject = { id: '/Users/dev/project', name: 'project', root: '/Users/dev/project' };
@@ -96,13 +96,13 @@ function HostProbe(): JSX.Element {
 
 describe('a host theme overrides tokens only inside the workspace root', () => {
   it('applies the host token overrides on the workspace root element', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={hostWithTokens({ '--accent-primary': '#8b5cf6' })} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={hostWithTokens({ '--accent-primary': '#8b5cf6' })} />);
     const projectFolder = await screen.findByTestId('sprout-workspace');
     await waitFor(() => expect(projectFolder.style.getPropertyValue('--accent-primary')).toBe('#8b5cf6'));
   });
 
   it('does not apply the override on documentElement (it cannot leak onto the host page)', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={hostWithTokens({ '--accent-primary': '#8b5cf6' })} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={hostWithTokens({ '--accent-primary': '#8b5cf6' })} />);
     const projectFolder = await screen.findByTestId('sprout-workspace');
     await waitFor(() => expect(projectFolder.style.getPropertyValue('--accent-primary')).toBe('#8b5cf6'));
     // The document root carries the app's own theme, never the host's override.
@@ -117,9 +117,9 @@ describe('a host theme overrides tokens only inside the workspace root', () => {
           <button type="button" data-testid="recolor" onClick={() => setColor('#222222')}>
             recolor
           </button>
-          <SproutWorkspace project={PROJECT} space="code" host={hostWithTokens({ '--accent-primary': color })}>
+          <SproutSpaces project={PROJECT} space="code" host={hostWithTokens({ '--accent-primary': color })}>
             <HostProbe />
-          </SproutWorkspace>
+          </SproutSpaces>
         </>
       );
     }
@@ -139,7 +139,7 @@ describe('a host theme overrides tokens only inside the workspace root', () => {
   });
 
   it('writes no host override when the host theme carries no tokens', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={hostWithTokens({})} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={hostWithTokens({})} />);
     const projectFolder = await screen.findByTestId('sprout-workspace');
     // The root carries the theme pack's value (mirrored so a host page's
     // workspace is themed), and nothing from the host.
@@ -149,7 +149,7 @@ describe('a host theme overrides tokens only inside the workspace root', () => {
   });
 
   it('mirrors the theme mode and pack onto the root, so host-page scoped rules match', async () => {
-    render(<SproutWorkspace project={PROJECT} space="code" host={hostWithTokens({}, 'light')} />);
+    render(<SproutSpaces project={PROJECT} space="code" host={hostWithTokens({}, 'light')} />);
     const projectFolder = await screen.findByTestId('sprout-workspace');
     // A host page's `documentElement` is the host's; the workspace carries its
     // own `data-theme` for the `[data-theme='light'] .x` rules, and the pack's
@@ -162,7 +162,7 @@ describe('a host theme overrides tokens only inside the workspace root', () => {
 
   it('ignores non-custom-property keys (a token is a CSS custom property)', async () => {
     render(
-      <SproutWorkspace
+      <SproutSpaces
         project={PROJECT}
         space="code"
         host={hostWithTokens({ '--accent-primary': '#8b5cf6', color: 'red' })}
@@ -176,7 +176,7 @@ describe('a host theme overrides tokens only inside the workspace root', () => {
 
   it('clears the host overrides it wrote when the workspace unmounts', async () => {
     const { unmount } = render(
-      <SproutWorkspace project={PROJECT} space="code" host={hostWithTokens({ '--accent-primary': '#8b5cf6' })} />,
+      <SproutSpaces project={PROJECT} space="code" host={hostWithTokens({ '--accent-primary': '#8b5cf6' })} />,
     );
     const projectFolder = await screen.findByTestId('sprout-workspace');
     await waitFor(() => expect(projectFolder.style.getPropertyValue('--accent-primary')).toBe('#8b5cf6'));
@@ -189,7 +189,7 @@ describe('a host theme overrides tokens only inside the workspace root', () => {
 
   it('clears only the tokens it wrote, leaving an unrelated inline custom property alone', async () => {
     const { unmount } = render(
-      <SproutWorkspace project={PROJECT} space="code" host={hostWithTokens({ '--accent-primary': '#8b5cf6' })} />,
+      <SproutSpaces project={PROJECT} space="code" host={hostWithTokens({ '--accent-primary': '#8b5cf6' })} />,
     );
     const projectFolder = await screen.findByTestId('sprout-workspace');
     await waitFor(() => expect(projectFolder.style.getPropertyValue('--accent-primary')).toBe('#8b5cf6'));

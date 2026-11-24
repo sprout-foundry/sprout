@@ -18,7 +18,7 @@ import './WorkspaceTerminalView.css';
  *   backend, else through the host transport.
  * - `none` — the workspace has no terminal; the view says so.
  */
-export type WorkspaceTerminalBackend = 'wasm' | 'pty' | 'none';
+export type SpacesTerminalBackend = 'wasm' | 'pty' | 'none';
 
 /**
  * The terminal backend a host offers. A host whose agent runs in the browser
@@ -30,7 +30,7 @@ export type WorkspaceTerminalBackend = 'wasm' | 'pty' | 'none';
  * `capabilities.localTerminal` gets the PTY terminal on its backend; any other
  * host has none.
  */
-export function resolveWorkspaceTerminalBackend(host: SproutHost): WorkspaceTerminalBackend {
+export function resolveSpacesTerminalBackend(host: SproutHost): SpacesTerminalBackend {
   const agent = host.transport.agent?.kind;
   if (agent === 'wasm') return 'wasm';
   if (agent === 'daemon') return 'pty';
@@ -38,13 +38,13 @@ export function resolveWorkspaceTerminalBackend(host: SproutHost): WorkspaceTerm
   return 'none';
 }
 
-export interface WorkspaceTerminalViewProps {
+export interface SpacesTerminalViewProps {
   /**
    * The backend to attach to. Omitted (or `'auto'`), it is resolved from the
    * host (`resolveWorkspaceTerminalBackend`). A host may force `'none'` to
    * show the unavailable state, or pin a backend it knows is served.
    */
-  backend?: WorkspaceTerminalBackend | 'auto';
+  backend?: SpacesTerminalBackend | 'auto';
   /** Additional class on the view root, alongside `sprout-terminal-view`. */
   className?: string;
   /** Replaces the default message the view shows when no terminal is available. */
@@ -59,13 +59,13 @@ const DEFAULT_UNAVAILABLE_MESSAGE = 'Terminal not available in this workspace.';
  * rendered in place in its slot. It fills the slot and is always expanded, so
  * its sessions start when it mounts.
  */
-export function WorkspaceTerminalView({
+export function SpacesTerminalView({
   backend = 'auto',
   className,
   unavailableMessage,
-}: WorkspaceTerminalViewProps): JSX.Element {
+}: SpacesTerminalViewProps): JSX.Element {
   const host = useHost();
-  const resolved = backend === 'auto' ? resolveWorkspaceTerminalBackend(host) : backend;
+  const resolved = backend === 'auto' ? resolveSpacesTerminalBackend(host) : backend;
   if (resolved === 'none') {
     const rootClass = ['sprout-terminal-view', 'sprout-terminal-view--unavailable', className]
       .filter(Boolean)
@@ -83,7 +83,7 @@ function ArrangedTerminal({
   backend,
   className,
 }: {
-  backend: Exclude<WorkspaceTerminalBackend, 'none'>;
+  backend: Exclude<SpacesTerminalBackend, 'none'>;
   className?: string;
 }): JSX.Element {
   const [isResizingVertical, setIsResizingVertical] = useState(false);
@@ -113,4 +113,4 @@ function ArrangedTerminal({
   );
 }
 
-export default WorkspaceTerminalView;
+export default SpacesTerminalView;

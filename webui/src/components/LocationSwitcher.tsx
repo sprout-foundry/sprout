@@ -53,7 +53,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
   // ─── Hook: Suggestions, input, keyboard, panel toggles ───
   const sug = useProjectFolderSuggestions({
     isConnected,
-    workspaceRoot: ws.workspaceRoot,
+    projectFolder: ws.projectFolder,
     daemonRoot: ws.daemonRoot,
     remoteContext: ws.remoteContext,
     switchingState: ws.switchingState,
@@ -74,11 +74,11 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
 
   // ─── Derived values ───
   const triggerProjectFolderName = useMemo(() => {
-    if (nameOnly) return ws.workspaceRoot?.split('/').filter(Boolean).pop() || ws.workspaceRoot || '';
-    const display = getPathDisplayName(ws.workspaceRoot);
+    if (nameOnly) return ws.projectFolder?.split('/').filter(Boolean).pop() || ws.projectFolder || '';
+    const display = getPathDisplayName(ws.projectFolder);
     if (!ws.remoteContext?.homePath) return display;
-    return collapseHomePath(ws.workspaceRoot, ws.remoteContext.homePath);
-  }, [nameOnly, ws.remoteContext?.homePath, ws.workspaceRoot]);
+    return collapseHomePath(ws.projectFolder, ws.remoteContext.homePath);
+  }, [nameOnly, ws.remoteContext?.homePath, ws.projectFolder]);
 
   // ─── Render ───
   return (
@@ -116,7 +116,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         disabled={!isConnected || (ws.isLoading && !isOpen)}
-        title={ws.workspaceRoot || 'No project folder'}
+        title={ws.projectFolder || 'No project folder'}
       >
         <FolderOpen size={14} className="location-switcher-trigger-icon" />
         {sug.showText && <span className="location-switcher-trigger-text">{triggerProjectFolderName}</span>}
@@ -130,7 +130,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       {supportsSSH && isSshPanelOpen && (
         <SSHPanel
           remoteContext={ws.remoteContext}
-          workspaceRoot={ws.workspaceRoot}
+          projectFolder={ws.projectFolder}
           switchingState={ws.switchingState}
           sshFailure={ws.sshFailure}
           showExpiredSessionRecovery={ws.showExpiredSessionRecovery}
@@ -162,7 +162,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
 
       {isOpen && (
         <ProjectFolderPopover
-          workspaceRoot={ws.workspaceRoot}
+          projectFolder={ws.projectFolder}
           daemonRoot={ws.daemonRoot}
           remoteContext={ws.remoteContext}
           switchingState={ws.switchingState}

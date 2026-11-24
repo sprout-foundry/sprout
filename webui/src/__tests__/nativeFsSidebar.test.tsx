@@ -187,7 +187,7 @@ describe('onFetchFiles — gate ACTIVE routes through the bridge', () => {
 
     render(
       <HostProvider>
-        <Sidebar onFileClick={() => {}} workspaceRoot="/ws" />
+        <Sidebar onFileClick={() => {}} projectFolder="/ws" />
       </HostProvider>,
     );
     expect(screen.getByTestId('mock-filetree')).toBeTruthy();
@@ -227,7 +227,7 @@ describe('onFetchFiles — gate ACTIVE routes through the bridge', () => {
 
     render(
       <HostProvider>
-        <Sidebar onFileClick={() => {}} workspaceRoot="/ws" />
+        <Sidebar onFileClick={() => {}} projectFolder="/ws" />
       </HostProvider>,
     );
     expect(screen.getByTestId('mock-filetree')).toBeTruthy();
@@ -257,7 +257,7 @@ describe('onFetchFiles — gate ACTIVE routes through the bridge', () => {
 
     render(
       <HostProvider>
-        <Sidebar onFileClick={() => {}} workspaceRoot="/ws" />
+        <Sidebar onFileClick={() => {}} projectFolder="/ws" />
       </HostProvider>,
     );
     expect(screen.getByTestId('mock-filetree')).toBeTruthy();
@@ -297,7 +297,7 @@ describe('onFetchFiles — gate INACTIVE falls back to clientFetch', () => {
 
     render(
       <HostProvider>
-        <Sidebar onFileClick={() => {}} workspaceRoot="/ws" />
+        <Sidebar onFileClick={() => {}} projectFolder="/ws" />
       </HostProvider>,
     );
     expect(screen.getByTestId('mock-filetree')).toBeTruthy();

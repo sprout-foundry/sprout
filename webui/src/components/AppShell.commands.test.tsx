@@ -97,15 +97,21 @@ function ProbeEditor() {
   const isActiveRef = useRef(true);
   const wrapping = useRef(new Compartment());
   const wrapOn = useRef(false);
-  const { openWorkspaceBuffer } = useEditorManager();
+  const { openProjectFolderBuffer } = useEditorManager();
 
   // An open file buffer: the Edit menu's clipboard items need a text editor.
   const opened = useRef(false);
   useEffect(() => {
     if (opened.current) return;
     opened.current = true;
-    openWorkspaceBuffer({ kind: 'file', path: 'src/probe.ts', title: 'probe.ts', content: INITIAL_DOC, ext: '.ts' });
-  }, [openWorkspaceBuffer]);
+    openProjectFolderBuffer({
+      kind: 'file',
+      path: 'src/probe.ts',
+      title: 'probe.ts',
+      content: INITIAL_DOC,
+      ext: '.ts',
+    });
+  }, [openProjectFolderBuffer]);
 
   useEffect(() => {
     const view = new EditorView({

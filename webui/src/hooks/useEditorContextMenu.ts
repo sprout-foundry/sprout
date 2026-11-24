@@ -35,7 +35,7 @@ export interface ContextMenuState {
 
 export interface UseEditorContextMenuReturn {
   contextMenu: ContextMenuState | null;
-  workspaceRoot: string;
+  projectFolder: string;
   hideContextMenu: () => void;
   handleEditorContextMenu: (e: React.MouseEvent) => void;
   handleCopySelection: () => void;
@@ -177,7 +177,7 @@ export function useEditorContextMenu(
 
   return {
     contextMenu,
-    workspaceRoot: projectFolder,
+    projectFolder: projectFolder,
     hideContextMenu,
     handleEditorContextMenu,
     handleCopySelection,

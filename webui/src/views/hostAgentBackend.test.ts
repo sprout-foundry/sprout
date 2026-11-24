@@ -31,7 +31,7 @@ const NOOP_ADAPTER: APIAdapter = {
   supportsSSH: false,
   supportsGit: false,
   supportsChat: false,
-  supportsWorkspaceSwitching: false,
+  supportsProjectFolderSwitching: false,
   supportsExport: false,
   supportsInstances: false,
   supportsLocalTerminal: false,

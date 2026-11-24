@@ -60,7 +60,7 @@ import type { SproutHost } from '../host';
 import { setActiveHost } from '../host/accessor';
 import { headlessHost } from '../host/HostProvider';
 import { __resetCommandHandlersForTests, hasCommandHandler } from '../services/commandHandlers';
-import { SproutWorkspace } from './SproutWorkspace';
+import { SproutSpaces } from './SproutWorkspace';
 
 const PROJECT = { id: '/work/widgets', root: '/work/widgets', name: 'widgets' };
 
@@ -76,7 +76,7 @@ function host(
   };
 }
 
-const daemonHost = () => host({ git: true, localTerminal: true, workspaceSwitching: true });
+const daemonHost = () => host({ git: true, localTerminal: true, projectFolderSwitching: true });
 
 const REPO_STATUS = {
   message: 'success',
@@ -168,7 +168,7 @@ afterEach(() => {
 
 function mount(projectFolderHost: SproutHost, space: 'code' | 'design' = 'code') {
   setActiveHost(projectFolderHost);
-  return render(<SproutWorkspace project={PROJECT} space={space} host={projectFolderHost} />);
+  return render(<SproutSpaces project={PROJECT} space={space} host={projectFolderHost} />);
 }
 
 function tabPaths(): string[] {

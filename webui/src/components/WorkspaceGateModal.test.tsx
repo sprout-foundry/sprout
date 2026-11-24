@@ -12,7 +12,7 @@ const modeState = vi.hoisted(() => ({ cloud: false, studio: false }));
 vi.mock('../config/mode', () => ({
   // Getters read the live flags so toggling modeState at runtime
   // affects the component's next render.
-  get supportsWorkspaceSwitching() {
+  get supportsProjectFolderSwitching() {
     return !modeState.cloud;
   },
   get supportsFolderPicker() {
@@ -122,7 +122,7 @@ function renderModal(overrides: Record<string, unknown> = {}) {
   // Mirror the test's modeState flags into a host so per-test cloud/studio
   // toggles keep working exactly as before.
   const host = makeTestHost({
-    workspaceSwitching: !modeState.cloud,
+    projectFolderSwitching: !modeState.cloud,
     folderPicker: modeState.studio,
   });
   act(() => {

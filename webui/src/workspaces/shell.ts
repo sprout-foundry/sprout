@@ -13,14 +13,14 @@
 
 import type { EditorBuffer } from '@sprout/ui';
 import type { ComponentProps } from 'react';
-import type { default as WorkspacePane } from '../components/WorkspacePane';
+import type { default as SpacesPane } from '../components/WorkspacePane';
 import type { ChatSession } from '../services/chatSessions';
 import type { PerChatState, ViewType } from '../types/app';
 import type { GitBranchesState, GitStatusData } from '../types/git-types';
 import type { ShipPayload } from './ship';
 
 /** Chat/editor surface payload, consumed by the Code shell. */
-export interface WorkspaceShellChat {
+export interface SpacesShellChat {
   perChatCache?: Record<string, PerChatState>;
   activeChatId?: string | null;
   chatSessions?: ChatSession[];
@@ -31,23 +31,23 @@ export interface WorkspaceShellChat {
   onDeleteChat?: (id: string, options?: { removeWorktree?: boolean }) => Promise<void> | void;
   onDeleteAllChats?: () => void;
   onRenameChat?: (id: string, name: string) => void;
-  chatProps: ComponentProps<typeof WorkspacePane>['chatProps'];
-  reviewProps: ComponentProps<typeof WorkspacePane>['reviewProps'];
-  diffState: ComponentProps<typeof WorkspacePane>['diffState'];
+  chatProps: ComponentProps<typeof SpacesPane>['chatProps'];
+  reviewProps: ComponentProps<typeof SpacesPane>['reviewProps'];
+  diffState: ComponentProps<typeof SpacesPane>['diffState'];
 }
 
 /** Mockup payload, consumed by the Code shell's preview panel. */
-export interface WorkspaceShellMockup {
+export interface SpacesShellMockup {
   /** True while the mockup-presence probe is in flight. */
   loading: boolean;
   /** True when the workspace has a `design/mockup.html` to show. */
   present: boolean;
 }
 /** Git state the Code shell's status bar shows. */
-export interface WorkspaceShellGit {
+export interface SpacesShellGit {
   gitBranches: GitBranchesState;
   gitStatus: GitStatusData | null;
-  workspaceRoot: string;
+  projectFolder: string;
   /**
    * The name the status bar labels the workspace with. An embedding host
    * passes its project's name, since its workspace root (a container path such
@@ -61,7 +61,7 @@ export interface WorkspaceShellGit {
  * Everything a mode shell may need from the app, in one object. Shells take
  * the whole object and read only what their mode renders.
  */
-export interface WorkspaceShellProps {
+export interface SpacesShellProps {
   // Viewport and shell chrome (both shells).
   isMobile: boolean;
   isTablet: boolean;
@@ -95,8 +95,8 @@ export interface WorkspaceShellProps {
   handleOutlineNavigateToSymbol: (line: number) => void;
 
   // Per-surface payloads; each shell reads only its own.
-  chat: WorkspaceShellChat;
-  mockup: WorkspaceShellMockup;
-  git: WorkspaceShellGit;
+  chat: SpacesShellChat;
+  mockup: SpacesShellMockup;
+  git: SpacesShellGit;
   ship: ShipPayload;
 }

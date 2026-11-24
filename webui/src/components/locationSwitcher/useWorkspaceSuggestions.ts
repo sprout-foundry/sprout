@@ -7,7 +7,7 @@ import { MAX_RECENT_WORKSPACES, MAX_SUGGESTIONS } from './types';
 
 export interface UseProjectFolderSuggestionsProps {
   isConnected: boolean;
-  workspaceRoot: string;
+  projectFolder: string;
   daemonRoot: string;
   remoteContext: RemoteProjectFolderContext | null;
   switchingState: SwitchingState;
@@ -52,7 +52,7 @@ export interface UseProjectFolderSuggestionsResult {
 
 export function useProjectFolderSuggestions({
   isConnected,
-  workspaceRoot: projectFolder,
+  projectFolder: projectFolder,
   daemonRoot,
   remoteContext,
   switchingState: _switchingState,
@@ -70,7 +70,7 @@ export function useProjectFolderSuggestions({
   setIsOpen,
   setIsSshPanelOpen,
 }: UseProjectFolderSuggestionsProps): UseProjectFolderSuggestionsResult {
-  const { workspaceSwitching: supportsWorkspaceSwitching } = useHostCapabilities();
+  const { projectFolderSwitching: supportsProjectFolderSwitching } = useHostCapabilities();
   const [inputValue, setInputValue] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [suggestions, setSuggestions] = useState<ProjectFolderDirectory[]>([]);
@@ -278,13 +278,13 @@ export function useProjectFolderSuggestions({
 
   // sprout:open-workspace-switcher event — disabled in cloud mode
   useEffect(() => {
-    if (!supportsWorkspaceSwitching) return;
+    if (!supportsProjectFolderSwitching) return;
     const handler = () => {
       openPopover();
     };
     window.addEventListener('sprout:open-workspace-switcher', handler);
     return () => window.removeEventListener('sprout:open-workspace-switcher', handler);
-  }, [openPopover, supportsWorkspaceSwitching]);
+  }, [openPopover, supportsProjectFolderSwitching]);
 
   // Click outside
   useEffect(() => {

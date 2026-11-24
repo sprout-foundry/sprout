@@ -130,7 +130,7 @@ function makeShellProps(overrides = {}) {
     git: {
       gitBranches: { current: 'main', branches: [] },
       gitStatus: null,
-      workspaceRoot: '/tmp/repo',
+      projectFolder: '/tmp/repo',
     },
     ...overrides,
   };

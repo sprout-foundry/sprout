@@ -255,6 +255,34 @@ func TestLegacyKeyFallbackIsSoleLinkOnly(t *testing.T) {
 	}
 }
 
+// A legacy gpu.json whose name cannot name a file migrates under a usable
+// default instead of failing every gpu command.
+func TestLegacyMigrationWithUnusableName(t *testing.T) {
+	dir := withTestConfig(t)
+	gpuDir := filepath.Join(dir, "gpu")
+	if err := os.MkdirAll(gpuDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	legacy := []byte(`{"platform_url": "https://platform.example", "link_id": "link-x",
+		"name": "///", "engine": "127.0.0.1:8006"}`)
+	if err := os.WriteFile(filepath.Join(gpuDir, "gpu.json"), legacy, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	links, err := LoadLinks()
+	if err != nil {
+		t.Fatalf("LoadLinks with an unusable legacy name: %v", err)
+	}
+	if len(links) != 1 || !links[0].Linked() {
+		t.Fatalf("links = %+v, %v; want the legacy link migrated", links, err)
+	}
+	if links[0].Slot() == "" {
+		t.Fatalf("migrated link has no usable slot: %+v", links[0])
+	}
+	if _, err := os.Stat(filepath.Join(gpuDir, "gpu.json")); !os.IsNotExist(err) {
+		t.Fatalf("the legacy file is still there: %v", err)
+	}
+}
+
 func linksTestDir() string {
 	dir, _ := LinksDir()
 	return dir

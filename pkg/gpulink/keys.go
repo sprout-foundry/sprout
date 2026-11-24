@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/credentials"
@@ -124,6 +125,17 @@ func migrateLegacy() error {
 	if err := json.Unmarshal(data, st); err != nil {
 		return fmt.Errorf("parsing %s: %w", oldPath, err)
 	}
+	// A name that reduces to nothing (or to a Windows device name) cannot
+	// name a state file or service instance; give the link a usable one
+	// rather than failing every gpu command until the file is hand-deleted.
+	// Taken slots come from the links dir directly: LoadLinks would
+	// re-enter this migration while gpu.json is still on disk.
+	if st.Name == "" || Slot(st.Name) == "" {
+		st.Name = "gpu"
+		if slots, err := takenSlots(); err == nil {
+			st.Name = DefaultLinkName(slots, st.Engine)
+		}
+	}
 	// A per-link file at this slot (a link made after a downgrade, say) is
 	// newer than the legacy one; keep it and drop only the legacy file. The
 	// links dir is read directly: LoadLink would re-enter this migration
@@ -161,6 +173,38 @@ func migrateLegacy() error {
 		return fmt.Errorf("removing %s: %w", oldPath, err)
 	}
 	return nil
+}
+
+// takenSlots lists the slots of the per-link state files currently on disk,
+// without triggering the legacy migration (migrateLegacy uses it while
+// gpu.json is still on disk).
+func takenSlots() ([]*State, error) {
+	dir, err := LinksDir()
+	if err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("reading gpu link dir: %w", err)
+	}
+	var links []*State
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			continue
+		}
+		st := &State{Engine: DefaultEngine}
+		if json.Unmarshal(data, st) == nil && st.Linked() {
+			links = append(links, st)
+		}
+	}
+	return links, nil
 }
 
 func saveSecret(name, value string) (string, error) {

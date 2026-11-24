@@ -255,6 +255,18 @@ func startGPUService(out io.Writer, st *gpulink.State) {
 		_, _ = fmt.Fprintf(out, "Start it with `sprout gpu start --name %s`, or `sprout gpu install` to run every link in the background.\n", st.Slot())
 		return
 	}
+	// The single service an older sprout installed names no link in its
+	// `sprout gpu start`, so it cannot serve several links: once this link
+	// exists, every link gets its own instance and the single service
+	// retires. (Without this, its next restart crash-loops on "several
+	// GPUs are linked; pass --name" and drops the links it served.)
+	if gpulink.LegacyServiceInstalled() {
+		if links, err := gpulink.LoadLinks(); err == nil && len(links) > 0 {
+			if _, err := gpulink.InstallAllServices(linkNames(links)); err != nil {
+				_, _ = fmt.Fprintf(out, "Could not replace the older single service (%v); run `sprout gpu install` to replace it.\n", err)
+			}
+		}
+	}
 	path, err := gpulink.InstallService(st.Name)
 	if err != nil {
 		_, _ = fmt.Fprintf(out, "Could not run it in the background (%v); start it with `sprout gpu start --name %s`.\n", err, st.Slot())

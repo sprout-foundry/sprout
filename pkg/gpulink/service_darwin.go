@@ -12,24 +12,37 @@ import (
 	"strings"
 )
 
-const launchdLabel = "com.sprout.gpu"
+// launchdLabelPrefix begins each link's launchd label; the slot follows
+// (com.sprout.gpu.<slot>), so several links share one machine. The label
+// without a slot is the single agent older sprouts installed.
+const launchdLabelPrefix = "com.sprout.gpu."
 
-func servicePath() (string, error) {
+func launchdLabel(slot string) string { return launchdLabelPrefix + slot }
+
+func legacyLaunchdLabel() string { return "com.sprout.gpu" }
+
+func servicePath(slot string) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, "Library", "LaunchAgents", launchdLabel+".plist"), nil
+	return filepath.Join(home, "Library", "LaunchAgents", launchdLabel(slot)+".plist"), nil
 }
 
-// InstallService registers `sprout gpu start` as a launchd agent that runs
-// at login and restarts if it exits.
-func InstallService() (string, error) {
+// InstallService registers `sprout gpu start --name <name>` as a launchd
+// agent that runs at login and restarts if it exits. The single agent an
+// older sprout installed is left in place here — replacing it is
+// InstallAllServices' job, once every link has an agent.
+func InstallService(name string) (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
 		return "", err
 	}
-	path, err := servicePath()
+	slot := Slot(name)
+	if slot == "" {
+		return "", fmt.Errorf("link name %q has no usable service label; pick another with --name", name)
+	}
+	path, err := servicePath(slot)
 	if err != nil {
 		return "", err
 	}
@@ -37,14 +50,14 @@ func InstallService() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	logPath := filepath.Join(dir, "gpu.log")
+	logPath := filepath.Join(dir, "logs", slot+".log")
 	plist := `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>Label</key><string>` + launchdLabel + `</string>
+	<key>Label</key><string>` + html.EscapeString(launchdLabel(slot)) + `</string>
 	<key>ProgramArguments</key>
-	<array><string>` + html.EscapeString(exe) + `</string><string>gpu</string><string>start</string></array>
+	<array><string>` + html.EscapeString(exe) + `</string><string>gpu</string><string>start</string><string>--name</string><string>` + html.EscapeString(slot) + `</string></array>
 	<key>RunAtLoad</key><true/>
 	<key>KeepAlive</key><true/>
 	<key>ThrottleInterval</key><integer>30</integer>
@@ -56,31 +69,101 @@ func InstallService() (string, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return "", err
 	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o700); err != nil {
 		return "", err
 	}
 	if err := os.WriteFile(path, []byte(plist), 0o644); err != nil {
 		return "", err
 	}
 	domain := "gui/" + strconv.Itoa(os.Getuid())
-	_ = exec.Command("launchctl", "bootout", domain+"/"+launchdLabel).Run()                            //nolint:gosec // G204: launchctl with the link's own plist
+	_ = exec.Command("launchctl", "bootout", domain+"/"+launchdLabel(slot)).Run()                      //nolint:gosec // G204: launchctl with the link's own plist
 	if out, err := exec.Command("launchctl", "bootstrap", domain, path).CombinedOutput(); err != nil { //nolint:gosec // G204: launchctl with the link's own plist
 		return "", fmt.Errorf("launchctl bootstrap: %s", out)
 	}
 	return path, nil
 }
 
-// UninstallService stops and removes the launchd agent.
-func UninstallService() error {
-	path, err := servicePath()
+// InstallAllServices installs every link's agent and, once all are in
+// place, stops and removes the single agent an older sprout installed:
+// removing it any earlier would leave a migrated link unserved if a later
+// install failed.
+func InstallAllServices(names []string) ([]string, error) {
+	var paths []string
+	for _, name := range names {
+		path, err := InstallService(name)
+		if err != nil {
+			return paths, err
+		}
+		paths = append(paths, path)
+	}
+	return paths, uninstallLegacyService()
+}
+
+// ReplaceLegacyService stops and removes the single agent an older sprout
+// installed. Call it only when every link has its own agent.
+func ReplaceLegacyService() error { return uninstallLegacyService() }
+
+// UninstallService stops and removes one link's launchd agent. An empty slot
+// removes every link's agent and the legacy one.
+func UninstallService(slot string) error {
+	if slot != "" {
+		path, err := servicePath(slot)
+		if err != nil {
+			return err
+		}
+		_ = exec.Command("launchctl", "bootout", "gui/"+strconv.Itoa(os.Getuid())+"/"+launchdLabel(slot)).Run() //nolint:gosec // G204: launchctl with the link's own plist
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+	dir, err := launchAgentsDir()
 	if err != nil {
 		return err
 	}
-	_ = exec.Command("launchctl", "bootout", "gui/"+strconv.Itoa(os.Getuid())+"/"+launchdLabel).Run() //nolint:gosec // G204: launchctl with the link's own plist
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+	entries, err := os.ReadDir(dir)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("reading %s: %w", dir, err)
+	}
+	for _, e := range entries {
+		if name := strings.TrimSuffix(e.Name(), ".plist"); strings.HasPrefix(name, launchdLabelPrefix) {
+			_ = UninstallService(strings.TrimPrefix(name, launchdLabelPrefix))
+		}
+	}
+	return uninstallLegacyService()
+}
+
+// uninstallLegacyService stops and removes the single launchd agent an older
+// sprout installed; per-link agents have replaced it.
+func uninstallLegacyService() error {
+	_ = exec.Command("launchctl", "bootout", "gui/"+strconv.Itoa(os.Getuid())+"/"+legacyLaunchdLabel()).Run() //nolint:gosec // G204: launchctl with the link's own plist
+	dir, err := launchAgentsDir()
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(filepath.Join(dir, legacyLaunchdLabel()+".plist")); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return nil
+}
+
+// LegacyServiceInstalled reports whether the single launchd agent an older
+// sprout installed is still on disk.
+func LegacyServiceInstalled() bool {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(filepath.Join(home, "Library", "LaunchAgents", legacyLaunchdLabel()+".plist"))
+	return err == nil
+}
+
+func launchAgentsDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, "Library", "LaunchAgents"), nil
 }
 
 // ServiceNotice is what to know about the service on this machine.
@@ -88,9 +171,9 @@ func ServiceNotice() string {
 	return "The agent serves while you are logged in and the Mac is awake; keep it from sleeping while you want it to serve (System Settings → Energy, or `caffeinate -s`)."
 }
 
-// ServiceState is whether the service is running, and how to see its log.
-func ServiceState() (state, logs string) {
-	out, err := exec.Command("launchctl", "print", "gui/"+strconv.Itoa(os.Getuid())+"/"+launchdLabel).Output() //nolint:gosec // G204: launchctl query for the link's own agent
+// ServiceState is whether a link's service is running, and how to see its log.
+func ServiceState(slot string) (state, logs string) {
+	out, err := exec.Command("launchctl", "print", "gui/"+strconv.Itoa(os.Getuid())+"/"+launchdLabel(slot)).Output() //nolint:gosec // G204: launchctl query for the link's own agent
 	state = "not installed"
 	if err == nil {
 		state = "loaded"
@@ -101,9 +184,9 @@ func ServiceState() (state, logs string) {
 			}
 		}
 	}
-	logs = "the log file in the GPU link's config directory (gpu.log)"
+	logs = "the log file in the GPU links' config directory"
 	if dir, err := Dir(); err == nil {
-		logs = "tail -n 50 " + filepath.Join(dir, "gpu.log")
+		logs = "tail -n 50 " + filepath.Join(dir, "logs", slot+".log")
 	}
 	return state, logs
 }

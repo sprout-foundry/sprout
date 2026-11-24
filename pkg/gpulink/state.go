@@ -13,19 +13,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/credentials"
-)
-
-const (
-	// credentialKey names the link's agent key in sprout's credential store.
-	credentialKey = "sprout-gpu-link" //nolint:gosec // G101: a credential-store entry *name*, not a credential value
-	// engineKeyCredential names the engine's own API key, when it has one.
-	engineKeyCredential = "sprout-gpu-engine" //nolint:gosec // G101: a credential-store entry *name*, not a credential value
 )
 
 // DefaultEngine is Ollama's address, the most common local engine.
@@ -35,8 +30,8 @@ const DefaultEngine = "127.0.0.1:11434"
 // the model in State.Model, instead of by a server at host:port.
 const EngineSinter = "sinter"
 
-// State is the link's persistent configuration. The keys are not part of
-// it: they live in the credential store.
+// State is one link's persistent configuration. The keys are not part of
+// it: they live in the credential store, under the link's slot (Slot).
 type State struct {
 	PlatformURL string `json:"platform_url"`
 	LinkID      string `json:"link_id"`
@@ -61,7 +56,52 @@ const FleetKeyRotation = 30 * 24 * time.Hour
 // Linked reports whether `sprout gpu link` completed.
 func (s *State) Linked() bool { return s.LinkID != "" }
 
-// Dir is where the link keeps its state.
+// Slot is this link's file-system-safe name: the key its state file,
+// credential entries and background service all use.
+func (s *State) Slot() string { return Slot(s.Name) }
+
+// Slot reduces a link name to the form files, credential entries and service
+// instances key on: letters, digits, dots, dashes and underscores only;
+// anything else becomes a dash. It returns "" for a name that reduces to
+// nothing (or to a Windows device name), which callers must reject.
+func Slot(name string) string {
+	var b strings.Builder
+	for _, r := range strings.TrimSpace(name) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_', r == '.':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('-')
+		}
+	}
+	s := strings.Trim(b.String(), "-._")
+	if s == "" {
+		return ""
+	}
+	if isWindowsDeviceName(s) {
+		s += "-link"
+	}
+	return s
+}
+
+// isWindowsDeviceName reports whether s names a DOS device, which Windows
+// reserves even with an extension ("CON.json" is the console).
+func isWindowsDeviceName(s string) bool {
+	base := strings.SplitN(s, ".", 2)[0]
+	switch strings.ToUpper(base) {
+	case "CON", "PRN", "AUX", "NUL":
+		return true
+	}
+	if len(base) == 4 {
+		rest := strings.ToUpper(base)
+		if rest[:3] == "COM" || rest[:3] == "LPT" {
+			return rest[3] >= '1' && rest[3] <= '9'
+		}
+	}
+	return false
+}
+
+// Dir is where the GPU links keep their state.
 func Dir() (string, error) {
 	base, err := configuration.GetConfigDir()
 	if err != nil {
@@ -70,37 +110,94 @@ func Dir() (string, error) {
 	return filepath.Join(base, "gpu"), nil
 }
 
-func statePath() (string, error) {
+// LinksDir is where one state file per link lives.
+func LinksDir() (string, error) {
 	dir, err := Dir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "gpu.json"), nil
+	return filepath.Join(dir, "links"), nil
 }
 
-// LoadState returns the saved state, or an empty one when no GPU was linked.
-func LoadState() (*State, error) {
-	path, err := statePath()
+func statePath(slot string) (string, error) {
+	dir, err := LinksDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, slot+".json"), nil
+}
+
+// LoadLinks returns every saved link, sorted by name, migrating a link an
+// older sprout saved to the single gpu.json first.
+func LoadLinks() ([]*State, error) {
+	if err := migrateLegacy(); err != nil {
+		return nil, err
+	}
+	dir, err := LinksDir()
 	if err != nil {
 		return nil, err
 	}
-	s := &State{Engine: DefaultEngine}
-	data, err := os.ReadFile(path)
+	entries, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
-		return s, nil
+		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("reading gpu link state: %w", err)
+		return nil, fmt.Errorf("reading gpu link dir: %w", err)
 	}
-	if err := json.Unmarshal(data, s); err != nil {
-		return nil, fmt.Errorf("parsing %s: %w", path, err)
+	var links []*State
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		path := filepath.Join(dir, e.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("reading %s: %w", path, err)
+		}
+		st := &State{Engine: DefaultEngine}
+		if err := json.Unmarshal(data, st); err != nil {
+			return nil, fmt.Errorf("parsing %s: %w", path, err)
+		}
+		links = append(links, st)
 	}
-	return s, nil
+	sort.Slice(links, func(i, j int) bool { return links[i].Name < links[j].Name })
+	return links, nil
 }
 
-// Save writes the state with owner-only permissions.
+// LoadLink returns the link with this slot, or an empty one (Linked false)
+// when nothing is linked under it.
+func LoadLink(slot string) (*State, error) {
+	links, err := LoadLinks()
+	if err != nil {
+		return nil, err
+	}
+	for _, st := range links {
+		if st.Slot() == slot {
+			return st, nil
+		}
+	}
+	return &State{Engine: DefaultEngine}, nil
+}
+
+// Save writes the state to the link's own file with owner-only permissions.
+// It refuses when a different link already occupies the slot: two names
+// reducing to one slot would otherwise overwrite each other's state and
+// share credential entries.
 func (s *State) Save() error {
-	path, err := statePath()
+	slot := s.Slot()
+	if slot == "" {
+		return fmt.Errorf("link name %q has no usable file name; pick another with --name", s.Name)
+	}
+	if other, err := LoadLink(slot); err == nil && other.Linked() && other.LinkID != s.LinkID {
+		return fmt.Errorf("the slot %q is already taken by the link %q; pick another name with --name", slot, other.Name)
+	}
+	return s.saveAt(slot)
+}
+
+// saveAt writes the state file without the slot guard; migrateLegacy uses
+// it, since the guard reads the links dir it is about to create.
+func (s *State) saveAt(slot string) error {
+	path, err := statePath(slot)
 	if err != nil {
 		return err
 	}
@@ -118,11 +215,11 @@ func (s *State) Save() error {
 	return os.Rename(tmp, path)
 }
 
-// Remove deletes the state and both keys.
-func Remove() error {
-	_ = deleteSecret(credentialKey)
-	_ = deleteSecret(engineKeyCredential)
-	path, err := statePath()
+// RemoveLink deletes one link's state and both of its keys.
+func RemoveLink(slot string) error {
+	_ = deleteSecret(AgentKeyName(slot))
+	_ = deleteSecret(EngineKeyName(slot))
+	path, err := statePath(slot)
 	if err != nil {
 		return err
 	}
@@ -132,93 +229,29 @@ func Remove() error {
 	return nil
 }
 
-// SaveAPIKey stores the agent key in sprout's encrypted file store, where the
-// background service can read it.
-func SaveAPIKey(key string) (string, error) { return saveSecret(credentialKey, key) }
-
-// LoadAPIKey reads the agent key.
-func LoadAPIKey() (string, error) { return loadSecret(credentialKey) }
-
-// SaveEngineKey stores the engine's own API key ("" removes it).
-func SaveEngineKey(key string) error {
-	if key == "" {
-		return deleteSecret(engineKeyCredential)
+// DefaultLinkName picks a new link's name: the machine's hostname, or
+// hostname-port when a link under the hostname already exists, so a second
+// engine on one machine links without flags and fits the platform's
+// unique-name check. Port is the engine's port ("sinter" without one).
+func DefaultLinkName(links []*State, engine string) string {
+	host, err := os.Hostname()
+	if err != nil || strings.TrimSpace(host) == "" {
+		host = "gpu"
 	}
-	_, err := saveSecret(engineKeyCredential, key)
-	return err
-}
-
-// LoadEngineKey reads the engine's own API key; "" when there is none.
-func LoadEngineKey() string {
-	key, _ := loadSecret(engineKeyCredential)
-	return key
-}
-
-// The link's keys are kept in sprout's encrypted file store, not the OS
-// keyring: the agent runs as a background service (systemd user unit,
-// launchd agent), and on a machine nobody is logged in to the keyring is
-// locked or unreachable, so a service reading it fails or waits on an unlock
-// prompt no one sees.
-func saveSecret(name, value string) (string, error) {
-	if err := credentials.NewFileBackend().Set(name, value); err != nil {
-		return "", fmt.Errorf("storing %s: %w", name, err)
+	host = strings.TrimSuffix(host, ".local")
+	taken := map[string]bool{}
+	for _, st := range links {
+		taken[st.Slot()] = true
 	}
-	return "encrypted file store", nil
-}
-
-// keyringReadTimeout bounds reading a key an older link left in the OS
-// keyring: a locked keyring can wait on an unlock prompt indefinitely.
-const keyringReadTimeout = 3 * time.Second
-
-func loadSecret(name string) (string, error) {
-	fileValue, fileErr := credentials.NewFileBackend().Get(name)
-	if fileErr == nil && fileValue != "" {
-		return fileValue, nil
+	if !taken[Slot(host)] {
+		return host
 	}
-	// A link made before keys moved to the file store kept its key in the
-	// keyring: read it there (bounded) and move it, so the service finds it
-	// next time.
-	type result struct {
-		value string
-		err   error
+	if _, port, err := net.SplitHostPort(engine); err == nil && !taken[Slot(host+"-"+port)] {
+		return host + "-" + port
 	}
-	done := make(chan result, 1)
-	go func() {
-		v, _, err := credentials.GetFromActiveBackend(name)
-		done <- result{v, err}
-	}()
-	select {
-	case r := <-done:
-		if r.err == nil && r.value != "" {
-			_ = credentials.NewFileBackend().Set(name, r.value)
-			return r.value, nil
+	for i := 2; ; i++ {
+		if !taken[Slot(fmt.Sprintf("%s-%d", host, i))] {
+			return fmt.Sprintf("%s-%d", host, i)
 		}
-		if fileErr != nil {
-			return "", fileErr
-		}
-		return "", r.err
-	case <-time.After(keyringReadTimeout):
-		if fileErr != nil {
-			return "", fileErr
-		}
-		return "", fmt.Errorf("reading %s: the OS keyring did not answer (locked, or no login session)", name)
 	}
-}
-
-// MoveKeysToFileStore copies the link's keys into the file store when an
-// older link left them only in the OS keyring. `sprout gpu install` runs it
-// from the person's session, where the keyring opens, so the service never
-// needs the keyring.
-func MoveKeysToFileStore() error {
-	if _, err := loadSecret(credentialKey); err != nil {
-		return err
-	}
-	_, _ = loadSecret(engineKeyCredential)
-	return nil
-}
-
-func deleteSecret(name string) error {
-	err := credentials.DeleteFromActiveBackend(name)
-	_ = credentials.NewFileBackend().Delete(name)
-	return err
 }

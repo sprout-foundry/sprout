@@ -5,5 +5,5 @@ import { version } from '../package.json';
  * contract version with the workspace. The version is the package's own, so
  * a host cannot disagree with what it actually loaded.
  */
-export const WORKSPACE_PACKAGE_NAME = '@sprout-foundry/workspace';
-export const WORKSPACE_PACKAGE_VERSION = version;
+export const SPACES_PACKAGE_NAME = '@sprout-foundry/spaces';
+export const SPACES_PACKAGE_VERSION = version;

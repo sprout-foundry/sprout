@@ -1,4 +1,4 @@
-# @sprout-foundry/workspace
+# @sprout-foundry/spaces
 
 The composition API for Sprout. A host application mounts Sprout's workspace —
 one project, one of the registered spaces — inside its own product through
@@ -25,8 +25,8 @@ default own mode it builds the provider stack itself, so the host does not
 wrap it:
 
 ```tsx
-import "@sprout-foundry/workspace/styles.css";
-import { SproutWorkspace } from "@sprout-foundry/workspace/views";
+import "@sprout-foundry/spaces/styles.css";
+import { SproutWorkspace } from "@sprout-foundry/spaces/views";
 
 <SproutWorkspace
   project={{ id: repoUrl, repoUrl }}
@@ -35,14 +35,14 @@ import { SproutWorkspace } from "@sprout-foundry/workspace/views";
 />;
 ```
 
-The integration guide (`docs/integration/workspace-package.md` in the Sprout
+The integration guide (`docs/integration/spaces-package.md` in the Sprout
 repository) covers layouts, the chat and editor units, escalation, styles and
 the WASM assets; `docs/integration/host-contract.md` covers the `SproutHost`
 a host provides.
 
 ## Headless agent
 
-`@sprout-foundry/workspace/agent` runs the in-browser agent without Sprout's
+`@sprout-foundry/spaces/agent` runs the in-browser agent without Sprout's
 interface, for a host that renders its own: `createAgent({ wasmBase,
 modelEndpoint, persona, hostTools, files, context })` returns an agent with
 `send`, `cancel`, `answer`, typed events (text, tool steps, `ask_user`, file
@@ -50,7 +50,7 @@ writes, mockup progress, `done`) and the agent's files. It imports no React
 and no web UI module. See `docs/integration/headless-agent.md`.
 
 ```ts
-import { createAgent } from "@sprout-foundry/workspace/agent";
+import { createAgent } from "@sprout-foundry/spaces/agent";
 
 const agent = await createAgent({
   wasmBase: "/assets/sprout-wasm",
@@ -66,10 +66,10 @@ await agent.send("Sketch a landing page");
 The workspace's styles ship as one stylesheet:
 
 ```tsx
-import "@sprout-foundry/workspace/styles.css";
+import "@sprout-foundry/spaces/styles.css";
 ```
 
-It is emitted at `dist/workspace.css` and scoped to the `.sprout-workspace`
+It is emitted at `dist/spaces.css` and scoped to the `.sprout-workspace`
 class the workspace root renders, so it cannot style the host page outside
 the mounted workspace (no top-level `:root`/`html`/`body`/`*` selector). It
 styles surfaces through `var(--token)` design tokens; the host imports
@@ -102,13 +102,13 @@ A host serves that directory at a URL it owns and tells Sprout where it is:
 ## Build
 
 ```bash
-npm run build -w @sprout-foundry/workspace
-npm test -w @sprout-foundry/workspace   # the headless agent's tests
+npm run build -w @sprout-foundry/spaces
+npm test -w @sprout-foundry/spaces   # the headless agent's tests
 ```
 
 The build emits `dist/index.js` plus its lazily loaded chunks, `dist/agent.js`
 (self-contained),
-`dist/workspace.css`, `dist/index.d.ts` and `dist/wasm/` (the content-hashed
+`dist/spaces.css`, `dist/index.d.ts` and `dist/wasm/` (the content-hashed
 WASM assets and their manifest). The `files` and `exports` fields in
 `package.json` are the publish allowlist: `dist/` (entry, chunks, stylesheet,
 declarations, WASM) and this README.
@@ -116,7 +116,7 @@ declarations, WASM) and this README.
 ## Installation
 
 ```bash
-npm install @sprout-foundry/workspace
+npm install @sprout-foundry/spaces
 ```
 
 This package is published to GitHub Packages. Configure your `.npmrc`:

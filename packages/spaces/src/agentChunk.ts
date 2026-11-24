@@ -1,5 +1,5 @@
 /**
- * Headless agent entry point (`@sprout-foundry/workspace/agent`).
+ * Headless agent entry point (`@sprout-foundry/spaces/agent`).
  *
  * Runs Sprout's in-browser (WASM) agent as an engine for a host's own
  * interface: `createAgent` loads the module, selects a persona, registers the

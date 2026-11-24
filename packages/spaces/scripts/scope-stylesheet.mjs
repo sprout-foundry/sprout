@@ -8,7 +8,7 @@
 // that stylesheet would leak onto the host's own DOM outside the mounted
 // workspace. This pass rewrites it so every rule applies only inside the
 // workspace root (`.sprout-workspace`, the class `SproutWorkspace` renders)
-// and writes the result to the package's declared `dist/workspace.css`.
+// and writes the result to the package's declared `dist/spaces.css`.
 //
 // The rewrite is textual and deliberately conservative: it rewrites only the
 // selectors that would otherwise escape the workspace root and leaves every
@@ -32,7 +32,7 @@ const chunksDir = resolve(dist, "chunks");
 /** The workspace root class `SproutWorkspace` renders (webui `sprout-workspace`). */
 export const WORKSPACE_ROOT_CLASS = ".sprout-workspace";
 /** The stable artifact path the package ships and its `exports` map declares. */
-export const STYLESHEET_PATH = "dist/workspace.css";
+export const STYLESHEET_PATH = "dist/spaces.css";
 
 const hasClass = (selector) =>
   selector === WORKSPACE_ROOT_CLASS ||
@@ -263,10 +263,10 @@ function bundledStylesheets() {
 
 /**
  * Scope the emitted stylesheet(s), write the single artifact to
- * `dist/workspace.css`, and remove the incidental `chunks/*.css`. Idempotent:
+ * `dist/spaces.css`, and remove the incidental `chunks/*.css`. Idempotent:
  * running it twice produces the same bytes.
  */
-export function emitWorkspaceStylesheet() {
+export function emitSpacesStylesheet() {
   const sources = bundledStylesheets();
   if (sources.length === 0) {
     throw new Error(
@@ -276,7 +276,7 @@ export function emitWorkspaceStylesheet() {
   const scoped = sources
     .map((file) => scopeStylesheet(readFileSync(file, "utf-8")))
     .join("\n");
-  writeFileSync(resolve(dist, "workspace.css"), scoped);
+  writeFileSync(resolve(dist, "spaces.css"), scoped);
   for (const file of sources) rmSync(file);
   return {
     path: STYLESHEET_PATH,
@@ -290,9 +290,9 @@ export function emitWorkspaceStylesheet() {
 // hand-built `file://` string: on Windows argv[1] is a backslash path the
 // naive comparison never matches, silently skipping the pass.
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const result = emitWorkspaceStylesheet();
+  const result = emitSpacesStylesheet();
   process.stdout.write(
-    `scope-stylesheet: wrote ${relative(packageDir, resolve(dist, "workspace.css"))} ` +
+    `scope-stylesheet: wrote ${relative(packageDir, resolve(dist, "spaces.css"))} ` +
       `(${result.sources} bundled source(s), ${result.bytes} bytes)\n`,
   );
 }

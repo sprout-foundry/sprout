@@ -2,7 +2,7 @@ import { build, defineConfig, type InlineConfig, type Plugin } from "vite";
 import { resolve } from "path";
 
 /**
- * Library build for `@sprout-foundry/workspace`.
+ * Library build for `@sprout-foundry/spaces`.
  *
  * ESM only, code-split. The type declarations are rolled up separately by
  * `scripts/bundle-dts.mjs` (API Extractor), which emits the single

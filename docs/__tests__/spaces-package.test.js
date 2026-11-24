@@ -1,4 +1,4 @@
-// @sprout-foundry/workspace build-artifact tests
+// @sprout-foundry/spaces build-artifact tests
 // ==============================================
 // The package is the hosted artifact: a host installs `dist/` and nothing
 // else. These tests assert what that artifact contains — the entry, its
@@ -6,14 +6,14 @@
 // and that the scaffold wiring (workspaces, the `make build-all` step) is in
 // place.
 //
-// The assertions read `packages/workspace/dist`, produced by the package's
-// own build. `make install` runs the workspace-package build before this file
+// The assertions read `packages/spaces/dist`, produced by the package's
+// own build. `make install` runs the spaces package build before this file
 // and `make build-all` runs it as part of the full build, so the artifact is
 // always fresh where these tests matter. A missing `dist/` (a bare `make lint`
 // on a fresh checkout) skips the artifact assertions with a message instead of
 // failing on an artifact the test did not produce.
 //
-// Run with: node docs/__tests__/workspace-package.test.js
+// Run with: node docs/__tests__/spaces-package.test.js
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
@@ -29,14 +29,14 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, "../..");
-const PACKAGE_DIR = path.join(ROOT, "packages/workspace");
+const PACKAGE_DIR = path.join(ROOT, "packages/spaces");
 const DIST = path.join(PACKAGE_DIR, "dist");
 
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf-8");
 const readJson = (rel) => JSON.parse(read(rel));
 const exists = (rel) => fs.existsSync(path.join(ROOT, rel));
 
-/** Every file under dist/, as posix paths relative to packages/workspace. */
+/** Every file under dist/, as posix paths relative to packages/spaces. */
 function walk(dir, acc = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
@@ -69,13 +69,13 @@ function declaredArtifacts(pkg) {
   ];
 }
 
-const pkg = readJson("packages/workspace/package.json");
+const pkg = readJson("packages/spaces/package.json");
 const rootPkg = readJson("package.json");
 const built = fs.existsSync(DIST);
 if (!built) {
   console.warn(
-    "[workspace-package] packages/workspace/dist is absent — skipping artifact assertions. " +
-      "Run `npm run build -w @sprout-foundry/workspace` (or `make build-all`) first.",
+    "[spaces-package] packages/spaces/dist is absent — skipping artifact assertions. " +
+      "Run `npm run build -w @sprout-foundry/spaces` (or `make build-all`) first.",
   );
 }
 
@@ -126,7 +126,7 @@ const EDITOR_MARKERS = /@codemirror\/|CodeMirror|cm-editor/;
 const WASM_MARKERS = /sprout\.wasm|wasm_exec|WebAssembly\.instantiate/;
 
 /** The package's one emitted stylesheet (`exports["./styles.css"]`). */
-const STYLESHEET = "dist/workspace.css";
+const STYLESHEET = "dist/spaces.css";
 
 /** Read the emitted stylesheet, comment-stripped (the xterm license banner lives in a comment). */
 function readSheet() {
@@ -254,7 +254,7 @@ async function globalLeaks(css) {
 
 /**
  * Load the scoping pass the build runs. It is ESM and lives under
- * `packages/workspace/scripts/`, so it is imported by URL.
+ * `packages/spaces/scripts/`, so it is imported by URL.
  */
 async function loadScopeStylesheet() {
   return import(
@@ -391,10 +391,10 @@ describe("stylesheet scoping pass", () => {
 
 // ── Package manifest ───────────────────────────────────────────────────
 
-describe("@sprout-foundry/workspace package.json", () => {
+describe("@sprout-foundry/spaces package.json", () => {
   test("is published to GitHub Packages like @sprout-foundry/design", () => {
     const design = readJson("packages/design/package.json");
-    assert.equal(pkg.name, "@sprout-foundry/workspace");
+    assert.equal(pkg.name, "@sprout-foundry/spaces");
     assert.equal(pkg.publishConfig.registry, design.publishConfig.registry);
     assert.equal(pkg.license, design.license);
     assert.equal(pkg.repository.type, design.repository.type);
@@ -435,7 +435,7 @@ describe("version lockstep with the sprout release", () => {
     assert.equal(
       pkg.version,
       rootPkg.version,
-      "packages/workspace/package.json must track the root sprout version",
+      "packages/spaces/package.json must track the root sprout version",
     );
   });
 
@@ -448,8 +448,8 @@ describe("version lockstep with the sprout release", () => {
 
   test("the lockfile records the package at the sprout version", () => {
     const lock = readJson("package-lock.json");
-    const entry = lock.packages?.["packages/workspace"];
-    assert.ok(entry, "package-lock.json has a packages/workspace entry");
+    const entry = lock.packages?.["packages/spaces"];
+    assert.ok(entry, "package-lock.json has a packages/spaces entry");
     assert.equal(entry.name, pkg.name);
     assert.equal(entry.version, rootPkg.version);
     // The lockfile's own root entries drift independently of the workspace
@@ -474,24 +474,24 @@ describe("build wiring", () => {
     const makefile = read("Makefile");
     assert.match(
       makefile,
-      /^build-workspace-package:/m,
-      "Makefile has a build-workspace-package target",
+      /^build-spaces-package:/m,
+      "Makefile has a build-spaces-package target",
     );
     assert.match(
       makefile,
-      /^build-all: .*\bbuild-workspace-package\b/m,
-      "build-all depends on build-workspace-package",
+      /^build-all: .*\bbuild-spaces-package\b/m,
+      "build-all depends on build-spaces-package",
     );
   });
 
   test("the package is built after its dependencies (events, ui, webui)", () => {
     const makefile = read("Makefile");
-    const target = makefile.match(/^build-workspace-package:(.*)$/m);
-    assert.ok(target, "build-workspace-package has a prerequisite list");
+    const target = makefile.match(/^build-spaces-package:(.*)$/m);
+    assert.ok(target, "build-spaces-package has a prerequisite list");
     assert.match(
       target[1],
       /^[ \t]*deploy-ui\b/,
-      "build-workspace-package depends on deploy-ui (which builds @sprout/events and @sprout/ui first)",
+      "build-spaces-package depends on deploy-ui (which builds @sprout/events and @sprout/ui first)",
     );
   });
 });
@@ -500,17 +500,17 @@ describe("build wiring", () => {
 
 describe("package sources", () => {
   test("the entry re-exports the public host entry point", () => {
-    const source = read("packages/workspace/src/index.ts");
+    const source = read("packages/spaces/src/index.ts");
     assert.match(source, /export \* from '\.\/host';/);
   });
 
   test("the views entry point re-exports the public views module", () => {
-    const source = read("packages/workspace/src/viewsChunk.ts");
+    const source = read("packages/spaces/src/viewsChunk.ts");
     assert.match(source, /from '\.\.\/\.\.\/\.\.\/webui\/src\/views\/index'/);
   });
 
   test("the providers entry point re-exports the provider wrapper", () => {
-    const source = read("packages/workspace/src/providersChunk.ts");
+    const source = read("packages/spaces/src/providersChunk.ts");
     assert.match(
       source,
       /from "\.\.\/\.\.\/\.\.\/webui\/src\/providers\/SproutProviders"/,
@@ -520,11 +520,11 @@ describe("package sources", () => {
 
   test("the agent entry point imports no web UI or React module", () => {
     const sources = [
-      "packages/workspace/src/agentChunk.ts",
+      "packages/spaces/src/agentChunk.ts",
       ...fs
-        .readdirSync(path.join(ROOT, "packages/workspace/src/agent"))
+        .readdirSync(path.join(ROOT, "packages/spaces/src/agent"))
         .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
-        .map((f) => `packages/workspace/src/agent/${f}`),
+        .map((f) => `packages/spaces/src/agent/${f}`),
     ];
     for (const file of sources) {
       const source = read(file);
@@ -537,7 +537,7 @@ describe("package sources", () => {
   });
 
   test("the host entry point re-exports the public host module", () => {
-    const source = read("packages/workspace/src/host.ts");
+    const source = read("packages/spaces/src/host.ts");
     assert.match(source, /from '\.\.\/\.\.\/\.\.\/webui\/src\/host\/index'/);
   });
 });
@@ -546,7 +546,7 @@ describe("package sources", () => {
 
 describe(
   "build artifacts",
-  { skip: !built && "packages/workspace/dist not built" },
+  { skip: !built && "packages/spaces/dist not built" },
   () => {
     test("the declared entry points and type declarations were emitted", () => {
       for (const file of declaredArtifacts(pkg)) {
@@ -565,7 +565,7 @@ describe(
       // dropped by npm pack, so the artifact would ship an incomplete package.
       const allowed = new Set([
         ...declaredArtifacts(pkg),
-        "dist/workspace.css",
+        "dist/spaces.css",
         "dist/README.md",
       ]);
       const isAllowed = (file) =>
@@ -619,12 +619,12 @@ describe(
       );
       assert.match(
         types,
-        /WORKSPACE_PACKAGE_NAME/,
+        /SPACES_PACKAGE_NAME/,
         "the declaration names the package identity",
       );
       assert.match(
         types,
-        /WORKSPACE_PACKAGE_VERSION/,
+        /SPACES_PACKAGE_VERSION/,
         "the declaration names the package version",
       );
     });
@@ -651,11 +651,11 @@ describe(
     test("the version constants are declared exactly once", () => {
       const types = fs.readFileSync(path.join(DIST, "index.d.ts"), "utf-8");
       const declarations = [
-        ...types.matchAll(/declare const (WORKSPACE_PACKAGE_\w+)/g),
+        ...types.matchAll(/declare const (SPACES_PACKAGE_\w+)/g),
       ].map((m) => m[1]);
       assert.deepEqual(
         [...declarations].sort(),
-        ["WORKSPACE_PACKAGE_NAME", "WORKSPACE_PACKAGE_VERSION"],
+        ["SPACES_PACKAGE_NAME", "SPACES_PACKAGE_VERSION"],
         "each version constant is declared exactly once",
       );
     });
@@ -750,13 +750,13 @@ describe(
 
     test("the emitted stylesheet is at its declared stable path and carries the views styles", () => {
       // ws.5 (SP-160 §160a): the styles are a first-class, explicitly-named
-      // artifact — `dist/workspace.css`, reachable as
-      // `@sprout-foundry/workspace/styles.css` — not an incidental
+      // artifact — `dist/spaces.css`, reachable as
+      // `@sprout-foundry/spaces/styles.css` — not an incidental
       // `chunks/*.css` emitted because a `.css` import happened to be reachable.
       // Assert the content survived the library build and the scoping pass.
       assert.ok(
-        fs.existsSync(path.join(DIST, "workspace.css")),
-        "the build emits dist/workspace.css",
+        fs.existsSync(path.join(DIST, "spaces.css")),
+        "the build emits dist/spaces.css",
       );
       const css = readSheet();
       assert.ok(
@@ -807,7 +807,7 @@ describe(
 
 describe(
   "the package ships content-hashed WASM and a manifest",
-  { skip: !built && "packages/workspace/dist not built" },
+  { skip: !built && "packages/spaces/dist not built" },
   () => {
     // "Upgrading the package changes the WASM asset URLs": the package emits
     // sprout.<hash>.wasm / wasm_exec.<hash>.js plus wasm-manifest.json under
@@ -990,7 +990,7 @@ describe(
 
 describe(
   "lazy loading: the entry loads no editor or WASM code",
-  { skip: !built && "packages/workspace/dist not built" },
+  { skip: !built && "packages/spaces/dist not built" },
   () => {
     // "Importing the package loads no editor or WASM code until a space opens":
     // importing is evaluating `dist/index.js`, which eager-fetches exactly the
@@ -1107,7 +1107,7 @@ describe(
 
 describe(
   "no platform calls on import",
-  { skip: !built && "packages/workspace/dist not built" },
+  { skip: !built && "packages/spaces/dist not built" },
   () => {
     // Importing the package must not reach the bootstrap adapter (its module
     // scope fetches /api/bootstrap and installs an adapter) nor resolve platform
@@ -1178,7 +1178,7 @@ describe(
 
 describe(
   "source is not published",
-  { skip: !built && "packages/workspace/dist not built" },
+  { skip: !built && "packages/spaces/dist not built" },
   () => {
     test("the publish allowlist never includes src/ or the vite config", () => {
       for (const spec of pkg.files) {
@@ -1226,7 +1226,7 @@ describe("a host can install the published package", () => {
 
 describe(
   "the build keeps peer dependencies external",
-  { skip: !built && "packages/workspace/dist not built" },
+  { skip: !built && "packages/spaces/dist not built" },
   () => {
     const scripts = () => walk(DIST).filter((file) => file.endsWith(".js"));
 
@@ -1260,7 +1260,7 @@ describe(
     test("declarations resolve entirely within the package", () => {
       // The published `types` entry must resolve for a host that has only the
       // package's `dist/`: no `../../../webui/...` path out of the package, no
-      // nonexistent `@sprout-foundry/workspace-webui` namespace, and no bare
+      // nonexistent `@sprout-foundry/spaces-webui` namespace, and no bare
       // import of a package the host does not install (the bundled `@sprout/ui`
       // must be inlined). `react`/`react-dom` are the only allowed externals —
       // they are peer dependencies the host provides.
@@ -1297,7 +1297,7 @@ describe(
 
     test("a scratch TypeScript project type-checks the package against dist/ alone", () => {
       // The end-to-end proof of self-containment: a host project that maps
-      // `@sprout-foundry/workspace` to `packages/workspace/dist` (and has only
+      // `@sprout-foundry/spaces` to `packages/spaces/dist` (and has only
       // the repo's React types available — no `webui/src`) must type-check
       // importing the package's public surface. This is what a real host does.
       const scratch = fs.mkdtempSync(
@@ -1319,7 +1319,7 @@ describe(
                 target: "ES2020",
                 baseUrl: scratch,
                 paths: {
-                  "@sprout-foundry/workspace": [path.join(DIST, "index.d.ts")],
+                  "@sprout-foundry/spaces": [path.join(DIST, "index.d.ts")],
                   react: [path.join(ROOT, "node_modules/react")],
                   "react/jsx-runtime": [
                     path.join(ROOT, "node_modules/react/jsx-runtime"),
@@ -1342,7 +1342,7 @@ describe(
             "  headlessHost,",
             "  type SproutHost,",
             "  type HostCapabilities,",
-            "} from '@sprout-foundry/workspace';",
+            "} from '@sprout-foundry/spaces';",
             "",
             "const host: SproutHost = localHost;",
             "const caps: HostCapabilities = host.capabilities;",
@@ -1356,7 +1356,7 @@ describe(
 
         // `node <typescript/bin/tsc>`: the `.bin/tsc` shim is a POSIX shell
         // script CreateProcess cannot execute on Windows (see
-        // packages/workspace/scripts/bundle-dts.mjs).
+        // packages/spaces/scripts/bundle-dts.mjs).
         const require = createRequire(import.meta.url);
         const tsc = require.resolve("typescript/bin/tsc");
         const result = spawnSync(
@@ -1382,7 +1382,7 @@ describe(
 
 describe(
   "a host can consume the packed tarball",
-  { skip: !built && "packages/workspace/dist not built" },
+  { skip: !built && "packages/spaces/dist not built" },
   () => {
     test("packing, installing into a scratch Vite React 18 app, type-checking and building all pass with a single React copy", () => {
       // The end-to-end proof a host actually consumes: `npm pack` the package,
@@ -1390,11 +1390,11 @@ describe(
       // TypeScript + Vite React 18 app outside the repo, and require
       // `tsc --noEmit` and `vite build` to pass with the app bundling exactly
       // one React copy. The heavy lifting lives in its own script (runnable on
-      // its own: `node --test docs/__tests__/workspace-consumer.test.mjs`) so
+      // its own: `node --test docs/__tests__/spaces-consumer.test.mjs`) so
       // the manifest of assertions here stays readable; this runs it and
       // surfaces its output when it fails.
       const consumerTest = path.join(
-        "docs/__tests__/workspace-consumer.test.mjs",
+        "docs/__tests__/spaces-consumer.test.mjs",
       );
       const result = spawnSync(process.execPath, ["--test", consumerTest], {
         cwd: ROOT,

@@ -177,7 +177,7 @@ unmount. The non-React services then resolve their URLs against it:
 In `providers="ambient"` mode the caller has already registered its host and
 owns the transport, so the composition neither registers nor connects — see
 "one workspace per page" in
-[workspace-package.md](workspace-package.md).
+[spaces-package.md](spaces-package.md).
 
 For an in-browser agent, which calls the adapter answers itself and which it
 forwards to `apiBaseURL` is listed in

@@ -1,5 +1,5 @@
 /**
- * `@sprout-foundry/workspace` — the composition API a host mounts.
+ * `@sprout-foundry/spaces` — the composition API a host mounts.
  *
  * A host builds around Sprout's spaces through this package instead of
  * importing web UI internals. The entry point of the scaffold is deliberately
@@ -23,4 +23,4 @@
 
 export * from './host';
 
-export { WORKSPACE_PACKAGE_NAME, WORKSPACE_PACKAGE_VERSION } from './packageInfo';
+export { SPACES_PACKAGE_NAME, SPACES_PACKAGE_VERSION } from './packageInfo';

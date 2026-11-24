@@ -1,4 +1,4 @@
-// @sprout-foundry/workspace content-hashed WASM emission (SP-160 §160e)
+// @sprout-foundry/spaces content-hashed WASM emission (SP-160 §160e)
 // ====================================================================
 // The package is the hosted artifact: it must ship its WASM assets
 // content-hashed with a manifest, so a host that caches the package as
@@ -11,8 +11,8 @@
 // manifest/URLs change when the bytes change. It does not fork the algorithm —
 // the same helpers the cloud/standalone build uses are the ones exercised here.
 //
-// Run with: node packages/workspace/scripts/emit-wasm-assets.test.mjs
-// (wired into the package's build script so `make build-workspace-package`
+// Run with: node packages/spaces/scripts/emit-wasm-assets.test.mjs
+// (wired into the package's build script so `make build-spaces-package`
 // runs it).
 
 import { test, describe } from "node:test";

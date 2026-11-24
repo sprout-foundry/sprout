@@ -1,6 +1,6 @@
 /* The package stylesheet a host page loads.
  *
- * The package's views are styled by `@sprout-foundry/workspace/workspace.css`,
+ * The package's views are styled by `@sprout-foundry/spaces/styles.css`,
  * every rule of which is scoped to `.sprout-workspace`. That stylesheet
  * references the design tokens but does not define them — the app defines
  * them on `:root` (index.css). A host page does not, so importing this file

@@ -2,14 +2,14 @@
 // =====================================================================
 // The strongest artifact assertion: everything else checks `dist/` in the
 // repo, but a host consumes the *packed* package. This script `npm pack`s
-// `packages/workspace`, stands the tarball up as an installed dependency of a
+// `packages/spaces`, stands the tarball up as an installed dependency of a
 // scratch TypeScript + Vite **React 18** app created outside the repo (in
 // `os.tmpdir()`), and requires:
 //
 //   - `tsc --noEmit` to type-check the app importing `SproutWorkspace` (from
-//     `@sprout-foundry/workspace/views`), `SproutProviders` (from
-//     `@sprout-foundry/workspace/providers`) and the host types (from
-//     `@sprout-foundry/workspace`) — proving the subpath `exports` map and the
+//     `@sprout-foundry/spaces/views`), `SproutProviders` (from
+//     `@sprout-foundry/spaces/providers`) and the host types (from
+//     `@sprout-foundry/spaces`) — proving the subpath `exports` map and the
 //     rolled-up `views.d.ts`/`providers.d.ts` resolve from the tarball alone;
 //   - `vite build` to bundle the app;
 //   - the built app to contain a SINGLE React copy.
@@ -19,7 +19,7 @@
 // registry fetch of the peer + toolchain), which is flaky and can hang. The
 // app's `node_modules` is instead populated by symlinking the repo's own
 // installed packages (react 18, react-dom, @types/react(-dom), vite,
-// @vitejs/plugin-react, typescript) and linking `@sprout-foundry/workspace` at
+// @vitejs/plugin-react, typescript) and linking `@sprout-foundry/spaces` at
 // the EXTRACTED tarball — the same module resolution a real install produces,
 // with no network. `npm pack` (the packaging step under test) is still run for
 // real, and the tarball's contents are asserted.
@@ -29,7 +29,7 @@
 // asserts they all resolve to ONE install root. A package that bundled its own
 // React would surface a second root under its `dist/`.
 //
-// Run with: node --test docs/__tests__/workspace-consumer.test.mjs
+// Run with: node --test docs/__tests__/spaces-consumer.test.mjs
 
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -43,15 +43,15 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, "../..");
-const PACKAGE_DIR = path.join(ROOT, "packages/workspace");
+const PACKAGE_DIR = path.join(ROOT, "packages/spaces");
 const DIST = path.join(PACKAGE_DIR, "dist");
 const NODE_MODULES = path.join(ROOT, "node_modules");
 
 const built = fs.existsSync(DIST);
 if (!built) {
   console.warn(
-    "[workspace-consumer] packages/workspace/dist is absent — skipping. " +
-      "Run `npm run build -w @sprout-foundry/workspace` (or `make build-all`) first.",
+    "[spaces-consumer] packages/spaces/dist is absent — skipping. " +
+      "Run `npm run build -w @sprout-foundry/spaces` (or `make build-all`) first.",
   );
 }
 
@@ -87,7 +87,7 @@ function run(command, args, options = {}) {
 /**
  * Populate `nodeModulesDir` with symlinks to the repo's installed packages so
  * the scratch app resolves React, the toolchain and their transitive
- * dependencies without a network install. `@sprout-foundry/workspace` is the
+ * dependencies without a network install. `@sprout-foundry/spaces` is the
  * exception: it points at the extracted tarball.
  */
 function linkNodeModules(nodeModulesDir, extractedPackageDir) {
@@ -100,17 +100,17 @@ function linkNodeModules(nodeModulesDir, extractedPackageDir) {
     // "junction": unprivileged on Windows, a dir symlink elsewhere.
     fs.symlinkSync(path.join(NODE_MODULES, name), target, "junction");
   }
-  // The workspace package, installed from the tarball rather than the repo.
+  // The spaces package, installed from the tarball rather than the repo.
   const scope = path.join(nodeModulesDir, "@sprout-foundry");
   fs.mkdirSync(scope, { recursive: true });
-  const workspaceLink = path.join(scope, "workspace");
-  if (!fs.lstatSync(workspaceLink, { throwIfNoEntry: false })) {
-    fs.symlinkSync(extractedPackageDir, workspaceLink, "junction");
+  const spacesLink = path.join(scope, "spaces");
+  if (!fs.lstatSync(spacesLink, { throwIfNoEntry: false })) {
+    fs.symlinkSync(extractedPackageDir, spacesLink, "junction");
   }
 }
 
 const SCRATCH = built
-  ? fs.mkdtempSync(path.join(os.tmpdir(), "workspace-consumer-"))
+  ? fs.mkdtempSync(path.join(os.tmpdir(), "spaces-consumer-"))
   : null;
 const APP = SCRATCH ? path.join(SCRATCH, "app") : null;
 const PACK_DIR = SCRATCH ? path.join(SCRATCH, "pack") : null;
@@ -123,7 +123,7 @@ after(() => {
 
 describe(
   "a host consumes the packed tarball",
-  { skip: !built && "packages/workspace/dist not built" },
+  { skip: !built && "packages/spaces/dist not built" },
   () => {
     before(() => {
       fs.mkdirSync(PACK_DIR, { recursive: true });
@@ -202,7 +202,7 @@ describe(
         path.join(APP, "package.json"),
         JSON.stringify(
           {
-            name: "workspace-consumer",
+            name: "spaces-consumer",
             private: true,
             type: "module",
             version: "0.0.0",
@@ -238,13 +238,13 @@ describe(
           "  SproutProviders,",
           "  availableModes,",
           "  registerWorkspaceMode,",
-          '} from "@sprout-foundry/workspace/views";',
-          'import { SproutProviders as ProvidersOnly } from "@sprout-foundry/workspace/providers";',
-          'import { localHost } from "@sprout-foundry/workspace";',
-          'import type { SproutHost } from "@sprout-foundry/workspace";',
-          'import type { SproutWorkspaceProps } from "@sprout-foundry/workspace/views";',
-          'import type { SproutProvidersProps } from "@sprout-foundry/workspace/providers";',
-          'import "@sprout-foundry/workspace/styles.css";',
+          '} from "@sprout-foundry/spaces/views";',
+          'import { SproutProviders as ProvidersOnly } from "@sprout-foundry/spaces/providers";',
+          'import { localHost } from "@sprout-foundry/spaces";',
+          'import type { SproutHost } from "@sprout-foundry/spaces";',
+          'import type { SproutWorkspaceProps } from "@sprout-foundry/spaces/views";',
+          'import type { SproutProvidersProps } from "@sprout-foundry/spaces/providers";',
+          'import "@sprout-foundry/spaces/styles.css";',
           "",
           "const host: SproutHost = localHost;",
           "void registerWorkspaceMode;",
@@ -298,7 +298,7 @@ describe(
       // ── tsc --noEmit ─────────────────────────────────────────────────
       // `node <typescript/bin/tsc>`: the `.bin/tsc` shim is a POSIX shell
       // script CreateProcess cannot execute on Windows (see
-      // packages/workspace/scripts/bundle-dts.mjs).
+      // packages/spaces/scripts/bundle-dts.mjs).
       const require = createRequire(import.meta.url);
       const tsc = require.resolve("typescript/bin/tsc");
       const typeCheck = run(

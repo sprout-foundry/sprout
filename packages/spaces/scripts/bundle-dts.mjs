@@ -25,7 +25,7 @@
 //
 // The outputs therefore define every exported symbol and carry NO path outside
 // the package: no `../../webui/...`, no nonexistent
-// `@sprout-foundry/workspace-webui` namespace. External bare specifiers that
+// `@sprout-foundry/spaces-webui` namespace. External bare specifiers that
 // remain (`react`, the peer a host installs) are the only imports.
 //
 // The declaration trees are built in a scratch dir and never emitted under
@@ -93,7 +93,7 @@ const ENTRIES = [
   {
     subpath: ".",
     source: "src/index.ts",
-    declaration: "packages/workspace/src/index.d.ts",
+    declaration: "packages/spaces/src/index.d.ts",
     outFile: "index.d.ts",
     required: [
       "SproutHost",
@@ -112,14 +112,14 @@ const ENTRIES = [
       "repoSlug",
       "repoName",
       "githubRepoSlug",
-      "WORKSPACE_PACKAGE_NAME",
-      "WORKSPACE_PACKAGE_VERSION",
+      "SPACES_PACKAGE_NAME",
+      "SPACES_PACKAGE_VERSION",
     ],
   },
   {
     subpath: "./views",
     source: "src/viewsChunk.ts",
-    declaration: "packages/workspace/src/viewsChunk.d.ts",
+    declaration: "packages/spaces/src/viewsChunk.d.ts",
     outFile: "views.d.ts",
     required: [
       "SproutWorkspace",
@@ -208,14 +208,14 @@ const ENTRIES = [
   {
     subpath: "./providers",
     source: "src/providersChunk.ts",
-    declaration: "packages/workspace/src/providersChunk.d.ts",
+    declaration: "packages/spaces/src/providersChunk.d.ts",
     outFile: "providers.d.ts",
     required: ["SproutProviders", "SproutProvidersProps"],
   },
   {
     subpath: "./agent",
     source: "src/agentChunk.ts",
-    declaration: "packages/workspace/src/agentChunk.d.ts",
+    declaration: "packages/spaces/src/agentChunk.d.ts",
     outFile: "agent.d.ts",
     required: [
       "createAgent",
@@ -373,7 +373,7 @@ function writeScratchScaffolding(outDir) {
   writeFileSync(
     resolve(outDir, "package.json"),
     JSON.stringify({
-      name: "@sprout-foundry/workspace-dts-rollup",
+      name: "@sprout-foundry/spaces-dts-rollup",
       version: "0.0.0",
       type: "module",
     }),

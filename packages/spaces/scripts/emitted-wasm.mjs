@@ -2,7 +2,7 @@
 //
 // The build (scripts/emit-wasm-assets.mjs) writes dist/wasm/ and its
 // wasm-manifest.json; this is the small, testable reader that maps the manifest
-// back to concrete filenames so a post-build step (e.g. the workspace-package
+// back to concrete filenames so a post-build step (e.g. the spaces-package
 // artifact test) can assert the hashed names match the files on disk, and so a
 // future tool can locate the emitted assets without hard-coding the hash.
 import { existsSync, readFileSync } from "node:fs";

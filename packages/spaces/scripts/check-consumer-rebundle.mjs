@@ -72,7 +72,7 @@ function linkFromRepo(nodeModules, name) {
 
 async function main() {
   // Real path: Vite rejects an HTML entry whose root differs from it only by a symlink (macOS /var).
-  const work = realpathSync(mkdtempSync(join(tmpdir(), "workspace-consumer-")));
+  const work = realpathSync(mkdtempSync(join(tmpdir(), "spaces-consumer-")));
   try {
     const packed = JSON.parse(
       execFileSync("npm", ["pack", "--json", "--pack-destination", work], {
@@ -97,8 +97,8 @@ async function main() {
       [
         'import { createElement } from "react";',
         'import { createRoot } from "react-dom/client";',
-        'import { localHost } from "@sprout-foundry/workspace";',
-        'import { SproutWorkspace } from "@sprout-foundry/workspace/views";',
+        'import { localHost } from "@sprout-foundry/spaces";',
+        'import { SproutWorkspace } from "@sprout-foundry/spaces/views";',
         "",
         'const host = { ...localHost, transport: { ...localHost.transport, agent: { kind: "wasm" } } };',
         'createRoot(document.getElementById("root")).render(',

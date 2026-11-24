@@ -4,7 +4,7 @@
 .PHONY: help test test-unit test-unit-lowmem test-race test-smoke test-cli-e2e test-wasm test-desktop-smoke test-all test-ci test-coverage \
        clean build build-all install build-version build-ui deploy-ui build-wasm \
        verify-ui-embedded test-webui lint lint-fix lint-go lint-go-new dev build-webui-dist build-webui-dist-local \
-       verify-dist verify-dist-local automate-run studio-providers build-workspace-package
+       verify-dist verify-dist-local automate-run studio-providers build-spaces-package
 
 # Default target
 help:
@@ -314,7 +314,7 @@ build: prepare-grammars
 # "Taskgated Invalid Signature" until it's replaced at a fresh inode
 # (rm+cp, same effect as an atomic rename here since these are same-volume
 # copies into a directory only this install step writes to).
-install: build build-workspace-package
+install: build build-spaces-package
 	@echo "Installing sprout..."
 	@mkdir -p ~/.local/bin ~/go/bin
 	rm -f ~/.local/bin/sprout && cp sprout ~/.local/bin/sprout
@@ -427,8 +427,8 @@ lint:
 	@cd webui && npm run lint && npm run format:check && npm run type-check && echo "Lint completed successfully"
 	@echo "Validating docs/CONSUMPTION_GUIDE.md against packages/ui..."
 	@node docs/__tests__/consumption-guide.test.js
-	@echo "Validating the @sprout-foundry/workspace build artifact..."
-	@node docs/__tests__/workspace-package.test.js
+	@echo "Validating the @sprout-foundry/spaces build artifact..."
+	@node docs/__tests__/spaces-package.test.js
 
 # Auto-fix frontend linting issues
 lint-fix:
@@ -627,21 +627,21 @@ studio-providers:
 	@cp ../sprout-studio/shared/studio-bridge.js ../sprout-studio/android/app/src/main/assets/studio-bridge.js
 	@echo "Done. Review with: git -C ../sprout-studio diff shared/studio-bridge.js"
 
-# Build the @sprout-foundry/workspace package (the hosted artifact, SP-160
+# Build the @sprout-foundry/spaces package (the hosted artifact, SP-160
 # §160e): the Vite library build that emits dist/index.js + its lazily loaded
 # chunks + the type declarations. `deploy-ui` builds the workspace packages it
 # federates (@sprout/events, @sprout/ui) first, so this depends on it and
 # inputs are edge-driven — an unchanged tree rebuilds nothing.
 #
-# The artifact assertions (docs/__tests__/workspace-package.test.js) run from
+# The artifact assertions (docs/__tests__/spaces-package.test.js) run from
 # `make lint` and from the `install` step below, so the built dist is always
 # checked before it is used.
-build-workspace-package: deploy-ui build-wasm
-	@echo "Building @sprout-foundry/workspace package..."
-	@npm run build -w @sprout-foundry/workspace || { echo "@sprout-foundry/workspace build failed" >&2; exit 1; }
-	@echo "Validating the @sprout-foundry/workspace build artifact..."
-	@node docs/__tests__/workspace-package.test.js
-	@echo "@sprout-foundry/workspace package build completed in packages/workspace/dist/"
+build-spaces-package: deploy-ui build-wasm
+	@echo "Building @sprout-foundry/spaces package..."
+	@npm run build -w @sprout-foundry/spaces || { echo "@sprout-foundry/spaces build failed" >&2; exit 1; }
+	@echo "Validating the @sprout-foundry/spaces build artifact..."
+	@node docs/__tests__/spaces-package.test.js
+	@echo "@sprout-foundry/spaces package build completed in packages/spaces/dist/"
 
 # Full development build: UI + WASM + Go binary + the hosted package
 # Optimized: skips React rebuild if source files haven't changed
@@ -652,12 +652,12 @@ build-workspace-package: deploy-ui build-wasm
 # blob into pkg/webui/static and ship it inside the Go binary, leaving
 # users on the prior turn's WASM until the next full build.
 #
-# build-workspace-package comes last (and itself depends on deploy-ui for the
+# build-spaces-package comes last (and itself depends on deploy-ui for the
 # @sprout/events + @sprout/ui dists its library build federates): the signed
 # binary is produced before the artifact assertions run, and the step sits on
 # the same edge-driven build-deploy-ui prerequisite, so the default local
 # build still rebuilds only what changed.
-build-all: build-wasm deploy-ui build build-workspace-package
+build-all: build-wasm deploy-ui build build-spaces-package
 	@echo "Full build completed: React UI + WASM shell + Go binary + workspace package"
 
 # Generate the shared Go→TS type contract at webui/src/types/generated.ts.

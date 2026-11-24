@@ -1,12 +1,12 @@
 {
-  "name": "@sprout-foundry/workspace",
+  "name": "@sprout-foundry/spaces",
   "version": "1.14.27",
   "description": "Composition API for Sprout — the workspace, its spaces and views, for hosts that embed them",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git://github.com/sprout-foundry/sprout.git",
-    "directory": "packages/workspace"
+    "directory": "packages/spaces"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
@@ -21,7 +21,7 @@
     "dist/providers.d.ts",
     "dist/agent.js",
     "dist/agent.d.ts",
-    "dist/workspace.css",
+    "dist/spaces.css",
     "dist/wasm/",
     "dist/chunks/",
     "README.md"
@@ -43,7 +43,7 @@
       "types": "./dist/agent.d.ts",
       "import": "./dist/agent.js"
     },
-    "./styles.css": "./dist/workspace.css",
+    "./styles.css": "./dist/spaces.css",
     "./wasm/": "./dist/wasm/"
   },
   "scripts": {

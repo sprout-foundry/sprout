@@ -1,6 +1,6 @@
-# Using `@sprout-foundry/workspace`
+# Using `@sprout-foundry/spaces`
 
-`@sprout-foundry/workspace` is how another application hosts Sprout's
+`@sprout-foundry/spaces` is how another application hosts Sprout's
 workspace: it mounts one project's workspace (a space such as code or
 design) inside its own product and provides a `SproutHost` (see
 [host-contract.md](host-contract.md)). It is the only hosted artifact; hosts
@@ -60,9 +60,9 @@ own around it:
 
 ```tsx
 import { useMemo } from "react";
-import "@sprout-foundry/workspace/styles.css";
-import { SproutWorkspace } from "@sprout-foundry/workspace/views";
-import type { SproutProject } from "@sprout-foundry/workspace/views";
+import "@sprout-foundry/spaces/styles.css";
+import { SproutWorkspace } from "@sprout-foundry/spaces/views";
+import type { SproutProject } from "@sprout-foundry/spaces/views";
 import { myHost } from "./myHost"; // a module-level SproutHost
 
 export function ProjectSpace({ repoUrl }: { repoUrl: string }) {
@@ -144,8 +144,8 @@ so a host gets the same IDE the app shows with no wiring:
 ```tsx
 import "@sprout-foundry/design/tokens.css";
 import "@sprout-foundry/design/reset.css";
-import "@sprout-foundry/workspace/styles.css";
-import { SproutWorkspace } from "@sprout-foundry/workspace/views";
+import "@sprout-foundry/spaces/styles.css";
+import { SproutWorkspace } from "@sprout-foundry/spaces/views";
 
 // No `layout`: the full space. It fills the box it is given.
 <div style={{ height: "100%" }}>
@@ -223,7 +223,7 @@ reusable unit rather than a view a host has to feed by hand. `./views` exports
 import {
   WorkspaceChatProvider,
   useWorkspaceChatProps,
-} from "@sprout-foundry/workspace/views";
+} from "@sprout-foundry/spaces/views";
 
 <WorkspaceChatProvider
   initialState={initialState}
@@ -325,7 +325,7 @@ the changes panel, so a host that arranges them gets working surfaces with no
 extra wiring.
 
 ```tsx
-import { SproutWorkspace } from "@sprout-foundry/workspace/views";
+import { SproutWorkspace } from "@sprout-foundry/spaces/views";
 
 <SproutWorkspace
   project={{ id: repoUrl, repoUrl }}
@@ -674,7 +674,7 @@ import {
   EscalationListener,
   SproutWorkspace,
   useEscalationTriggers,
-} from "@sprout-foundry/workspace/views";
+} from "@sprout-foundry/spaces/views";
 
 // The detector for the trigger events is a hook, so it lives in a small
 // component of the host's own.
@@ -756,7 +756,7 @@ exactly that:
 import {
   listBrowserWorkspaceFiles,
   readBrowserWorkspaceFile,
-} from "@sprout-foundry/workspace/views";
+} from "@sprout-foundry/spaces/views";
 
 const files = await listBrowserWorkspaceFiles();
 // files: { path, size, mode, differsFromCheckout }[]
@@ -816,11 +816,11 @@ transport, so the app renders its workspace in ambient mode.
 The workspace's styles are one stylesheet the package ships and declares:
 
 ```tsx
-import "@sprout-foundry/workspace/styles.css";
+import "@sprout-foundry/spaces/styles.css";
 ```
 
-It is emitted at `dist/workspace.css` and reachable through the package's
-`exports` map (`"./styles.css": "./dist/workspace.css"`); no other `.css`
+It is emitted at `dist/spaces.css` and reachable through the package's
+`exports` map (`"./styles.css": "./dist/spaces.css"`); no other `.css`
 file is emitted, so a host imports exactly one stylesheet. Import it once,
 before mounting; it is static CSS with no runtime dependency.
 
@@ -841,7 +841,7 @@ it itself:
 
 ```tsx
 import "@sprout-foundry/design/tokens.css"; // and, optionally, /reset.css
-import "@sprout-foundry/workspace/styles.css";
+import "@sprout-foundry/spaces/styles.css";
 ```
 
 The package deliberately does **not** `@import` `@sprout-foundry/design`
@@ -887,7 +887,7 @@ The `./wasm/` subpath export points at the directory:
 
 ```js
 import { createRequire } from "node:module";
-const wasmDir = new URL("@sprout-foundry/workspace/wasm/", import.meta.url);
+const wasmDir = new URL("@sprout-foundry/spaces/wasm/", import.meta.url);
 ```
 
 **Building.** The package's build copies the WASM from
@@ -895,7 +895,7 @@ const wasmDir = new URL("@sprout-foundry/workspace/wasm/", import.meta.url);
 produces — and fails if they are absent (a package that ships no WASM/manifest
 is a broken artifact, so a mis-ordered build is loud, not silently green).
 `make build-all` runs `build-wasm` before the package build; a standalone
-`npm run build -w @sprout-foundry/workspace` uses whatever `make build-wasm`
+`npm run build -w @sprout-foundry/spaces` uses whatever `make build-wasm`
 last emitted, so run it after changing the Go WASM.
 
 **Where the loader looks.** A host serves `dist/wasm/` at a path it owns — its
@@ -922,15 +922,15 @@ at neither path sets `wasmBase`.
 ## Publishing (maintainers)
 
 Publishing runs in GitHub Actions on a version tag that matches
-`packages/workspace/package.json`:
+`packages/spaces/package.json`:
 
 ```bash
-git tag workspace-v1.0.0 -m "workspace v1.0.0"
-git push origin workspace-v1.0.0
+git tag spaces-v1.0.0 -m "spaces v1.0.0"
+git push origin spaces-v1.0.0
 ```
 
-`.github/workflows/publish-workspace.yml` builds the package in production
-mode, validates the artifact (`docs/__tests__/workspace-package.test.js`)
+`.github/workflows/publish-spaces.yml` builds the package in production
+mode, validates the artifact (`docs/__tests__/spaces-package.test.js`)
 and publishes it. `@sprout-foundry/design` publishes the same way from
 `.github/workflows/publish-design.yml` on `design-v*` tags. A published
 version can never be overwritten; bump the version for every release.

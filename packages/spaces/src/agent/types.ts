@@ -1,5 +1,5 @@
 /**
- * Public types of the headless agent API (`@sprout-foundry/workspace/agent`).
+ * Public types of the headless agent API (`@sprout-foundry/spaces/agent`).
  *
  * Nothing here references React or the web UI: a host drives Sprout's
  * in-browser agent with these types and renders its own interface.

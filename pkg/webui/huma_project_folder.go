@@ -23,7 +23,7 @@ import (
 // Huma operations.
 func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 	huma.Register(api, huma.Operation{
-		OperationID: "workspaceGet",
+		OperationID: "projectFolderGet",
 		Method:      http.MethodGet,
 		Path:        "/api/project-folder",
 		Summary:     "Report the client's active project folder.",
@@ -32,7 +32,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 	}, ws.projectFolderGetHumaHandler)
 
 	huma.Register(api, huma.Operation{
-		OperationID: "workspaceSet",
+		OperationID: "projectFolderSet",
 		Method:      http.MethodPost,
 		Path:        "/api/project-folder",
 		Summary:     "Set the client's active project folder.",
@@ -41,7 +41,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 	}, ws.projectFolderSetHumaHandler)
 
 	huma.Register(api, huma.Operation{
-		OperationID: "workspaceBrowse",
+		OperationID: "projectFolderBrowse",
 		Method:      http.MethodGet,
 		Path:        "/api/project-folder/browse",
 		Summary:     "Browse directories under the daemon root.",
@@ -59,7 +59,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 	}, ws.workspaceSymbolsHumaHandler)
 
 	huma.Register(api, huma.Operation{
-		OperationID: "workspaceProjects",
+		OperationID: "projectFolderProjects",
 		Method:      http.MethodGet,
 		Path:        "/api/project-folder/projects",
 		Summary:     "List known projects.",
@@ -68,7 +68,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 	}, ws.projectFolderProjectsHumaHandler)
 
 	huma.Register(api, huma.Operation{
-		OperationID: "workspaceSync",
+		OperationID: "projectFolderSync",
 		Method:      http.MethodPost,
 		Path:        "/api/project-folder/sync",
 		Summary:     "Synchronize the project folder tree.",
@@ -77,7 +77,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 	}, ws.projectFolderSyncHumaHandler)
 
 	huma.Register(api, huma.Operation{
-		OperationID: "workspaceTakeover",
+		OperationID: "projectFolderTakeover",
 		Method:      http.MethodPost,
 		Path:        "/api/project-folder/takeover",
 		Summary:     "Take over a project folder from another device.",

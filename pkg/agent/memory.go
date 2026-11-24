@@ -191,10 +191,18 @@ func ListMemories() ([]MemoryInfo, error) {
 	return memories, nil
 }
 
-// maxMemoryPromptBytes is the default cap on memory bytes in the system prompt (~12 500 tokens).
+// maxMemoryPromptBytes is the outer cap on memory bytes in the first user message (~12 500 tokens).
 const maxMemoryPromptBytes = 50_000
 
-// LoadMemoriesForPrompt formats every memory body for the system prompt (memory_prompt "full").
+// maxMemoryEntryBytes is the per-memory cap: the largest rendered entry the block carries.
+// It is a fixed constant derived from maxMemoryPromptBytes (one fifth of the default total,
+// so a few full bodies fit under the outer guard) — not a share of the caller's maxBytes.
+// The outer guard (memory_prompt_max_bytes, or maxBytes when set) remains the backstop.
+// The per-memory value is fixed, so which entries are rendered never depends on how big
+// a neighbour's entry happens to be.
+const maxMemoryEntryBytes = maxMemoryPromptBytes / 5
+
+// LoadMemoriesForPrompt formats every memory body for the first user message (memory_prompt "full").
 // Returns empty string if no memories exist.
 func LoadMemoriesForPrompt() string {
 	return LoadMemoriesForPromptMode(MemoryPromptFull, 0)

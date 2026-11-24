@@ -157,7 +157,7 @@ type Config struct {
 
 	// ContextMode selects a named context-engine preset: "" (full default) | "full" | "low_context".
 	ContextMode ContextMode `json:"context_mode,omitempty"`
-	// MemoryPrompt: how memories enter the system prompt: "" or "full" (bodies), "index" (names; bodies via manage_memory), "off".
+	// MemoryPrompt: how memories enter the system prompt: "" or "index" (names; bodies via manage_memory), "full" (bodies), "off".
 	MemoryPrompt         string `json:"memory_prompt,omitempty"`
 	MemoryPromptMaxBytes int    `json:"memory_prompt_max_bytes,omitempty"` // 0: the 50 KB default
 

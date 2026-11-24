@@ -452,12 +452,12 @@ func TestLoadMemoriesForPrompt_RespectsMaxBytes(t *testing.T) {
 
 	result := LoadMemoriesForPrompt()
 
-	// Should contain the truncation notice
-	if !strings.Contains(result, "additional memory file(s) omitted") {
+	// Should contain the truncation notice naming the per-memory cap
+	if !strings.Contains(result, "memory file(s) omitted") {
 		t.Error("expected truncation notice for oversized memory")
 	}
-	if !strings.Contains(result, "total size exceeded") {
-		t.Error("expected 'total size exceeded' in truncation notice")
+	if !strings.Contains(result, "per-memory cap") {
+		t.Error("expected 'per-memory cap' in truncation notice")
 	}
 }
 
@@ -475,7 +475,7 @@ func TestLoadMemoriesForPrompt_MultipleMemoriesWithLimit(t *testing.T) {
 	result := LoadMemoriesForPrompt()
 
 	// Should contain the truncation notice
-	if !strings.Contains(result, "additional memory file(s) omitted") {
+	if !strings.Contains(result, "memory file(s) omitted") {
 		t.Error("expected truncation notice when total exceeds limit")
 	}
 }

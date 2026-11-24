@@ -381,24 +381,26 @@ status` and `sprout gpu status` show it too.
 
 ### `sprout gpu`
 
-Link an inference engine this machine runs (Ollama, llama.cpp, vLLM, MLX,
+Link inference engines this machine runs (Ollama, llama.cpp, vLLM, MLX,
 LM Studio: anything that answers OpenAI's `/v1/chat/completions`) to your
-platform account, so your tasks and Sprout can run on its models. The agent
-connects out to the platform over one WebSocket: no port is opened on your
-network, and the platform reaches only the engine's model-serving paths
-(`/v1/chat/completions`, `/v1/completions`, `/v1/embeddings`, `/v1/models`,
-`/health`). Linking needs a paid plan on the platform.
+platform account, so your tasks and Sprout can run on their models — several
+engines per machine, one link (and one background service) each. The agent
+connects out to the platform over one WebSocket per link: no port is opened
+on your network, and the platform reaches only the engine's model-serving
+paths (`/v1/chat/completions`, `/v1/completions`, `/v1/embeddings`,
+`/v1/models`, `/health`). Linking needs a paid plan on the platform.
 
 **Basic Usage:**
 
 ```bash
 sprout gpu link --engine 127.0.0.1:11434   # approve in the browser; then it serves in the background
+sprout gpu link --engine 127.0.0.1:8021    # a second engine: named hostname-8021 automatically
 sprout gpu link --sinter --model qwen3.5-9b  # or serve a model in-process with sinter (Apple Silicon)
-sprout gpu install                         # (re)install the background service (systemd user unit / launchd agent)
-sprout gpu start                           # serve in the foreground instead (what the service runs)
-sprout gpu status
-sprout gpu unlink
-sprout gpu rotate-key                      # trade the link's key for a new one
+sprout gpu install                         # (re)install every background service (one systemd user-unit instance / launchd agent per link)
+sprout gpu start --name <name>             # serve one in the foreground instead (what the service runs)
+sprout gpu status                          # every link, its service, and whether its engine answers
+sprout gpu unlink --name <name>
+sprout gpu rotate-key --name <name>        # trade a link's key for a new one
 ```
 
 **`link` flags:**
@@ -412,7 +414,7 @@ sprout gpu rotate-key                      # trade the link's key for a new one
 | `--no-browser` | Print the approval URL instead of opening a browser |
 | `--sinter` | Serve a model in-process with sinter instead of a server at `--engine` (Apple Silicon builds) |
 | `--fleet` | Link to the platform's own GPU fleet (a machine the platform owns or rents) instead of your account. Approved in the browser by a platform admin (or with `--token`); the GPU is then added as a Linked GPU (fleet) provider |
-| `--no-service` | Link only; do not install and start the background service. By default `link` installs it (a systemd user unit or launchd agent running `sprout gpu start`, restarted if it exits) and restarts it after a new link; on Linux it also enables lingering where allowed, so the service keeps serving with nobody logged in |
+| `--no-service` | Link only; do not install and start the background service. By default `link` installs it (a systemd user-unit instance or launchd agent running `sprout gpu start --name <name>`, restarted if it exits) and restarts it after a new link; on Linux it also enables lingering where allowed, so the service keeps serving with nobody logged in |
 | `--token <token>` | An enrollment token a platform admin minted: links to the fleet without the browser approval, for a rented box that links itself on boot. Single use and short-lived; implies `--fleet` |
 | `--model <name\|dir>` | The model to serve with sinter (implies `--sinter`): a catalog name (e.g. `qwen3.5-9b`), an installed model, or a model directory; default: the model recommended for this machine's memory. A missing catalog model and the MLX runtime are downloaded once |
 
@@ -438,8 +440,21 @@ key stops working once the new one connects, so a rotation the agent did not
 save cannot lock it out.
 
 After linking, choose one of the engine's models under **Account → Models**
-on the platform. The link key and engine key live in sprout's credential
-store; the state is in the config directory's `gpu/gpu.json`.
+on the platform. Each link's key and engine key live in sprout's credential
+store under the link's slot — its name reduced to a file-safe form; its
+state is one file in the config directory's `gpu/links/<slot>.json`.
+
+**Several GPUs on one machine:** each link has its own name, state file, keys
+and background service (`sprout-gpu@<name>.service` on Linux,
+`com.sprout.gpu.<name>` on macOS). A link's default name is the machine's
+hostname; when that is already linked, the next link takes `hostname-port`
+(say `box-8021`) for free, so a second engine needs no flags. Pass `--name`
+to `link` to choose it yourself, and to `start`, `unlink`, `rotate-key` and
+`uninstall` to say which link (not needed while only one is linked).
+`sprout gpu status` lists every link. A sprout that linked only one GPU
+before this keeps working: its `gpu.json`, keys and single service migrate
+to the per-link layout on the next run, and `gpu install` replaces the old
+single service with per-link instances.
 
 ## Advanced Agent Flags
 

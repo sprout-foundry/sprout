@@ -11,9 +11,15 @@ import (
 	"strings"
 )
 
-const systemdUnit = "sprout-gpu.service"
+// systemdUnitTemplate is the template unit; each link runs as an instance
+// sprout-gpu@<slot>.service, so several links share one machine.
+const systemdUnitTemplate = "sprout-gpu@.service"
 
-func servicePath() (string, error) {
+// legacySystemdUnit is the single unit older sprouts installed; its
+// replacement by instances happens on the next install.
+const legacySystemdUnit = "sprout-gpu.service"
+
+func systemdUserDir() (string, error) {
 	base := os.Getenv("XDG_CONFIG_HOME")
 	if base == "" {
 		home, err := os.UserHomeDir()
@@ -22,12 +28,14 @@ func servicePath() (string, error) {
 		}
 		base = filepath.Join(home, ".config")
 	}
-	return filepath.Join(base, "systemd", "user", systemdUnit), nil
+	return filepath.Join(base, "systemd", "user"), nil
 }
 
-// InstallService registers `sprout gpu start` as a systemd user unit that
-// starts at login and restarts if it exits.
-func InstallService() (string, error) {
+func instanceUnit(slot string) string { return "sprout-gpu@" + slot + ".service" }
+
+// writeTemplate writes the template unit both instances and legacy-unit
+// replacement run through.
+func writeTemplate() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
 		return "", err
@@ -35,22 +43,46 @@ func InstallService() (string, error) {
 	if strings.ContainsAny(exe, " \t\n\"'\\") {
 		return "", fmt.Errorf("cannot write a systemd unit for a binary path with spaces or quotes: %s", exe)
 	}
-	path, err := servicePath()
+	dir, err := systemdUserDir()
 	if err != nil {
 		return "", err
 	}
-	unit := "[Unit]\nDescription=Sprout GPU link\nAfter=network-online.target\n\n" +
-		"[Service]\nExecStart=" + exe + " gpu start\nRestart=always\nRestartSec=30\n\n" +
+	path := filepath.Join(dir, systemdUnitTemplate)
+	unit := "[Unit]\nDescription=Sprout GPU link %i\nAfter=network-online.target\n\n" +
+		"[Service]\nExecStart=" + exe + " gpu start --name %i\nRestart=always\nRestartSec=30\n\n" +
 		"[Install]\nWantedBy=default.target\n"
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
 	if err := os.WriteFile(path, []byte(unit), 0o644); err != nil {
 		return "", err
 	}
+	return path, nil
+}
+
+// InstallService registers `sprout gpu start --name <name>` as a systemd
+// user unit instance that starts at login and restarts if it exits. The
+// instance is the link's slot: systemd instance names, like the state
+// files, key on it. The single unit an older sprout installed is left in
+// place here — replacing it is InstallAllServices' job, once every link
+// has an instance — so a one-link install of a second link never leaves
+// the first link unserved.
+func InstallService(name string) (string, error) {
+	slot := Slot(name)
+	if slot == "" {
+		return "", fmt.Errorf("link name %q has no usable service instance name; pick another with --name", name)
+	}
+	path, err := writeTemplate()
+	if err != nil {
+		return "", err
+	}
 	// restart, not just start: after a new link the running agent must pick
 	// up the new link's state and key.
-	for _, args := range [][]string{{"--user", "daemon-reload"}, {"--user", "enable", systemdUnit}, {"--user", "restart", systemdUnit}} {
+	for _, args := range [][]string{
+		{"--user", "daemon-reload"},
+		{"--user", "enable", instanceUnit(slot)},
+		{"--user", "restart", instanceUnit(slot)},
+	} {
 		if out, err := exec.Command("systemctl", args...).CombinedOutput(); err != nil { //nolint:gosec // G204: fixed systemctl subcommands for the link's own unit
 			return "", fmt.Errorf("systemctl %s: %s", strings.Join(args, " "), out)
 		}
@@ -62,18 +94,76 @@ func InstallService() (string, error) {
 	return path, nil
 }
 
-// UninstallService disables and removes the systemd user unit.
-func UninstallService() error {
-	_ = exec.Command("systemctl", "--user", "disable", "--now", systemdUnit).Run()
-	path, err := servicePath()
+// InstallAllServices installs every link's service instance and, once all
+// are in place, replaces the single unit an older sprout installed: removing
+// it any earlier would leave a migrated link unserved if a later install
+// failed.
+func InstallAllServices(names []string) ([]string, error) {
+	var paths []string
+	for _, name := range names {
+		path, err := InstallService(name)
+		if err != nil {
+			return paths, err
+		}
+		paths = append(paths, path)
+	}
+	return paths, uninstallLegacyService()
+}
+
+// ReplaceLegacyService stops and removes the single unit an older sprout
+// installed. Call it only when every link has its own instance.
+func ReplaceLegacyService() error { return uninstallLegacyService() }
+
+// UninstallService disables and removes one link's service instance. An
+// empty slot removes every instance, the template and the legacy unit.
+func UninstallService(slot string) error {
+	if slot != "" {
+		_ = exec.Command("systemctl", "--user", "disable", "--now", instanceUnit(slot)).Run() //nolint:gosec // G204: fixed systemctl subcommand for the link's own unit
+		return nil
+	}
+	dir, err := systemdUserDir()
 	if err != nil {
 		return err
 	}
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+	links, err := LoadLinks()
+	if err == nil {
+		for _, st := range links {
+			_ = exec.Command("systemctl", "--user", "disable", "--now", instanceUnit(st.Slot())).Run() //nolint:gosec // G204: fixed systemctl subcommand for the link's own unit
+		}
+	}
+	_ = exec.Command("systemctl", "--user", "disable", "--now", legacySystemdUnit).Run()
+	if err := os.Remove(filepath.Join(dir, systemdUnitTemplate)); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	_ = os.Remove(filepath.Join(dir, legacySystemdUnit))
+	_ = exec.Command("systemctl", "--user", "daemon-reload").Run()
+	return nil
+}
+
+// uninstallLegacyService stops and removes the single unit an older sprout
+// installed; per-link instances have replaced it.
+func uninstallLegacyService() error {
+	_ = exec.Command("systemctl", "--user", "disable", "--now", legacySystemdUnit).Run() //nolint:gosec // G204: fixed systemctl subcommand for the link's own unit
+	dir, err := systemdUserDir()
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(filepath.Join(dir, legacySystemdUnit)); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	_ = exec.Command("systemctl", "--user", "daemon-reload").Run()
 	return nil
+}
+
+// LegacyServiceInstalled reports whether the single unit an older sprout
+// installed is still on disk.
+func LegacyServiceInstalled() bool {
+	dir, err := systemdUserDir()
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(filepath.Join(dir, legacySystemdUnit))
+	return err == nil
 }
 
 // ServiceNotice is what to know about the service on this machine: on Linux,
@@ -86,12 +176,13 @@ func ServiceNotice() string {
 	return "The service stops when you log out; run `sudo loginctl enable-linger $USER` to keep it serving."
 }
 
-// ServiceState is whether the service is running, and how to see its log.
-func ServiceState() (state, logs string) {
-	out, _ := exec.Command("systemctl", "--user", "is-active", systemdUnit).Output() //nolint:gosec // G204: fixed systemctl query for the link's own unit
+// ServiceState is whether a link's service is running, and how to see its log.
+func ServiceState(slot string) (state, logs string) {
+	unit := instanceUnit(slot)
+	out, _ := exec.Command("systemctl", "--user", "is-active", unit).Output() //nolint:gosec // G204: fixed systemctl query for the link's own unit
 	state = strings.TrimSpace(string(out))
 	if state == "" {
 		state = "not installed"
 	}
-	return state, "journalctl --user -u " + systemdUnit + " -n 50 --no-pager"
+	return state, "journalctl --user -u " + unit + " -n 50 --no-pager"
 }

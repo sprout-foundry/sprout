@@ -33,6 +33,14 @@ func normalizeMemoryPromptMode(mode string) (normalized string, ok bool) {
 	}
 }
 
+// memoryEntry renders one memory as a single entry of the block.
+func memoryEntry(index bool, memory MemoryInfo) string {
+	if index {
+		return fmt.Sprintf("- `%s`: %s\n", memory.Name, memorySummary(memory.Content))
+	}
+	return fmt.Sprintf("### %s\n%s\n\n", memory.Name, memoryBody(memory.Content))
+}
+
 // LoadMemoriesForPromptMode formats the memories for the conversation's first user message in the given mode.
 // maxBytes <= 0 uses maxMemoryPromptBytes. Every request carries the result, so the index
 // mode (the default) keeps a large memory store from costing thousands of tokens a request.
@@ -78,18 +86,21 @@ func LoadMemoriesForPromptMode(mode string, maxBytes int) string {
 	omittedPerMemory := 0
 	omittedOuter := 0
 	for i, memory := range memories {
-		var entry string
-		if index {
-			entry = fmt.Sprintf("- `%s`: %s\n", memory.Name, memorySummary(memory.Content))
-		} else {
-			entry = fmt.Sprintf("### %s\n%s\n\n", memory.Name, memoryBody(memory.Content))
-		}
+		entry := memoryEntry(index, memory)
 		if len(entry) > maxMemoryEntryBytes {
 			omittedPerMemory++
 			continue
 		}
 		if written+len(entry) > maxBytes {
-			omittedOuter += len(memories) - i // every remaining entry: outer guard
+			// Remaining entries are each omitted, but by their own cause: an
+			// oversized one by the per-memory cap, the rest by the outer guard.
+			for j := i; j < len(memories); j++ {
+				if len(memoryEntry(index, memories[j])) > maxMemoryEntryBytes {
+					omittedPerMemory++
+				} else {
+					omittedOuter++
+				}
+			}
 			break
 		}
 		sb.WriteString(entry)

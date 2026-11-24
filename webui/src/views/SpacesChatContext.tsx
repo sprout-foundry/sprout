@@ -1,7 +1,7 @@
 /**
- * WorkspaceChatProvider + useWorkspaceChat — the chat slice as one unit.
+ * SpacesChatProvider + useSpacesChat — the chat slice as one unit.
  *
- * The chat surface is the most stateful part of the workspace: the transcript
+ * The chat surface is the most stateful part of the spaces: the transcript
  * and its per-chat caches, the WebSocket event reducer that fills them, the
  * chat-session manager (list/create/switch/delete/rename), the send/queue
  * operations, and the `chatProps`/`reviewProps`/`diffState` the view renders
@@ -18,7 +18,7 @@
  *
  * The app-specific callbacks the chat view needs (opening a review buffer,
  * the model picker, session restore, fork) are not part of the chat state, so
- * they arrive as the `overrides` of `useWorkspaceChatProps`, which is where
+ * they arrive as the `overrides` of `useSpacesChatProps`, which is where
  * the view props are assembled. That keeps the assembly in this unit while
  * the app keeps owning its own surfaces.
  */
@@ -48,10 +48,10 @@ import type { SpacesShellChat } from '../spaces/shell';
 // ── The context ──────────────────────────────────────────────────────────
 
 /**
- * What `useWorkspaceChat()` exposes: the chat state, its store setter, the
+ * What `useSpacesChat()` exposes: the chat state, its store setter, the
  * event handlers and the session/queue operations. A host that wants to
  * compose its own chat surface reads these directly; the assembled view props
- * come from `useWorkspaceChatProps`.
+ * come from `useSpacesChatProps`.
  */
 export interface SpacesChatValue {
   /** The chat slice of the app state (transcript, caches, sessions, …). */
@@ -163,7 +163,7 @@ export interface SpacesChatProviderProps {
  *
  * It must be mounted under a `HostProvider`: the unit reads the host to decide
  * whether the host serves the chat session store (`capabilities.chatSessions`)
- * and to resolve the store's API base. `SproutWorkspace` mounts one in its own
+ * and to resolve the store's API base. `SproutSpaces` mounts one in its own
  * mode; a host that composes its own stack supplies it.
  */
 export function SpacesChatProvider({
@@ -370,13 +370,13 @@ function useSubscribeEvents(
 }
 
 /**
- * Read the chat unit. Throws outside `WorkspaceChatProvider` so a mis-mounted
+ * Read the chat unit. Throws outside `SpacesChatProvider` so a mis-mounted
  * chat surface fails loudly rather than rendering an empty transcript.
  */
 export function useSpacesChat(): SpacesChatValue {
   const value = useContext(SpacesChatContext);
   if (!value) {
-    throw new Error('useWorkspaceChat must be used within a WorkspaceChatProvider');
+    throw new Error('useSpacesChat must be used within a SpacesChatProvider');
   }
   return value;
 }
@@ -401,13 +401,13 @@ export interface SpacesChatPropsOverrides {
   isForking?: boolean;
   backendReachable?: boolean;
   onRetryConnection?: () => void;
-  /** Dismiss the workspace-busy notice. Defaults to clearing it in the store. */
+  /** Dismiss the project-folder-busy notice. Defaults to clearing it in the store. */
   onDismissBusy?: () => void;
   /** The per-turn change summaries shown in the transcript. */
   fileEdits?: FileEdit[];
-  /** The review surface state (owned by the app's git workspace). */
+  /** The review surface state (owned by the app's git state). */
   review?: SpacesChatReviewProps;
-  /** The diff surface state (owned by the app's git workspace). */
+  /** The diff surface state (owned by the app's git state). */
   diff?: SpacesChatDiffState;
 }
 

@@ -1,5 +1,5 @@
 /**
- * WorkspaceChatProvider — the chat unit driven by a fake transport.
+ * SpacesChatProvider — the chat unit driven by a fake transport.
  *
  * The unit's contract is that it needs only a fetch function and an events
  * provider: delivered events fill the transcript, and a send goes out through
@@ -221,7 +221,7 @@ function renderUnit(overrides: { fetchFn?: typeof fetch; host?: SproutHost; chat
   return { ...utils, events, fetch, getValue: () => value! };
 }
 
-describe('WorkspaceChatProvider', () => {
+describe('SpacesChatProvider', () => {
   beforeEach(() => {
     sessionsModule.createChatSessionsApi.mockReset();
     hostSessionsModule.createHostChatSessionsApi.mockReset();

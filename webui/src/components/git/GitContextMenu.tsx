@@ -21,7 +21,7 @@ export interface GitContextMenuProps {
 
 function GitContextMenu({
   contextMenu,
-  projectFolder: projectFolder,
+  projectFolder,
   onPreviewFile,
   onOpenFile,
   onStageFile,

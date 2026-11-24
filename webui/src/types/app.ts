@@ -107,7 +107,7 @@ export interface AppState {
   logs: LogEntry[];
   isProcessing: boolean;
   lastError: string | null;
-  /** 409 project_folder_busy payload (SP-142 §3) — see WorkspaceBusyInfo. */
+  /** 409 project_folder_busy payload (SP-142 §3) — see ProjectFolderBusyInfo. */
   projectFolderBusy: ProjectFolderBusyInfo | null;
   currentView: ViewType;
   toolExecutions: ToolExecution[];

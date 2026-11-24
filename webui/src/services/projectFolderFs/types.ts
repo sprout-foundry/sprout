@@ -13,7 +13,7 @@
  * Why one seam: features (file tree, editor saves, git clone via the
  * isomorphic-git adapter, zip import/export, agent file tools) must not
  * each invent their own fs-shaped plumbing. They program against
- * `WorkspaceFs`, pick a backend once at startup, and the same code runs
+ * `ProjectFolderFs`, pick a backend once at startup, and the same code runs
  * against the native project folder, the daemon API, or a test double.
  *
  * Conventions (mirroring bridge-protocol.md §10.1):

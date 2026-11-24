@@ -2,7 +2,7 @@ import { Monitor } from 'lucide-react';
 import React from 'react';
 import type { SproutInstance } from '../../services/api';
 
-export interface SpacesInstancesProps {
+export interface ProjectFolderInstancesProps {
   instances: SproutInstance[];
   selectedInstancePID: number;
   isSwitching: boolean;
@@ -10,7 +10,7 @@ export interface SpacesInstancesProps {
   onInstanceChange: ((pid: number) => void) | undefined;
 }
 
-export const SpacesInstances: React.FC<SpacesInstancesProps> = ({
+export const ProjectFolderInstances: React.FC<ProjectFolderInstancesProps> = ({
   instances,
   selectedInstancePID,
   isSwitching,

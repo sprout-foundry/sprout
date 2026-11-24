@@ -21,7 +21,7 @@ import './ProjectFolderGateModal.css';
  * home directory.
  *
  * Renders only in local mode — cloud mode has a single virtual FS, so
- * `supportsWorkspaceSwitching` (false in cloud) short-circuits to null.
+ * `supportsProjectFolderSwitching` (false in cloud) short-circuits to null.
  *
  * Studio variant: when `supportsFolderPicker` is true (a studio shell
  * advertising the bridge's native folder picker via capabilities.json), the
@@ -132,21 +132,23 @@ function ProjectFolderGateModal({
   // shell that somehow reports both still never renders in cloud mode.
   if (supportsFolderPicker) {
     return (
-      <div className="workspace-gate-overlay" data-testid="workspace-gate-modal">
-        <div className={`workspace-gate-content${pending ? ' is-busy' : ''}`}>
-          <div className="workspace-gate-header">
-            <div className="workspace-gate-header-icon">
+      <div className="project-folder-gate-overlay" data-testid="project-folder-gate-modal">
+        <div className={`project-folder-gate-content${pending ? ' is-busy' : ''}`}>
+          <div className="project-folder-gate-header">
+            <div className="project-folder-gate-header-icon">
               <AlertTriangle size={28} />
             </div>
             <div>
-              <h2 className="workspace-gate-title">Choose a project folder</h2>
-              <p className="workspace-gate-subtitle">Pick where this project lives — or create a new project folder.</p>
+              <h2 className="project-folder-gate-title">Choose a project folder</h2>
+              <p className="project-folder-gate-subtitle">
+                Pick where this project lives — or create a new project folder.
+              </p>
             </div>
           </div>
 
           {creating ? (
             <form
-              className="workspace-gate-create-form"
+              className="project-folder-gate-create-form"
               onSubmit={(e) => {
                 e.preventDefault();
                 run('create', async () => {
@@ -179,12 +181,12 @@ function ProjectFolderGateModal({
                 });
               }}
             >
-              <label className="workspace-gate-create-label" htmlFor="workspace-gate-create-input">
+              <label className="project-folder-gate-create-label" htmlFor="project-folder-gate-create-input">
                 Project name
               </label>
               <input
-                id="workspace-gate-create-input"
-                className="workspace-gate-create-input"
+                id="project-folder-gate-create-input"
+                className="project-folder-gate-create-input"
                 type="text"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
@@ -192,18 +194,18 @@ function ProjectFolderGateModal({
                 autoComplete="off"
                 autoFocus
                 disabled={pending !== null}
-                data-testid="workspace-gate-create-input"
+                data-testid="project-folder-gate-create-input"
               />
-              <label className="workspace-gate-create-label" htmlFor="workspace-gate-starter-select">
+              <label className="project-folder-gate-create-label" htmlFor="project-folder-gate-starter-select">
                 Starter
               </label>
               <select
-                id="workspace-gate-starter-select"
-                className="workspace-gate-starter-select"
+                id="project-folder-gate-starter-select"
+                className="project-folder-gate-starter-select"
                 value={selectedStarter}
                 onChange={(e) => setSelectedStarter(e.target.value)}
                 disabled={pending !== null}
-                data-testid="workspace-gate-starter-select"
+                data-testid="project-folder-gate-starter-select"
               >
                 <option value="">Blank (no starter)</option>
                 {starterOptions.map((s) => (
@@ -212,9 +214,9 @@ function ProjectFolderGateModal({
                   </option>
                 ))}
               </select>
-              <div className="workspace-gate-create-actions">
+              <div className="project-folder-gate-create-actions">
                 <button
-                  className="workspace-gate-home-btn"
+                  className="project-folder-gate-home-btn"
                   type="button"
                   onClick={() => {
                     // Reset the form. setPending is defensive — the button is
@@ -227,19 +229,19 @@ function ProjectFolderGateModal({
                     setPending(null);
                   }}
                   disabled={pending !== null}
-                  data-testid="workspace-gate-create-cancel"
+                  data-testid="project-folder-gate-create-cancel"
                 >
                   Cancel
                 </button>
                 <button
-                  className="workspace-gate-primary-btn"
+                  className="project-folder-gate-primary-btn"
                   type="submit"
                   disabled={pending !== null || newName.trim() === ''}
-                  data-testid="workspace-gate-create-submit"
+                  data-testid="project-folder-gate-create-submit"
                 >
                   {pending === 'create' ? (
                     <>
-                      <Loader2 size={14} className="workspace-gate-btn-spin" aria-hidden="true" />
+                      <Loader2 size={14} className="project-folder-gate-btn-spin" aria-hidden="true" />
                       Creating&hellip;
                     </>
                   ) : (
@@ -249,9 +251,9 @@ function ProjectFolderGateModal({
               </div>
             </form>
           ) : (
-            <div className="workspace-gate-studio-actions">
+            <div className="project-folder-gate-studio-actions">
               <button
-                className="workspace-gate-primary-btn"
+                className="project-folder-gate-primary-btn"
                 type="button"
                 onClick={() =>
                   run('pick', async () => {
@@ -269,11 +271,11 @@ function ProjectFolderGateModal({
                   })
                 }
                 disabled={pending !== null}
-                data-testid="workspace-gate-pick-btn"
+                data-testid="project-folder-gate-pick-btn"
               >
                 {pending === 'pick' ? (
                   <>
-                    <Loader2 size={14} className="workspace-gate-btn-spin" aria-hidden="true" />
+                    <Loader2 size={14} className="project-folder-gate-btn-spin" aria-hidden="true" />
                     Choosing&hellip;
                   </>
                 ) : (
@@ -281,14 +283,14 @@ function ProjectFolderGateModal({
                 )}
               </button>
               <button
-                className="workspace-gate-secondary-btn"
+                className="project-folder-gate-secondary-btn"
                 type="button"
                 onClick={() => {
                   setError(null);
                   setCreating(true);
                 }}
                 disabled={pending !== null}
-                data-testid="workspace-gate-new-btn"
+                data-testid="project-folder-gate-new-btn"
               >
                 <FolderPlus size={16} aria-hidden="true" />
                 New Project…
@@ -297,14 +299,14 @@ function ProjectFolderGateModal({
           )}
 
           {error && (
-            <div className="workspace-gate-error" role="alert" data-testid="workspace-gate-error">
+            <div className="project-folder-gate-error" role="alert" data-testid="project-folder-gate-error">
               {error}
             </div>
           )}
 
-          <div className="workspace-gate-home-consent">
+          <div className="project-folder-gate-home-consent">
             <button
-              className="workspace-gate-home-btn"
+              className="project-folder-gate-home-btn"
               type="button"
               onClick={() =>
                 // Same path as the desktop variant's consent handler in
@@ -313,18 +315,18 @@ function ProjectFolderGateModal({
                 run('consent', () => consentToHomeProjectFolder())
               }
               disabled={pending !== null}
-              data-testid="workspace-gate-home-btn"
+              data-testid="project-folder-gate-home-btn"
             >
               {pending === 'consent' ? (
                 <>
-                  <Loader2 size={14} className="workspace-gate-btn-spin" aria-hidden="true" />
+                  <Loader2 size={14} className="project-folder-gate-btn-spin" aria-hidden="true" />
                   Dismissing&hellip;
                 </>
               ) : (
                 'Continue in Documents'
               )}
             </button>
-            <p className="workspace-gate-home-warning">
+            <p className="project-folder-gate-home-warning">
               Running in your Documents folder keeps Sprout working, but the agent sees everything there. Choosing a
               dedicated project folder keeps its scope small.
             </p>
@@ -335,15 +337,15 @@ function ProjectFolderGateModal({
   }
 
   return (
-    <div className="workspace-gate-overlay" data-testid="workspace-gate-modal">
-      <div className={`workspace-gate-content${pending ? ' is-busy' : ''}`}>
-        <div className="workspace-gate-header">
-          <div className="workspace-gate-header-icon">
+    <div className="project-folder-gate-overlay" data-testid="project-folder-gate-modal">
+      <div className={`project-folder-gate-content${pending ? ' is-busy' : ''}`}>
+        <div className="project-folder-gate-header">
+          <div className="project-folder-gate-header-icon">
             <AlertTriangle size={28} />
           </div>
           <div>
-            <h2 className="workspace-gate-title">Select a project folder</h2>
-            <p className="workspace-gate-subtitle">
+            <h2 className="project-folder-gate-title">Select a project folder</h2>
+            <p className="project-folder-gate-subtitle">
               Sprout is running in your home directory, which gives the agent access to all your files. Select a project
               folder to limit its scope.
             </p>
@@ -368,29 +370,29 @@ function ProjectFolderGateModal({
         )}
 
         {error && (
-          <div className="workspace-gate-error" role="alert" data-testid="workspace-gate-error">
+          <div className="project-folder-gate-error" role="alert" data-testid="project-folder-gate-error">
             {error}
           </div>
         )}
 
-        <div className="workspace-gate-home-consent">
+        <div className="project-folder-gate-home-consent">
           <button
-            className="workspace-gate-home-btn"
+            className="project-folder-gate-home-btn"
             type="button"
             onClick={() => run('consent', onConsentHome)}
             disabled={pending !== null}
-            data-testid="workspace-gate-home-btn"
+            data-testid="project-folder-gate-home-btn"
           >
             {pending === 'consent' ? (
               <>
-                <Loader2 size={14} className="workspace-gate-btn-spin" aria-hidden="true" />
+                <Loader2 size={14} className="project-folder-gate-btn-spin" aria-hidden="true" />
                 Dismissing&hellip;
               </>
             ) : (
               'Use my home directory anyway'
             )}
           </button>
-          <p className="workspace-gate-home-warning">
+          <p className="project-folder-gate-home-warning">
             Running in your home directory gives the agent unrestricted access to all files and may trigger macOS
             permission prompts for protected folders like Music and Photos.
           </p>

@@ -1,5 +1,5 @@
 /**
- * browserWorkspaceFiles — the host contract's read-only in-browser project folder
+ * browserProjectFolderFiles — the host contract's read-only in-browser project folder
  * file API (the move-to-container seam).
  *
  * A host that moves a project off the in-browser WASM agent (e.g. into a

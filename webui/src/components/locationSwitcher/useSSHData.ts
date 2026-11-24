@@ -155,7 +155,7 @@ export function useSSHData({
           if (!statusPollCancelled && ls?.status) setSwitchingState((p) => ({ ...p, status: ls.status }));
         } catch {
           // best-effort: cosmetic progress text for the open-in-progress state;
-          // the real failure surfaces from the openSSHWorkspace call below.
+          // the real failure surfaces from the openSSHProjectFolder call below.
         }
       };
       const statusPollTimer = window.setInterval(() => {

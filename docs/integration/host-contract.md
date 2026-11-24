@@ -1127,7 +1127,7 @@ branch is recoverable from the conversion commits (`git show 536a191c2`,
 | `config/mode.ts` — `supportsSSH`, local on / cloud off | `capabilities.ssh` |
 | `config/mode.ts` — `supportsGit`, local on / cloud on | `capabilities.git` |
 | `config/mode.ts` — `supportsChat`, local on / cloud on | `capabilities.chat` |
-| `config/mode.ts` — `supportsProjectFolderSwitching`, local on / cloud off | `capabilities.workspaceSwitching` |
+| `config/mode.ts` — `supportsProjectFolderSwitching`, local on / cloud off | `capabilities.projectFolderSwitching` |
 | `config/mode.ts` — `supportsFolderPicker`, local off / cloud off | `capabilities.folderPicker` |
 | `config/mode.ts` — `supportsExport`, local on / cloud off | `capabilities.export` |
 | `config/mode.ts` — `supportsInstances`, local off / cloud on | `capabilities.instances` |
@@ -1135,7 +1135,7 @@ branch is recoverable from the conversion commits (`git show 536a191c2`,
 | `config/mode.ts` — `supportsSettings`, local on / cloud on | `capabilities.settings` |
 | `config/mode.ts` — `supportsAutomations` (`!isCloud`) | `capabilities.automations` |
 | `config/mode.ts` — `supportsAgentChanges` (`!isCloud`) | `capabilities.agentChanges` |
-| `components/StatusBar.tsx` — workspace label/name shown when not cloud | `capabilities.workspaceSwitching` |
+| `components/StatusBar.tsx` — workspace label/name shown when not cloud | `capabilities.projectFolderSwitching` |
 | `components/StatusBar.tsx` — git branch placeholder when not cloud | `capabilities.localTerminal` |
 | `components/StatusBar.tsx` — account-managed model badge | `transport.authMode === 'bearer'` |
 | `components/HeaderBar.tsx` — platform header affordances (back-to-dashboard, Start Building, credits) vs Sprout's MenuBar | `transport.authMode === 'bearer'` |
@@ -1160,7 +1160,7 @@ branch is recoverable from the conversion commits (`git show 536a191c2`,
 | `components/SidebarGitSection.tsx` — two local-only panes (worktrees) | `capabilities.localTerminal` |
 | `components/SidebarFilesSection.tsx` — clone-repo action | `capabilities.localTerminal` |
 | `components/Sidebar.tsx` — the Automations tab (`supportsAutomations`, i.e. `!isCloud`) | `capabilities.automations` |
-| `components/ProjectFolderBar.tsx` — hidden host name | `capabilities.workspaceSwitching` |
+| `components/ProjectFolderBar.tsx` — hidden host name | `capabilities.projectFolderSwitching` |
 | `components/TerminalWorkbench.tsx` — the WASM terminal notice | the pane transport: shown on the in-browser shell, not on a PTY |
 | `hooks/useSecurityHandlers.ts` — the ask-user POST path | `transport.agent` (`hostRunsInBrowserAgent`): the in-browser agent takes the POST, a daemon the socket event |
 | `hooks/useEscalationTriggers.ts` + `components/AgentEscalationBridge.tsx` — hosted-only escalation | `capabilities.localTerminal` (inverted) |

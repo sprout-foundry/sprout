@@ -41,9 +41,9 @@ vi.mock('../components/EditorPane', async () => {
 
 import { EditorManagerProvider } from '../contexts/EditorManagerContext';
 import { useProjectFolderFileTree } from './useProjectFolderFileTree';
-import { WorkspaceEditorProvider, useWorkspaceEditor, useWorkspaceEditorProps } from './SpacesEditorContext';
-import type { WorkspaceEditorValue } from './SpacesEditorContext';
-import { WorkspaceEditorView } from './SpacesEditorView';
+import { SpacesEditorProvider, useSpacesEditor, useSpacesEditorProps } from './SpacesEditorContext';
+import type { SpacesEditorValue } from './SpacesEditorContext';
+import { SpacesEditorView } from './SpacesEditorView';
 
 function jsonResponse(body: unknown): Response {
   return {
@@ -64,16 +64,16 @@ const LISTING = {
   ],
 };
 
-let editor: WorkspaceEditorValue;
+let editor: SpacesEditorValue;
 
 function Probe(): null {
-  editor = useWorkspaceEditor();
+  editor = useSpacesEditor();
   return null;
 }
 
-/** A tree wired to the editor the way the composed workspace wires it. */
+/** A tree wired to the editor the way the composed spaces wire it. */
 function Tree(): JSX.Element {
-  const { fileTree } = useWorkspaceEditorProps();
+  const { fileTree } = useSpacesEditorProps();
   const props = useProjectFolderFileTree({ ...fileTree, fetchFn: transport.fetch as unknown as typeof fetch });
   return <FileTree {...props} />;
 }
@@ -81,11 +81,11 @@ function Tree(): JSX.Element {
 function mount() {
   return render(
     <EditorManagerProvider>
-      <WorkspaceEditorProvider>
+      <SpacesEditorProvider>
         <Probe />
         <Tree />
-        <WorkspaceEditorView />
-      </WorkspaceEditorProvider>
+        <SpacesEditorView />
+      </SpacesEditorProvider>
     </EditorManagerProvider>,
   );
 }
@@ -95,7 +95,7 @@ beforeEach(() => {
   localStorage.clear();
   localStorage.setItem('sprout-welcome-dismissed', 'true');
   transport.fetch.mockReset();
-  // Services below the unit (the layout's workspace-root probe) use the
+  // Services below the unit (the layout's project-folder-root probe) use the
   // global fetch; route them to the same fake.
   vi.stubGlobal('fetch', transport.fetch);
   transport.fetch.mockImplementation(async (url: string) => {
@@ -110,7 +110,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('WorkspaceEditorProvider', () => {
+describe('SpacesEditorProvider', () => {
   it('shows the empty state until a file is opened', () => {
     mount();
     expect(screen.getByText('Open a file')).toBeInTheDocument();
@@ -195,7 +195,7 @@ describe('WorkspaceEditorProvider', () => {
 
   it('throws when read outside the provider', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    expect(() => render(<Probe />)).toThrow(/WorkspaceEditorProvider/);
+    expect(() => render(<Probe />)).toThrow(/SpacesEditorProvider/);
     spy.mockRestore();
   });
 });

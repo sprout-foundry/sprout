@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HostProvider } from '../host/HostProvider';
 import { makeTestHost } from '../host/testHost';
-import SpacesBar from './ProjectFolderBar';
+import ProjectFolderBar from './ProjectFolderBar';
 
 vi.mock('../services/api', () => ({
   ApiService: {
@@ -35,41 +35,41 @@ afterEach(() => {
 // host to name unless it is attached to a remote one, so the early return is
 // keyed on projectFolderSwitching. isConnected: false keeps the fetch path out of
 // scope for this early-return flip.
-describe('WorkspaceBar host-name early return', () => {
+describe('ProjectFolderBar host-name early return', () => {
   it('renders nothing in a hosted build, even with workspace switching', () => {
     const host = makeTestHost({ projectFolderSwitching: true });
     host.transport = { ...host.transport, authMode: 'bearer' };
     act(() => {
       root.render(
         <HostProvider host={host}>
-          <SpacesBar isConnected={false} />
+          <ProjectFolderBar isConnected={false} />
         </HostProvider>,
       );
     });
-    expect(container.querySelector('.workspace-bar')).toBeNull();
+    expect(container.querySelector('.project-folder-bar')).toBeNull();
   });
 
   it('renders nothing on a shell with no workspace switching', () => {
     act(() => {
       root.render(
         <HostProvider host={makeTestHost({ projectFolderSwitching: false })}>
-          <SpacesBar isConnected={false} />
+          <ProjectFolderBar isConnected={false} />
         </HostProvider>,
       );
     });
-    expect(container.querySelector('.workspace-bar')).toBeNull();
+    expect(container.querySelector('.project-folder-bar')).toBeNull();
   });
 
-  it('renders the local host name on a workspace-switching shell', () => {
+  it('renders the local host name on a project-folder-switching shell', () => {
     act(() => {
       root.render(
         <HostProvider host={makeTestHost({ projectFolderSwitching: true })}>
-          <SpacesBar isConnected={false} />
+          <ProjectFolderBar isConnected={false} />
         </HostProvider>,
       );
     });
-    const bar = container.querySelector('.workspace-bar');
+    const bar = container.querySelector('.project-folder-bar');
     expect(bar).not.toBeNull();
-    expect(container.querySelector('.workspace-bar-host-name')?.textContent).toBe('Local');
+    expect(container.querySelector('.project-folder-bar-host-name')?.textContent).toBe('Local');
   });
 });

@@ -149,7 +149,7 @@ async function instantiate(
 
 /**
  * Load (once per page) and start Sprout's WASM module. A module already
- * running on the page — loaded by the workspace views, or by an earlier
+ * running on the page — loaded by the spaces views, or by an earlier
  * call — is reused as is.
  */
 export function loadSproutWasm(options: LoadSproutWasmOptions): Promise<SproutWasmBridge> {

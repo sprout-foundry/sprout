@@ -4,7 +4,7 @@ import { ChatFooter } from './ChatFooter';
 import type { ToolExecution } from './types';
 
 /**
- * The workspace-busy notice and send-anyway queueing.
+ * The project-folder-busy notice and send-anyway queueing.
  *
  * The composer footer renders the inline notice when the server rejects a
  * send with 409 project_folder_busy (another chat in this client context holds
@@ -15,7 +15,7 @@ import type { ToolExecution } from './types';
  * useWebSocketEventHandler.test.ts's completed-path coverage) and the
  * queued entry's cancel path is the existing queue-remove action.
  */
-describe('ChatFooter workspace-busy notice (SP-142 §3)', () => {
+describe('ChatFooter project-folder-busy notice (SP-142 §3)', () => {
   const baseProps = {
     queryProgress: null,
     isProcessing: false,
@@ -29,7 +29,7 @@ describe('ChatFooter workspace-busy notice (SP-142 §3)', () => {
     render(
       <ChatFooter {...baseProps} projectFolderBusy={{ runningChatId: 'chat-2', runningChatName: 'Refactor sweep' }} />,
     );
-    expect(screen.getByTestId('workspace-busy-notice')).toBeTruthy();
+    expect(screen.getByTestId('project-folder-busy-notice')).toBeTruthy();
     expect(screen.getByText(/Refactor sweep/)).toBeTruthy();
     expect(screen.getByText(/your message is queued and sends when it finishes/)).toBeTruthy();
   });
@@ -46,7 +46,7 @@ describe('ChatFooter workspace-busy notice (SP-142 §3)', () => {
         pendingDraft="  fix the flaky test  "
       />,
     );
-    fireEvent.click(screen.getByTestId('workspace-busy-send-anyway'));
+    fireEvent.click(screen.getByTestId('project-folder-busy-send-anyway'));
     // The handler receives the raw draft; trimming is the handler's job
     // (AppContent's handleSendAnyway trims before queueing).
     expect(onSendAnyway).toHaveBeenCalledWith('  fix the flaky test  ');
@@ -62,7 +62,7 @@ describe('ChatFooter workspace-busy notice (SP-142 §3)', () => {
         pendingDraft=""
       />,
     );
-    expect(screen.queryByTestId('workspace-busy-notice')).toBeNull();
+    expect(screen.queryByTestId('project-folder-busy-notice')).toBeNull();
   });
 
   it('dismiss clears the notice without queueing', () => {
@@ -77,7 +77,7 @@ describe('ChatFooter workspace-busy notice (SP-142 §3)', () => {
         pendingDraft="draft"
       />,
     );
-    fireEvent.click(screen.getByTestId('workspace-busy-dismiss'));
+    fireEvent.click(screen.getByTestId('project-folder-busy-dismiss'));
     expect(onDismissBusy).toHaveBeenCalledTimes(1);
     expect(onSendAnyway).not.toHaveBeenCalled();
   });
@@ -92,19 +92,19 @@ describe('ChatFooter workspace-busy notice (SP-142 §3)', () => {
         pendingDraft="   "
       />,
     );
-    expect(screen.queryByTestId('workspace-busy-send-anyway')).toBeNull();
+    expect(screen.queryByTestId('project-folder-busy-send-anyway')).toBeNull();
     // The notice itself stays — the user may type a draft next.
-    expect(screen.getByTestId('workspace-busy-notice')).toBeTruthy();
+    expect(screen.getByTestId('project-folder-busy-notice')).toBeTruthy();
   });
 
-  it('clearing on completion: the notice disappears when workspaceBusy clears', async () => {
+  it('clearing on completion: the notice disappears when projectFolderBusy clears', async () => {
     const { rerender } = render(
       <ChatFooter {...baseProps} projectFolderBusy={{ runningChatId: 'c', runningChatName: 'Runner' }} />,
     );
-    expect(screen.getByTestId('workspace-busy-notice')).toBeTruthy();
+    expect(screen.getByTestId('project-folder-busy-notice')).toBeTruthy();
     rerender(<ChatFooter {...baseProps} projectFolderBusy={null} />);
     await waitFor(() => {
-      expect(screen.queryByTestId('workspace-busy-notice')).toBeNull();
+      expect(screen.queryByTestId('project-folder-busy-notice')).toBeNull();
     });
   });
 });

@@ -38,7 +38,7 @@ function ws(root: string, extra: Record<string, unknown> = {}) {
   };
 }
 
-describe('reconcileTabWorkspace', () => {
+describe('reconcileTabProjectFolder', () => {
   const changed = vi.fn();
 
   beforeEach(() => {
@@ -97,7 +97,7 @@ describe('reconcileTabWorkspace', () => {
   });
 });
 
-describe('installWorkspaceReconnectSync', () => {
+describe('installProjectFolderReconnectSync', () => {
   beforeEach(() => {
     __resetProjectFolderStoreForTests();
     api.getProjectFolder.mockReset();
@@ -131,7 +131,7 @@ describe('installWorkspaceReconnectSync', () => {
   });
 });
 
-describe('consentToHomeWorkspace', () => {
+describe('consentToHomeProjectFolder', () => {
   beforeEach(() => {
     __resetProjectFolderStoreForTests();
     api.getProjectFolder.mockReset();

@@ -1,5 +1,5 @@
 /**
- * Workspace-mode shell contract.
+ * Space shell contract.
  *
  * A mode's shell owns the shell around its surface: the `<main>` column and
  * the chrome that belongs to that mode. Code gets the menubar and status bar.
@@ -40,7 +40,7 @@ export interface SpacesShellChat {
 export interface SpacesShellMockup {
   /** True while the mockup-presence probe is in flight. */
   loading: boolean;
-  /** True when the workspace has a `design/mockup.html` to show. */
+  /** True when the project folder has a `design/mockup.html` to show. */
   present: boolean;
 }
 /** Git state the Code shell's status bar shows. */
@@ -49,8 +49,8 @@ export interface SpacesShellGit {
   gitStatus: GitStatusData | null;
   projectFolder: string;
   /**
-   * The name the status bar labels the workspace with. An embedding host
-   * passes its project's name, since its workspace root (a container path such
+   * The name the status bar labels the project folder with. An embedding host
+   * passes its project's name, since its project folder (a container path such
    * as `/workspace`) names nothing the user recognises. Unset, the label comes
    * from the root's basename or the open repository.
    */

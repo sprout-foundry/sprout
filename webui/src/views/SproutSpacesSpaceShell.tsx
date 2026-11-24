@@ -1,24 +1,24 @@
 /**
- * The own-mode space shell of `SproutWorkspace` (no `layout`, no host
+ * The own-mode space shell of `SproutSpaces` (no `layout`, no host
  * `shellProps`): the standalone app's code space, assembled from the same
  * components the app root assembles it from, around the composition's chat
  * and editor units.
  *
  * - The sidebar — the app's project sidebar (`ProjectNav`) with Files,
- *   Search and Source control drilled into the workspace's own views
- *   (`WorkspaceSidebar`).
+ *   Search and Source control drilled into the spaces' own views
+ *   (`SpacesSidebar`).
  * - The registered space shell — `CodeShell` (header, editor tabs with the
  *   conversation, the status bar; not its agent-changes context panel, as
  *   each turn's changes show in the conversation).
  * - The docked terminal — the app's terminal workbench, docked under the
- *   space in flow (`WorkspaceDockedTerminal`).
+ *   space in flow (`SpacesDockedTerminal`).
  * - The app root's editor, tab and terminal commands (`useHotkeyCommandHandler`)
  *   and its view commands, registered so the scoped hotkeys, the menu and
  *   the palette reach them.
  *
  * Git (the Source control section, the status bar's branch, diff and review
  * tabs) runs only when the host declares `capabilities.git`; the terminal
- * only when the host has one (`resolveWorkspaceTerminalBackend`). What has
+ * only when the host has one (`resolveSpacesTerminalBackend`). What has
  * no backend is not rendered.
  */
 
@@ -42,7 +42,7 @@ import { useProjectFolderGitState } from './useProjectFolderGitState';
 import type { ProjectFolderGitState } from './useProjectFolderGitState';
 import { useSpacesChat, useSpacesChatProps } from './SpacesChatContext';
 import { SpacesDockedTerminal, useToggleTerminalCommand } from './SpacesDockedTerminal';
-import { useWorkspaceEditor } from './SpacesEditorContext';
+import { useSpacesEditor } from './SpacesEditorContext';
 import { SpacesSidebar } from './SpacesSidebar';
 import { resolveSpacesTerminalBackend } from './SpacesTerminalView';
 import './SpacesSpaceShell.css';
@@ -102,7 +102,7 @@ export interface ComposedSpaceShellProps {
   spaceId: SpaceId;
   chatOverrides?: Partial<ChatProps>;
   hasMockup?: boolean;
-  /** The project's workspace root (local/daemon hosts). */
+  /** The project folder (local/daemon hosts). */
   projectFolder?: string;
   /** The project's display name, the sidebar's title. */
   projectName: string;
@@ -118,7 +118,7 @@ export function ComposedSpaceShell(props: ComposedSpaceShellProps): JSX.Element 
 }
 
 function GitBackedSpaceShell(props: ComposedSpaceShellProps): JSX.Element {
-  const { openFile } = useWorkspaceEditor();
+  const { openFile } = useSpacesEditor();
   const onOpenFile = useCallback((path: string) => void openFile(path), [openFile]);
   const git = useProjectFolderGitState({ onOpenFile });
   return <SpaceShellLayout {...props} git={git} />;
@@ -129,13 +129,13 @@ function SpaceShellLayout({
   spaceId,
   chatOverrides,
   hasMockup,
-  projectFolder: projectFolder,
+  projectFolder,
   projectName,
   git,
 }: ComposedSpaceShellProps & { git: ProjectFolderGitState | null }): JSX.Element {
   const { state, chat } = useSpacesChat();
   const { buffers, activeBufferId, openProjectFolderBuffer } = useEditorManager();
-  const { openFile, activeFile } = useWorkspaceEditor();
+  const { openFile, activeFile } = useSpacesEditor();
   const host = useHost();
   const terminalBackend = resolveSpacesTerminalBackend(host);
 
@@ -299,7 +299,7 @@ function SpaceShellLayout({
 
   return (
     <>
-      <div className="sprout-workspace-shell" data-testid="workspace-space-shell">
+      <div className="sprout-spaces-shell" data-testid="spaces-space-shell">
         <ErrorBoundary panelName="Sidebar">
           <SpacesSidebar
             title={projectName}
@@ -315,7 +315,7 @@ function SpaceShellLayout({
             }
           />
         </ErrorBoundary>
-        <div className="sprout-workspace-shell__main">
+        <div className="sprout-spaces-shell__main">
           <Shell
             isMobile={false}
             isTablet={false}
@@ -393,7 +393,7 @@ function useShellCommands({
   }, [showConversation, setCurrentView, activeBufferId, closeBuffer]);
 }
 
-/** Fired by the startup repo import once the repository is in the workspace. */
+/** Fired by the startup repo import once the repository is in the project folder. */
 const REPO_IMPORTED_EVENT = 'sprout:repo-imported';
 
 /**

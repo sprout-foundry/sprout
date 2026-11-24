@@ -637,7 +637,7 @@ describe('embedded workspace (no app shell)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Tests: the sidebar's Cmd/Ctrl+\ toggle (useWorkspaceKeyDown)
+// Tests: the sidebar's Cmd/Ctrl+\ toggle (useSpacesKeyDown)
 // ---------------------------------------------------------------------------
 
 describe('sidebar toggle shortcut', () => {

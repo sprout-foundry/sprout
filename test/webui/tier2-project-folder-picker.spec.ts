@@ -41,7 +41,7 @@ test.describe('Workspace Picker', () => {
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Check if workspace indicator is visible
-    const workspaceIndicator = page.getByTestId(TESTIDS['status-bar-workspace']);
+    const workspaceIndicator = page.getByTestId(TESTIDS['status-bar-project-folder']);
     const hasWorkspaceIndicator = await workspaceIndicator.isVisible({ timeout: 10_000 }).catch(() => false);
 
     if (!hasWorkspaceIndicator) {
@@ -65,13 +65,13 @@ test.describe('Workspace Picker', () => {
     await workspaceIndicator.click();
     await page.waitForTimeout(1000);
 
-    // Use the workspace-picker testid
-    const pickerDialog = page.getByTestId(TESTIDS['workspace-picker']);
+    // Use the project-folder-picker testid
+    const pickerDialog = page.getByTestId(TESTIDS['project-folder-picker']);
     const hasPicker = await pickerDialog.isVisible({ timeout: 5_000 }).catch(() => false);
 
     if (hasPicker) {
-      // Use the workspace-picker-option testid
-      const options = page.getByTestId(TESTIDS['workspace-picker-option']);
+      // Use the project-folder-picker-option testid
+      const options = page.getByTestId(TESTIDS['project-folder-picker-option']);
       const optionCount = await options.count();
 
       if (optionCount > 0) {
@@ -101,7 +101,7 @@ test.describe('Workspace Picker', () => {
       const hasFallbackDialog = await fallbackDialog.isVisible({ timeout: 5_000 }).catch(() => false);
 
       if (hasFallbackDialog) {
-        const options = page.locator('[role="option"], .workspace-option, li:has-text("workspace")');
+        const options = page.locator('[role="option"], .project-folder-option, li:has-text("workspace")');
         const optionList = await options.all();
         const optionCount = optionList.length;
 
@@ -133,7 +133,7 @@ test.describe('Workspace Picker', () => {
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Check if workspace indicator is visible
-    const workspaceIndicator = page.getByTestId(TESTIDS['status-bar-workspace']);
+    const workspaceIndicator = page.getByTestId(TESTIDS['status-bar-project-folder']);
     const hasWorkspaceIndicator = await workspaceIndicator.isVisible({ timeout: 10_000 }).catch(() => false);
 
     if (!hasWorkspaceIndicator) {
@@ -155,8 +155,8 @@ test.describe('Workspace Picker', () => {
     await workspaceIndicator.click();
     await page.waitForTimeout(1000);
 
-    // Use the workspace-picker-option testid
-    const options = page.getByTestId(TESTIDS['workspace-picker-option']);
+    // Use the project-folder-picker-option testid
+    const options = page.getByTestId(TESTIDS['project-folder-picker-option']);
     const optionCount = await options.count();
 
     if (optionCount > 1) {

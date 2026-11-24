@@ -131,7 +131,7 @@ describe('example host imports only the public entry points (SP-160 Acceptance c
 
   describe('scanner catches seeded violations (positive control)', () => {
     it('flags a private import reaching into a web UI module', () => {
-      expect(findInternalImports(`import { useWorkspaceMode } from '../../../spaces/useSpace';`)).toEqual([
+      expect(findInternalImports(`import { useSpace } from '../../../spaces/useSpace';`)).toEqual([
         '../../../spaces/useSpace',
       ]);
       expect(findInternalImports(`import { ChatView } from '../../../components/ChatView';`)).toEqual([

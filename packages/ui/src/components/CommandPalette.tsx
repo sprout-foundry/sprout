@@ -168,7 +168,7 @@ function CommandPalette({
   onOpenFileInNewPane,
   recentFiles,
   isLoading = false,
-  projectFolder: projectFolder,
+  projectFolder,
 }: CommandPaletteProps): JSX.Element | null {
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<PaletteMode>(initialMode);

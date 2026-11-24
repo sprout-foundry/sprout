@@ -56,9 +56,9 @@ function expandHomePath(path: string, homeDir: string): string {
 function MarkerBadges({ markers }: { markers: string[] }): JSX.Element | null {
   if (!markers.length) return null;
   return (
-    <span className="workspace-picker-markers">
+    <span className="project-folder-picker-markers">
       {markers.map((m) => (
-        <span key={m} className="workspace-picker-marker">
+        <span key={m} className="project-folder-picker-marker">
           {m}
         </span>
       ))}
@@ -87,22 +87,22 @@ function ProjectRow({
 }): ReactElement {
   return (
     <button
-      className="workspace-picker-row"
+      className="project-folder-picker-row"
       type="button"
       onClick={onClick}
       title={path}
       disabled={disabled}
       aria-busy={pending || undefined}
-      data-testid="workspace-picker-option"
+      data-testid="project-folder-picker-option"
     >
-      <div className="workspace-picker-row-icon">
+      <div className="project-folder-picker-row-icon">
         {pending ? <Loader2 size={18} className="spin" aria-hidden="true" /> : icon}
       </div>
-      <div className="workspace-picker-row-info">
-        <span className="workspace-picker-row-name">{name}</span>
+      <div className="project-folder-picker-row-info">
+        <span className="project-folder-picker-row-name">{name}</span>
         <MarkerBadges markers={markers} />
       </div>
-      {timeAgo && <span className="workspace-picker-row-time">{timeAgo}</span>}
+      {timeAgo && <span className="project-folder-picker-row-time">{timeAgo}</span>}
     </button>
   );
 }
@@ -150,16 +150,16 @@ function ProjectFolderPicker({
   };
 
   return (
-    <div className="workspace-picker" data-testid="workspace-picker">
+    <div className="project-folder-picker" data-testid="project-folder-picker">
       {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="workspace-picker-header">
-        <div className="workspace-picker-header-icon">
+      <div className="project-folder-picker-header">
+        <div className="project-folder-picker-header-icon">
           <FolderOpen size={24} />
         </div>
         <div>
-          <h2 className="workspace-picker-title">No project folder detected</h2>
-          <p className="workspace-picker-subtitle">
-            Current: <span className="workspace-picker-path">{displayProjectFolder}</span>
+          <h2 className="project-folder-picker-title">No project folder detected</h2>
+          <p className="project-folder-picker-subtitle">
+            Current: <span className="project-folder-picker-path">{displayProjectFolder}</span>
           </p>
         </div>
       </div>
@@ -167,15 +167,15 @@ function ProjectFolderPicker({
       {/* Switch failure — first thing in the body, above the lists the user
           just acted on, so it can't land below the fold on a tablet. */}
       {switchError && (
-        <div className="workspace-picker-error" role="alert" data-testid="workspace-picker-error">
+        <div className="project-folder-picker-error" role="alert" data-testid="project-folder-picker-error">
           <AlertTriangle size={14} aria-hidden="true" />
           <span>{switchError}</span>
         </div>
       )}
 
       {/* ── Recent Projects ─────────────────────────────────────── */}
-      <section className="workspace-picker-section">
-        <h3 className="workspace-picker-section-title">Recent Projects</h3>
+      <section className="project-folder-picker-section">
+        <h3 className="project-folder-picker-section-title">Recent Projects</h3>
         {recentProjectFolders.length > 0 ? (
           recentProjectFolders.map((ws) => (
             <ProjectRow
@@ -191,13 +191,13 @@ function ProjectFolderPicker({
             />
           ))
         ) : (
-          <p className="workspace-picker-empty">No recent projects</p>
+          <p className="project-folder-picker-empty">No recent projects</p>
         )}
       </section>
 
       {/* ── Nearby Projects ─────────────────────────────────────── */}
-      <section className="workspace-picker-section">
-        <h3 className="workspace-picker-section-title">Nearby Projects</h3>
+      <section className="project-folder-picker-section">
+        <h3 className="project-folder-picker-section-title">Nearby Projects</h3>
         {suggestedProjects.length > 0 ? (
           suggestedProjects.map((proj) => (
             <ProjectRow
@@ -212,13 +212,13 @@ function ProjectFolderPicker({
             />
           ))
         ) : (
-          <p className="workspace-picker-empty">No nearby projects found</p>
+          <p className="project-folder-picker-empty">No nearby projects found</p>
         )}
       </section>
 
       {/* ── Browse Button ───────────────────────────────────────── */}
       <button
-        className="workspace-picker-browse-btn"
+        className="project-folder-picker-browse-btn"
         type="button"
         onClick={onBrowse}
         disabled={isSwitching}

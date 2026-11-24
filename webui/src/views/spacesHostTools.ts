@@ -1,7 +1,7 @@
 /**
- * Host tools for a mounted workspace's in-browser agent: tools the host
+ * Host tools for mounted spaces' in-browser agent: tools the host
  * implements in JavaScript (a board, an account) and offers to the agent
- * while the workspace is mounted. Same shape as the agent package's
+ * while the spaces are mounted. Same shape as the agent package's
  * `HostTool`, so one value serves both.
  *
  * Only the in-browser agent takes them: a daemon backend runs its agent in
@@ -11,7 +11,7 @@
 import { getAdapter } from '../services/apiAdapter';
 import type { WasmShell } from '../services/wasmShell';
 
-/** A tool the host implements and offers to the workspace's agent. */
+/** A tool the host implements and offers to the spaces' agent. */
 export interface SpacesHostTool {
   /** Function name the model calls: letters, digits, `_`, `-`; at most 64. */
   name: string;
@@ -60,7 +60,7 @@ export async function registerSpacesHostTools(tools: SpacesHostTool[]): Promise<
       resultText(await tool.handler(parseArgs(argsJSON), { chatId: context?.chatId ?? '', toolName: tool.name })),
     );
     if (res.ok) registered.push(tool.name);
-    else console.warn(`[SproutWorkspace] host tool ${tool.name} not offered: ${res.error ?? 'refused'}`);
+    else console.warn(`[SproutSpaces] host tool ${tool.name} not offered: ${res.error ?? 'refused'}`);
   }
   return () => registered.forEach((name) => shell.unregisterHostTool(name));
 }

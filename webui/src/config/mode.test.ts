@@ -60,7 +60,7 @@ describe('mode config (default / local mode)', () => {
     expect(modeModule.supportsChat).toBe(true);
   });
 
-  it('exports supportsWorkspaceSwitching as true in local mode', () => {
+  it('exports supportsProjectFolderSwitching as true in local mode', () => {
     expect(modeModule.supportsProjectFolderSwitching).toBe(true);
   });
 
@@ -125,7 +125,7 @@ describe('mode config (cloud mode)', () => {
     expect(modeModule.supportsChat).toBe(true);
   });
 
-  it('exports supportsWorkspaceSwitching as true in cloud mode with no host (local default)', () => {
+  it('exports supportsProjectFolderSwitching as true in cloud mode with no host (local default)', () => {
     expect(modeModule.supportsProjectFolderSwitching).toBe(true);
   });
 
@@ -234,7 +234,7 @@ describe('mode config flag invariants', () => {
       expect(modeModule.supportsChat).toBe(true);
     });
 
-    it('supportsWorkspaceSwitching is true without an adapter (local default)', () => {
+    it('supportsProjectFolderSwitching is true without an adapter (local default)', () => {
       expect(modeModule.supportsProjectFolderSwitching).toBe(true);
     });
 
@@ -441,7 +441,7 @@ describe('live capability refresh (adapter installs AFTER mode.ts loads)', () =>
       fileOpsViaAPI: true,
       showOnboarding: true,
       supportsSSH: false,
-      // git/chat/workspaceSwitching/export/instances/localTerminal/settings
+      // git/chat/projectFolderSwitching/export/instances/localTerminal/settings
       // deliberately omitted (undefined) — capability() falls back per-key.
       supportsGit: undefined,
       supportsChat: undefined,

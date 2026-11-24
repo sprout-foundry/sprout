@@ -28,7 +28,7 @@ import { notificationBus } from '../services/notificationBus';
 import type { AppState, PerChatState, ViewType } from '../types/app';
 import { useLog } from '../utils/log';
 import type { SpaceId, SpacesShellProps } from '../views';
-import { SproutSpaces, useSpace, useSpacesChatProps, useWorkspaceEditor } from '../views';
+import { SproutSpaces, useSpace, useSpacesChatProps, useSpacesEditor } from '../views';
 import { closeBuffersMatching } from './closeBuffers';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import { useCommandPaletteSources } from './CommandPalette/useCommandPaletteSources';
@@ -168,10 +168,10 @@ const AppContent: React.FC<AppContentProps> = ({
     saveAllBuffers,
     toggleBufferPin,
   } = useEditorManager();
-  const { openFile: openProjectFolderFile } = useWorkspaceEditor();
+  const { openFile: openProjectFolderFile } = useSpacesEditor();
   const apiService = ApiService.getInstance();
   const sproutFetch = useSproutFetch();
-  // SP-130: home-directory gate. `useWorkspace` fetches project folder metadata
+  // SP-130: home-directory gate. `useProjectFolder` fetches project folder metadata
   // (is_project, needs_project_folder_selection, project_folder_is_home, …). When the
   // resolved project folder is the user's home directory without consent, a
   // blocking overlay renders on top of the normal UI until the user either
@@ -279,7 +279,7 @@ const AppContent: React.FC<AppContentProps> = ({
 
   // SP-139 Phase 2: the turn change strip fetched an agent-session diff;
   // open it as a review buffer. Shaped as a GitDiffResponse so the
-  // DiffWorkspaceTab text view renders it directly (no staged/unstaged
+  // DiffSpacesTab text view renders it directly (no staged/unstaged
   // modes; defaultView text — the fragment diff has no full-file pair for
   // the merge view).
   const handleReviewChange = useCallback(
@@ -446,7 +446,7 @@ const AppContent: React.FC<AppContentProps> = ({
   );
 
   /**
-   * Selecting a mode moves the view. The workspace-mode state is the source of
+   * Selecting a mode moves the view. The spaces-mode state is the source of
    * truth for "which surface am I in"; `currentView` remains the intra-mode
    * route (chat/editor/git inside Code), so the two are kept in step here
    * rather than each mode re-deriving it.
@@ -502,7 +502,7 @@ const AppContent: React.FC<AppContentProps> = ({
   });
 
   // The editor, tab and terminal commands (menu items, shortcuts, palette).
-  // useAppContentHotkeys above owns the app-level ones and EditorWorkspace the
+  // useAppContentHotkeys above owns the app-level ones and EditorSpaces the
   // pane splits, so every command has exactly one handler.
   const handleCloseAllBuffers = useCallback(
     () =>
@@ -601,7 +601,7 @@ const AppContent: React.FC<AppContentProps> = ({
         return;
       }
       // Everything else routes through the hotkey handlers (useAppContentHotkeys,
-      // useHotkeyCommandHandler, EditorWorkspace), the path menus and shortcuts take.
+      // useHotkeyCommandHandler, EditorSpaces), the path menus and shortcuts take.
       window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId } }));
     },
     [onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded, handleOpenHotkeysConfig],
@@ -623,7 +623,7 @@ const AppContent: React.FC<AppContentProps> = ({
   const {
     gitStatus,
     gitBranches,
-    projectFolder: projectFolder,
+    projectFolder,
     activeDiffPath,
     activeDiff,
     diffMode,
@@ -723,7 +723,7 @@ const AppContent: React.FC<AppContentProps> = ({
     },
   });
 
-  // The active mode's shell (workspaceMode.Shell) owns the <main> column and
+  // The active mode's shell (space.Shell) owns the <main> column and
   // the chrome that belongs to that mode — see spaces/shell.ts. Each
   // shell reads only the slice of this object its mode renders.
   const shellProps: SpacesShellProps = {
@@ -760,7 +760,7 @@ const AppContent: React.FC<AppContentProps> = ({
     git: {
       gitBranches,
       gitStatus,
-      projectFolder: projectFolder,
+      projectFolder,
     },
     // Ship payload. The deploy data source is the backend deploy API via the
     // app's services; until it is wired, Ship renders its not-yet-deployed
@@ -774,7 +774,7 @@ const AppContent: React.FC<AppContentProps> = ({
   };
 
   // The project folder composition (SP-160 §160a): the app renders the active space
-  // through `SproutWorkspace` — the same component a host mounts — rather than
+  // through `SproutSpaces` — the same component a host mounts — rather than
   // assembling the registry shell itself. The space is the app's resolved
   // mode; the app owns "which space" (its switcher lives in the Sidebar) and
   // feeds the resolved id down, so the switcher and the mounted space agree.
@@ -860,7 +860,7 @@ const AppContent: React.FC<AppContentProps> = ({
     onCreate: handleConversationCreate,
   });
 
-  // `useGitWorkspace` returns a fresh object each render, so mapping it inline
+  // `useGitProjectFolder` returns a fresh object each render, so mapping it inline
   // rebuilt the panel props every time. The values inside are what matter —
   // rebuild them each render (no stale closures) and keep the identity only
   // when they are unchanged.
@@ -873,7 +873,7 @@ const AppContent: React.FC<AppContentProps> = ({
       {/* SP-130: blocking home-workspace gate. Renders as a full-screen
        * overlay on top of the normal UI when the workspace resolves to the
        * user's home directory without consent. The component itself also
-       * short-circuits in cloud mode (supportsWorkspaceSwitching = false). */}
+       * short-circuits in cloud mode (supportsProjectFolderSwitching = false). */}
       {projectFolderInfo.needs_project_folder_selection && projectFolderInfo.project_folder_is_home && (
         <ProjectFolderGateModal
           projectFolderInfo={projectFolderInfo}
@@ -926,7 +926,7 @@ const AppContent: React.FC<AppContentProps> = ({
           shellProps={shellProps}
           hasMockup={hasMockup}
           onSpaceChange={selectSpace}
-          className="app-workspace"
+          className="app-spaces"
         />
       </>
       {supportsLocalTerminal ? (

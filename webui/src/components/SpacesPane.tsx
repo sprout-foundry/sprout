@@ -13,7 +13,7 @@ import { PreviewSurface } from './PreviewPanel';
 import { useMockupPresence } from './useMockupPresence';
 import './SpacesPane.css';
 
-// ReviewWorkspaceTab pulls in the deep-review pipeline (595+ LOC component
+// ReviewSpacesTab pulls in the deep-review pipeline (595+ LOC component
 // plus its dependencies). Code-split so the chat-mode initial load doesn't
 // include it; the chunk is fetched only when the user opens the review
 // surface.
@@ -245,6 +245,6 @@ const SpacesPane: React.FC<SpacesPaneProps> = React.memo(
   },
 );
 
-SpacesPane.displayName = 'WorkspacePane';
+SpacesPane.displayName = 'SpacesPane';
 
 export default SpacesPane;

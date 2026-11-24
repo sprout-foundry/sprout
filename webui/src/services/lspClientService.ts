@@ -820,7 +820,7 @@ class LSPClientService {
  * (and stays empty in a shell that never restores a layout). The project folder
  * store is populated by the app's own project folder fetch, so it covers that
  * window. Callers that resolve or strip a workspace-relative path must use
- * this rather than `getWorkspacePathSync()` alone: an empty root silently
+ * this rather than `getProjectFolderPathSync()` alone: an empty root silently
  * turns a relative path into an absolute one (or leaves an absolute path
  * unstripped), which is how a path comparison against the file tree's
  * relative node paths stops matching.

@@ -69,8 +69,8 @@ export interface AgentFilesOptions {
   /** Persistence; defaults to memory only (files last as long as the page). */
   store?: AgentFileStore;
   /**
-   * Files written into the workspace before the first turn, keyed by
-   * workspace-relative path (an existing project's files, a starter).
+   * Files written into the project folder before the first turn, keyed by
+   * project-folder-relative path (an existing project's files, a starter).
    */
   initial?: Record<string, string>;
 }
@@ -134,7 +134,7 @@ export interface PersonaDefinition {
    * allowlist still decides whether each call runs without asking.
    */
   mcp?: string[];
-  /** Workspace-relative directories this persona may write under. */
+  /** Project-folder-relative directories this persona may write under. */
   write_paths?: string[];
   /** Agency grants, e.g. `git_write`. */
   capabilities?: string[];
@@ -242,7 +242,7 @@ export interface CreateAgentOptions {
 /** A file the agent wrote, created, edited or deleted. */
 export interface FileWrittenEvent {
   type: 'file_written';
-  /** Workspace-relative path (`design/mockup.html`). */
+  /** Project-folder-relative path (`design/mockup.html`). */
   path: string;
   /** `write`, `edit`, `created`, `deleted`, … as the agent reported it. */
   action: string;
@@ -337,25 +337,25 @@ export type AgentEventOf<T extends AgentEventType> = Extract<AgentEvent, { type:
 /** An entry of `files.list`. */
 export interface AgentFileEntry {
   name: string;
-  /** Workspace-relative path. */
+  /** Project-folder-relative path. */
   path: string;
   type: 'file' | 'dir';
   size: number;
 }
 
-/** The agent's workspace files. Paths are workspace-relative. */
+/** The agent's project folder files. Paths are project-folder-relative. */
 export interface AgentFiles {
   /** A file's content, or null when there is none. */
   read(path: string): string | null;
-  /** A directory's entries (the workspace root by default). */
+  /** A directory's entries (the project folder root by default). */
   list(dir?: string): AgentFileEntry[];
-  /** Every file in the workspace, recursively (paths). */
+  /** Every file in the project folder, recursively (paths). */
   walk(): string[];
   /** Write a file (seed a project file before or between turns). */
   write(path: string, content: string): void;
-  /** Every workspace file with its content — what a host commits into a repository. */
+  /** Every project folder file with its content — what a host commits into a repository. */
   snapshot(): Record<string, string>;
-  /** The workspace's absolute root in the agent's filesystem. */
+  /** The project folder's absolute path in the agent's filesystem. */
   readonly root: string;
 }
 

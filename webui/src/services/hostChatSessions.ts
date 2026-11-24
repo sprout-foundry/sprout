@@ -43,7 +43,7 @@ export function hostApiURL(apiBaseURL: string, path: string): string {
  * The project the host's chat session store is scoped to. A host store keeps
  * one chat list per project (see `docs/integration/host-contract.md`), so every
  * host session call names the project of the mounted project folder. Recorded by
- * the chat unit (`WorkspaceChatProvider`'s `chatSessionsProject`) for the
+ * the chat unit (`SpacesChatProvider`'s `chatSessionsProject`) for the
  * module-level paths — the turn append and the list/messages refreshes — the
  * same way the active host is recorded for them; the chat unit's own session
  * API binds its project explicitly. Empty means no project: the host's

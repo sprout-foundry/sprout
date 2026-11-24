@@ -16,7 +16,7 @@ interface UseTabOpenParams {
 }
 
 /**
- * Tab opening logic: openFile, openWorkspaceBuffer.
+ * Tab opening logic: openFile, openProjectFolderBuffer.
  * Depends on activateBuffer and switchToBuffer from the caller.
  */
 export function useTabOpen({

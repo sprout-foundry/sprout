@@ -82,7 +82,7 @@ const baseProps = {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('DiffWorkspaceTab merge-mode content and save gating', () => {
+describe('DiffSpacesTab merge-mode content and save gating', () => {
   it('uses full contents when available (not the fragment reconstruction)', () => {
     render(
       <DiffSpacesTab

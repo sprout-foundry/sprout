@@ -515,7 +515,7 @@ export const useGitProjectFolder = ({
         }
       })
       .catch((error) => {
-        debugLog('[useGitWorkspace] Failed to generate commit message:', error);
+        debugLog('[useGitProjectFolder] Failed to generate commit message:', error);
         const msg = error instanceof Error ? error.message : 'Failed to generate commit message';
         setGitActionError(msg);
         notificationBus.notify('warning', 'AI Commit', msg, 5000);
@@ -750,7 +750,7 @@ export const useGitProjectFolder = ({
   return {
     gitStatus,
     gitBranches,
-    projectFolder: projectFolder,
+    projectFolder,
     commitMessage,
     setCommitMessage,
     selectedFiles,

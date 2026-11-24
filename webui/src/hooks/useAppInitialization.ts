@@ -65,7 +65,7 @@ export interface UseAppInitializationOptions {
   /**
    * Whether this hook registers the event/reconnect callbacks with the
    * transport. Defaults to true (the app's historical behavior). When the
-   * chat unit owns the subscription (`WorkspaceChatProvider`), the app passes
+   * chat unit owns the subscription (`SpacesChatProvider`), the app passes
    * false so events are not delivered twice; the hook still connects.
    */
   manageEventSubscription?: boolean;
@@ -365,7 +365,7 @@ export function useAppInitialization({
             !getTabProjectFolderPath().trim() &&
             supportsProjectFolderSwitching
           ) {
-            window.dispatchEvent(new CustomEvent('sprout:open-workspace-switcher'));
+            window.dispatchEvent(new CustomEvent('sprout:open-project-folder-switcher'));
           }
         } catch (error) {
           debugLog('[startup] workspace check failed:', error);

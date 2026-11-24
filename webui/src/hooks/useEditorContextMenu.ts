@@ -177,7 +177,7 @@ export function useEditorContextMenu(
 
   return {
     contextMenu,
-    projectFolder: projectFolder,
+    projectFolder,
     hideContextMenu,
     handleEditorContextMenu,
     handleCopySelection,

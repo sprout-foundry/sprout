@@ -80,7 +80,7 @@ export type SproutStudioFsBridge = {
 };
 
 /**
- * The narrow `window.SproutStudio` subset used by the workspace-gate studio
+ * The narrow `window.SproutStudio` subset used by the project-folder-gate studio
  * variant (bridge files channel, §10.1). Same never-reject contract as above:
  * user-cancel and failures resolve `{ ok: false, error: "<code>" }`.
  */
@@ -500,7 +500,7 @@ export function writeProjectFolderResponse(result: unknown): Response {
 
 /**
  * Read a project folder file through the bridge and synthesize a `Response`.
- * `path` must already be normalized (call `normalizeWorkspacePath` first).
+ * `path` must already be normalized (call `normalizeProjectFolderPath` first).
  * The bridge never rejects; a transport failure is surfaced as a 500.
  */
 export async function nativeReadProjectFolderFile(path: string): Promise<Response> {

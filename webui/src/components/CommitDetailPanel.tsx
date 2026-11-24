@@ -127,7 +127,7 @@ function CommitDetailPanel({
           content,
           metadata: {
             sourcePath: `commit:${commit.hash}:${filePath}`,
-            // WorkspacePane's diff renderer reads metadata.diff as a
+            // SpacesPane's diff renderer reads metadata.diff as a
             // GitDiffResponse object — a bare diff string here renders as
             // "(no diff available)".
             diff: {
@@ -144,7 +144,7 @@ function CommitDetailPanel({
             // Read-only history — open in the text view by default.
             defaultView: 'text',
             // Full before/after contents for the merge view (read-only —
-            // sourcePath is virtual so WorkspacePane's canSave stays false).
+            // sourcePath is virtual so SpacesPane's canSave stays false).
             originalContent: result?.original_content,
             modifiedContent: result?.modified_content,
             contentsTruncated: result?.contents_truncated ?? false,

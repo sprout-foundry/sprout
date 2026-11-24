@@ -64,10 +64,10 @@ function ProjectFolderBrowser({ initialPath, onSelect, onCancel }: ProjectFolder
   const displayPath = daemonRoot && path.startsWith(daemonRoot) ? '~' + path.slice(daemonRoot.length) || '~' : path;
 
   return (
-    <div className="workspace-browser" data-testid="workspace-browser">
-      <div className="workspace-browser-bar">
+    <div className="project-folder-browser" data-testid="project-folder-browser">
+      <div className="project-folder-browser-bar">
         <button
-          className="workspace-browser-up"
+          className="project-folder-browser-up"
           type="button"
           onClick={() => void load(parentOf(path))}
           disabled={!canGoUp || loading}
@@ -76,49 +76,49 @@ function ProjectFolderBrowser({ initialPath, onSelect, onCancel }: ProjectFolder
         >
           <ArrowLeft size={16} />
         </button>
-        <span className="workspace-browser-path" title={path}>
+        <span className="project-folder-browser-path" title={path}>
           {displayPath}
         </span>
       </div>
 
-      <div className="workspace-browser-list" data-testid="workspace-browser-list">
+      <div className="project-folder-browser-list" data-testid="project-folder-browser-list">
         {loading ? (
-          <div className="workspace-browser-status">
-            <Loader2 size={16} className="workspace-browser-spin" aria-hidden="true" />
+          <div className="project-folder-browser-status">
+            <Loader2 size={16} className="project-folder-browser-spin" aria-hidden="true" />
             <span>Loading&hellip;</span>
           </div>
         ) : error ? (
-          <div className="workspace-browser-status workspace-browser-status--error">{error}</div>
+          <div className="project-folder-browser-status project-folder-browser-status--error">{error}</div>
         ) : directories.length === 0 ? (
-          <div className="workspace-browser-status">No sub-folders here</div>
+          <div className="project-folder-browser-status">No sub-folders here</div>
         ) : (
           directories.map((dir) => (
             <button
               key={dir.path}
-              className="workspace-browser-row"
+              className="project-folder-browser-row"
               type="button"
               onClick={() => void load(dir.path)}
               title={dir.path}
-              data-testid="workspace-browser-entry"
+              data-testid="project-folder-browser-entry"
             >
-              <Folder size={16} className="workspace-browser-row-icon" />
-              <span className="workspace-browser-row-name">{dir.name}</span>
-              <ChevronRight size={14} className="workspace-browser-row-chevron" />
+              <Folder size={16} className="project-folder-browser-row-icon" />
+              <span className="project-folder-browser-row-name">{dir.name}</span>
+              <ChevronRight size={14} className="project-folder-browser-row-chevron" />
             </button>
           ))
         )}
       </div>
 
-      <div className="workspace-browser-actions">
-        <button className="workspace-browser-cancel" type="button" onClick={onCancel}>
+      <div className="project-folder-browser-actions">
+        <button className="project-folder-browser-cancel" type="button" onClick={onCancel}>
           Back
         </button>
         <button
-          className="workspace-browser-confirm"
+          className="project-folder-browser-confirm"
           type="button"
           onClick={() => onSelect(path)}
           disabled={loading || !path}
-          data-testid="workspace-browser-confirm"
+          data-testid="project-folder-browser-confirm"
         >
           Use this folder
         </button>

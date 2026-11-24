@@ -94,7 +94,7 @@ function GitSidebarPanel({
   isReviewLoading,
   actionError,
   actionWarning,
-  projectFolder: projectFolder,
+  projectFolder,
   onCommitMessageChange,
   onGenerateCommitMessage,
   onCommit,

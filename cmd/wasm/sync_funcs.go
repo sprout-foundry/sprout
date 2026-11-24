@@ -210,7 +210,7 @@ func stopHeartbeatFunc(_ js.Value, _ []js.Value) interface{} {
 }
 
 // ─── Theirs content stash ─────────────────────────────────────────
-// When a workspace_patch carries conflict metadata, the browser stores
+// When a project_folder_patch carries conflict metadata, the browser stores
 // the container's content under a .theirs path so the UI can render
 // a git-style diff. This is a process-level snapshot for free-tier WASM;
 // when the agent is wired up (Tier 2b), it routes through the agent.
@@ -240,7 +240,7 @@ func peekTheirsContent(theirsPath string) (string, bool) {
 	return content, ok
 }
 
-// handleProjectFolderPatchConflictFunc processes an incoming workspace_patch
+// handleProjectFolderPatchConflictFunc processes an incoming project_folder_patch
 // that carries conflict metadata. When conflict is true, it writes the
 // container's content to the .theirs sibling file in the virtual
 // filesystem so the browser can show a git-style diff/conflict UI.

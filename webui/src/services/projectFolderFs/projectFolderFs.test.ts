@@ -26,8 +26,8 @@ function fsWithSeed(seed: Record<string, string> = {}): ProjectFolderFs {
   return createMemoryFs(seed);
 }
 
-describe('workspaceFs contract (memory backend)', () => {
-  it('is a WorkspaceFs', () => {
+describe('projectFolderFs contract (memory backend)', () => {
+  it('is a ProjectFolderFs', () => {
     expect(isProjectFolderFs(createMemoryFs())).toBe(true);
   });
 
@@ -133,7 +133,7 @@ describe('workspaceFs contract (memory backend)', () => {
   });
 });
 
-describe('workspaceFs resolution', () => {
+describe('projectFolderFs resolution', () => {
   it('normalizeFsPath strips slashes', () => {
     expect(normalizeFsPath('/a/b/')).toBe('a/b');
     expect(normalizeFsPath('')).toBe('');
@@ -219,7 +219,7 @@ describe('gitFs adapter', () => {
   });
 });
 
-describe('workspaceGit', () => {
+describe('projectFolderGit', () => {
   it('parses owner/name from urls and shorthand', () => {
     expect(parseRepoRef('https://github.com/acme/api.git')).toEqual({
       owner: 'acme',

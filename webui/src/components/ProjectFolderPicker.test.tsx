@@ -27,7 +27,7 @@ const PROPS = {
   onBrowse: vi.fn(),
 };
 
-describe('WorkspacePicker', () => {
+describe('ProjectFolderPicker', () => {
   it('calls onSelect with the chosen path', () => {
     const onSelect = vi.fn();
     render(<ProjectFolderPicker {...PROPS} onSelect={onSelect} />);
@@ -43,7 +43,7 @@ describe('WorkspacePicker', () => {
 
     fireEvent.click(screen.getByText('api'));
 
-    const rows = screen.getAllByTestId('workspace-picker-option') as HTMLButtonElement[];
+    const rows = screen.getAllByTestId('project-folder-picker-option') as HTMLButtonElement[];
     expect(rows).toHaveLength(2);
     rows.forEach((row) => expect(row.disabled).toBe(true));
 
@@ -80,7 +80,7 @@ describe('WorkspacePicker', () => {
     expect(banner.textContent).not.toMatch(/Error: /);
 
     // The banner renders before the "Recent Projects" section.
-    const body = document.querySelector('.workspace-picker');
+    const body = document.querySelector('.project-folder-picker');
     const children = Array.from(body?.children ?? []);
     expect(children.indexOf(banner)).toBeLessThan(
       children.indexOf(screen.getByText('Recent Projects').closest('section') as Element),
@@ -103,7 +103,7 @@ describe('WorkspacePicker', () => {
     fireEvent.click(screen.getByText('api'));
     await screen.findByRole('alert');
 
-    const rows = screen.getAllByTestId('workspace-picker-option') as HTMLButtonElement[];
+    const rows = screen.getAllByTestId('project-folder-picker-option') as HTMLButtonElement[];
     rows.forEach((row) => expect(row.disabled).toBe(false));
   });
 });

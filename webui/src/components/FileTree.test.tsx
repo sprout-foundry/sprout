@@ -237,7 +237,7 @@ describe('FileTree context menu – file items', () => {
     expect(texts).not.toContain('Copy absolute path');
   });
 
-  it('shows "Copy absolute path" when workspaceRoot is provided', async () => {
+  it('shows "Copy absolute path" when projectFolder is provided', async () => {
     await renderTree({ projectFolder: '/home/user/project' });
 
     fireContextMenuOnFile('main.go');
@@ -247,7 +247,7 @@ describe('FileTree context menu – file items', () => {
     expect(texts).toContain('Copy absolute path');
   });
 
-  it('does NOT show "Copy absolute path" when workspaceRoot is not provided', async () => {
+  it('does NOT show "Copy absolute path" when projectFolder is not provided', async () => {
     await renderTree({ projectFolder: undefined });
 
     fireContextMenuOnFile('main.go');
@@ -282,7 +282,7 @@ describe('FileTree context menu – clipboard & editor actions', () => {
     expect(mockClipboardWriteText).toHaveBeenCalledWith('main.go');
   });
 
-  it('"Copy absolute path" calls clipboard with workspaceRoot/file.path', async () => {
+  it('"Copy absolute path" calls clipboard with projectFolder/file.path', async () => {
     await renderTree({ projectFolder: '/home/user/project', onFileSelect });
 
     fireContextMenuOnFile('main.go');

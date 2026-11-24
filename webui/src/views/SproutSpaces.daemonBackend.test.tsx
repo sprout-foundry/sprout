@@ -1,9 +1,9 @@
 /**
- * A composed workspace on a daemon backend: which store owns the conversation,
- * and which backend answers the workspace's own calls.
+ * Composed spaces on a daemon backend: which store owns the conversation,
+ * and which backend answers the spaces' own calls.
  *
  * The platform's transport names the platform; the daemon lives behind its
- * workspace proxy. A chat-session store the host serves is pinned to the host,
+ * dev space proxy. A chat-session store the host serves is pinned to the host,
  * so a turn the daemon runs is written back there and restored from there on
  * the next load. Everything else — the change tracker included — belongs to the
  * daemon, so those calls resolve against the daemon's own base.
@@ -48,7 +48,7 @@ const PROJECT = { id: 'acme/widgets', root: '/work/widgets' };
 const CHAT_AND_CHANGES = { left: [], center: ['chat'], right: ['changes'], overlay: [] };
 const DAEMON_BASE = '/workspace/ws-1/proxy';
 
-/** The platform once a project's workspace runs: bearer transport, daemon behind the proxy. */
+/** The platform once a project's dev space runs: bearer transport, daemon behind the proxy. */
 function platformDaemonHost(): SproutHost {
   const base = headlessHost();
   return {
@@ -109,7 +109,7 @@ beforeEach(() => {
   setActiveHost(headlessHost());
   fetchMock = vi.fn(async (input: unknown) => {
     const url = String(input);
-    // The workspace-root probe expects its own envelope; every other call in
+    // The project-folder-root probe expects its own envelope; every other call in
     // this file is a chat-session read, which the transcript shape answers.
     const body = url.includes('/api/project-folder') ? { project_folder: '', daemon_root: '' } : TRANSCRIPT;
     return {
@@ -117,7 +117,7 @@ beforeEach(() => {
       status: 200,
       headers: new Headers(),
       json: async () => body,
-      // `getWorkspace` parses the response text itself (it accepts both a JSON
+      // `getProjectFolder` parses the response text itself (it accepts both a JSON
       // envelope and a bare path), so the body has to be there too.
       text: async () => JSON.stringify(body),
     };
@@ -131,7 +131,7 @@ afterEach(() => {
   setActiveHost(headlessHost());
 });
 
-describe('SproutWorkspace on a daemon backend', () => {
+describe('SproutSpaces on a daemon backend', () => {
   it('restores the conversation from the host store when it connects', async () => {
     render(<SproutSpaces project={PROJECT} space="code" host={platformDaemonHost()} layout={CHAT_AND_CHANGES} />);
     await screen.findByTestId('daemon-chat');

@@ -402,7 +402,7 @@ describe('writeCapabilityManifest', () => {
     expect(existsSync(join(outDir, 'capabilities.json'))).toBe(false);
   });
 
-  // ── Studio workspace-gate capability keys ────────────────────────────
+  // ── Studio project-folder-gate capability keys ────────────────────────────
   // The fs-portion dist declares the project folder gate flags so a studio shell
   // reading the manifest can truthfully report them (the native
   // pickWorkspace / createWorkspace ops ship with the fs exclusion).

@@ -34,7 +34,7 @@ function ProjectFolderPickerView({
 }): JSX.Element {
   const { projectFolderSwitching: supportsProjectFolderSwitching } = useHostCapabilities();
   const handleBrowse = () => {
-    window.dispatchEvent(new CustomEvent('sprout:open-workspace-switcher'));
+    window.dispatchEvent(new CustomEvent('sprout:open-project-folder-switcher'));
   };
 
   if (!supportsProjectFolderSwitching) {

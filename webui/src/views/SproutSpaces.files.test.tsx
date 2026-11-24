@@ -1,14 +1,14 @@
 /**
- * SproutWorkspace — the files and editor units of an arranged workspace.
+ * SproutSpaces — the files and editor units of arranged spaces.
  *
- * An own-mode workspace with a `layout` assembles a working `fileTree` (the
- * workspace file API), an `editor` rendered from the editor unit, and a
+ * Own-mode spaces with a `layout` assemble a working `fileTree` (the
+ * project folder file API), an `editor` rendered from the editor unit, and a
  * `changes` panel whose file clicks open the editor; a kind the host supplies
  * through `viewProps` wins. The tree, the bare editor primitive, the editor
  * pane and the composite views are stubbed with nodes that expose the props
  * the composition handed them; the provider stack and the editor unit are
  * the real ones. Because the editor pane is stubbed, no file is read here:
- * `SproutWorkspace.fileSelect.test.tsx` covers selection with the real tree
+ * `SproutSpaces.fileSelect.test.tsx` covers selection with the real tree
  * and editor, as the package mounts them.
  */
 
@@ -143,7 +143,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('SproutWorkspace files and editor', () => {
+describe('SproutSpaces files and editor', () => {
   it('assembles a working file tree against the host transport', async () => {
     render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={IDE} />);
     const tree = await screen.findByTestId('files-test-tree');
@@ -158,8 +158,8 @@ describe('SproutWorkspace files and editor', () => {
 
   it('renders the assembled editor for an arranged editor, and a file picked in the tree opens in it', async () => {
     render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={IDE} />);
-    const projectFolder = await screen.findByTestId('sprout-workspace');
-    expect(within(projectFolder).getByTestId('workspace-editor')).toBeInTheDocument();
+    const projectFolder = await screen.findByTestId('sprout-spaces');
+    expect(within(projectFolder).getByTestId('spaces-editor')).toBeInTheDocument();
     expect(within(projectFolder).queryByTestId('files-test-primitive-editor')).not.toBeInTheDocument();
 
     act(() => {
@@ -175,7 +175,7 @@ describe('SproutWorkspace files and editor', () => {
   it('shows the editor in the center slot for a file picked in a tree arranged without one', async () => {
     render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={NO_EDITOR} />);
     await screen.findByTestId('files-test-tree');
-    expect(screen.queryByTestId('workspace-editor')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('spaces-editor')).not.toBeInTheDocument();
 
     act(() => {
       screen.getByTestId('files-test-tree-select').click();
@@ -194,18 +194,18 @@ describe('SproutWorkspace files and editor', () => {
     act(() => {
       screen.getByTestId('files-test-tree-select').click();
     });
-    await screen.findByTestId('workspace-editor');
+    await screen.findByTestId('spaces-editor');
 
     await act(async () => {
       screen.getByTestId('files-test-tree-delete').click();
     });
     expect(fetchSpy.mock.calls.some(([url]) => String(url).includes('/api/delete'))).toBe(true);
-    await waitFor(() => expect(screen.queryByTestId('workspace-editor')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByTestId('spaces-editor')).not.toBeInTheDocument());
   });
 
   it('opens a changed file in the editor from the changes panel and from an open-in-editor request', async () => {
     render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={IDE} />);
-    await screen.findByTestId('sprout-workspace');
+    await screen.findByTestId('sprout-spaces');
 
     act(() => {
       screen.getByTestId('files-test-changes').click();
@@ -231,7 +231,7 @@ describe('SproutWorkspace files and editor', () => {
         viewProps={{ fileTree: { onFileSelect, selectedFile: 'host.txt' }, editor: { value: 'host buffer' } }}
       />,
     );
-    const projectFolder = await screen.findByTestId('sprout-workspace');
+    const projectFolder = await screen.findByTestId('sprout-spaces');
 
     const tree = within(projectFolder).getByTestId('files-test-tree');
     expect(tree).toHaveAttribute('data-selected', 'host.txt');
@@ -245,6 +245,6 @@ describe('SproutWorkspace files and editor', () => {
       'data-value',
       'host buffer',
     );
-    expect(within(projectFolder).queryByTestId('workspace-editor')).not.toBeInTheDocument();
+    expect(within(projectFolder).queryByTestId('spaces-editor')).not.toBeInTheDocument();
   });
 });

@@ -180,9 +180,9 @@ describe('EditorManager tab pane management', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 2. openWorkspaceBuffer deactivates previous buffer but preserves paneId
+  // 2. openProjectFolderBuffer deactivates previous buffer but preserves paneId
   // -----------------------------------------------------------------------
-  it.skip('openWorkspaceBuffer deactivates previous buffer but preserves paneId', async () => {
+  it.skip('openProjectFolderBuffer deactivates previous buffer but preserves paneId', async () => {
     renderProvider();
 
     const activePaneId = ctx().activePaneId;
@@ -221,9 +221,9 @@ describe('EditorManager tab pane management', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 3. openWorkspaceBuffer with existing path reactivates instead of duping
+  // 3. openProjectFolderBuffer with existing path reactivates instead of duping
   // -----------------------------------------------------------------------
-  it('openWorkspaceBuffer with existing buffer activates it without creating duplicates', async () => {
+  it('openProjectFolderBuffer with existing buffer activates it without creating duplicates', async () => {
     renderProvider();
 
     const path = '__workspace/dedup-test';
@@ -471,9 +471,9 @@ describe('paneId preservation fix', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 3. openWorkspaceBuffer preserves paneId when opening project folder buffers
+  // 3. openProjectFolderBuffer preserves paneId when opening project folder buffers
   // -----------------------------------------------------------------------
-  it('openWorkspaceBuffer preserves paneId when switching to a new workspace buffer', async () => {
+  it('openProjectFolderBuffer preserves paneId when switching to a new workspace buffer', async () => {
     renderProvider();
 
     const paneId = ctx().activePaneId;

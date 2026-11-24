@@ -2,8 +2,8 @@
  * projectFolderCwd — session-level working directory for the studio webui.
  *
  * Sprout Studio mobile apps embed this webui with cloned GitHub repos living
- * at `repos/<owner>/<name>/` in the project folder (see services/workspaceFs/
- * workspaceGit.ts). Every surface — Files tree, native terminal, git panel,
+ * at `repos/<owner>/<name>/` in the project folder (see services/projectFolderFs/
+ * projectFolderGit.ts). Every surface — Files tree, native terminal, git panel,
  * agent — is rooted at the project folder top today. This module is the single
  * source of truth for a session-level working directory so selecting a repo
  * scopes all of them to `repos/<owner>/<name>` at once.
@@ -37,7 +37,7 @@ import { debugLog } from '../utils/log';
 /** localStorage key prefix holding the workspace-relative cwd ('' = project folder). */
 export const WORKSPACE_CWD_STORAGE_KEY = 'sprout-workspace-cwd';
 
-/** The storage key for the cwd within `workspaceRoot` ('' = root not known yet). */
+/** The storage key for the cwd within `projectFolder` ('' = root not known yet). */
 export function projectFolderCwdStorageKey(projectFolder: string): string {
   return projectFolder ? `${WORKSPACE_CWD_STORAGE_KEY}:${projectFolder}` : WORKSPACE_CWD_STORAGE_KEY;
 }
@@ -98,14 +98,14 @@ function persistCwd(cwd: string): void {
     window.localStorage.setItem(projectFolderCwdStorageKey(scope), cwd);
   } catch (err) {
     // Private mode / quota: the session still works, just not across reloads.
-    debugLog('[workspaceCwd] failed to persist cwd:', err);
+    debugLog('[projectFolderCwd] failed to persist cwd:', err);
   }
 }
 
 /**
  * Lazily-initialized state. Reading localStorage at module scope would run in
  * every test/SSR import; deferring to first access keeps imports side-effect
- * free and lets tests reset cleanly via `__resetWorkspaceCwdForTests()`.
+ * free and lets tests reset cleanly via `__resetProjectFolderCwdForTests()`.
  */
 let state: ProjectFolderCwdState | null = null;
 
@@ -153,7 +153,7 @@ function notify(cwd: string): void {
       listener(cwd);
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error('[workspaceCwd] Listener error (swallowed):', err);
+      console.error('[projectFolderCwd] Listener error (swallowed):', err);
     }
   }
 }
@@ -259,7 +259,7 @@ export function resolveCdTarget(arg: string, sessionCwd: string): string | null 
 
 /**
  * Reactive cwd for components, via `useSyncExternalStore` (the AppStore
- * pattern): `getWorkspaceCwd` is a stable snapshot getter and the subscribe
+ * pattern): `getProjectFolderCwd` is a stable snapshot getter and the subscribe
  * closure is bound once so the store never resubscribes.
  */
 export function useProjectFolderCwd(): string {

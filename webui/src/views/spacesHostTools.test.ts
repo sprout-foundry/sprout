@@ -21,7 +21,7 @@ function fakeAdapter() {
 
 afterEach(() => uninstallAdapter());
 
-describe('registerWorkspaceHostTools', () => {
+describe('registerSpacesHostTools', () => {
   it('offers the tools to the in-browser agent and withdraws them', async () => {
     const { adapter, shell, handlers } = fakeAdapter();
     installAdapter(adapter);

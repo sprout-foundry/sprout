@@ -627,7 +627,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
     fireEvent.click(screen.getByText('Start a Dev Space'));
 
     await waitFor(() =>
-      expect(screen.getByTestId('escalation-toast-workspace-error').textContent).toContain('network down'),
+      expect(screen.getByTestId('escalation-toast-dev-space-error').textContent).toContain('network down'),
     );
     expect(hrefSetter).not.toHaveBeenCalled();
   });

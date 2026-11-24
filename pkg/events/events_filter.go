@@ -105,8 +105,8 @@ func FileContentChangedEvent(filePath string, modTime int64, size int64) map[str
 	}
 }
 
-// ProjectFolderPatchEvent creates a workspace_patch event payload for real-time
-// ProjectFolderPatchEvent creates a workspace_patch event payload for real-time
+// ProjectFolderPatchEvent creates a project_folder_patch event payload for real-time
+// ProjectFolderPatchEvent creates a project_folder_patch event payload for real-time
 // file change notification from the agent to the browser.
 //
 // The payload intentionally carries NO file content. The only in-tree consumer

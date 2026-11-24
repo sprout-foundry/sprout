@@ -37,7 +37,7 @@ func newTestAgentWithEventBus(t *testing.T) (*Agent, *events.EventBus) {
 
 // expectFileChangedEvent waits for a file_changed event on the given channel
 // and verifies its type, file_path, and action fields.
-// It skips non-file_changed events (e.g., workspace_patch) that may arrive first.
+// It skips non-file_changed events (e.g., project_folder_patch) that may arrive first.
 func expectFileChangedEvent(t *testing.T, ch <-chan events.UIEvent, expectedPath, expectedAction string) map[string]interface{} {
 	t.Helper()
 

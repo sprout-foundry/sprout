@@ -60,7 +60,7 @@ function emit(next: Partial<ProjectFolderStoreState>): void {
     try {
       listener();
     } catch (err) {
-      debugLog('[workspaceStore] listener error (swallowed):', err);
+      debugLog('[projectFolderStore] listener error (swallowed):', err);
     }
   }
 }
@@ -87,7 +87,7 @@ function scheduleRetry(): void {
 function accept(projectFolder: ProjectFolderResponse): void {
   clearRetry();
   retryAttempt = 0;
-  emit({ projectFolder: projectFolder, loading: false, error: null, updatedAt: Date.now() });
+  emit({ projectFolder, loading: false, error: null, updatedAt: Date.now() });
   setProjectFolderCwdScope(projectFolder.project_folder);
 }
 
@@ -205,9 +205,7 @@ export function applyProjectFolder(projectFolder: string, daemonRoot?: string): 
  */
 export function announceProjectFolderChanged(projectFolder: string, daemonRoot = ''): void {
   if (typeof window === 'undefined') return;
-  window.dispatchEvent(
-    new CustomEvent('sprout:workspace-changed', { detail: { projectFolder: projectFolder, daemonRoot } }),
-  );
+  window.dispatchEvent(new CustomEvent('sprout:workspace-changed', { detail: { projectFolder, daemonRoot } }));
 }
 
 function installWindowListeners(): void {

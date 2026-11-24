@@ -43,7 +43,7 @@
  * polls `/api/preview/status` on an interval (fast while starting, slow
  * heartbeat otherwise, only while the panel is open) and it listens on
  * `window` for the `sprout:wsevent` CustomEvent (dispatched by webui's
- * websocket bridge) to re-mount its iframe when workspace files change.
+ * websocket bridge) to re-mount its iframe when project folder files change.
  * An embedding shell without webui's websocket bridge must dispatch
  * `sprout:wsevent` window events with the same shape, or rely on polling
  * alone. `usePreviewStatus` is re-exported here so a host can drive the
@@ -97,7 +97,7 @@ export type { ChatProps } from '../components/chat/types';
 // `mode: 'builder'` is the plain-language presentation a non-developer
 // shell opts into (see `AgentChangesPanelProps.mode`); a host passes it
 // through its arrangement's per-kind props, e.g.
-// `viewProps={{ changes: { mode: 'builder' } }}` on `SproutWorkspace`.
+// `viewProps={{ changes: { mode: 'builder' } }}` on `SproutSpaces`.
 export { default as AgentChangesPanel } from '../components/AgentChangesPanel';
 export type { AgentChangesPanelProps, AgentChangesMode } from '../components/AgentChangesPanel';
 
@@ -126,7 +126,7 @@ export {
 export type { CopyKey, CopyOverrides } from '../config/copy';
 
 // The registered spaces a host mounts, re-exported so mounting a space needs
-// the views entry point only (no reach into the workspace registry module). A
+// the views entry point only (no reach into the spaces registry module). A
 // host that registers its own space gets the registration API here too; the
 // built-in spaces (`code`, `design`) are always present. The registry imports
 // the built-in shells, so importing this entry pulls the shell graph with it —
@@ -138,7 +138,7 @@ export type { UnregisterSpace, Space, SpaceContext, SpaceId, SpaceRegistration }
 // The active-space state a host drives with its own switcher: it reads the
 // resolved mode and the offered modes, and calls `select`. A host that owns
 // its chrome (Sprout's own app root does) keeps the requested-space state here
-// and feeds the resolved id to `SproutWorkspace`'s `space` prop, so the
+// and feeds the resolved id to `SproutSpaces`'s `space` prop, so the
 // switcher and the mounted space cannot disagree.
 export { useSpace } from '../spaces/useSpace';
 export type { UseSpaceResult } from '../spaces/useSpace';
@@ -154,7 +154,7 @@ export type { SproutProvidersProps } from '../providers/index';
 
 // The WASM asset seam: a host that mounts the package serves its content-hashed
 // `dist/wasm/` at a base the host owns, and tells the loader where that is.
-// `SproutWorkspace`/`SproutProviders` take it as the `wasmBase` prop; a host
+// `SproutSpaces`/`SproutProviders` take it as the `wasmBase` prop; a host
 // that drives the loader itself uses these directly.
 export {
   WasmAssetsProvider,
@@ -166,18 +166,18 @@ export {
 } from '../contexts/WasmAssetsContext';
 export type { WasmAssets, WasmAssetsProviderProps } from '../contexts/WasmAssetsContext';
 
-// SproutWorkspace — one component that mounts one project's workspace: the
+// SproutSpaces — one component that mounts one project's spaces: the
 // host contract, the provider stack and one registered space, behind the
 // props a host holds. It is the composition the app root performs, exposed so
-// an embedding host does not assemble a workspace from internals.
+// an embedding host does not assemble spaces from internals.
 export { SproutSpaces } from './SproutSpaces';
 export type { SproutSpacesProps, SproutProject } from './SproutSpaces';
 export type { SpacesHostTool } from './spacesHostTools';
 
 // The chat unit: the chat state, its WebSocket event reducer, the chat
 // session manager and the queue, plus the chat/review/diff view props. A host
-// mounts `WorkspaceChatProvider` with a fetch function and an events provider
-// and reads the chat through `useWorkspaceChat()` / `useWorkspaceChatProps()`;
+// mounts `SpacesChatProvider` with a fetch function and an events provider
+// and reads the chat through `useSpacesChat()` / `useSpacesChatProps()`;
 // the standalone app mounts it with its own transport, unchanged.
 export { SpacesChatProvider, useSpacesChat, useSpacesChatProps, createEmptyChatState } from './SpacesChatContext';
 export type {
@@ -194,38 +194,38 @@ export type {
 // and filesystem-tier choices), the file-access prompt, `ask_user`, password
 // prompts, edit and shell approvals, and the model picker, rendered from the
 // chat unit's state and answered back to the agent. Mount it inside
-// `WorkspaceChatProvider` wherever the chat unit is mounted — without it a
+// `SpacesChatProvider` wherever the chat unit is mounted — without it a
 // request leaves the agent waiting with nothing on screen. An own-mode
-// `SproutWorkspace` and Sprout's app root mount it already.
+// `SproutSpaces` and Sprout's app root mount it already.
 export { SpacesAgentPrompts } from './SpacesAgentPrompts';
 
 // The editor unit: the open files, the active file, and opening, closing and
 // saving them by path, over the buffer manager `SproutProviders` mounts. A
-// host reads it through `useWorkspaceEditor()`; `useWorkspaceEditorProps()`
+// host reads it through `useSpacesEditor()`; `useSpacesEditorProps()`
 // wires the views around the editor (tree selection, the changes panel's
-// file clicks) to it, and `WorkspaceEditorView` is the assembled editor (tabs
-// over the active pane). An own-mode `SproutWorkspace` mounts the provider
+// file clicks) to it, and `SpacesEditorView` is the assembled editor (tabs
+// over the active pane). An own-mode `SproutSpaces` mounts the provider
 // and renders the view for an arranged `editor`; the standalone app mounts
 // the same provider at its root.
-export { WorkspaceEditorProvider, useWorkspaceEditor, useWorkspaceEditorProps } from './SpacesEditorContext';
+export { SpacesEditorProvider, useSpacesEditor, useSpacesEditorProps } from './SpacesEditorContext';
 export type {
-  WorkspaceEditorProviderProps,
-  WorkspaceEditorValue,
-  WorkspaceEditorFile,
-  WorkspaceEditorProps,
+  SpacesEditorProviderProps,
+  SpacesEditorValue,
+  SpacesEditorFile,
+  SpacesEditorProps,
   OpenProjectFolderFileOptions,
 } from './SpacesEditorContext';
-export { WorkspaceEditorView } from './SpacesEditorView';
-export type { WorkspaceEditorViewProps } from './SpacesEditorView';
+export { SpacesEditorView } from './SpacesEditorView';
+export type { SpacesEditorViewProps } from './SpacesEditorView';
 
 // The file tree's data callbacks against the host transport (`/api/files`
 // and the create/delete/rename calls through `clientFetch`): the one
-// implementation the app's sidebar and the composed workspace's `fileTree`
+// implementation the app's sidebar and the composed spaces' `fileTree`
 // view use. A host building `viewProps.fileTree` itself starts from it.
 export { useProjectFolderFileTree, fetchProjectFolderFiles } from './useProjectFolderFileTree';
 export type { UseProjectFolderFileTreeOptions } from './useProjectFolderFileTree';
 
-// The space shell contract a host supplies through SproutWorkspace's
+// The space shell contract a host supplies through SproutSpaces's
 // `shellProps` (the data the app root assembles today), so mounting a space's
 // registered shell is typed from this one entry point.
 export type { SpacesShellProps } from '../spaces/shell';
@@ -239,8 +239,8 @@ export type { SpacesShellProps } from '../spaces/shell';
 //
 // - `AgentEscalationBridge` installs the global the WASM agent calls and asks
 //   the consent question. A host mounts it once per page with the project's
-//   repo URL — the same value `SproutWorkspace`'s `project.repoUrl` carries —
-//   so the bridge and the workspace agree on one repository.
+//   repo URL — the same value `SproutSpaces`'s `project.repoUrl` carries —
+//   so the bridge and the project folder agree on one repository.
 // - `EscalationListener` renders the "Browser limitation reached" affordance
 //   for the *user's own* terminal/preview actions (git push, quota, timeout),
 //   and `useEscalationTriggers` is the detector those events come from. It
@@ -273,12 +273,12 @@ export { ESCALATION_TRIGGER_EVENT, useEscalationTriggers } from '../hooks/useEsc
 export type { EscalationTriggerEvent, UseEscalationTriggersOptions } from '../hooks/useEscalationTriggers';
 
 // The source control and search views: what an arranged `git` and `search`
-// render. `WorkspaceGitView` is the app's git section (status, staging,
-// commit, branches, pull/push, history) against the workspace transport —
+// render. `SpacesGitView` is the app's git section (status, staging,
+// commit, branches, pull/push, history) against the spaces transport —
 // the daemon's git or, for an in-browser host, the browser's own — with
-// worktrees gated on `serverGit`; `WorkspaceSearchView` is the app's search
+// worktrees gated on `serverGit`; `SpacesSearchView` is the app's search
 // panel over `/api/search`. Both open files through `onOpenFile` /
-// `onFileClick`, which the composed workspace wires to the editor unit.
+// `onFileClick`, which the composed spaces wire to the editor unit.
 export { SpacesGitView } from './SpacesGitView';
 export type { SpacesGitViewProps, SpacesGitPanelProps } from './SpacesGitView';
 export { SpacesSearchView } from './SpacesSearchView';
@@ -292,7 +292,7 @@ export type { SpacesSearchViewProps } from './SpacesSearchView';
 export { SpacesTerminalView, resolveSpacesTerminalBackend } from './SpacesTerminalView';
 export type { SpacesTerminalViewProps, SpacesTerminalBackend } from './SpacesTerminalView';
 
-// The in-browser workspace's read-only file API: the host contract's
+// The in-browser project folder's read-only file API: the host contract's
 // move-to-container seam. A host that moves a project off the in-browser WASM
 // agent (e.g. into a container) must carry along the files the user edited in
 // the browser but never pushed; this is how it reads them. Both functions are
@@ -300,7 +300,7 @@ export type { SpacesTerminalViewProps, SpacesTerminalBackend } from './SpacesTer
 // the agent must run in-browser), so a host that offers nothing gets a stable
 // gate error instead of a crash. The VFS enumeration and the checkout
 // comparison are the same ones the app's own git and file flows use, so the
-// host sees the workspace exactly as the in-browser agent does. A host that
+// host sees the project folder exactly as the in-browser agent does. A host that
 // never runs the in-browser agent (a daemon backend) leaves the capability off
 // and never calls these.
 export {
@@ -312,7 +312,7 @@ export type { ProjectFolderFileEntry } from '../services/browserProjectFolderFil
 
 // The command palette unit (composite — requires the webui context stack):
 // the app's palette as an overlay an arrangement places (the default overlay
-// includes it). It opens from its shortcuts inside the workspace and from
+// includes it). It opens from its shortcuts inside the spaces and from
 // `OPEN_COMMAND_PALETTE_EVENT`, and lists only commands something handles; a
 // host registers handlers for built-in command ids with
 // `registerCommandHandler` or passes its own commands through

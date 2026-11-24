@@ -33,7 +33,7 @@ export interface ExampleHostState {
   notifications: HostNotification[];
   /** Navigation intents the host has resolved, newest last. */
   intents: HostNavigationIntent[];
-  /** The space currently mounted (a registered workspace-mode id). */
+  /** The space currently mounted (a registered spaces-mode id). */
   activeSpaceId: SpaceId;
 }
 

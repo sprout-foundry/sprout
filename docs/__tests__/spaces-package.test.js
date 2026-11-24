@@ -232,7 +232,7 @@ function selectorPreludes(css) {
  * Selectors that would escape the workspace root and style the host page.
  *
  * The check is the same predicate the scoping pass uses (`isLeakingSelector`):
- * a selector leaks when it has no workspace-root class anchor and its first
+ * a selector leaks when it has no spaces-root class anchor and its first
  * compound is not class-scoped — i.e. it reaches host-owned elements by name
  * (`body`, `select`), by the universal `*`, or by a bare attribute
  * (`[data-theme=dark] .x`). Reusing one predicate (rather than a list of
@@ -244,7 +244,7 @@ async function globalLeaks(css) {
   return selectorPreludes(css).filter(
     // `isLeakingSelector` is the pass's own predicate; a `:root` that somehow
     // survived the rewrite is a leak too (the pass rewrites every `:root` to
-    // the workspace-root class), so flag it explicitly as a belt-and-braces.
+    // the spaces-root class), so flag it explicitly as a belt-and-braces.
     (selector) =>
       selector === ":root" ||
       selector.startsWith(":root") ||
@@ -274,25 +274,25 @@ function scopeSelectorList(css) {
 
 describe("stylesheet scoping pass", () => {
   test("scopes a host-rooted selector instead of passing it through", async () => {
-    // The enforcement must not treat "contains the workspace-root class" as
-    // "already scoped": `body .sprout-workspace .panel` starts at a host
+    // The enforcement must not treat "contains the spaces-root class" as
+    // "already scoped": `body .sprout-spaces .panel` starts at a host
     // element and would style the host page. Only a selector whose FIRST
     // compound is the workspace root is already scoped.
     const { scopeStylesheet } = await loadScopeStylesheet();
     assert.equal(
       scopeSelectorList(
-        scopeStylesheet("body .sprout-workspace .panel{color:red}"),
+        scopeStylesheet("body .sprout-spaces .panel{color:red}"),
       ),
-      ".sprout-workspace body .sprout-workspace .panel",
+      ".sprout-spaces body .sprout-spaces .panel",
     );
   });
 
-  test("leaves an already workspace-rooted selector byte-for-byte", async () => {
+  test("leaves an already spaces-rooted selector byte-for-byte", async () => {
     const { scopeStylesheet } = await loadScopeStylesheet();
     for (const selector of [
-      ".sprout-workspace .panel",
-      ".sprout-workspace[data-theme=light] .x",
-      ".sprout-workspace.extra",
+      ".sprout-spaces .panel",
+      ".sprout-spaces[data-theme=light] .x",
+      ".sprout-spaces.extra",
     ]) {
       assert.equal(
         scopeSelectorList(scopeStylesheet(`${selector}{color:red}`)),
@@ -305,17 +305,17 @@ describe("stylesheet scoping pass", () => {
     const { scopeStylesheet } = await loadScopeStylesheet();
     assert.equal(
       scopeSelectorList(scopeStylesheet(":root{--x:1}")),
-      ".sprout-workspace",
+      ".sprout-spaces",
     );
     assert.equal(
       scopeSelectorList(
         scopeStylesheet(":root[data-theme='light'] .logo{fill:red}"),
       ),
-      ".sprout-workspace[data-theme='light'] .logo",
+      ".sprout-spaces[data-theme='light'] .logo",
     );
     assert.equal(
       scopeSelectorList(scopeStylesheet(":root.phone-tab-bar-shown{--y:2}")),
-      ".sprout-workspace.phone-tab-bar-shown",
+      ".sprout-spaces.phone-tab-bar-shown",
     );
   });
 
@@ -323,15 +323,15 @@ describe("stylesheet scoping pass", () => {
     const { scopeStylesheet } = await loadScopeStylesheet();
     assert.equal(
       scopeSelectorList(scopeStylesheet("body{color:red}")),
-      ".sprout-workspace body",
+      ".sprout-spaces body",
     );
     assert.equal(
       scopeSelectorList(scopeStylesheet("*{margin:0}")),
-      ".sprout-workspace *",
+      ".sprout-spaces *",
     );
     assert.equal(
       scopeSelectorList(scopeStylesheet("select option{color:red}")),
-      ".sprout-workspace select option",
+      ".sprout-spaces select option",
     );
     assert.equal(
       scopeSelectorList(scopeStylesheet("select.styled-select{color:red}")),
@@ -347,7 +347,7 @@ describe("stylesheet scoping pass", () => {
     // that carries `data-theme`, so a descendant prefix would never match.
     assert.equal(
       scopeSelectorList(scopeStylesheet("[data-theme=dark] .x{color:red}")),
-      ".sprout-workspace[data-theme=dark] .x",
+      ".sprout-spaces[data-theme=dark] .x",
     );
   });
 
@@ -372,7 +372,7 @@ describe("stylesheet scoping pass", () => {
     const { scopeStylesheet } = await loadScopeStylesheet();
     assert.equal(
       scopeStylesheet("@keyframes a{0%, 100% {opacity:0}} body{color:red}"),
-      "@keyframes a{0%, 100% {opacity:0}} .sprout-workspace body{color:red}",
+      "@keyframes a{0%, 100% {opacity:0}} .sprout-spaces body{color:red}",
     );
   });
 
@@ -785,18 +785,18 @@ describe(
       );
     });
 
-    test("the stylesheet keeps the workspace-root scope the views mount into", () => {
+    test("the stylesheet keeps the spaces-root scope the views mount into", () => {
       // The other side of the same property: scoping must not delete the
-      // workspace-rooted rules. The views root class is still styled, and the
+      // spaces-rooted rules. The views root class is still styled, and the
       // light-theme logo guards that used to be written on `:root` are now
       // guarded on the workspace root instead.
       const css = readSheet();
       assert.ok(
         css.includes(".sprout-views-layout"),
-        "the workspace-rooted layout styles survive scoping",
+        "the spaces-rooted layout styles survive scoping",
       );
       assert.ok(
-        /\.sprout-workspace\[data-theme=light\]/.test(css),
+        /\.sprout-spaces\[data-theme=light\]/.test(css),
         "the light-theme guards are scoped to the workspace root",
       );
     });

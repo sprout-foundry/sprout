@@ -407,7 +407,7 @@ const EditorSpaces: React.FC<EditorSpacesProps> = ({
                     void closeBuffer(placeholderId);
                   }
                 } catch (err) {
-                  console.warn('[EditorWorkspace] Failed to create chat:', err);
+                  console.warn('[EditorSpaces] Failed to create chat:', err);
                   void closeBuffer(placeholderId);
                 }
               })}
@@ -750,7 +750,7 @@ const EditorSpaces: React.FC<EditorSpacesProps> = ({
       isFileOpen={currentBuffer?.kind === 'file'}
       onNavigateToSymbol={handleOutlineNavigateToSymbol}
     >
-      <div ref={projectFolderRef} className={`editor-workspace ${paneLayout}`}>
+      <div ref={projectFolderRef} className={`editor-spaces ${paneLayout}`}>
         <div ref={containerRef} className={`panes-container layout-${paneLayout}`}>
           {renderPaneLayout()}
         </div>

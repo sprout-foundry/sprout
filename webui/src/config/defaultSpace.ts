@@ -7,7 +7,7 @@
  * value is read at module load, so it is a build-time choice.
  *
  * An embedding shell that installs before the shell renders can also set the
- * default at runtime with `overrideDefaultWorkspaceMode`; tests use the same
+ * default at runtime with `overrideDefaultSpace`; tests use the same
  * seam to simulate a configured default without a rebuild.
  *
  * This module only reports the *configured* id (or `null` when nothing is

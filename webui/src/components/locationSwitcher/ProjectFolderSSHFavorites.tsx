@@ -15,7 +15,7 @@ export interface ProjectFolderSSHFavoritesProps {
 
 export const ProjectFolderSSHFavorites: React.FC<ProjectFolderSSHFavoritesProps> = ({
   remoteContext,
-  projectFolder: projectFolder,
+  projectFolder,
   favorites,
   isSwitching,
   onSelectFavorite,

@@ -1,5 +1,5 @@
 /**
- * Barrel re-export so `workspaceFs` has one import surface without a
+ * Barrel re-export so `projectFolderFs` has one import surface without a
  * circular dependency (index resolves backends; this file is the flat API).
  */
 export { createMemoryFs } from './memoryFs';

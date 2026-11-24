@@ -160,19 +160,19 @@ const DiffSpacesTab = React.memo(function DiffSpacesTab({
   }, []);
 
   return (
-    <div className="workspace-tab workspace-diff-tab">
-      <div className="workspace-tab-header">
+    <div className="spaces-tab spaces-diff-tab">
+      <div className="spaces-tab-header">
         <div>
-          <div className="workspace-tab-eyebrow">{title}</div>
+          <div className="spaces-tab-eyebrow">{title}</div>
           <h2>{path}</h2>
         </div>
-        <div className="workspace-diff-controls">
+        <div className="spaces-diff-controls">
           {availableModes.length > 1 && (
-            <div className="workspace-diff-mode-tabs">
+            <div className="spaces-diff-mode-tabs">
               {availableModes.map((mode) => (
                 <button
                   key={mode}
-                  className={`workspace-diff-mode-tab ${diffMode === mode ? 'active' : ''}`}
+                  className={`spaces-diff-mode-tab ${diffMode === mode ? 'active' : ''}`}
                   onClick={() => onDiffModeChange(mode)}
                 >
                   {mode.charAt(0).toUpperCase() + mode.slice(1)}
@@ -180,15 +180,15 @@ const DiffSpacesTab = React.memo(function DiffSpacesTab({
               ))}
             </div>
           )}
-          <div className="workspace-diff-view-toggle">
+          <div className="spaces-diff-view-toggle">
             <button
-              className={`workspace-diff-view-btn ${viewMode === 'merge' ? 'active' : ''}`}
+              className={`spaces-diff-view-btn ${viewMode === 'merge' ? 'active' : ''}`}
               onClick={() => setViewMode('merge')}
             >
               Merge
             </button>
             <button
-              className={`workspace-diff-view-btn ${viewMode === 'text' ? 'active' : ''}`}
+              className={`spaces-diff-view-btn ${viewMode === 'text' ? 'active' : ''}`}
               onClick={() => setViewMode('text')}
             >
               Text
@@ -198,32 +198,32 @@ const DiffSpacesTab = React.memo(function DiffSpacesTab({
       </div>
 
       {isLoading ? (
-        <div className="workspace-tab-empty">
+        <div className="spaces-tab-empty">
           <GitCompareArrows size={28} />
           <p>Loading diff…</p>
         </div>
       ) : error ? (
-        <div className="workspace-tab-empty workspace-tab-error">
+        <div className="spaces-tab-empty spaces-tab-error">
           <GitCompareArrows size={28} />
           <p>{error}</p>
         </div>
       ) : diffText ? (
         viewMode === 'merge' && (docs.original !== '' || docs.modified !== '') ? (
-          <div className="workspace-diff-merge-wrapper">
+          <div className="spaces-diff-merge-wrapper">
             {/* In-flow confirm bar: appears only when pane B holds unsaved
                 edits (reverted chunks or typing). Accept/Reject belong on the
                 LLM edit-approval surface, not here — this bar is the only
                 decision a git-diff review needs: keep the edited result on
                 disk, or throw the edits away. */}
             {hasUnsavedEdits && mergeEditable && (
-              <div className="workspace-diff-edit-bar" role="status">
-                <span className="workspace-diff-edit-bar-label">
+              <div className="spaces-diff-edit-bar" role="status">
+                <span className="spaces-diff-edit-bar-label">
                   <Check size={13} /> Unsaved edits in this diff
                 </span>
-                <div className="workspace-diff-edit-bar-actions">
+                <div className="spaces-diff-edit-bar-actions">
                   <button
                     type="button"
-                    className="workspace-diff-edit-bar-btn discard"
+                    className="spaces-diff-edit-bar-btn discard"
                     onClick={handleDiscardEdits}
                     disabled={isSaving}
                     title="Discard your edits and restore the diff view"
@@ -232,7 +232,7 @@ const DiffSpacesTab = React.memo(function DiffSpacesTab({
                   </button>
                   <button
                     type="button"
-                    className="workspace-diff-edit-bar-btn save"
+                    className="spaces-diff-edit-bar-btn save"
                     onClick={() => void handleSave(modifiedContent)}
                     disabled={isSaving}
                     title="Write the edited file to disk (Cmd+S)"
@@ -243,9 +243,9 @@ const DiffSpacesTab = React.memo(function DiffSpacesTab({
               </div>
             )}
             {/* Collapse unchanged toggle */}
-            <div className="workspace-diff-collapse-toggle">
+            <div className="spaces-diff-collapse-toggle">
               <button
-                className={`workspace-diff-collapse-btn ${collapseUnchanged ? 'active' : ''}`}
+                className={`spaces-diff-collapse-btn ${collapseUnchanged ? 'active' : ''}`}
                 onClick={() => setCollapseUnchanged(!collapseUnchanged)}
                 title={collapseUnchanged ? 'Expand unchanged regions' : 'Collapse unchanged regions'}
                 aria-pressed={collapseUnchanged}
@@ -271,7 +271,7 @@ const DiffSpacesTab = React.memo(function DiffSpacesTab({
           <DiffSurface diffText={diffText} title={title} path={diff?.path || path} />
         )
       ) : (
-        <div className="workspace-tab-empty">
+        <div className="spaces-tab-empty">
           <p>(no diff available)</p>
         </div>
       )}

@@ -48,7 +48,7 @@ function setup(opts: {
   }) => {
     const id = o.path;
     calls.open.push({ id, isPinned: o.isPinned, isClosable: o.isClosable, activate: o.activate });
-    // Mirror openWorkspaceBuffer: register a new buffer so subsequent runs dedupe.
+    // Mirror openProjectFolderBuffer: register a new buffer so subsequent runs dedupe.
     const chatId = o.metadata?.chatId as string;
     opts.buffers.set(
       id,

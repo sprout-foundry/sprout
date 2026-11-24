@@ -52,7 +52,7 @@ export interface UseProjectFolderSuggestionsResult {
 
 export function useProjectFolderSuggestions({
   isConnected,
-  projectFolder: projectFolder,
+  projectFolder,
   daemonRoot,
   remoteContext,
   switchingState: _switchingState,
@@ -276,14 +276,14 @@ export function useProjectFolderSuggestions({
     };
   }, [totalProjectFolderRows, isOpen, closePopover]);
 
-  // sprout:open-workspace-switcher event — disabled in cloud mode
+  // sprout:open-project-folder-switcher event — disabled in cloud mode
   useEffect(() => {
     if (!supportsProjectFolderSwitching) return;
     const handler = () => {
       openPopover();
     };
-    window.addEventListener('sprout:open-workspace-switcher', handler);
-    return () => window.removeEventListener('sprout:open-workspace-switcher', handler);
+    window.addEventListener('sprout:open-project-folder-switcher', handler);
+    return () => window.removeEventListener('sprout:open-project-folder-switcher', handler);
   }, [openPopover, supportsProjectFolderSwitching]);
 
   // Click outside

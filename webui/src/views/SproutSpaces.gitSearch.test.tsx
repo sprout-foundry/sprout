@@ -1,5 +1,5 @@
 /**
- * SproutWorkspace — the arranged `git` (source control) and `search` views
+ * SproutSpaces — the arranged `git` (source control) and `search` views
  * against a daemon host: git and search requests go to the host transport,
  * a changed file and a search result open in the editor unit, and features
  * that need server-side git follow `serverGit`.
@@ -156,10 +156,10 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('SproutWorkspace source control view (daemon host)', () => {
+describe('SproutSpaces source control view (daemon host)', () => {
   it('shows the working tree status from the host and commits through it', async () => {
     render(<SproutSpaces project={PROJECT} space="code" host={daemonHost()} layout={SOURCE_CONTROL} />);
-    const view = await screen.findByTestId('workspace-git');
+    const view = await screen.findByTestId('spaces-git');
     await within(view).findByTitle('src/changed.ts');
     expect(within(view).getByTitle('src/staged.ts')).toBeInTheDocument();
     expect(requests().some(({ url }) => url.startsWith('https://host.test/api/git/status'))).toBe(true);
@@ -180,20 +180,20 @@ describe('SproutWorkspace source control view (daemon host)', () => {
 
   it("shows a changed file's diff and opens the file in the editor unit", async () => {
     render(<SproutSpaces project={PROJECT} space="code" host={daemonHost()} layout={SOURCE_CONTROL} />);
-    const view = await screen.findByTestId('workspace-git');
+    const view = await screen.findByTestId('spaces-git');
     const row = await within(view).findByTitle('src/changed.ts');
 
     await act(async () => {
       fireEvent.click(row);
     });
-    const diff = await within(view).findByTestId('workspace-git-diff');
+    const diff = await within(view).findByTestId('spaces-git-diff');
     expect(diff).toHaveTextContent('new line');
     expect(requests().some(({ url }) => url.startsWith('https://host.test/api/git/diff?path=src%2Fchanged.ts'))).toBe(
       true,
     );
 
     act(() => {
-      fireEvent.click(within(diff).getByTestId('workspace-git-diff-open'));
+      fireEvent.click(within(diff).getByTestId('spaces-git-diff-open'));
     });
     await waitFor(() =>
       expect(screen.getByTestId('git-test-editor-pane')).toHaveAttribute('data-path', 'src/changed.ts'),
@@ -204,7 +204,7 @@ describe('SproutWorkspace source control view (daemon host)', () => {
     const { unmount } = render(
       <SproutSpaces project={PROJECT} space="code" host={daemonHost()} layout={SOURCE_CONTROL} />,
     );
-    let view = await screen.findByTestId('workspace-git');
+    let view = await screen.findByTestId('spaces-git');
     await within(view).findByTitle('src/changed.ts');
     expect(within(view).getByRole('tab', { name: /History/ })).toBeInTheDocument();
     expect(within(view).queryByRole('tab', { name: /Worktrees/ })).not.toBeInTheDocument();
@@ -213,7 +213,7 @@ describe('SproutWorkspace source control view (daemon host)', () => {
     render(
       <SproutSpaces project={PROJECT} space="code" host={daemonHost({ serverGit: true })} layout={SOURCE_CONTROL} />,
     );
-    view = await screen.findByTestId('workspace-git');
+    view = await screen.findByTestId('spaces-git');
     await within(view).findByTitle('src/changed.ts');
     expect(within(view).getByRole('tab', { name: /Worktrees/ })).toBeInTheDocument();
   });
@@ -224,7 +224,7 @@ describe('SproutWorkspace source control view (daemon host)', () => {
     const stop = onProjectFolderResponse((url, response) => seen.push({ url, ok: response.ok }));
     try {
       render(<SproutSpaces project={PROJECT} space="code" host={daemonHost()} layout={SOURCE_CONTROL} />);
-      const view = await screen.findByTestId('workspace-git');
+      const view = await screen.findByTestId('spaces-git');
       await within(view).findByTitle('src/changed.ts');
       await act(async () => {
         fireEvent.click(within(view).getByTitle(/^Push/));
@@ -239,13 +239,13 @@ describe('SproutWorkspace source control view (daemon host)', () => {
   it('shows the empty state for a workspace that is not a repository', async () => {
     inRepo = false;
     render(<SproutSpaces project={PROJECT} space="code" host={daemonHost()} layout={SOURCE_CONTROL} />);
-    const empty = await screen.findByTestId('workspace-git-empty');
+    const empty = await screen.findByTestId('spaces-git-empty');
     expect(empty).toHaveTextContent('No git repository');
   });
 
   it('shows the empty state and makes no git requests for a host without git', async () => {
     render(<SproutSpaces project={PROJECT} space="code" host={daemonHost({ git: false })} layout={SOURCE_CONTROL} />);
-    const empty = await screen.findByTestId('workspace-git-empty');
+    const empty = await screen.findByTestId('spaces-git-empty');
     expect(empty).toHaveTextContent("Source control isn't available");
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(requests().some(({ url }) => url.includes('/api/git/'))).toBe(false);
@@ -275,21 +275,21 @@ describe('SproutWorkspace source control view (daemon host)', () => {
         viewProps={{ git: { gitPanel: { ...callbacks, ...hostPanel } } }}
       />,
     );
-    const view = await screen.findByTestId('workspace-git');
+    const view = await screen.findByTestId('spaces-git');
     expect(within(view).getByTitle('src/changed.ts')).toBeInTheDocument();
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(requests().some(({ url }) => url.includes('/api/git/status'))).toBe(false);
   });
 });
 
-describe('SproutWorkspace search view (daemon host)', () => {
+describe('SproutSpaces search view (daemon host)', () => {
   it('searches through the host and opens a result in the editor at the matched line', async () => {
     const gotoLines: number[] = [];
     const onGoto = (event: Event) => gotoLines.push((event as CustomEvent<{ line: number }>).detail.line);
     document.addEventListener('editor-goto-line', onGoto);
     try {
       render(<SproutSpaces project={PROJECT} space="code" host={daemonHost()} layout={SOURCE_CONTROL} />);
-      const view = await screen.findByTestId('workspace-search');
+      const view = await screen.findByTestId('spaces-search');
       fireEvent.change(within(view).getByPlaceholderText('Search...'), { target: { value: 'needle' } });
 
       const hit = await within(view).findByText('12', {}, { timeout: 5000 });
@@ -318,7 +318,7 @@ describe('SproutWorkspace search view (daemon host)', () => {
         viewProps={{ search: { onFileClick } }}
       />,
     );
-    const view = await screen.findByTestId('workspace-search');
+    const view = await screen.findByTestId('spaces-search');
     fireEvent.change(within(view).getByPlaceholderText('Search...'), { target: { value: 'needle' } });
     const hit = await within(view).findByText('12', {}, { timeout: 5000 });
     act(() => {

@@ -16,7 +16,7 @@ import './SpacesTerminalView.css';
  * - `pty` — a PTY on the backend: the `/terminal` WebSocket and the
  *   `/api/terminal/*` calls, on the daemon the host names as its agent
  *   backend, else through the host transport.
- * - `none` — the workspace has no terminal; the view says so.
+ * - `none` — the spaces have no terminal; the view says so.
  */
 export type SpacesTerminalBackend = 'wasm' | 'pty' | 'none';
 
@@ -25,8 +25,8 @@ export type SpacesTerminalBackend = 'wasm' | 'pty' | 'none';
  * (`transport.agent.kind: 'wasm'`) gets a terminal on that shell. A host whose
  * agent is a daemon (`transport.agent.kind: 'daemon'`) gets the PTY terminal
  * on that daemon, which serves `/terminal` beside its agent — a hosted
- * platform reaching a workspace's daemon through its proxy declares no local
- * terminal, yet the workspace has one. Otherwise a host that declares
+ * platform reaching a dev space's daemon through its proxy declares no local
+ * terminal, yet the dev space has one. Otherwise a host that declares
  * `capabilities.localTerminal` gets the PTY terminal on its backend; any other
  * host has none.
  */
@@ -41,7 +41,7 @@ export function resolveSpacesTerminalBackend(host: SproutHost): SpacesTerminalBa
 export interface SpacesTerminalViewProps {
   /**
    * The backend to attach to. Omitted (or `'auto'`), it is resolved from the
-   * host (`resolveWorkspaceTerminalBackend`). A host may force `'none'` to
+   * host (`resolveSpacesTerminalBackend`). A host may force `'none'` to
    * show the unavailable state, or pin a backend it knows is served.
    */
   backend?: SpacesTerminalBackend | 'auto';
@@ -71,7 +71,7 @@ export function SpacesTerminalView({
       .filter(Boolean)
       .join(' ');
     return (
-      <div className={rootClass} role="status" data-testid="workspace-terminal-unavailable">
+      <div className={rootClass} role="status" data-testid="spaces-terminal-unavailable">
         {unavailableMessage ?? DEFAULT_UNAVAILABLE_MESSAGE}
       </div>
     );
@@ -105,7 +105,7 @@ function ArrangedTerminal({
     .filter(Boolean)
     .join(' ');
   return (
-    <div className={rootClass} data-testid="workspace-terminal" data-backend={backend}>
+    <div className={rootClass} data-testid="spaces-terminal" data-backend={backend}>
       {/* `isConnected` selects the pane transport: the PTY socket, or the
           in-browser WASM shell when there is no backend PTY. */}
       <TerminalWorkbench workbench={workbench} isConnected={backend === 'pty'} isExpanded isActive />

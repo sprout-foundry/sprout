@@ -1,5 +1,5 @@
 /**
- * useWorkspace — lightweight hook for project folder state and switching.
+ * useProjectFolder — lightweight hook for project folder state and switching.
  *
  * Used by WelcomeTab / ProjectFolderPicker to fetch project folder metadata
  * (is_project, needs_project_folder_selection, suggested_projects,
@@ -98,7 +98,7 @@ export interface UseProjectFolderResult {
 }
 
 export function useProjectFolder(): UseProjectFolderResult {
-  const { projectFolder: projectFolder, updatedAt, error } = useProjectFolderState();
+  const { projectFolder, updatedAt, error } = useProjectFolderState();
   const projectFolderInfo = useMemo(
     () => (projectFolder ? mapProjectFolderResponse(projectFolder) : EMPTY_WORKSPACE_INFO),
     [projectFolder],
@@ -127,7 +127,7 @@ export function useProjectFolder(): UseProjectFolderResult {
       window.setTimeout(() => window.location.reload(), 300);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error('[useWorkspace] failed to set workspace:', msg);
+      console.error('[useProjectFolder] failed to set workspace:', msg);
       throw err;
     }
   }, []);

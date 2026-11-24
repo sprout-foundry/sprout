@@ -54,7 +54,7 @@ interface SidebarFilesSectionProps {
 // ── Component ──────────────────────────────────────────────────────────────
 
 const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>(
-  ({ onFileClick, projectFolder: projectFolder }, ref) => {
+  ({ onFileClick, projectFolder }, ref) => {
     const fileTreeRef = useRef<FileTreeHandle | null>(null);
     // Files the agent or a shell command creates or deletes show up without
     // a manual refresh; in place, so the tree doesn't flash.
@@ -82,7 +82,7 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
     const handleFileSelect = useCallback((file: FileInfo) => onFileClick?.(file.path), [onFileClick]);
     const treeProps = useProjectFolderFileTree({
       rootPath: treeRoot,
-      projectFolder: projectFolder,
+      projectFolder,
       onFileSelect: handleFileSelect,
     });
 

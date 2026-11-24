@@ -83,13 +83,13 @@ export default function ProjectFolderCwdBar({
   if (!showSelector && !onAddRepo) return null;
 
   return (
-    <div className="workspace-cwd-bar" data-testid="workspace-cwd-bar">
+    <div className="project-folder-cwd-bar" data-testid="project-folder-cwd-bar">
       {showSelector && (
-        <label className="workspace-cwd-select-label">
+        <label className="project-folder-cwd-select-label">
           <FolderTree size={13} aria-hidden="true" />
           <select
-            className="workspace-cwd-select"
-            data-testid="workspace-cwd-select"
+            className="project-folder-cwd-select"
+            data-testid="project-folder-cwd-select"
             value={value}
             onChange={(e) => onChange(e.target.value)}
             title={cwd === '' ? 'Project folder' : cwd}
@@ -111,8 +111,8 @@ export default function ProjectFolderCwdBar({
       {onAddRepo && (
         <button
           type="button"
-          className={`workspace-add-repo-btn${showSelector ? '' : ' workspace-add-repo-btn--labeled'}`}
-          data-testid="workspace-add-repo-btn"
+          className={`project-folder-add-repo-btn${showSelector ? '' : ' project-folder-add-repo-btn--labeled'}`}
+          data-testid="project-folder-add-repo-btn"
           onClick={onAddRepo}
           disabled={addRepoDisabled}
           aria-label="Add a project folder from a repository"

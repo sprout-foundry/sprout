@@ -87,7 +87,7 @@ describe('resolveNativeFsGate (pure)', () => {
   });
 });
 
-describe('normalizeWorkspacePath (pure)', () => {
+describe('normalizeProjectFolderPath (pure)', () => {
   it('strips leading ./ and / and normalizes backslashes', () => {
     expect(normalizeProjectFolderPath('./src/main.go')).toBe('src/main.go');
     expect(normalizeProjectFolderPath('/src/main.go')).toBe('src/main.go');

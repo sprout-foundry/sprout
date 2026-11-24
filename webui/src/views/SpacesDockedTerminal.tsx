@@ -34,8 +34,8 @@ export interface SpacesDockedTerminalProps {
  * The composed space shell's terminal: the app's docked terminal (the same
  * workbench — tabs, splits, shell picker, background sessions — the same
  * persisted height, resize handle and collapse controls), docked at the
- * bottom of the workspace in flow rather than fixed to the viewport, so it
- * never covers the host page around the workspace.
+ * bottom of the spaces in flow rather than fixed to the viewport, so it
+ * never covers the host page around the spaces.
  *
  * As in the app, the terminal collapses to a strip along the bottom that
  * expands it — on either backend, so the terminal is always one click away
@@ -63,8 +63,8 @@ export function SpacesDockedTerminal({ backend, expanded, onExpandedChange }: Sp
   }, [expanded]);
 
   const className = [
-    'sprout-workspace-shell__terminal',
-    expanded ? 'sprout-workspace-shell__terminal--expanded' : '',
+    'sprout-spaces-shell__terminal',
+    expanded ? 'sprout-spaces-shell__terminal--expanded' : '',
     isResizingVertical ? 'resizing' : '',
   ]
     .filter(Boolean)
@@ -74,7 +74,7 @@ export function SpacesDockedTerminal({ backend, expanded, onExpandedChange }: Sp
     <div
       className={className}
       style={expanded ? { height: `${height}px` } : undefined}
-      data-testid="workspace-docked-terminal"
+      data-testid="spaces-docked-terminal"
       data-backend={backend}
       data-expanded={String(expanded)}
     >
@@ -124,7 +124,7 @@ export function SpacesDockedTerminal({ backend, expanded, onExpandedChange }: Sp
  * Handle `toggle_terminal` (Ctrl+` and the palette's Toggle Terminal) — and,
  * for a PTY terminal, the split/clear/kill commands the app's hotkey handler
  * forwards to it — registered so the scoped hotkeys, the menu and the palette
- * offer them from inside the workspace. Nothing registers without a terminal.
+ * offer them from inside the spaces. Nothing registers without a terminal.
  */
 export function useToggleTerminalCommand(
   setExpanded: (update: (expanded: boolean) => boolean) => void,

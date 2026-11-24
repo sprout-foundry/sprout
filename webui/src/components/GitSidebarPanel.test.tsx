@@ -167,7 +167,7 @@ describe('GitSidebarPanel context menu – menu items', () => {
     expect(texts).not.toContain('Open in editor');
   });
 
-  it('shows "Copy absolute path" when workspaceRoot is provided', async () => {
+  it('shows "Copy absolute path" when projectFolder is provided', async () => {
     await renderGitPanel({ projectFolder: '/home/user/project' });
 
     fireContextMenuOnGitFile('src/utils.ts');
@@ -177,7 +177,7 @@ describe('GitSidebarPanel context menu – menu items', () => {
     expect(texts).toContain('Copy absolute path');
   });
 
-  it('does NOT show "Copy absolute path" when workspaceRoot is not provided', async () => {
+  it('does NOT show "Copy absolute path" when projectFolder is not provided', async () => {
     await renderGitPanel({ projectFolder: undefined });
 
     fireContextMenuOnGitFile('src/utils.ts');
@@ -228,7 +228,7 @@ describe('GitSidebarPanel context menu – clipboard & editor actions', () => {
     expect(mockClipboardWriteText).toHaveBeenCalledWith('config.json');
   });
 
-  it('"Copy absolute path" calls clipboard with workspaceRoot/file.path', async () => {
+  it('"Copy absolute path" calls clipboard with projectFolder/file.path', async () => {
     await renderGitPanel({ projectFolder: '/home/user/project' });
 
     fireContextMenuOnGitFile('src/app.tsx');

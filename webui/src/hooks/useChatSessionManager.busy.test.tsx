@@ -59,7 +59,7 @@ function setup() {
     ...utils,
     queuedMessagesRef,
     getState: () => state,
-    setBusy: (v: AppState['workspaceBusy']) => {
+    setBusy: (v: AppState['projectFolderBusy']) => {
       state = { ...state, projectFolderBusy: v };
       utils.rerender();
     },

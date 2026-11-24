@@ -28,7 +28,7 @@ export interface UseLivePreviewReturn {
  * @param isSvgFile - Whether the file is an SVG file
  * @param isHtmlFile - Whether the file is an HTML file
  * @param splitPane - Function to split a pane
- * @param openWorkspaceBuffer - Function to open a buffer in the project folder
+ * @param openProjectFolderBuffer - Function to open a buffer in the project folder
  */
 export function useLivePreview(
   buffer: EditorBuffer | null | undefined,

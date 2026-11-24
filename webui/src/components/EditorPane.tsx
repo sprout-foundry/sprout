@@ -201,13 +201,13 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   // mirror, no actionsRef indirection.
   handleSaveRef.current = handleSave;
 
-  // openWorkspaceBuffer from EditorManagerContext is itself a stable callback
+  // openProjectFolderBuffer from EditorManagerContext is itself a stable callback
   // across renders, but we still wire it through a ref because the CM
-  // extensions builder reads `openWorkspaceBufferRef.current.getOpenProjectFolderBuffer()`
+  // extensions builder reads `openProjectFolderBufferRef.current.getOpenProjectFolderBuffer()`
   // inside handlers that fire after mount (e.g., when LSP client opens a
   // file from `textDocument/definition`). Without a render-time `.current`
   // assignment, a stale value from the first render would persist. The
-  // legacy code used `useRef(openWorkspaceBuffer)` which silently *never*
+  // legacy code used `useRef(openProjectFolderBuffer)` which silently *never*
   // updated; that's the bug we're fixing here.
   const openProjectFolderBufferRef = useRef<OpenProjectFolderBufferFn>(openProjectFolderBuffer);
   openProjectFolderBufferRef.current = openProjectFolderBuffer;
@@ -648,7 +648,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 }
 
 /**
- * Memoized on `paneId`: the pane is reached through WorkspacePane, whose props
+ * Memoized on `paneId`: the pane is reached through SpacesPane, whose props
  * include the chat's view props — those change on every stream flush, so an
  * open file was re-rendering ~20x/s while an agent answered. Its actual inputs
  * are the pane id and its contexts, so the memo is exact.

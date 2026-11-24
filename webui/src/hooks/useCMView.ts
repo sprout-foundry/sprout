@@ -59,7 +59,7 @@ export type OpenProjectFolderBufferFn = (req: OpenProjectFolderBufferRequest) =>
 export interface CMViewActions {
   /** Returns the current save function through one ref hop. */
   getSaveFn: () => () => void;
-  /** Returns the current openWorkspaceBuffer through one ref hop. */
+  /** Returns the current openProjectFolderBuffer through one ref hop. */
   getOpenProjectFolderBuffer: () => OpenProjectFolderBufferFn;
 }
 

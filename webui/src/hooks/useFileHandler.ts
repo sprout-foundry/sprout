@@ -4,7 +4,7 @@ import type { OpenProjectFolderFileOptions } from '../views/SpacesEditorContext'
 
 export interface UseFileHandlerParams {
   onViewChange: (view: ViewType) => void;
-  /** The editor unit's open (`useWorkspaceEditor().openFile`), which also moves to the line. */
+  /** The editor unit's open (`useSpacesEditor().openFile`), which also moves to the line. */
   openFile: (path: string, options?: OpenProjectFolderFileOptions) => void;
 }
 

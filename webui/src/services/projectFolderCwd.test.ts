@@ -28,7 +28,7 @@ beforeEach(() => {
   __resetProjectFolderCwdForTests();
 });
 
-describe('normalizeWorkspaceCwd', () => {
+describe('normalizeProjectFolderCwd', () => {
   it('returns the empty string for root-ish inputs', () => {
     expect(normalizeProjectFolderCwd('')).toBe('');
     expect(normalizeProjectFolderCwd('/')).toBe('');
@@ -142,7 +142,7 @@ describe('derived helpers', () => {
   });
 });
 
-describe('useWorkspaceCwd (React binding)', () => {
+describe('useProjectFolderCwd (React binding)', () => {
   it('re-renders the component when the cwd changes', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);

@@ -69,7 +69,7 @@ function endStepParagraph(messages: Message[]): Message[] {
 //   2. Clears the recentLogs cache in React state so stale data
 //      from the previous project folder doesn't linger.
 //   3. Dispatches a `sprout:workspace-changed` DOM event so other components
-//      (WorkspaceBar, FileBrowser, editor tabs, etc.) can re-fetch fresh data
+//      (ProjectFolderBar, FileBrowser, editor tabs, etc.) can re-fetch fresh data
 //      from the server's new project folder.
 export const handleProjectFolderChanged = (ctx: EventHandlerContext): void => {
   const { event, setState } = ctx;

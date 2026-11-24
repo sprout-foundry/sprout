@@ -33,7 +33,7 @@ import { clientFetch } from './services/clientSession';
 import { LocalEventsProvider } from './services/localEventsProvider';
 import { notificationBus } from './services/notificationBus';
 import { debugLog } from './utils/log';
-import { SpacesAgentPrompts, SpacesChatProvider, WorkspaceEditorProvider, useSpacesChat } from './views';
+import { SpacesAgentPrompts, SpacesChatProvider, SpacesEditorProvider, useSpacesChat } from './views';
 import './App.css';
 import './components/UpdateNotification.css';
 
@@ -332,7 +332,7 @@ function AppInner() {
       <WasmLoadingOverlay isLoading={!!state.wasmLoading} error={state.wasmError} />
       <UIManager>
         <NotificationCenter />
-        <WorkspaceEditorProvider>
+        <SpacesEditorProvider>
           <AppContent
             state={state}
             isMobile={isMobile}
@@ -377,7 +377,7 @@ function AppInner() {
             onRenameChat={chatManager.handleRenameChat}
             perChatCache={state.perChatCache}
           />
-        </WorkspaceEditorProvider>
+        </SpacesEditorProvider>
         <UpdateNotification />
         <UpdateAvailableBanner />
         <EscalationListener />

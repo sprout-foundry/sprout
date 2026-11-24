@@ -1,7 +1,7 @@
 /**
- * The command palette unit in an own-mode SproutWorkspace.
+ * The command palette unit in an own-mode SproutSpaces.
  *
- * - Its shortcut opens it when the key is pressed inside the workspace, and
+ * - Its shortcut opens it when the key is pressed inside the spaces, and
  *   not when it is pressed in the host page around it.
  * - `OPEN_COMMAND_PALETTE_EVENT` opens it, and its registration for that
  *   event makes the header search control appear.
@@ -123,11 +123,11 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('WorkspaceCommandPalette in an own-mode workspace', () => {
+describe('SpacesCommandPalette in an own-mode workspace', () => {
   it('opens on its shortcut inside the workspace but not from the host page', async () => {
     render(<Page />);
     await pressInsideProjectFolder();
-    expect(within(screen.getByTestId('sprout-workspace')).getByRole('dialog')).toBe(palette());
+    expect(within(screen.getByTestId('sprout-spaces')).getByRole('dialog')).toBe(palette());
 
     // The shortcut toggles: pressed again inside, the palette closes.
     fireEvent.keyDown(screen.getByTestId('palette-test-chat'), PALETTE_SHORTCUT);

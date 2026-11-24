@@ -68,7 +68,7 @@ function setupStorage(mock: ReturnType<typeof createMockStorage>) {
 // readRecentProjectFolders
 // ---------------------------------------------------------------------------
 
-describe('readRecentWorkspaces', () => {
+describe('readRecentProjectFolders', () => {
   let mock: ReturnType<typeof createMockStorage>;
   let readRecentProjectFolders: () => string[];
 
@@ -154,7 +154,7 @@ describe('readRecentWorkspaces', () => {
 // writeRecentProjectFolders
 // ---------------------------------------------------------------------------
 
-describe('writeRecentWorkspaces', () => {
+describe('writeRecentProjectFolders', () => {
   let mock: ReturnType<typeof createMockStorage>;
   let writeRecentProjectFolders: (paths: string[]) => void;
 
@@ -196,7 +196,7 @@ describe('writeRecentWorkspaces', () => {
 // readRemoteRecentProjectFolders
 // ---------------------------------------------------------------------------
 
-describe('readRemoteRecentWorkspaces', () => {
+describe('readRemoteRecentProjectFolders', () => {
   let mock: ReturnType<typeof createMockStorage>;
   let readRemoteRecentProjectFolders: () => Record<string, string[]>;
 
@@ -307,7 +307,7 @@ describe('readRemoteRecentWorkspaces', () => {
 // writeRemoteRecentProjectFolders
 // ---------------------------------------------------------------------------
 
-describe('writeRemoteRecentWorkspaces', () => {
+describe('writeRemoteRecentProjectFolders', () => {
   let mock: ReturnType<typeof createMockStorage>;
   let writeRemoteRecentProjectFolders: (value: Record<string, string[]>) => void;
 
@@ -342,7 +342,7 @@ describe('writeRemoteRecentWorkspaces', () => {
 // readSSHFavoriteProjectFolders
 // ---------------------------------------------------------------------------
 
-describe('readSSHFavoriteWorkspaces', () => {
+describe('readSSHFavoriteProjectFolders', () => {
   let mock: ReturnType<typeof createMockStorage>;
   let readSSHFavoriteProjectFolders: () => Record<string, string[]>;
 
@@ -447,7 +447,7 @@ describe('readSSHFavoriteWorkspaces', () => {
 // writeSSHFavoriteProjectFolders
 // ---------------------------------------------------------------------------
 
-describe('writeSSHFavoriteWorkspaces', () => {
+describe('writeSSHFavoriteProjectFolders', () => {
   let mock: ReturnType<typeof createMockStorage>;
   let writeSSHFavoriteProjectFolders: (value: Record<string, string[]>) => void;
 

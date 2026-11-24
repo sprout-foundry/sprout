@@ -1,17 +1,17 @@
 /**
- * The chat a composed workspace mounts.
+ * The chat composed spaces mount.
  *
- * A host that mounts a workspace through `SproutWorkspace` should get a
+ * A host that mounts spaces through `SproutSpaces` should get a
  * working chat without wiring one: this module owns the events provider the
  * chat unit and the provider stack share, and assembles the chat view props
  * from the chat unit so the layout renders a live chat. It is the internal
- * half of `SproutWorkspace` — the public surface is the workspace component
+ * half of `SproutSpaces` — the public surface is the spaces component
  * and the chat unit it is built on — so it is not re-exported from the views
  * entry.
  *
  * The events provider is owned here rather than defaulted inside
  * `SproutProviders`: the unit subscribes to the transport, so the wrapper and
- * the unit must share one instance. `SproutWorkspace` receives it from this
+ * the unit must share one instance. `SproutSpaces` receives it from this
  * hook and passes the same instance to both.
  */
 
@@ -26,7 +26,7 @@ import type { ViewKind } from './ViewsLayout';
 import { useProjectFolderFileTree } from './useProjectFolderFileTree';
 import { createEmptyChatState, useSpacesChatProps } from './SpacesChatContext';
 import type { SpacesChatViewProps } from './SpacesChatContext';
-import { useWorkspaceEditorProps } from './SpacesEditorContext';
+import { useSpacesEditorProps } from './SpacesEditorContext';
 
 /** The transport + fetch the chat unit and the provider stack share. */
 export interface SproutSpacesChatTransport {
@@ -44,7 +44,7 @@ export interface SproutSpacesChatOptions {
 }
 
 /**
- * Own the transport a composed workspace's chat runs on. The events provider
+ * Own the transport composed spaces' chat runs on. The events provider
  * is created once and never replaced, so the provider stack and the chat unit
  * share one identity across re-renders.
  */
@@ -74,7 +74,7 @@ export function useSproutSpacesChatViewProps(chatOverrides?: Partial<ChatProps>)
 
 /** What the composition assembles beyond the units' own props. */
 export interface SproutSpacesViewAssembly {
-  /** Merged over the assembled chat props (see `useSproutWorkspaceChatViewProps`). */
+  /** Merged over the assembled chat props (see `useSproutSpacesChatViewProps`). */
   chatOverrides?: Partial<ChatProps>;
   /** The preview panel's open state and close handler, owned by the composition. */
   previewPanel?: PreviewPanelProps;
@@ -82,8 +82,8 @@ export interface SproutSpacesViewAssembly {
 
 /**
  * Assemble the layout's per-kind props from the chat and editor units and the
- * host's overrides. Runs inside the `WorkspaceChatProvider` and
- * `WorkspaceEditorProvider` the units need: both are mounted around the
+ * host's overrides. Runs inside the `SpacesChatProvider` and
+ * `SpacesEditorProvider` the units need: both are mounted around the
  * layout, and this reads their state below them. A kind the host supplies
  * replaces the assembled props for that kind, so a host composing its own
  * surface is not fighting the unit's — except `previewPanel`, whose host
@@ -91,7 +91,7 @@ export interface SproutSpacesViewAssembly {
  * just `open` to drive it.
  *
  * - `chat` — the chat unit's view props, with `chatOverrides` merged over.
- * - `fileTree` — the workspace file API (`useWorkspaceFileTree`), with
+ * - `fileTree` — the project folder file API (`useProjectFolderFileTree`), with
  *   selection wired to the editor unit: picking a file opens it, and the
  *   active file is the selected one.
  * - `changes` — `onFileClick`, so a changed file opens in the editor. The
@@ -102,14 +102,14 @@ export interface SproutSpacesViewAssembly {
  * - `search` — `onFileClick`, so a result opens in the editor at its line.
  *
  * The `editor` kind takes no props here: the composition renders the
- * assembled editor view for it (see `SproutWorkspace`).
+ * assembled editor view for it (see `SproutSpaces`).
  */
 export function useSproutSpacesViewProps(
   overrides?: Partial<Record<ViewKind, object>>,
   { chatOverrides, previewPanel }: SproutSpacesViewAssembly = {},
 ): Partial<Record<ViewKind, object>> {
   const { chatProps } = useSproutSpacesChatViewProps(chatOverrides);
-  const editor = useWorkspaceEditorProps();
+  const editor = useSpacesEditorProps();
   const fileTree = useProjectFolderFileTree({
     onFileSelect: editor.fileTree.onFileSelect,
     selectedFile: editor.fileTree.selectedFile,

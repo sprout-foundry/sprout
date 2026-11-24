@@ -37,21 +37,21 @@ const MODE_FOR_COMMAND: Record<string, PaletteMode> = {
 };
 
 /**
- * The command palette as a workspace unit: the app's palette, mounted inside
- * a composed workspace so it works in an embed. It renders nothing until
- * opened, then overlays the workspace.
+ * The command palette as a spaces unit: the app's palette, mounted inside
+ * composed spaces so it works in an embed. It renders nothing until
+ * opened, then overlays the spaces.
  *
  * - It opens from its shortcuts (`command_palette`, `quick_open`,
- *   `editor_goto_symbol`) when the key is pressed inside the workspace — the
+ *   `editor_goto_symbol`) when the key is pressed inside the spaces — the
  *   hotkey provider's scope dispatches them because this unit registers them —
  *   and from `OPEN_COMMAND_PALETTE_EVENT`. Registering for that event is what
  *   makes the header's search control appear.
- * - It lists only what works in the embed: workspace files and the open
+ * - It lists only what works in the embed: project folder files and the open
  *   editors' recents (from the shared palette sources), the built-in commands
  *   something mounted has registered a handler for, and the host's own
  *   `commands`.
  * - Files open through `sprout:open-in-editor`, the request the composed
- *   workspace already routes to its editor unit.
+ *   spaces already route to its editor unit.
  *
  * In the standalone app the app root owns the palette (and the whole page's
  * shortcuts), so this unit renders nothing there.

@@ -3,7 +3,7 @@
  * the host (SP-160 §160b).
  *
  * A studio (`--native-fs`) dist ships a `capabilities.json` declaring
- * `supportsFolderPicker: true` / `supportsWorkspaceSwitching: true`, which its
+ * `supportsFolderPicker: true` / `supportsProjectFolderSwitching: true`, which its
  * shell reports to the webui through the installed adapter. The selected host
  * is the local host, whose own defaults leave `folderPicker` off; the entry
  * overlays the adapter's declared flags onto the host's capabilities so the

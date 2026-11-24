@@ -348,7 +348,7 @@ import { SproutSpaces } from "@sprout-foundry/spaces/views";
   the same hook the standalone app's Files sidebar uses. Selecting a file
   opens it in the editor; the active file is the tree's selection. Deleting
   or renaming an open file closes or retargets its editor tab.
-- **`editor`** renders `WorkspaceEditorView`: a tab per open file over the
+- **`editor`** renders `SpacesEditorView`: a tab per open file over the
   editor pane, with the app's buffer plumbing (loading through `/api/file`,
   edits, Cmd/Ctrl+S and auto-save, external-change detection). The file is
   read when the editor shows it.
@@ -373,18 +373,18 @@ in-browser agent is ready or before the repository is imported therefore
 fills in by itself; a host needs no refresh of its own.
 
 The editor is a unit like the chat. `./views` exports
-`WorkspaceEditorProvider`, `useWorkspaceEditor()` and
-`useWorkspaceEditorProps()`; `SproutSpaces` mounts the provider in own
+`SpacesEditorProvider`, `useSpacesEditor()` and
+`useSpacesEditorProps()`; `SproutSpaces` mounts the provider in own
 mode, and the standalone app mounts the same provider at its root. It must sit
 under `SproutProviders`, which holds the buffer manager the editor's open files
 live in. An own-mode `SproutSpaces` builds that stack itself, so the
 assembled tree, the editor view and the editor unit share one buffer manager
-with no host wiring; a host does not mount `WorkspaceEditorProvider` for them.
+with no host wiring; a host does not mount `SpacesEditorProvider` for them.
 
-- `useWorkspaceEditor()` reads the unit: `openFiles`, `activeFile`,
+- `useSpacesEditor()` reads the unit: `openFiles`, `activeFile`,
   `openFile(path, { line? })`, `closeFile(path)` and `saveFile(path?)` (the
   active file when `path` is omitted).
-- `useWorkspaceEditorProps()` returns the wiring for the views around the
+- `useSpacesEditorProps()` returns the wiring for the views around the
   editor: `fileTree` (`onFileSelect`, `selectedFile`) and `onFileClick(path,
 line?)`.
 

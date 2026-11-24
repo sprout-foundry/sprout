@@ -1,5 +1,5 @@
 /**
- * SproutWorkspace — the arranged `git` and `search` views on an in-browser
+ * SproutSpaces — the arranged `git` and `search` views on an in-browser
  * (wasm) host. Git requests are answered by the browser's own git through
  * the in-browser adapter, search by the browser file store; neither reaches
  * the page's fetch.
@@ -176,7 +176,7 @@ afterEach(() => {
 
 const pageCalls = (fragment: string) => pageFetch.mock.calls.filter(([input]) => String(input).includes(fragment));
 
-describe('SproutWorkspace source control and search views (wasm host)', () => {
+describe('SproutSpaces source control and search views (wasm host)', () => {
   it('shows status from browser git, commits through it, and opens a changed file in the editor', async () => {
     render(
       <SproutSpaces
@@ -186,7 +186,7 @@ describe('SproutWorkspace source control and search views (wasm host)', () => {
         layout={SOURCE_CONTROL}
       />,
     );
-    const view = await screen.findByTestId('workspace-git');
+    const view = await screen.findByTestId('spaces-git');
     await within(view).findByTitle('src/changed.ts', {}, { timeout: 15000 });
     expect(browserGit.ops.some(({ op }) => op === 'status')).toBe(true);
 
@@ -213,10 +213,10 @@ describe('SproutWorkspace source control and search views (wasm host)', () => {
     await act(async () => {
       fireEvent.click(row);
     });
-    const diff = await within(view).findByTestId('workspace-git-diff');
+    const diff = await within(view).findByTestId('spaces-git-diff');
     expect(diff).toHaveTextContent('browser line');
     act(() => {
-      fireEvent.click(within(diff).getByTestId('workspace-git-diff-open'));
+      fireEvent.click(within(diff).getByTestId('spaces-git-diff-open'));
     });
     await waitFor(() =>
       expect(screen.getByTestId('wasm-git-editor-pane')).toHaveAttribute('data-path', 'src/changed.ts'),
@@ -239,7 +239,7 @@ describe('SproutWorkspace source control and search views (wasm host)', () => {
       );
       // The search runs once the in-browser adapter is in place.
       await waitFor(() => expect(browserGit.ops.length).toBeGreaterThan(0), { timeout: 15000 });
-      const view = await screen.findByTestId('workspace-search');
+      const view = await screen.findByTestId('spaces-search');
       fireEvent.change(within(view).getByPlaceholderText('Search...'), { target: { value: 'needle' } });
 
       const hit = await within(view).findByText('12', {}, { timeout: 15000 });
@@ -247,7 +247,7 @@ describe('SproutWorkspace source control and search views (wasm host)', () => {
       act(() => {
         fireEvent.click(hit);
       });
-      // The editor holds the file under the browser workspace root.
+      // The editor holds the file under the browser project folder.
       await waitFor(() =>
         expect(screen.getByTestId('wasm-git-editor-pane').getAttribute('data-path')).toMatch(/(^|\/)src\/found\.ts$/),
       );

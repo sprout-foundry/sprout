@@ -58,7 +58,7 @@ export function areContextMenuEqual(prev: EditorContextMenuProps, next: EditorCo
  * Component that renders the editor context menu.
  */
 const EditorContextMenuImpl: FC<EditorContextMenuProps> = ({ contextMenu: ctx, isSemanticLanguage }) => {
-  const { contextMenu, projectFolder: projectFolder } = ctx;
+  const { contextMenu, projectFolder } = ctx;
 
   return (
     <ContextMenu

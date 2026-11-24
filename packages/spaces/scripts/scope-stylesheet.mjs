@@ -7,12 +7,12 @@
 // element selectors such as `select.styled-select`. Loaded on a host page
 // that stylesheet would leak onto the host's own DOM outside the mounted
 // workspace. This pass rewrites it so every rule applies only inside the
-// workspace root (`.sprout-workspace`, the class `SproutSpaces` renders)
+// workspace root (`.sprout-spaces`, the class `SproutSpaces` renders)
 // and writes the result to the package's declared `dist/spaces.css`.
 //
 // The rewrite is textual and deliberately conservative: it rewrites only the
 // selectors that would otherwise escape the workspace root and leaves every
-// workspace-rooted (already class-scoped) rule byte-for-byte alone, so the
+// spaces-rooted (already class-scoped) rule byte-for-byte alone, so the
 // stylesheet cannot be broken by a selector grammar it does not model.
 
 import {
@@ -29,8 +29,8 @@ const packageDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const dist = resolve(packageDir, "dist");
 const chunksDir = resolve(dist, "chunks");
 
-/** The workspace root class `SproutSpaces` renders (webui `sprout-workspace`). */
-export const WORKSPACE_ROOT_CLASS = ".sprout-workspace";
+/** The workspace root class `SproutSpaces` renders (webui `sprout-spaces`). */
+export const WORKSPACE_ROOT_CLASS = ".sprout-spaces";
 /** The stable artifact path the package ships and its `exports` map declares. */
 export const STYLESHEET_PATH = "dist/spaces.css";
 
@@ -59,7 +59,7 @@ function firstCompound(selector) {
 /**
  * `*` and bare element selectors (`body`, `html`, `select`, `button`, …) —
  * anything that matches elements a host page also owns. A selector whose first
- * compound is (or begins with) the workspace-root class is already scoped; a
+ * compound is (or begins with) the spaces-root class is already scoped; a
  * selector whose first compound carries any other *class* (`.foo`,
  * `select.styled-select`) is component-scoped and kept.
  *
@@ -99,7 +99,7 @@ function splitSelectorList(list) {
  *   workspace root and the theme guard still applies within it.
  * - A leading `:root.some-class` (e.g. `:root.phone-tab-bar-shown`) keeps the
  *   class on the workspace root.
- * - A leak (bare element/universal) gets the workspace-root descendant prefix.
+ * - A leak (bare element/universal) gets the spaces-root descendant prefix.
  * - Everything else is untouched.
  */
 function scopeSelector(selector) {
@@ -110,7 +110,7 @@ function scopeSelector(selector) {
   }
   // A bare attribute guard (`[data-theme='light'] .x`) is authored for the
   // element that carries the attribute. The workspace root carries it, so the
-  // guard must be compounded onto the root (`.sprout-workspace[data-theme=…]`)
+  // guard must be compounded onto the root (`.sprout-spaces[data-theme=…]`)
   // — a descendant prefix would only match a nested element that has the
   // attribute, which never exists.
   const attributeGuard = s.match(/^\[[^\]]+\]/);

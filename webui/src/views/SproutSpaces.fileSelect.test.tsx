@@ -1,10 +1,10 @@
 /**
- * SproutWorkspace — selecting a file in the assembled tree, mounted the way
+ * SproutSpaces — selecting a file in the assembled tree, mounted the way
  * the package mounts it.
  *
- * Own mode with only the stack `SproutWorkspace` builds itself: no provider
+ * Own mode with only the stack `SproutSpaces` builds itself: no provider
  * around it, the real `FileTree`, the real editor view and pane, and a fetch
- * that answers the workspace file API. Only the chat view (not under test)
+ * that answers the project folder file API. Only the chat view (not under test)
  * and the events transport (no socket in jsdom) are stubbed.
  */
 
@@ -96,13 +96,13 @@ async function clickTreeRow(name: string): Promise<void> {
   });
 }
 
-describe('SproutWorkspace tree selection, as the package mounts it', () => {
+describe('SproutSpaces tree selection, as the package mounts it', () => {
   it('opens a selected file in the arranged editor: the file is read and gets a tab', async () => {
     render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={WITH_EDITOR} />);
     await clickTreeRow('README.md');
 
     await waitFor(() => expect(requested('/api/file')).toContain('/api/file?path=README.md'));
-    const editor = screen.getByTestId('workspace-editor');
+    const editor = screen.getByTestId('spaces-editor');
     await waitFor(() => expect(within(editor).getByRole('tab', { name: /README\.md/ })).toBeInTheDocument());
     await waitFor(() => expect(editor.querySelector('.cm-content')?.textContent).toContain('# widgets readme'));
   });
@@ -110,13 +110,13 @@ describe('SproutWorkspace tree selection, as the package mounts it', () => {
   it('with no editor arranged, shows the editor in the center slot while a file is open', async () => {
     render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={NO_EDITOR} />);
     await screen.findByText('README.md');
-    expect(screen.queryByTestId('workspace-editor')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('spaces-editor')).not.toBeInTheDocument();
 
     await clickTreeRow('README.md');
 
     await waitFor(() => expect(requested('/api/file')).toContain('/api/file?path=README.md'));
     const center = screen.getByTestId('views-slot-center');
-    const editor = within(center).getByTestId('workspace-editor');
+    const editor = within(center).getByTestId('spaces-editor');
     // The editor joins the host's center views; it does not replace them.
     expect(within(center).getByTestId('file-select-chat')).toBeInTheDocument();
     await waitFor(() => expect(editor.querySelector('.cm-content')?.textContent).toContain('# widgets readme'));
@@ -125,7 +125,7 @@ describe('SproutWorkspace tree selection, as the package mounts it', () => {
     await act(async () => {
       fireEvent.click(within(editor).getByRole('button', { name: 'Close README.md' }));
     });
-    await waitFor(() => expect(screen.queryByTestId('workspace-editor')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByTestId('spaces-editor')).not.toBeInTheDocument());
     expect(within(center).getByTestId('file-select-chat')).toBeInTheDocument();
   });
 

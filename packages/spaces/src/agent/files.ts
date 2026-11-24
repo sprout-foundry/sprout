@@ -1,5 +1,5 @@
 /**
- * The agent's workspace files, read and written through the WASM module's
+ * The agent's project folder files, read and written through the WASM module's
  * in-memory filesystem (mirrored to the host's file store, when it gave one).
  */
 

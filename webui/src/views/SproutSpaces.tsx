@@ -22,15 +22,15 @@ import type { ViewsArrangement, ViewKind } from './ViewsLayout';
 import { SpacesAgentPrompts } from './SpacesAgentPrompts';
 import { SpacesChatProvider } from './SpacesChatContext';
 import { SpacesCommandPalette } from './SpacesCommandPalette';
-import { WorkspaceEditorProvider } from './SpacesEditorContext';
+import { SpacesEditorProvider } from './SpacesEditorContext';
 
 /**
- * SproutWorkspace — mount one project's workspace behind a single component.
+ * SproutSpaces — mount one project's spaces behind a single component.
  *
  * A host application that embeds Sprout owns "which project" and "which space"
  * itself; this component takes those two decisions (plus the host contract)
  * and renders the space, so the host does not reach into the web UI's own
- * shell and state to assemble a workspace. It is the composition the app root
+ * shell and state to assemble spaces. It is the composition the app root
  * itself performs today, behind one prop surface.
  *
  * What it composes, outside in:
@@ -39,12 +39,12 @@ import { WorkspaceEditorProvider } from './SpacesEditorContext';
  *   anything rendered below reads it through `useHost()` / the capability
  *   hooks. The host is a prop here, so this component supplies it (rather than
  *   requiring one upstream); a host that already mounted its own
- *   `HostProvider` should mount `SproutWorkspace` inside it and pass
+ *   `HostProvider` should mount `SproutSpaces` inside it and pass
  *   `providers="ambient"` — see below.
  * - `SproutProviders` — the web UI context stack every view and space shell
  *   reads (adapter, events, notifications, buffers, theme, catalogs).
  * - The **space** — resolved through the SP-155 registry
- *   (`resolveWorkspaceMode`), so an unknown or unavailable id degrades exactly
+ *   (`resolveSpace`), so an unknown or unavailable id degrades exactly
  *   as the registry specifies rather than rendering nothing.
  *
  * Two ways to source that stack, chosen by `providers`:
@@ -63,7 +63,7 @@ import { WorkspaceEditorProvider } from './SpacesEditorContext';
  *   second events transport and fork the buffer/notification/theme contexts
  *   the app-level chrome shares with the space. In this mode `host` and
  *   `wasmBase` are ignored (the ambient values win; supplying them warns),
- *   and only the registry space + the workspace root are rendered.
+ *   and only the registry space + the spaces root are rendered.
  *
  * Two ways a space's content is rendered (both load the same resolved space):
  *
@@ -83,37 +83,37 @@ import { WorkspaceEditorProvider } from './SpacesEditorContext';
  *   `ViewsLayout` instead of the space's built-in shell. It is for custom or
  *   minimal surfaces; the arranged views carry none of the space's chrome.
  *
- * `project` is the project this workspace is for. It is a minimal, host-facing
- * description; the web UI models the same thing as a workspace root
- * (`useWorkspace`'s `WorkspaceInfo.project_folder`) on local/daemon hosts and
+ * `project` is the project these spaces are for. It is a minimal, host-facing
+ * description; the web UI models the same thing as a project folder
+ * (`useProjectFolder`'s `ProjectFolderInfo.project_folder`) on local/daemon hosts and
  * as the active repository URL (`services/activeRepo`) on hosted ones, so the
- * two identifying fields below are named after those. It is the workspace's
- * identity today — it is surfaced on the workspace root (`data-project`) and
+ * two identifying fields below are named after those. It is the spaces'
+ * identity today — it is surfaced on the spaces root (`data-project`) and
  * reaches the mounted space once a space shell consumes it.
  */
 
 /**
- * The project a workspace mounts.
+ * The project the spaces mount.
  *
  * A host identifies the project; Sprout does not invent one. `id` is the
- * stable identifier — a workspace root path on a local/daemon host, a
+ * stable identifier — a project folder path on a local/daemon host, a
  * repository URL on a hosted one — mirroring how the web UI already keys a
  * project. `name`, `root` and `repoUrl` are the display/details a host can add
  * when it has them.
  */
 export interface SproutProject {
-  /** Stable identifier for the project (a workspace root path or a repo URL). */
+  /** Stable identifier for the project (a project folder path or a repo URL). */
   id: string;
   /** Human-readable project name for chrome that names it. */
   name?: string;
-  /** Filesystem root of the workspace (local/daemon hosts). */
+  /** The project folder (local/daemon hosts). */
   root?: string;
   /** Repository URL (hosted hosts, where the project is a repository). */
   repoUrl?: string;
 }
 
 export interface SproutSpacesProps {
-  /** The project this workspace is for. */
+  /** The project these spaces are for. */
   project: SproutProject;
   /** The space to mount — one of the SP-155 registered spaces; resolved by the registry. */
   space: SpaceId;
@@ -149,7 +149,7 @@ export interface SproutSpacesProps {
    * Per-kind props for the arranged views, keyed by view kind. They are merged
    * over the props the composition assembles: in own mode the composition
    * supplies a live `chat` (the chat unit's assembled view props), a working
-   * `fileTree` (the workspace file API, selection opening files in the
+   * `fileTree` (the project folder file API, selection opening files in the
    * editor unit, relisting when the in-browser agent or the startup repo
    * import lands), an `editor` rendered from the editor unit (shown at the
    * start of the `center` slot while files are open when the arrangement
@@ -162,8 +162,8 @@ export interface SproutSpacesProps {
    * instead); a host-supplied `editor` renders the bare `Editor` primitive
    * with the host's props. `previewPanel` is the exception: the host's props
    * are merged over the assembled `open`/`onClose`, so passing `open` alone
-   * drives it. `terminal` takes `WorkspaceTerminalViewProps` and
-   * `commandPalette` takes `WorkspaceCommandPaletteProps`; neither has
+   * drives it. `terminal` takes `SpacesTerminalViewProps` and
+   * `commandPalette` takes `SpacesCommandPaletteProps`; neither has
    * assembled props. In ambient mode the caller owns the stack and its
    * units, so these are passed to the layout as-is. Only meaningful with
    * `layout`.
@@ -198,9 +198,9 @@ export interface SproutSpacesProps {
    */
   chatOverrides?: Partial<ChatProps>;
   /**
-   * Whether the workspace mounts its command palette (default `true`). The
+   * Whether the spaces mount their command palette (default `true`). The
    * palette renders nothing until opened — from Ctrl/Cmd+Shift+P while focus
-   * is inside the workspace, or `OPEN_COMMAND_PALETTE_EVENT` — so it costs a
+   * is inside the spaces, or `OPEN_COMMAND_PALETTE_EVENT` — so it costs a
    * host nothing until used. A host with its own palette passes `false`: the
    * palette is removed from the arrangement (including the default overlay)
    * and the composed shell does not mount it, so its shortcut and the header
@@ -208,7 +208,7 @@ export interface SproutSpacesProps {
    */
   commandPalette?: boolean;
   /**
-   * Tools the host implements and offers to the workspace's in-browser agent
+   * Tools the host implements and offers to the spaces' in-browser agent
    * while it is mounted (a board, an account). Re-registered when the tool
    * names change; each call runs the latest handler. A daemon backend's agent
    * runs elsewhere and takes none.
@@ -230,7 +230,7 @@ export interface SproutSpacesProps {
    * in ambient mode, the shell renders against empty defaults.
    */
   shellProps?: SpacesShellProps;
-  /** Whether the workspace root has a mockup (`design/mockup.html`) — the preview panel's context. */
+  /** Whether the project folder has a mockup (`design/mockup.html`) — the preview panel's context. */
   hasMockup?: boolean;
   /**
    * Base URL the host serves the package's `dist/wasm/` WASM assets at. Sprout
@@ -238,9 +238,9 @@ export interface SproutSpacesProps {
    * location-probing default (the shipped local and cloud builds).
    */
   wasmBase?: string | null;
-  /** Additional class on the workspace root. */
+  /** Additional class on the spaces root. */
   className?: string;
-  /** Rendered inside the workspace root, below the mounted space. */
+  /** Rendered inside the spaces root, below the mounted space. */
   children?: ReactNode;
 }
 
@@ -250,7 +250,7 @@ export interface SproutSpacesProps {
  * the socket is — a mount that names a different target takes
  * `resetAndReconnect` rather than a `connect()` that would no-op on the
  * still-open socket, so a re-mount that swaps backends reconnects exactly as
- * an in-place swap does. Null before this page ever wired a workspace.
+ * an in-place swap does. Null before this page ever wired spaces.
  */
 let lastConnectedTarget: string | null = null;
 
@@ -294,11 +294,11 @@ const EMPTY_SHELL_PROPS: SpacesShellProps = {
 };
 
 /**
- * Mount one project's workspace.
+ * Mount one project's spaces.
  *
  * The mounted space is resolved through the registry, so `space` need not be an
  * id this build knows: an unknown or unavailable id resolves to the registry's
- * fallback (per `resolveWorkspaceMode`'s contract) and that resolved space is
+ * fallback (per `resolveSpace`'s contract) and that resolved space is
  * what mounts and what `onSpaceChange` reports.
  */
 export function SproutSpaces({
@@ -340,7 +340,7 @@ export function SproutSpaces({
     }
   }, [resolved.id, onSpaceChange]);
 
-  const rootClass = className ? `sprout-workspace ${className}` : 'sprout-workspace';
+  const rootClass = className ? `sprout-spaces ${className}` : 'sprout-spaces';
 
   // A host that supplies both is confused: `layout` replaces the space's
   // registered shell, so `shellProps` is ignored. Warn once per instance
@@ -368,7 +368,7 @@ export function SproutSpaces({
     );
   }
 
-  // The chat a composed workspace mounts. Only own mode builds it, and only
+  // The chat composed spaces mount. Only own mode builds it, and only
   // when the host does not supply `shellProps` (which carry the host's own
   // chat). Ambient mode must not build a second provider stack (whose
   // transport would double-subscribe the events the caller already routes) —
@@ -378,7 +378,7 @@ export function SproutSpaces({
   // Own mode: register the host for the module-level services (the non-React
   // accessor the client-session fetch and the WebSocket URL read), open the
   // events transport, and honour the host's agent backend — so a host that
-  // mounts a workspace gets working transport with no extra wiring. Ambient
+  // mounts spaces gets working transport with no extra wiring. Ambient
   // mode does none of it: the caller registered its host and owns its
   // transport, so doing it here would fight the caller's registration and
   // double-connect the stream.
@@ -445,7 +445,7 @@ export function SproutSpaces({
         if (cancelled) undo();
         else withdraw = undo;
       })
-      .catch((err) => console.warn('[SproutWorkspace] host tools not offered:', err));
+      .catch((err) => console.warn('[SproutSpaces] host tools not offered:', err));
     return () => {
       cancelled = true;
       withdraw?.();
@@ -473,7 +473,7 @@ export function SproutSpaces({
         loadSessionsOnConnect
         chatSessionsProject={chatSessionsProjectOf(project)}
       >
-        <WorkspaceEditorProvider>
+        <SpacesEditorProvider>
           {layout ? (
             <ArrangedViews arrangement={arranged ?? layout} viewProps={viewProps} chatOverrides={chatOverrides} />
           ) : (
@@ -496,7 +496,7 @@ export function SproutSpaces({
               unit records them, and without this the agent waits on a
               request nothing shows. */}
           <SpacesAgentPrompts />
-        </WorkspaceEditorProvider>
+        </SpacesEditorProvider>
       </SpacesChatProvider>
     );
   }
@@ -520,12 +520,12 @@ export function SproutSpaces({
 }
 
 /**
- * The workspace root element.
+ * The spaces root element.
  *
- * Its class (`sprout-workspace`) is the scope the package's stylesheet targets,
+ * Its class (`sprout-spaces`) is the scope the package's stylesheet targets,
  * so the stylesheet cannot leak onto the host page. The root also carries the
  * resolved `data-theme`, because the stylesheet's light-theme guards were
- * re-scoped from `:root[data-theme=…]` to `.sprout-workspace[data-theme=…]`:
+ * re-scoped from `:root[data-theme=…]` to `.sprout-spaces[data-theme=…]`:
  * without the attribute on the root those guards would never match, so the
  * attribute makes the scoped theme rules live. Read from `useTheme()`, which
  * `SproutProviders` (rendered just above) provides.
@@ -533,9 +533,9 @@ export function SproutSpaces({
  * The root is also where the host's own token overrides land
  * (`host.theme.tokens`, SP-160 §160d): they are written as inline custom
  * properties on this element, so a host theme can only restyle the mounted
- * workspace and never the host page around it. They are applied here rather
+ * spaces and never the host page around it. They are applied here rather
  * than on `documentElement` because this element — not `documentElement` — is
- * scoped to the workspace.
+ * scoped to the spaces.
  */
 function ProjectFolder({
   rootClass,
@@ -548,11 +548,11 @@ function ProjectFolder({
   projectId: string;
   spaceId: SpaceId;
   /**
-   * Whether the workspace owns the document it is mounted in. Own mode does
+   * Whether the spaces own the document they are mounted in. Own mode does
    * (it mounts its own `SproutProviders`, so nothing else in the page is
    * Sprout's), and the app's ambient mode does. A host page's ambient mount
    * does not: its `documentElement` is the host's, so the theme stops at the
-   * workspace root.
+   * spaces root.
    */
   documentScope: boolean;
   children: ReactNode;
@@ -561,10 +561,10 @@ function ProjectFolder({
   const host = useHost();
   const rootRef = useRef<HTMLDivElement>(null);
 
-  // The workspace root is the theme's scope: `ThemeContext` publishes the
+  // The spaces root is the theme's scope: `ThemeContext` publishes the
   // resolved pack but writes nothing to the DOM, because in a host page
   // `documentElement` belongs to the host. The pack's variables land here and
-  // inherit to everything inside the workspace; the host's own token
+  // inherit to everything inside the spaces; the host's own token
   // overrides (`host.theme.tokens`) are layered on top in the same pass, so
   // they always win regardless of which provider re-rendered.
   useEffect(() => {
@@ -584,9 +584,9 @@ function ProjectFolder({
   }, [theme, themePack, host]);
 
   // The app's own chrome (sidebar, terminal, dialogs) is outside the
-  // workspace root and reads the pack through `documentElement`, so the app
+  // spaces root and reads the pack through `documentElement`, so the app
   // marks that element. A host page does not set this: its document is the
-  // host's, and only the workspace is Sprout's.
+  // host's, and only the spaces are Sprout's.
   useEffect(() => {
     if (!documentScope) return;
     const root = document.documentElement;
@@ -603,13 +603,7 @@ function ProjectFolder({
   }, [theme, themePack, documentScope]);
 
   return (
-    <div
-      ref={rootRef}
-      className={rootClass}
-      data-testid="sprout-workspace"
-      data-project={projectId}
-      data-space={spaceId}
-    >
+    <div ref={rootRef} className={rootClass} data-testid="sprout-spaces" data-project={projectId} data-space={spaceId}>
       {children}
     </div>
   );
@@ -634,10 +628,10 @@ function ResolvedSpaceShell({
   return <Shell {...(shellProps ?? EMPTY_SHELL_PROPS)} />;
 }
 
-SproutSpaces.displayName = 'SproutWorkspace';
+SproutSpaces.displayName = 'SproutSpaces';
 
 /**
- * The project a host chat session store keys this workspace's chats by: the
+ * The project a host chat session store keys these spaces' chats by: the
  * repository URL when the host gave one, else the project id. A host store
  * normalizes either form to its project key, so a repo project lands in the
  * same bucket whether the host addresses it by URL or by id.

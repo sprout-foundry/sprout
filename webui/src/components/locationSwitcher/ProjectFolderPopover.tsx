@@ -4,7 +4,7 @@ import { useHostCapabilities } from '../../host';
 import type { SproutInstance } from '../../services/api';
 import { normalizePath } from './pathUtils';
 import type { ProjectFolderDirectory, SwitchingState, SSHFailureState, RemoteProjectFolderContext } from './types';
-import { SpacesInstances } from './ProjectFolderInstances';
+import { ProjectFolderInstances } from './ProjectFolderInstances';
 import { ProjectFolderRecentList } from './ProjectFolderRecentList';
 import { ProjectFolderSSHFavorites } from './ProjectFolderSSHFavorites';
 import { ProjectFolderSuggestionList } from './ProjectFolderSuggestionList';
@@ -50,7 +50,7 @@ export interface ProjectFolderPopoverProps {
 }
 
 export const ProjectFolderPopover: React.FC<ProjectFolderPopoverProps> = ({
-  projectFolder: projectFolder,
+  projectFolder,
   daemonRoot,
   remoteContext,
   switchingState,
@@ -88,7 +88,7 @@ export const ProjectFolderPopover: React.FC<ProjectFolderPopoverProps> = ({
       // role="listbox" was wrong — this popover contains mixed content
       // (error alerts, status text, and several lists), not bare options.
       // Lighthouse flagged the missing required option children. The
-      // inner ProjectFolderRecentList / WorkspaceInstances components carry
+      // inner ProjectFolderRecentList / ProjectFolderInstances components carry
       // their own list semantics. Using role="dialog" with aria-label so
       // assistive tech announces it as a popover.
       role="dialog"
@@ -229,7 +229,7 @@ export const ProjectFolderPopover: React.FC<ProjectFolderPopoverProps> = ({
 
         {/* Instances section */}
         {supportsInstances && !remoteContext ? (
-          <SpacesInstances
+          <ProjectFolderInstances
             instances={instances}
             selectedInstancePID={selectedInstancePID}
             isSwitching={switchingState.isSwitching}

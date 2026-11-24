@@ -40,7 +40,7 @@ export interface GitPanelPropsExtras {
 }
 
 /**
- * Map the git project folder state (`useGitWorkspace`) onto the git section's
+ * Map the git project folder state (`useGitProjectFolder`) onto the git section's
  * props. The app's sidebar and the composed project folder's `git` view both build
  * their panel through it, so the two cannot drift apart.
  */

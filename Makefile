@@ -23,7 +23,7 @@ help:
 	@echo ""
 	@echo "Build Commands:"
 	@echo "  make build            - Build sprout binary only"
-	@echo "  make build-all        - Full build (UI + WASM + binary + workspace package)"
+	@echo "  make build-all        - Full build (UI + WASM + binary + spaces package)"
 	@echo "  make install          - Build and install to ~/.local/bin/sprout"
 	@echo "  make build-fast       - Fast incremental build (skips unchanged UI)"
 	@echo "  make build-version    - Build with version information"
@@ -291,7 +291,7 @@ test-coverage: prepare-grammars
 # when the library is absent (brew install mlx-c enables it).
 BUILD_TAGS := grammar_blobs_external
 
-# Vite bundles for webui + the workspace package hold the full module graph
+# Vite bundles for webui + the spaces package hold the full module graph
 # in one process and OOM at Node's default ~1.2 GB heap on low-memory
 # machines (Termux/Android), crashing `deploy-ui` with
 # "FATAL ERROR: Ineffective mark-compacts near heap limit". 8 GB matches
@@ -658,7 +658,7 @@ build-spaces-package: deploy-ui build-wasm
 # the same edge-driven build-deploy-ui prerequisite, so the default local
 # build still rebuilds only what changed.
 build-all: build-wasm deploy-ui build build-spaces-package
-	@echo "Full build completed: React UI + WASM shell + Go binary + workspace package"
+	@echo "Full build completed: React UI + WASM shell + Go binary + spaces package"
 
 # Generate the shared Go→TS type contract at webui/src/types/generated.ts.
 #

@@ -188,7 +188,7 @@ function useFileIndex(options: UseFileIndexOptions): UseFileIndexResult {
     };
   }, [apiService, isOpen, log]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { allFiles, projectFolder: projectFolder, isLoadingFiles };
+  return { allFiles, projectFolder, isLoadingFiles };
 }
 
 export default useFileIndex;

@@ -14,7 +14,7 @@ export interface ProjectFolderSuggestionListProps {
 }
 
 export const ProjectFolderSuggestionList: React.FC<ProjectFolderSuggestionListProps> = ({
-  projectFolder: projectFolder,
+  projectFolder,
   remoteContext,
   suggestions,
   suggestionsLoading,

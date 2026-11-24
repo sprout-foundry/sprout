@@ -83,7 +83,7 @@ const baseProps = {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('DiffWorkspaceTab save path (Cmd+S through merge view)', () => {
+describe('DiffSpacesTab save path (Cmd+S through merge view)', () => {
   it('dispatches file:editor-saved before the HTTP write, with path and mtime', async () => {
     const sequence: string[] = [];
 

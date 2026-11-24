@@ -1,5 +1,5 @@
 /**
- * SproutWorkspace in own mode without `layout`: the composed space shell —
+ * SproutSpaces in own mode without `layout`: the composed space shell —
  * the app's project sidebar (Files / Search / Source control), the Code
  * shell (editor tabs with the conversation, the status bar, no agent-changes
  * context panel), the docked terminal — against a daemon host, a hosted
@@ -175,17 +175,17 @@ function tabPaths(): string[] {
   return Array.from(document.querySelectorAll('[data-buffer-id]')).map((tab) => tab.getAttribute('title') ?? '');
 }
 
-/** Whether a tab is open for a workspace path (the editor holds it absolute once the root is known). */
+/** Whether a tab is open for a project folder path (the editor holds it absolute once the root is known). */
 function hasTab(path: string): boolean {
   return tabPaths().some((tab) => tab === path || tab.endsWith(`/${path}`));
 }
 
-describe('SproutWorkspace space shell (own mode, no layout)', () => {
+describe('SproutSpaces space shell (own mode, no layout)', () => {
   it('renders the sidebar sections, editor tabs, the conversation, the docked terminal and the status bar', async () => {
     mount(daemonHost());
-    const shell = await screen.findByTestId('workspace-space-shell');
+    const shell = await screen.findByTestId('spaces-space-shell');
 
-    const sidebar = screen.getByTestId('workspace-sidebar');
+    const sidebar = screen.getByTestId('spaces-sidebar');
     const sections = within(sidebar).getByRole('tablist', { name: 'Files' });
     expect(
       within(sections)
@@ -201,7 +201,7 @@ describe('SproutWorkspace space shell (own mode, no layout)', () => {
     expect(screen.getByTestId('shell-test-chat')).toBeInTheDocument();
 
     // The docked PTY terminal, collapsed to its strip.
-    const terminal = screen.getByTestId('workspace-docked-terminal');
+    const terminal = screen.getByTestId('spaces-docked-terminal');
     expect(terminal).toHaveAttribute('data-backend', 'pty');
     expect(terminal).toHaveAttribute('data-expanded', 'false');
     expect(within(terminal).getByTestId('terminal-toggle')).toBeInTheDocument();
@@ -209,12 +209,12 @@ describe('SproutWorkspace space shell (own mode, no layout)', () => {
     // The status bar, with the branch the host's git reports.
     const statusBar = screen.getByTestId('status-bar');
     await waitFor(() => expect(statusBar).toHaveTextContent('main'));
-    expect(within(statusBar).getByTestId('status-bar-workspace')).toHaveTextContent('widgets');
+    expect(within(statusBar).getByTestId('status-bar-project-folder')).toHaveTextContent('widgets');
   });
 
   it('opens a file selected in the tree as an editor tab', async () => {
     mount(daemonHost());
-    const sidebar = await screen.findByTestId('workspace-sidebar');
+    const sidebar = await screen.findByTestId('spaces-sidebar');
     const file = await within(sidebar).findByText('README.md');
     act(() => {
       fireEvent.click(file);
@@ -229,11 +229,11 @@ describe('SproutWorkspace space shell (own mode, no layout)', () => {
     document.addEventListener('editor-goto-line', onGoto);
     try {
       mount(daemonHost());
-      const sidebar = await screen.findByTestId('workspace-sidebar');
+      const sidebar = await screen.findByTestId('spaces-sidebar');
       act(() => {
         fireEvent.click(within(sidebar).getByRole('tab', { name: 'Search' }));
       });
-      const view = within(sidebar).getByTestId('workspace-search');
+      const view = within(sidebar).getByTestId('spaces-search');
       fireEvent.change(within(view).getByPlaceholderText('Search...'), { target: { value: 'needle' } });
       const hit = await within(view).findByText('12', {}, { timeout: 5000 });
       expect(requests().some((url) => url.startsWith('https://host.test/api/search?query=needle'))).toBe(true);
@@ -249,7 +249,7 @@ describe('SproutWorkspace space shell (own mode, no layout)', () => {
 
   it("shows the host's working tree in Source control, and a clear state without a repository", async () => {
     const { unmount } = mount(daemonHost());
-    let sidebar = await screen.findByTestId('workspace-sidebar');
+    let sidebar = await screen.findByTestId('spaces-sidebar');
     act(() => {
       fireEvent.click(within(sidebar).getByRole('tab', { name: 'Source control' }));
     });
@@ -258,16 +258,16 @@ describe('SproutWorkspace space shell (own mode, no layout)', () => {
 
     inRepo = false;
     mount(daemonHost());
-    sidebar = await screen.findByTestId('workspace-sidebar');
+    sidebar = await screen.findByTestId('spaces-sidebar');
     act(() => {
       fireEvent.click(within(sidebar).getByRole('tab', { name: 'Source control' }));
     });
-    expect(await within(sidebar).findByTestId('workspace-git-empty')).toHaveTextContent('No git repository');
+    expect(await within(sidebar).findByTestId('spaces-git-empty')).toHaveTextContent('No git repository');
   });
 
   it('expands and collapses the docked terminal from its strip, its collapse button and toggle_terminal', async () => {
     mount(daemonHost());
-    const terminal = await screen.findByTestId('workspace-docked-terminal');
+    const terminal = await screen.findByTestId('spaces-docked-terminal');
     expect(within(terminal).getByTestId('shell-test-workbench')).toHaveAttribute('data-pty', 'true');
 
     act(() => {
@@ -289,7 +289,7 @@ describe('SproutWorkspace space shell (own mode, no layout)', () => {
 
   it('docks the in-browser terminal as a strip that the sidebar Terminal entry also opens', async () => {
     mount(host({ git: false }, { kind: 'wasm', modelEndpoint: '' }));
-    const terminal = await screen.findByTestId('workspace-docked-terminal');
+    const terminal = await screen.findByTestId('spaces-docked-terminal');
     expect(terminal).toHaveAttribute('data-backend', 'wasm');
     expect(terminal).toHaveAttribute('data-expanded', 'false');
     expect(terminal).toBeVisible();
@@ -297,7 +297,7 @@ describe('SproutWorkspace space shell (own mode, no layout)', () => {
     // Collapsed, no in-browser shell session has started.
     expect(within(terminal).getByTestId('shell-test-workbench')).toHaveAttribute('data-active', 'false');
 
-    const sidebar = screen.getByTestId('workspace-sidebar');
+    const sidebar = screen.getByTestId('spaces-sidebar');
     act(() => {
       fireEvent.click(within(sidebar).getByRole('button', { name: 'Back to project' }));
     });
@@ -315,7 +315,7 @@ describe('SproutWorkspace space shell (own mode, no layout)', () => {
         { kind: 'daemon', apiBaseURL: '/workspace/ws-1/proxy', wsURL: 'wss://host.test/workspace/ws-1/proxy/ws' },
       ),
     );
-    const terminal = await screen.findByTestId('workspace-docked-terminal');
+    const terminal = await screen.findByTestId('spaces-docked-terminal');
     expect(terminal).toHaveAttribute('data-backend', 'pty');
     expect(terminal).toHaveAttribute('data-expanded', 'false');
     expect(within(terminal).getByTestId('shell-test-workbench')).toHaveAttribute('data-pty', 'true');
@@ -328,14 +328,14 @@ describe('SproutWorkspace space shell (own mode, no layout)', () => {
 
   it("leaves out the Code shell's agent-changes context panel and its toggle", async () => {
     mount(host({ git: true, localTerminal: true, agentChanges: true }));
-    await screen.findByTestId('workspace-space-shell');
+    await screen.findByTestId('spaces-space-shell');
     expect(screen.queryByTestId('context-panel')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Toggle context panel' })).not.toBeInTheDocument();
   });
 
   it('hides what has no backend: no Source control, terminal, preview toggle or their commands', async () => {
     mount(host({ git: false, localTerminal: false, preview: false }));
-    const sidebar = await screen.findByTestId('workspace-sidebar');
+    const sidebar = await screen.findByTestId('spaces-sidebar');
     expect(
       within(sidebar)
         .getAllByRole('tab')
@@ -347,7 +347,7 @@ describe('SproutWorkspace space shell (own mode, no layout)', () => {
     expect(within(sidebar).queryByRole('button', { name: 'Source control' })).not.toBeInTheDocument();
     expect(within(sidebar).queryByRole('button', { name: 'Terminal' })).not.toBeInTheDocument();
 
-    expect(screen.queryByTestId('workspace-docked-terminal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('spaces-docked-terminal')).not.toBeInTheDocument();
     expect(screen.queryByTestId('preview-panel-toggle')).not.toBeInTheDocument();
     expect(hasCommandHandler('toggle_terminal')).toBe(false);
     expect(hasCommandHandler('toggle_preview')).toBe(false);
@@ -361,16 +361,16 @@ describe('SproutWorkspace space shell (own mode, no layout)', () => {
 
   it('collapses the sidebar to a rail and back', async () => {
     mount(daemonHost());
-    const sidebar = await screen.findByTestId('workspace-sidebar');
+    const sidebar = await screen.findByTestId('spaces-sidebar');
     act(() => {
       fireEvent.click(within(sidebar).getByRole('button', { name: 'Collapse sidebar' }));
     });
-    expect(screen.queryByTestId('workspace-sidebar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('spaces-sidebar')).not.toBeInTheDocument();
     act(() => {
       fireEvent.click(
-        within(screen.getByTestId('workspace-sidebar-rail')).getByRole('button', { name: 'Expand sidebar' }),
+        within(screen.getByTestId('spaces-sidebar-rail')).getByRole('button', { name: 'Expand sidebar' }),
       );
     });
-    expect(screen.getByTestId('workspace-sidebar')).toBeInTheDocument();
+    expect(screen.getByTestId('spaces-sidebar')).toBeInTheDocument();
   });
 });

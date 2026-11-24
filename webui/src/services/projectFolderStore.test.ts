@@ -40,7 +40,7 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-describe('workspaceStore', () => {
+describe('projectFolderStore', () => {
   beforeEach(() => {
     __resetProjectFolderStoreForTests();
     api.getProjectFolder.mockReset();

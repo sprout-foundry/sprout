@@ -2,7 +2,7 @@
  * SP-160 Acceptance criteria 2 — the local app's project folder composition.
  *
  * The local web UI is the package's own consumer: its shell must render the
- * active space through `SproutWorkspace` (with `localHost` and
+ * active space through `SproutSpaces` (with `localHost` and
  * `SproutProviders`) and reach the composition pieces through the package's
  * public entry points, never through a private module path. Anything the app
  * needs that the entries do not export is a gap in the API — added to the
@@ -11,15 +11,15 @@
  * Two enforcement layers:
  *
  * 1. Structural: the composition site (`components/AppContent.tsx`) renders
- *    `<SproutWorkspace` and imports it, the shell-props type, the mode id and
- *    the workspace-mode hook from the public `views` entry — not the private
+ *    `<SproutSpaces` and imports it, the shell-props type, the mode id and
+ *    the spaces-mode hook from the public `views` entry — not the private
  *    module paths. The app root (`App.tsx`) renders `<SproutProviders` from
  *    the public `providers` entry, and the entry (`index.tsx`) selects
  *    `localHost` from the public `host` entry.
- * 2. Behavioural: `SproutWorkspace` in `providers="ambient"` mode renders the
+ * 2. Behavioural: `SproutSpaces` in `providers="ambient"` mode renders the
  *    registry shell under the *ambient* host and stack (no second events
  *    transport, no shadowing `HostProvider`). That is the mode the app uses,
- *    and `SproutWorkspace.test.tsx` pins it against the real registry.
+ *    and `SproutSpaces.test.tsx` pins it against the real registry.
  *
  * The assertions are source-shape plus one isolated render (a fake composition
  * mirroring the app's), not a render of the whole `App` — `App` boots the
@@ -37,7 +37,7 @@ import { describe, expect, it, vi } from 'vitest';
 // whole app state object / dev-server API. Stub them so the composition test
 // exercises the real registry + real providers without a full app render.
 vi.mock('../spaces/CodeShell', () => ({
-  default: () => <div data-testid="app-workspace-code-shell" />,
+  default: () => <div data-testid="app-spaces-code-shell" />,
 }));
 import { HostProvider, localHost } from '../host';
 import { SproutProviders } from '../providers';
@@ -60,12 +60,12 @@ const PUBLIC_COMPOSITION_IMPORTS: Array<{ entry: string; privates: RegExp[] }> =
   { entry: '../host', privates: [/from '\.\.\/host\/HostProvider'/, /from '\.\.\/host\/localHost'/] },
 ];
 
-describe('the local app composes its workspace through SproutWorkspace', () => {
-  it('renders the space through <SproutWorkspace>, not the registry shell directly', () => {
+describe('the local app composes its workspace through SproutSpaces', () => {
+  it('renders the space through <SproutSpaces>, not the registry shell directly', () => {
     expect(appContentSource).toContain('<SproutSpaces');
     // The app used to resolve and render the registry shell itself
-    // (`const ModeShell = workspaceMode.Shell; … <ModeShell/>`). That assembly
-    // is now SproutWorkspace's, so the app must not render the shell directly.
+    // (`const ModeShell = space.Shell; … <ModeShell/>`). That assembly
+    // is now SproutSpaces's, so the app must not render the shell directly.
     expect(appContentSource).not.toMatch(/<ModeShell\b/);
     expect(appContentSource).not.toMatch(/<\s*space\.Shell\b/);
   });
@@ -102,7 +102,7 @@ describe('the local app imports composition pieces from the public entries', () 
     }
   });
 
-  it('imports SproutWorkspace + its companion types from the views entry', () => {
+  it('imports SproutSpaces + its companion types from the views entry', () => {
     // The views entry is where the composition lives; the app must not reach
     // into `../spaces/registry`, `../spaces/shell` or
     // `../spaces/useSpace` for these — they are re-exported.
@@ -125,9 +125,9 @@ describe('the local app imports composition pieces from the public entries', () 
 });
 
 describe('the app composition renders the registry shell under the ambient localHost', () => {
-  it('mounts the space through SproutWorkspace with a single ambient stack', async () => {
+  it('mounts the space through SproutSpaces with a single ambient stack', async () => {
     // A faithful stand-in for the app's composition: HostProvider(localHost)
-    // + SproutProviders + SproutWorkspace(providers="ambient"), exactly as
+    // + SproutProviders + SproutSpaces(providers="ambient"), exactly as
     // index.tsx + App.tsx + AppContent.tsx nest them.
     render(
       <HostProvider host={localHost}>
@@ -136,11 +136,11 @@ describe('the app composition renders the registry shell under the ambient local
         </SproutProviders>
       </HostProvider>,
     );
-    const projectFolder = await screen.findByTestId('sprout-workspace');
+    const projectFolder = await screen.findByTestId('sprout-spaces');
     expect(projectFolder).toHaveAttribute('data-project', '/workspace/project');
     expect(projectFolder).toHaveAttribute('data-space', 'code');
     // The registry shell renders (the fake composition uses the real registry
-    // and real providers); `SproutWorkspace.test.tsx` asserts the shell identity.
+    // and real providers); `SproutSpaces.test.tsx` asserts the shell identity.
   });
 });
 

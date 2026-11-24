@@ -1,7 +1,7 @@
 /**
  * The composed space shell's sidebar: the standalone app's project sidebar
  * (`ProjectNav`, the layered layout's L2) with its sections drilled into the
- * workspace's own views — Files (the file-tree unit), Search, Source control —
+ * spaces' own views — Files (the file-tree unit), Search, Source control —
  * instead of the app's sidebar panels, which reach app-only state.
  *
  * The host owns which project and which space is mounted, so the app's
@@ -48,11 +48,11 @@ export interface SpacesSidebarProps {
   conversations: ProjectNavConversations;
   /** The git state, or null when the host has no git (no Source control entry). */
   git: ProjectFolderGitState | null;
-  /** The workspace's absolute root, for the tree's absolute-path copies. */
+  /** The project folder's absolute path, for the tree's absolute-path copies. */
   projectFolder?: string;
   /** The path of the file the editor shows, selected in the tree. */
   selectedFile?: string;
-  /** Open a workspace file in the editor, optionally at a line. */
+  /** Open a project folder file in the editor, optionally at a line. */
   onOpenFile: (path: string, line?: number) => void;
   /** Offered as a Terminal entry that opens and closes the docked terminal. */
   onToggleTerminal?: () => void;
@@ -64,7 +64,7 @@ export function SpacesSidebar({
   onCollapsedChange,
   conversations,
   git,
-  projectFolder: projectFolder,
+  projectFolder,
   selectedFile,
   onOpenFile,
   onToggleTerminal,
@@ -144,7 +144,7 @@ export function SpacesSidebar({
 
   if (collapsed) {
     return (
-      <div className="sprout-workspace-shell__rail" data-testid="workspace-sidebar-rail">
+      <div className="sprout-spaces-shell__rail" data-testid="spaces-sidebar-rail">
         <button
           type="button"
           className="project-nav-back"
@@ -159,7 +159,7 @@ export function SpacesSidebar({
   }
 
   return (
-    <div className="sidebar-resize-wrapper sprout-workspace-shell__sidebar" data-testid="workspace-sidebar">
+    <div className="sidebar-resize-wrapper sprout-spaces-shell__sidebar" data-testid="spaces-sidebar">
       <div className={`sidebar layered${isResizing ? ' resizing' : ''}`} style={{ width: `${width}px` }}>
         <ProjectNav
           title={title}
@@ -209,7 +209,7 @@ function SidebarSection({
   id,
   git,
   treeRef,
-  projectFolder: projectFolder,
+  projectFolder,
   selectedFile,
   onOpenFile,
 }: {
@@ -240,7 +240,7 @@ function SidebarSection({
 
 function FilesSection({
   treeRef,
-  projectFolder: projectFolder,
+  projectFolder,
   selectedFile,
   onOpenFile,
 }: {
@@ -255,6 +255,6 @@ function FilesSection({
     },
     [onOpenFile],
   );
-  const tree = useProjectFolderFileTree({ onFileSelect, selectedFile, projectFolder: projectFolder });
+  const tree = useProjectFolderFileTree({ onFileSelect, selectedFile, projectFolder });
   return <SpacesFileTreeView ref={treeRef} {...tree} />;
 }

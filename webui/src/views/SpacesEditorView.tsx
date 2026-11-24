@@ -1,39 +1,39 @@
 import { File, X } from 'lucide-react';
 import EditorPane from '../components/EditorPane';
 import { useEditorManager } from '../contexts/EditorManagerContext';
-import { useWorkspaceEditor } from './SpacesEditorContext';
+import { useSpacesEditor } from './SpacesEditorContext';
 import '../components/EditorTabs.css';
 import './SpacesEditorView.css';
 
-export interface WorkspaceEditorViewProps {
-  /** Additional class on the view root, alongside `sprout-workspace-editor`. */
+export interface SpacesEditorViewProps {
+  /** Additional class on the view root, alongside `sprout-spaces-editor`. */
   className?: string;
 }
 
 /**
  * The assembled editor view: a tab per open file over the active pane's
  * editor. It is what an arranged `editor` view renders in an own-mode
- * `SproutWorkspace` (unless the host supplies `viewProps.editor`, which keeps
+ * `SproutSpaces` (unless the host supplies `viewProps.editor`, which keeps
  * the bare `Editor` primitive). Files reach it through the editor unit
- * (`useWorkspaceEditor`) or the file tree; loading, editing and saving
+ * (`useSpacesEditor`) or the file tree; loading, editing and saving
  * (Cmd/Ctrl+S, auto-save) run through the same buffer plumbing as the
  * standalone app's editor pane.
  *
  * Only file buffers show here. The buffer manager also holds the app's chat,
- * diff and review tabs, which belong to the app's own workspace panes (they
+ * diff and review tabs, which belong to the app's own panes (they
  * take the chat's view props), so they get no tab in this view.
  *
- * Must be mounted under `WorkspaceEditorProvider`.
+ * Must be mounted under `SpacesEditorProvider`.
  */
-export function WorkspaceEditorView({ className }: WorkspaceEditorViewProps): JSX.Element {
-  const { openFiles, activeFile, openFile, closeFile } = useWorkspaceEditor();
+export function SpacesEditorView({ className }: SpacesEditorViewProps): JSX.Element {
+  const { openFiles, activeFile, openFile, closeFile } = useSpacesEditor();
   const { panes, buffers, activePaneId } = useEditorManager();
   const pane = panes.find((p) => p.id === activePaneId) ?? panes[0];
   const paneBuffer = pane?.bufferId ? buffers.get(pane.bufferId) : undefined;
-  const rootClass = className ? `sprout-workspace-editor ${className}` : 'sprout-workspace-editor';
+  const rootClass = className ? `sprout-spaces-editor ${className}` : 'sprout-spaces-editor';
 
   return (
-    <div className={rootClass} data-testid="workspace-editor">
+    <div className={rootClass} data-testid="spaces-editor">
       {openFiles.length > 0 && (
         <div className="editor-tabs compact">
           <div className="tabs-container">
@@ -69,7 +69,7 @@ export function WorkspaceEditorView({ className }: WorkspaceEditorViewProps): JS
           </div>
         </div>
       )}
-      <div className="sprout-workspace-editor__pane">
+      <div className="sprout-spaces-editor__pane">
         {pane && paneBuffer?.kind === 'file' ? (
           <EditorPane paneId={pane.id} />
         ) : (
@@ -87,4 +87,4 @@ export function WorkspaceEditorView({ className }: WorkspaceEditorViewProps): JS
   );
 }
 
-export default WorkspaceEditorView;
+export default SpacesEditorView;

@@ -168,7 +168,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
   buffersRef.current = buffers;
   // Buffers opened but not yet in committed state, by path. A render between
   // two opens can hand buffersRef the committed map without them; the path
-  // lookup in openWorkspaceBuffer checks here too so it never opens a second
+  // lookup in openProjectFolderBuffer checks here too so it never opens a second
   // tab for the same path.
   const pendingOpensRef = useRef(new Map<string, EditorBuffer>());
   for (const [path, pending] of pendingOpensRef.current) {

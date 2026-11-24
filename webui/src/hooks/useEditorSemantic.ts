@@ -57,7 +57,7 @@ export interface UseEditorSemanticReturn {
  * @param bufferRef - Ref to current buffer
  * @param localContent - Current editor content
  * @param isSemanticLanguage - Function to check if language supports semantics
- * @param openWorkspaceBuffer - Function to open a buffer in the project folder
+ * @param openProjectFolderBuffer - Function to open a buffer in the project folder
  */
 export function useEditorSemantic(
   viewRef: React.MutableRefObject<EditorView | null>,

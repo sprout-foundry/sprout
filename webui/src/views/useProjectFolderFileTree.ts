@@ -3,17 +3,17 @@
  *
  * `FileTree` is a props-only primitive: it lists, creates, deletes and renames
  * through the callbacks it is handed. This hook is the one implementation of
- * those callbacks — the standalone app's sidebar and a composed workspace's
+ * those callbacks — the standalone app's sidebar and composed spaces'
  * arranged `fileTree` view both use it — so a host gets a working tree from
  * the same code the app runs.
  *
  * Listing goes to `/api/files` through the adapter-aware `clientFetch` (the
- * daemon on a local host, the in-browser workspace's VFS on a WASM host, the
+ * daemon on a local host, the in-browser project folder's VFS on a WASM host, the
  * host's API base on a hosted one); create/delete/rename go to `/api/create`,
  * `/api/delete` and `/api/rename` on the same fetch. A native shell with the
  * files channel lists through its bridge instead.
  *
- * The hook needs no provider: a host can call it above `SproutWorkspace` to
+ * The hook needs no provider: a host can call it above `SproutSpaces` to
  * build `viewProps.fileTree` itself. Inside the provider stack it also keeps
  * open editor buffers in step with deletes and renames.
  */
@@ -36,19 +36,19 @@ export interface UseProjectFolderFileTreeOptions {
   onFileSelect?: (file: FileInfo) => void;
   /** The selected file path, for a controlled selection. */
   selectedFile?: string;
-  /** The directory the tree roots at; defaults to the workspace root (`.`). */
+  /** The directory the tree roots at; defaults to the project folder root (`.`). */
   rootPath?: string;
-  /** The workspace's absolute root, used when the tree copies absolute paths. */
+  /** The project folder's absolute path, used when the tree copies absolute paths. */
   projectFolder?: string;
   /** The fetch the file calls go through; defaults to the adapter-aware `clientFetch`. */
   fetchFn?: typeof fetch;
 }
 
-/** The workspace file listing as `/api/files` returns it. */
+/** The project folder listing as `/api/files` returns it. */
 interface ApiFileEntry {
   name: string;
   path: string;
-  /** Workspace-relative spelling of `path`; the daemon sends both. */
+  /** Project-folder-relative spelling of `path`; the daemon sends both. */
   relative?: string;
   size?: number;
   modified?: number;
@@ -67,7 +67,7 @@ interface ApiFileEntry {
  * ancestor expansion, selection and reveal all compare against the relative
  * form. The daemon sends both spellings; prefer `relative` and fall back to
  * `path` for adapters (the WASM file bridge) that only send one, stripping a
- * known workspace root when the fallback is absolute.
+ * known project folder when the fallback is absolute.
  */
 function toFileInfo(file: ApiFileEntry, projectFolder?: string): FileInfo {
   const isDir = Boolean(file.isDir ?? file.is_dir);
@@ -100,7 +100,7 @@ function compareEntries(a: FileInfo, b: FileInfo): number {
   return a.name.localeCompare(b.name);
 }
 
-/** List one directory of the workspace. */
+/** List one directory of the project folder. */
 export async function fetchProjectFolderFiles(
   path: string,
   fetchFn: typeof fetch = clientFetch,
@@ -130,9 +130,9 @@ function childPath(parentPath: string, name: string): string {
   return parentPath === '.' ? name : `${parentPath}/${name}`;
 }
 
-/** The `FileTreeProps` for a tree backed by the workspace's file API. */
+/** The `FileTreeProps` for a tree backed by the project folder file API. */
 export function useProjectFolderFileTree(options: UseProjectFolderFileTreeOptions = {}): FileTreeProps {
-  const { onFileSelect, selectedFile, rootPath = '.', projectFolder: projectFolder, fetchFn = clientFetch } = options;
+  const { onFileSelect, selectedFile, rootPath = '.', projectFolder, fetchFn = clientFetch } = options;
   const bufferManager = useOptionalBufferManager();
 
   const onFetchFiles = useCallback(
@@ -172,7 +172,7 @@ export function useProjectFolderFileTree(options: UseProjectFolderFileTreeOption
       onFileSelect: handleFileSelect,
       selectedFile,
       rootPath,
-      projectFolder: projectFolder,
+      projectFolder,
       onFetchFiles,
       onCreateFile,
       onCreateFolder,

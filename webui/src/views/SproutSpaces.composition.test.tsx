@@ -1,5 +1,5 @@
 /**
- * SproutWorkspace — what an own-mode composition assembles beyond the units.
+ * SproutSpaces — what an own-mode composition assembles beyond the units.
  *
  * - `chatOverrides` merge over the assembled chat props (the arranged chat
  *   and the composed space shell's chat) without dropping the live send.
@@ -152,7 +152,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('SproutWorkspace chatOverrides', () => {
+describe('SproutSpaces chatOverrides', () => {
   it('merges host callbacks over the assembled chat on the layout path', async () => {
     const overrides = { onModelClick: vi.fn(), onRestoreSession: vi.fn() };
     render(
@@ -181,7 +181,7 @@ describe('SproutWorkspace chatOverrides', () => {
   });
 });
 
-describe('SproutWorkspace arranged preview panel', () => {
+describe('SproutSpaces arranged preview panel', () => {
   const togglePreview = () =>
     act(() => {
       window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'toggle_preview' } }));
@@ -254,7 +254,7 @@ describe('SproutWorkspace arranged preview panel', () => {
   });
 });
 
-describe('SproutWorkspace space shell in own mode', () => {
+describe('SproutSpaces space shell in own mode', () => {
   it('feeds the Code shell from the chat and editor units without shellProps', async () => {
     render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} chatOverrides={{ onModelClick: vi.fn() }} />);
     const shell = await screen.findByTestId('composition-code-shell');
@@ -295,7 +295,7 @@ describe('SproutWorkspace space shell in own mode', () => {
   });
 });
 
-describe('SproutWorkspace chat session load', () => {
+describe('SproutSpaces chat session load', () => {
   /** Deliver a connection event to every chat reducer subscribed so far. */
   function connect(): void {
     for (const provider of eventsProviders) {

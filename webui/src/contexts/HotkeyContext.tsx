@@ -319,7 +319,7 @@ function HotkeyProviderRoot({ children }: HotkeyProviderProps): JSX.Element {
   const [scopedKeyListeners] = useState(() => new Set<SpacesKeyListener>());
   const handleScopedKeyDown = useCallback(
     (event: ReactKeyboardEvent) => {
-      // Workspace-level key listeners (useWorkspaceKeyDown) see every key
+      // Workspace-level key listeners (useSpacesKeyDown) see every key
       // pressed in the scope; one that handles a key prevents its default.
       for (const listener of scopedKeyListeners) listener(event.nativeEvent);
       if (event.nativeEvent.defaultPrevented) event.stopPropagation();

@@ -1,8 +1,8 @@
 /**
- * SproutWorkspace — the arranged preview panel is safe by default.
+ * SproutSpaces — the arranged preview panel is safe by default.
  *
  * The real `PreviewPanel` (and its status hook) is mounted, so these tests
- * observe the requests it makes through the workspace transport:
+ * observe the requests it makes through the spaces transport:
  *
  * - The default arrangement (which places `previewPanel` in the overlay) on a
  *   host without `capabilities.preview` mounts no panel, registers no
@@ -91,7 +91,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('SproutWorkspace preview panel safety', () => {
+describe('SproutSpaces preview panel safety', () => {
   it('mounts no panel and never requests /api/preview on the default arrangement without the capability', async () => {
     render(<SproutSpaces project={PROJECT} space="code" host={BASE_HOST} layout={{}} />);
     await screen.findByTestId('preview-test-chat');

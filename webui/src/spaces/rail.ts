@@ -1,5 +1,5 @@
 /**
- * Workspace mode rails.
+ * Space rails.
  *
  * Each mode supplies the icon rail rendered while it is active. The shell
  * renders `mode.Rail` and knows nothing about any mode's entries, which is what
@@ -9,7 +9,7 @@
  * Git/Files/Search inside Code). Mode switching lives on the top-left switcher,
  * not here, so a rail never has to know the mode list.
  *
- * Entries that are not workspace-domain features — platform nav, plugins,
+ * Entries that are not spaces-domain features — platform nav, plugins,
  * costs, settings, logs — stay in the shell's shared rail region rather than
  * being duplicated per mode.
  */

@@ -82,7 +82,7 @@ beforeEach(() => {
   setupResponses();
 });
 
-describe('useGitWorkspace — gitActionError lifecycle (stale banner after recovery)', () => {
+describe('useGitProjectFolder — gitActionError lifecycle (stale banner after recovery)', () => {
   it('clears a stale gitActionError when a later status load succeeds', async () => {
     // First attempt(s) fail (e.g. the boot call before the WASM shell is ready).
     // The hook fires several loads on mount, so use a persistent reject —

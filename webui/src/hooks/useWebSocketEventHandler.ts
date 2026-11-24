@@ -365,7 +365,7 @@ export function useWebSocketEventHandler({
           // it on error events — without mirroring, a background chat's
           // cached banner freezes at whatever it showed when the user last
           // viewed the chat: a recovered run keeps showing "chat failed"
-          // forever, and inactive chat panes (WorkspacePane) render the
+          // forever, and inactive chat panes (SpacesPane) render the
           // stale value directly. Ordering is safe: a failed run publishes
           // query_completed BEFORE its terminal error event, so the error
           // wins the race. (session_terminated/session_displaced are not

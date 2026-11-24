@@ -115,7 +115,7 @@ describe('areContextMenuEqual', () => {
       expect(areContextMenuEqual(prev, next)).toBe(false);
     });
 
-    it('different workspaceRoot', () => {
+    it('different projectFolder', () => {
       const prev = makeProps({ contextMenu: makeContextMenuBag({ projectFolder: '/ws1' }) });
       const next = makeProps({ contextMenu: makeContextMenuBag({ projectFolder: '/ws2' }) });
       expect(areContextMenuEqual(prev, next)).toBe(false);
@@ -247,7 +247,7 @@ describe('EditorContextMenu rendering', () => {
     expect(items.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('renders Copy absolute path when workspaceRoot is set', () => {
+  it('renders Copy absolute path when projectFolder is set', () => {
     renderContextMenu({
       contextMenu: makeContextMenuBag({
         contextMenu: { x: 100, y: 200, hasSelection: false },
@@ -260,7 +260,7 @@ describe('EditorContextMenu rendering', () => {
     expect(items.length).toBe(3);
   });
 
-  it('hides Copy absolute path when workspaceRoot is null', () => {
+  it('hides Copy absolute path when projectFolder is null', () => {
     renderContextMenu({
       contextMenu: makeContextMenuBag({
         contextMenu: { x: 100, y: 200, hasSelection: false },

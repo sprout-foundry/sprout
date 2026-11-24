@@ -1,5 +1,5 @@
 /**
- * SproutWorkspace with an in-browser (wasm) agent backend.
+ * SproutSpaces with an in-browser (wasm) agent backend.
  *
  * Such a host may serve no events socket, so "connected" follows the agent
  * wiring instead: not connected while the cloud adapter installs, connected
@@ -115,7 +115,7 @@ afterEach(() => {
   WebSocketService.getInstance().setLocalAgentState('none');
 });
 
-describe('SproutWorkspace with a wasm agent backend', () => {
+describe('SproutSpaces with a wasm agent backend', () => {
   it('loads the provider catalog and the session list once the adapter is installed, not before', async () => {
     render(
       <SproutSpaces project={{ id: 'acme/widgets', root: '' }} space="code" host={wasmHost()} layout={CHAT_ONLY} />,

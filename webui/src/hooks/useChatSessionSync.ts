@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { EditorBuffer } from '../types/editor';
 
-/** Shape of the openWorkspaceBuffer callback from EditorManagerContext */
+/** Shape of the openProjectFolderBuffer callback from EditorManagerContext */
 export type OpenProjectFolderBufferFn = (options: {
   kind: 'chat' | 'diff' | 'review' | 'file' | 'compare';
   path: string;

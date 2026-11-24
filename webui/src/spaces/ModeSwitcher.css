@@ -33,7 +33,7 @@
   box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
-/* A single-mode workspace renders the trigger as a plain mark, not a control. */
+/* A single-mode project folder renders the trigger as a plain mark, not a control. */
 .mode-switcher-trigger--static {
   display: inline-flex;
   align-items: center;

@@ -4,13 +4,13 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { useFileTreeAutoRefresh } from '../hooks/useFileTreeAutoRefresh';
 import { ADAPTER_INSTALLED_EVENT } from '../services/apiAdapter';
 
-/** Fired by the startup repo import once the repository is in the workspace. */
+/** Fired by the startup repo import once the repository is in the project folder. */
 const REPO_IMPORTED_EVENT = 'sprout:repo-imported';
 
 /**
- * The file tree an own-mode `SproutWorkspace` renders for an arranged
+ * The file tree an own-mode `SproutSpaces` renders for an arranged
  * `fileTree`: the `FileTree` primitive with the props it is handed, reloaded
- * when the workspace's contents change underneath it.
+ * when the project folder's contents change underneath it.
  *
  * The tree lists once, on mount. On a host whose agent runs in the browser
  * that first listing can run before the agent's adapter is installed (so it
@@ -20,7 +20,7 @@ const REPO_IMPORTED_EVENT = 'sprout:repo-imported';
  * for the session. It therefore reloads, in place, when an adapter is
  * installed and when the startup repo import completes — and, as the app's
  * sidebar tree does, after the agent, a shell command or a save changes the
- * workspace's files.
+ * spaces' files.
  *
  * The ref is the tree's handle (`refresh`, `revealFile`).
  */

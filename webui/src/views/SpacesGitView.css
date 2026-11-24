@@ -3,7 +3,7 @@
  * slot. Placement beyond that is the host's.
  */
 
-.sprout-workspace-git {
+.sprout-spaces-git {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -12,7 +12,7 @@
   overflow: hidden;
 }
 
-.sprout-workspace-git__panel {
+.sprout-spaces-git__panel {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -20,7 +20,7 @@
   overflow: auto;
 }
 
-.sprout-workspace-git__diff {
+.sprout-spaces-git__diff {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -28,7 +28,7 @@
   border-top: 1px solid var(--border-default);
 }
 
-.sprout-workspace-git__diff-header {
+.sprout-spaces-git__diff-header {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -36,7 +36,7 @@
   background: var(--bg-elevated);
 }
 
-.sprout-workspace-git__diff-title {
+.sprout-spaces-git__diff-title {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -46,13 +46,13 @@
   white-space: nowrap;
 }
 
-.sprout-workspace-git__diff-body {
+.sprout-spaces-git__diff-body {
   flex: 1;
   min-height: 0;
   overflow: auto;
 }
 
-.sprout-workspace-git__empty {
+.sprout-spaces-git__empty {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -64,10 +64,10 @@
   text-align: center;
 }
 
-.sprout-workspace-git__empty-title {
+.sprout-spaces-git__empty-title {
   color: var(--text-primary);
 }
 
-.sprout-workspace-git__empty-detail {
+.sprout-spaces-git__empty-detail {
   font-size: var(--text-sm);
 }

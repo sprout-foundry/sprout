@@ -1,5 +1,5 @@
 /**
- * Active workspace-mode state.
+ * Active space state.
  *
  * Owns which mode the shell is showing and persists it **per instance**: each
  * connected filesystem root remembers which mode the user was in, matching how
@@ -63,20 +63,20 @@ export function persistSpace(id: SpaceId): void {
 }
 
 export interface UseSpaceResult {
-  /** The active mode, resolved against what this workspace offers. */
+  /** The active mode, resolved against what this project folder offers. */
   mode: Space;
   /** Modes to list in the switcher, in order. */
   modes: Space[];
   /** Switch modes. */
   select: (id: SpaceId) => void;
-  /** True when the workspace offers more than one mode. */
+  /** True when the project folder offers more than one mode. */
   canSwitch: boolean;
 }
 
 /**
- * Tracks the active mode for the current workspace.
+ * Tracks the active mode for the current project folder.
  *
- * The requested id is kept in state and always resolved through `resolveWorkspaceMode`,
+ * The requested id is kept in state and always resolved through `resolveSpace`,
  * so a persisted id this build no longer registers degrades to Code instead of
  * rendering a mode with nothing to show.
  */
@@ -90,7 +90,7 @@ export function useSpace(ctx: SpaceContext): UseSpaceResult {
   const modes = useMemo(() => availableModes({ hasMockup }), [hasMockup]);
   const mode = useMemo(() => resolveSpace(requested, { hasMockup }), [requested, hasMockup]);
 
-  // Re-persist when availability changes the resolved mode: a workspace that
+  // Re-persist when availability changes the resolved mode: a project folder that
   // no longer offers the mode should come back on Code, not keep it stale.
   useEffect(() => {
     if (requested !== null && requested !== mode.id) persistSpace(mode.id);

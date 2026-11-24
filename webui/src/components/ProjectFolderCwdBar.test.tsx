@@ -1,5 +1,5 @@
 /**
- * WorkspaceCwdBar.test.tsx — the Files project folder row (cwd select + add-repo).
+ * ProjectFolderCwdBar.test.tsx — the Files project folder row (cwd select + add-repo).
  *
  * Covers the contract that keeps the row non-duplicative and honest:
  *  - one option per cloned repo, plus "Project folder" ('' value)
@@ -68,7 +68,7 @@ describe('buildCwdOptions (pure)', () => {
   });
 });
 
-describe('WorkspaceCwdBar (render)', () => {
+describe('ProjectFolderCwdBar (render)', () => {
   beforeEach(() => {
     (globalThis as unknown as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
     container = document.createElement('div');
@@ -84,18 +84,18 @@ describe('WorkspaceCwdBar (render)', () => {
 
   it('renders the root option selected with no repos and no chip', () => {
     renderBar({});
-    const select = container.querySelector<HTMLSelectElement>('[data-testid="workspace-cwd-select"]')!;
+    const select = container.querySelector<HTMLSelectElement>('[data-testid="project-folder-cwd-select"]')!;
     expect(select).not.toBeNull();
     expect(select.value).toBe('');
     expect(select.options).toHaveLength(1);
     expect(select.options[0].textContent).toBe('Project folder');
     // The deduplication guarantee: no companion chip repeating the value.
-    expect(container.querySelector('[data-testid="workspace-cwd-chip"]')).toBeNull();
+    expect(container.querySelector('[data-testid="project-folder-cwd-chip"]')).toBeNull();
   });
 
   it('shows the selected repo and fires onChange with its path', () => {
     const props = renderBar({ cwd: 'repos/octo/sprout', repos: ['octo/sprout'] });
-    const select = container.querySelector<HTMLSelectElement>('[data-testid="workspace-cwd-select"]')!;
+    const select = container.querySelector<HTMLSelectElement>('[data-testid="project-folder-cwd-select"]')!;
     expect(select.value).toBe('repos/octo/sprout');
     const option = select.selectedOptions[0];
     expect(option.textContent).toBe('octo/sprout');
@@ -112,7 +112,7 @@ describe('WorkspaceCwdBar (render)', () => {
 
   it('keeps a cwd inside a repo selectable via the dynamic option', () => {
     renderBar({ cwd: 'repos/octo/sprout/src', repos: ['octo/sprout'] });
-    const select = container.querySelector<HTMLSelectElement>('[data-testid="workspace-cwd-select"]')!;
+    const select = container.querySelector<HTMLSelectElement>('[data-testid="project-folder-cwd-select"]')!;
     expect(select.value).toBe('repos/octo/sprout/src');
     const labels = Array.from(select.options).map((o) => o.textContent);
     expect(labels).toEqual(['Project folder', 'octo/sprout', 'octo/sprout › src']);
@@ -120,15 +120,15 @@ describe('WorkspaceCwdBar (render)', () => {
 
   it('renders the add-repo button only when a trigger is provided', () => {
     renderBar({});
-    expect(container.querySelector('[data-testid="workspace-add-repo-btn"]')).toBeNull();
+    expect(container.querySelector('[data-testid="project-folder-add-repo-btn"]')).toBeNull();
     renderBar({ onAddRepo: vi.fn(), addRepoDisabled: false });
-    expect(container.querySelector('[data-testid="workspace-add-repo-btn"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="project-folder-add-repo-btn"]')).not.toBeNull();
   });
 
   it('fires onAddRepo on click and respects the disabled state', () => {
     const onAddRepo = vi.fn();
     renderBar({ onAddRepo, addRepoDisabled: true });
-    const btn = container.querySelector<HTMLButtonElement>('[data-testid="workspace-add-repo-btn"]')!;
+    const btn = container.querySelector<HTMLButtonElement>('[data-testid="project-folder-add-repo-btn"]')!;
     expect(btn.disabled).toBe(true);
   });
 });

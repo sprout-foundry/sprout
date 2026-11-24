@@ -307,7 +307,7 @@ export function useProjectFolderData({ isConnected }: UseProjectFolderDataProps)
   }, [switchingState.error]);
 
   return {
-    projectFolder: projectFolder,
+    projectFolder,
     daemonRoot,
     remoteContext,
     switchingState,

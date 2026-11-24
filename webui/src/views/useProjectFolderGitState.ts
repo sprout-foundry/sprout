@@ -1,5 +1,5 @@
 /**
- * The git state a composed space shell runs on: one `useGitWorkspace`
+ * The git state a composed space shell runs on: one `useGitProjectFolder`
  * instance — the hook the standalone app's root runs — feeding the sidebar's
  * Source control section, the status bar's branch, and the chat's diff and
  * review tabs, so the three agree as they do in the app.
@@ -24,11 +24,11 @@ import { useHost } from '../host';
 import { ADAPTER_INSTALLED_EVENT } from '../services/apiAdapter';
 import type { SpacesChatDiffState, SpacesChatReviewProps } from './SpacesChatContext';
 
-/** Fired by the startup repo import once the repository is in the workspace. */
+/** Fired by the startup repo import once the repository is in the project folder. */
 const REPO_IMPORTED_EVENT = 'sprout:repo-imported';
 
 export interface ProjectFolderGitState {
-  /** The git workspace the app's root runs (status, branches, diffs, review). */
+  /** The git state the app's root runs (status, branches, diffs, review). */
   projectFolder: UseGitProjectFolderResult;
   /** The Source control section's props. */
   panel: SidebarGitPanelProps;
@@ -129,5 +129,5 @@ export function useProjectFolderGitState({
     [activeDiffPath, activeDiff, diffMode, isDiffLoading, diffError, handleDiffModeChange],
   );
 
-  return { projectFolder: projectFolder, panel, review, diff };
+  return { projectFolder, panel, review, diff };
 }

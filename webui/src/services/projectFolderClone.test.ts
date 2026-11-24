@@ -20,7 +20,7 @@ afterEach(() => {
   mocks.proxy = undefined;
 });
 
-describe('cloneIntoWorkspace', () => {
+describe('cloneIntoProjectFolder', () => {
   it('clones through browser git into the workspace root in the hosted IDE', async () => {
     mocks.proxy = 'http://localhost/git-proxy';
     mocks.gitClone.mockResolvedValue({ message: 'ok', url: 'x', branch: 'main', files: 3 });
@@ -36,7 +36,7 @@ describe('cloneIntoWorkspace', () => {
     expect(announced).toHaveBeenCalledTimes(1);
   });
 
-  it('uses the workspaceFs clone elsewhere', async () => {
+  it('uses the projectFolderFs clone elsewhere', async () => {
     const cloned = { repo: 'o/n', dir: 'repos/o/n', entries: 1, defaultBranch: 'main' };
     mocks.cloneRepo.mockResolvedValue(cloned);
     await expect(cloneIntoProjectFolder('o/n')).resolves.toBe(cloned);

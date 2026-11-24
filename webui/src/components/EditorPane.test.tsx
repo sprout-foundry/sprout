@@ -1140,7 +1140,7 @@ describe('EditorPane', () => {
       expect(copyToClipboard).toHaveBeenCalledWith('src/components/EditorPane.tsx');
     });
 
-    it('"Copy absolute path" calls copyToClipboard with workspaceRoot + file path', async () => {
+    it('"Copy absolute path" calls copyToClipboard with projectFolder + file path', async () => {
       // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);

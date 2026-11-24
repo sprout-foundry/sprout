@@ -30,7 +30,7 @@ function renderBreadcrumb(
 ) {
   const {
     filePath = 'src/components/App.tsx',
-    projectFolder: projectFolder,
+    projectFolder,
     showFileName,
     onNavigate,
     symbols,

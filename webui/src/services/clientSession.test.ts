@@ -118,7 +118,7 @@ describe('clientSession tab isolation', () => {
     expect(session['sprout.webuiClientId']).toBe(id);
   });
 
-  it('persistTabWorkspacePath and getTabWorkspacePath use localStorage', () => {
+  it('persistTabProjectFolderPath and getTabProjectFolderPath use localStorage', () => {
     const session: Record<string, string> = {};
     const local: Record<string, string> = {};
     const win = createMockWindow(session, local);
@@ -133,7 +133,7 @@ describe('clientSession tab isolation', () => {
     expect(retrieved).toBe('/home/user/project-a');
   });
 
-  it('persistTabWorkspacePath ignores empty paths', () => {
+  it('persistTabProjectFolderPath ignores empty paths', () => {
     const session: Record<string, string> = {};
     const local: Record<string, string> = {};
     const win = createMockWindow(session, local);

@@ -62,7 +62,7 @@ vi.mock('../contexts/EditorManagerContext', () => ({
 }));
 
 vi.mock('./SpacesPane', () => ({
-  default: () => <div data-testid="workspace-pane-mock" />,
+  default: () => <div data-testid="spaces-pane-mock" />,
 }));
 vi.mock('./ChatView', () => ({
   default: () => <div data-testid="chat-view-mock" />,
@@ -76,7 +76,7 @@ vi.mock('@sprout/ui', () => ({
   CommandInput: () => <div className="mock-command-input" />,
 }));
 
-// SP-140-3: EditorWorkspace gates the design route on design/ presence.
+// SP-140-3: EditorSpaces gates the design route on design/ presence.
 import EditorSpaces from './EditorSpaces';
 
 const minimalProps = {
@@ -108,7 +108,7 @@ describe('P4.2 mobile peer-buffer topology', () => {
     const editor = screen.getByTestId('mobile-editor-surface');
     expect(editor).toBeInTheDocument();
     expect(editor.getAttribute('data-active')).toBe('true');
-    expect(screen.getByTestId('workspace-pane-mock')).toBeInTheDocument();
+    expect(screen.getByTestId('spaces-pane-mock')).toBeInTheDocument();
   });
 
   it('chat surface stays MOUNTED (keep-alive) while the editor surface is visible', () => {

@@ -15,10 +15,10 @@ vi.mock('../contexts/SproutAdapterContext', () => ({
   useSproutFetch: () => vi.fn(),
 }));
 
-// WorkspacePane → EditorPane pulls the full CodeMirror editor — too heavy for
+// SpacesPane → EditorPane pulls the full CodeMirror editor — too heavy for
 // this layout/drag test and irrelevant to it.
 vi.mock('./SpacesPane', () => ({
-  default: () => createElement('div', { className: 'mock-workspace-pane' }),
+  default: () => createElement('div', { className: 'mock-spaces-pane' }),
 }));
 
 let container: HTMLDivElement;
@@ -93,7 +93,7 @@ async function settle(n = 4) {
   });
 }
 
-describe('EditorWorkspace split resize', () => {
+describe('EditorSpaces split resize', () => {
   it('dragging the flex-layout resize handle updates pane sizes', async () => {
     act(() => {
       root.render(createElement(EditorManagerProvider, null, createElement(Harness)));

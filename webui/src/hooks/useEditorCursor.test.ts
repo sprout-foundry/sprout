@@ -1055,8 +1055,8 @@ describe('useEditorCursor — EditorView identity across settings-callback re-re
     expect(viewAtMount!.state.selection.main.head).toBe(6);
 
     // Simulate a "settings toggle" re-render where the parent passes a fresh
-    // arrow function for openWorkspaceBuffer. The pre-fix code used
-    // `useRef(openWorkspaceBuffer)` which captured v1 forever; the fix
+    // arrow function for openProjectFolderBuffer. The pre-fix code used
+    // `useRef(openProjectFolderBuffer)` which captured v1 forever; the fix
     // reassigns .current every render.
     harness.reRender(1, openProjectFolderBufferV2);
     expect(harness.cmViewApiRef.current!.view).toBe(viewAtMount);

@@ -8,7 +8,7 @@
  * rather than by buffer id, and the "open this path (at this line)" plumbing
  * the app root used to keep to itself. The standalone app mounts it inside
  * its provider stack and routes its own file opens through it; a composed
- * `SproutWorkspace` mounts it in own mode, so an arranged `editor` view and
+ * `SproutSpaces` mounts it in own mode, so an arranged `editor` view and
  * the file tree share one editor.
  *
  * It must be mounted under `SproutProviders` (it reads the buffer manager).
@@ -21,12 +21,12 @@ import { getProjectFolderPath, resolveEditorFilePath } from '../services/lspClie
 import type { EditorBuffer } from '../types/editor';
 
 /** A file open in the editor. */
-export interface WorkspaceEditorFile {
+export interface SpacesEditorFile {
   /** The buffer id the editor tracks the file under. */
   bufferId: string;
-  /** The file's path as the editor holds it (absolute when the workspace root is known). */
+  /** The file's path as the editor holds it (absolute when the project folder is known). */
   path: string;
-  /** The path relative to the workspace root — the form the file tree uses. */
+  /** The path relative to the project folder — the form the file tree uses. */
   projectFolderPath: string;
   /** The file name. */
   name: string;
@@ -39,11 +39,11 @@ export interface OpenProjectFolderFileOptions {
   line?: number;
 }
 
-export interface WorkspaceEditorValue {
+export interface SpacesEditorValue {
   /** The files open in the editor, in tab order. */
-  openFiles: WorkspaceEditorFile[];
+  openFiles: SpacesEditorFile[];
   /** The file the editor is showing, or null when it shows none. */
-  activeFile: WorkspaceEditorFile | null;
+  activeFile: SpacesEditorFile | null;
   /**
    * Open a file (or switch to it when already open) and make it the active
    * one. Returns the buffer id.
@@ -59,19 +59,19 @@ export interface WorkspaceEditorValue {
   saveFile: (path?: string) => Promise<void>;
 }
 
-/** What an arranged workspace's views take from the editor unit. */
-export interface WorkspaceEditorProps {
+/** What arranged spaces' views take from the editor unit. */
+export interface SpacesEditorProps {
   /** Tree selection wired to the editor: selecting a file opens it; the active file is selected. */
   fileTree: Pick<FileTreeProps, 'onFileSelect' | 'selectedFile'>;
   /** Open a path, optionally at a line — the shape `AgentChangesPanel`'s `onFileClick` takes. */
   onFileClick: (path: string, line?: number) => void;
 }
 
-export interface WorkspaceEditorProviderProps {
+export interface SpacesEditorProviderProps {
   children: ReactNode;
 }
 
-const WorkspaceEditorContext = createContext<WorkspaceEditorValue | null>(null);
+const SpacesEditorContext = createContext<SpacesEditorValue | null>(null);
 
 function fileNameOf(path: string): string {
   return path.split('/').filter(Boolean).pop() || path;
@@ -82,7 +82,7 @@ function extensionOf(name: string): string {
   return index > 0 ? name.slice(index) : '';
 }
 
-/** The tree's form of an editor path: relative to the workspace root when it is known. */
+/** The tree's form of an editor path: relative to the project folder when it is known. */
 function toProjectFolderPath(path: string): string {
   const root = getProjectFolderPath();
   if (!root) return path;
@@ -90,7 +90,7 @@ function toProjectFolderPath(path: string): string {
   return path.startsWith(prefix) ? path.slice(prefix.length) : path;
 }
 
-function toEditorFile(buffer: EditorBuffer): WorkspaceEditorFile {
+function toEditorFile(buffer: EditorBuffer): SpacesEditorFile {
   return {
     bufferId: buffer.id,
     path: buffer.file.path,
@@ -103,7 +103,7 @@ function toEditorFile(buffer: EditorBuffer): WorkspaceEditorFile {
 /** How long to wait for a freshly opened buffer's editor to mount before moving its cursor. */
 const GOTO_LINE_DELAY_MS = 100;
 
-export function WorkspaceEditorProvider({ children }: WorkspaceEditorProviderProps): JSX.Element {
+export function SpacesEditorProvider({ children }: SpacesEditorProviderProps): JSX.Element {
   const { buffers, buffersRef, activeBufferId, openFile: openBuffer, closeBuffer, saveBuffer } = useEditorManager();
 
   const findBufferId = useCallback(
@@ -151,7 +151,7 @@ export function WorkspaceEditorProvider({ children }: WorkspaceEditorProviderPro
   );
 
   const openFiles = useMemo(() => {
-    const files: WorkspaceEditorFile[] = [];
+    const files: SpacesEditorFile[] = [];
     for (const buffer of buffers.values()) {
       if (buffer.kind === 'file') files.push(toEditorFile(buffer));
     }
@@ -163,28 +163,28 @@ export function WorkspaceEditorProvider({ children }: WorkspaceEditorProviderPro
     return buffer?.kind === 'file' ? toEditorFile(buffer) : null;
   }, [buffers, activeBufferId]);
 
-  const value = useMemo<WorkspaceEditorValue>(
+  const value = useMemo<SpacesEditorValue>(
     () => ({ openFiles, activeFile, openFile, closeFile, saveFile }),
     [openFiles, activeFile, openFile, closeFile, saveFile],
   );
 
-  return <WorkspaceEditorContext.Provider value={value}>{children}</WorkspaceEditorContext.Provider>;
+  return <SpacesEditorContext.Provider value={value}>{children}</SpacesEditorContext.Provider>;
 }
 
-WorkspaceEditorProvider.displayName = 'WorkspaceEditorProvider';
+SpacesEditorProvider.displayName = 'SpacesEditorProvider';
 
-/** Read the editor unit. Throws outside a `WorkspaceEditorProvider`. */
-export function useWorkspaceEditor(): WorkspaceEditorValue {
-  const value = useContext(WorkspaceEditorContext);
+/** Read the editor unit. Throws outside a `SpacesEditorProvider`. */
+export function useSpacesEditor(): SpacesEditorValue {
+  const value = useContext(SpacesEditorContext);
   if (!value) {
-    throw new Error('useWorkspaceEditor must be used within a WorkspaceEditorProvider');
+    throw new Error('useSpacesEditor must be used within a SpacesEditorProvider');
   }
   return value;
 }
 
 /** The editor unit's props for the views arranged around it (the file tree, the changes panel). */
-export function useWorkspaceEditorProps(): WorkspaceEditorProps {
-  const { openFile, activeFile } = useWorkspaceEditor();
+export function useSpacesEditorProps(): SpacesEditorProps {
+  const { openFile, activeFile } = useSpacesEditor();
   const onFileSelect = useCallback(
     (file: FileInfo) => {
       if (!file.isDir) openFile(file.path);

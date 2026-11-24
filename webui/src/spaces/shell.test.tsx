@@ -5,7 +5,7 @@
  * The shells own the <main> column and the chrome that belongs to a mode:
  * CodeShell composes the editor chrome (menubar, context panel, status bar)
  * and the preview panel. What is pinned here: Code renders its full chrome,
- * the preview panel shows the mockup when the workspace has one and the dev
+ * the preview panel shows the mockup when the project folder has one and the dev
  * server's output otherwise, and the local/non-local terminal switch still
  * lands in the Code column.
  *
@@ -40,7 +40,7 @@ vi.mock('../components/HeaderBar', () => ({
 }));
 
 vi.mock('../components/EditorSpaces', () => ({
-  default: () => createElement('div', { className: 'mock-editor-workspace' }),
+  default: () => createElement('div', { className: 'mock-editor-spaces' }),
 }));
 
 vi.mock('../components/StatusBar', () => ({
@@ -148,7 +148,7 @@ describe('CodeShell', () => {
 
     expect(container.querySelector('main.main-content')).not.toBeNull();
     expect(container.querySelector('.mock-header-bar')).not.toBeNull();
-    expect(container.querySelector('.mock-editor-workspace')).not.toBeNull();
+    expect(container.querySelector('.mock-editor-spaces')).not.toBeNull();
     expect(container.querySelector('.mock-status-bar')).not.toBeNull();
   });
 

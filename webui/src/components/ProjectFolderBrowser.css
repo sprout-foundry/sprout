@@ -1,7 +1,7 @@
 /* WorkspaceBrowser — inline directory picker inside the workspace gate.
  * All colors/sizes use design tokens from App.css (no raw hex). */
 
-.workspace-browser {
+.project-folder-browser {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -13,14 +13,14 @@
 
 /* ── Path bar ─────────────────────────────────────────────────────── */
 
-.workspace-browser-bar {
+.project-folder-browser-bar {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
 }
 
-.workspace-browser-up {
+.project-folder-browser-up {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -38,23 +38,23 @@
     border-color 0.15s var(--ease-out);
 }
 
-.workspace-browser-up:hover:not(:disabled) {
+.project-folder-browser-up:hover:not(:disabled) {
   background: var(--bg-hover);
   color: var(--text-primary);
   border-color: var(--border-strong);
 }
 
-.workspace-browser-up:disabled {
+.project-folder-browser-up:disabled {
   opacity: 0.4;
   cursor: default;
 }
 
-.workspace-browser-up:focus-visible {
+.project-folder-browser-up:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
-.workspace-browser-path {
+.project-folder-browser-path {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--text-secondary);
@@ -67,7 +67,7 @@
 
 /* ── Directory list ───────────────────────────────────────────────── */
 
-.workspace-browser-list {
+.project-folder-browser-list {
   display: flex;
   flex-direction: column;
   min-height: 140px;
@@ -78,7 +78,7 @@
   background: var(--bg-primary);
 }
 
-.workspace-browser-row {
+.project-folder-browser-row {
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -94,25 +94,25 @@
   transition: background 0.12s var(--ease-out);
 }
 
-.workspace-browser-row:last-child {
+.project-folder-browser-row:last-child {
   border-bottom: none;
 }
 
-.workspace-browser-row:hover {
+.project-folder-browser-row:hover {
   background: var(--bg-hover);
 }
 
-.workspace-browser-row:focus-visible {
+.project-folder-browser-row:focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: -2px;
 }
 
-.workspace-browser-row-icon {
+.project-folder-browser-row-icon {
   color: var(--accent-primary);
   flex-shrink: 0;
 }
 
-.workspace-browser-row-name {
+.project-folder-browser-row-name {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -120,14 +120,14 @@
   white-space: nowrap;
 }
 
-.workspace-browser-row-chevron {
+.project-folder-browser-row-chevron {
   color: var(--text-muted);
   flex-shrink: 0;
 }
 
 /* ── Status (loading / empty / error) ─────────────────────────────── */
 
-.workspace-browser-status {
+.project-folder-browser-status {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -138,15 +138,15 @@
   color: var(--text-tertiary);
 }
 
-.workspace-browser-status--error {
+.project-folder-browser-status--error {
   color: var(--accent-error);
 }
 
-.workspace-browser-spin {
-  animation: workspace-browser-spin 1s linear infinite;
+.project-folder-browser-spin {
+  animation: project-folder-browser-spin 1s linear infinite;
 }
 
-@keyframes workspace-browser-spin {
+@keyframes project-folder-browser-spin {
   to {
     transform: rotate(360deg);
   }
@@ -154,14 +154,14 @@
 
 /* ── Actions ──────────────────────────────────────────────────────── */
 
-.workspace-browser-actions {
+.project-folder-browser-actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-3);
 }
 
-.workspace-browser-cancel,
-.workspace-browser-confirm {
+.project-folder-browser-cancel,
+.project-folder-browser-confirm {
   font-size: var(--text-sm);
   padding: var(--space-3) var(--space-6);
   border-radius: var(--radius-md);
@@ -172,36 +172,36 @@
     border-color 0.15s var(--ease-out);
 }
 
-.workspace-browser-cancel {
+.project-folder-browser-cancel {
   background: transparent;
   border: 1px solid var(--border-default);
   color: var(--text-secondary);
 }
 
-.workspace-browser-cancel:hover {
+.project-folder-browser-cancel:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
   border-color: var(--border-strong);
 }
 
-.workspace-browser-confirm {
+.project-folder-browser-confirm {
   background: var(--accent-primary);
   border: 1px solid var(--accent-primary);
   color: var(--accent-fg);
   font-weight: 500;
 }
 
-.workspace-browser-confirm:hover:not(:disabled) {
+.project-folder-browser-confirm:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent-primary) 85%, var(--bg-primary));
 }
 
-.workspace-browser-confirm:disabled {
+.project-folder-browser-confirm:disabled {
   opacity: 0.5;
   cursor: default;
 }
 
-.workspace-browser-cancel:focus-visible,
-.workspace-browser-confirm:focus-visible {
+.project-folder-browser-cancel:focus-visible,
+.project-folder-browser-confirm:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--accent-primary);
 }

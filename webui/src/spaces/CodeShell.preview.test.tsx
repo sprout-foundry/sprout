@@ -11,7 +11,7 @@
  *   5. The mockup auto-opens the preview the first time one appears.
  *
  * The pane body itself (mockup vs dev server) is covered by
- * WorkspacePane.stats.test.tsx and MockupPanel.test.tsx.
+ * SpacesPane.stats.test.tsx and MockupPanel.test.tsx.
  *
  * Same lightweight-mock pattern as shell.test.tsx: leaf components are mocked
  * to divs, and the editor manager is a fake so the test can observe the
@@ -31,7 +31,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 // ---------------------------------------------------------------------------
 
 vi.mock('../components/EditorSpaces', () => ({
-  default: () => createElement('div', { className: 'mock-editor-workspace' }),
+  default: () => createElement('div', { className: 'mock-editor-spaces' }),
 }));
 vi.mock('../components/StatusBar', () => ({
   default: () => createElement('div', { className: 'mock-status-bar' }),
@@ -69,7 +69,7 @@ const fakeEditor = {
     next.delete(id);
     fakeEditor.buffers = next;
   }),
-  // One pane to start with, like a fresh workspace: the preview must split.
+  // One pane to start with, like a fresh project folder: the preview must split.
   panes: [{ id: 'pane-1' }] as Array<{ id: string }>,
   activePaneId: 'pane-1' as string | null,
   splitPane: vi.fn((paneId: string) => {

@@ -1,19 +1,19 @@
 /**
- * A light theme pack must be COMPLETE for the workspace surfaces it styles.
+ * A light theme pack must be COMPLETE for the spaces surfaces it styles.
  *
- * The bug this pins (TODO.md, "Launch smoke test"): inside a light-theme
- * workspace the chat composer and the change list rendered dark while the
+ * The bug this pins (TODO.md, "Launch smoke test"): inside light-theme
+ * spaces the chat composer and the change list rendered dark while the
  * transcript and the shell were light.
  *
  * Why: the theme packs are the override layer on top of the package's
  * `tokens.css`, whose `:root` block is DARK. In a host-embedded mount the
- * workspace root (`.sprout-workspace`) carries the ACTIVE pack's variables as
+ * spaces root (`.sprout-spaces`) carries the ACTIVE pack's variables as
  * inline custom properties and the host's `documentElement` is never marked
  * `data-theme='light'` (deliberate — the host owns its document). So:
  *
  *   - a token the active (light) pack defines → resolves light (inline wins);
  *   - a token the light pack OMITS → is not set inline, so it inherits the
- *     dark `:root` value → a dark surface inside a light workspace.
+ *     dark `:root` value → a dark surface inside light-themed spaces.
  *
  * The light pack was missing `--bg-hover`, the `--accent-primary-*` family,
  * `--accent-info`, `--color-danger` and the `--color-*-bg` status tints, all of
@@ -24,7 +24,7 @@
  *     token the package defines, i.e. one that would inherit a dark default)
  *     is declared by the light pack. Non-vacuous: the dark pack is the
  *     control, and a simulated omission must be reported;
- *  2. a rendering test — the real components rendered under the real workspace
+ *  2. a rendering test — the real components rendered under the real spaces
  *     root in light mode resolve those tokens to the pack's light values, and
  *     NOT to the package's dark `:root` values.
  */
@@ -56,7 +56,7 @@ vi.mock('../services/localEventsProvider', () => ({
 }));
 
 vi.mock('../spaces/CodeShell', () => ({
-  default: () => <div data-testid="sprout-workspace-code-shell" />,
+  default: () => <div data-testid="sprout-spaces-code-shell" />,
 }));
 vi.mock('../services/api', () => {
   class MockApiService {
@@ -160,8 +160,8 @@ const THEME_NEUTRAL_PREFIXES = [
 /**
  * The COLOR tokens the two components read that the package defines. Those are
  * exactly the ones a light pack must declare: a color token the pack omits is
- * not set inline on the workspace root, so it inherits the package's dark
- * `:root` value and the surface renders dark in a light workspace. A token the
+ * not set inline on the spaces root, so it inherits the package's dark
+ * `:root` value and the surface renders dark in light-themed spaces. A token the
  * package does not define at all has its own `var(…, fallback)` at the use site
  * and is theme-neutral (see `designTokens.test.ts`'s PACKAGE_OVERRIDES).
  */
@@ -185,7 +185,7 @@ describe('the light theme pack is complete for the composer and the change list'
 
   it('declares every color token the composer and the change list read', () => {
     // The regression: these were omitted, so they inherited the package's dark
-    // `:root` values and the surfaces rendered dark in a light workspace.
+    // `:root` values and the surfaces rendered dark in light-themed spaces.
     expect(colorTokensOmittedBy(lightPack!)).toEqual([]);
   });
 
@@ -248,8 +248,8 @@ describe('the light theme pack is complete for the composer and the change list'
 });
 
 /**
- * The rendering half: the real components, under the real workspace root, in a
- * light host theme. The workspace root carries the pack inline; the host's
+ * The rendering half: the real components, under the real spaces root, in a
+ * light host theme. The spaces root carries the pack inline; the host's
  * `documentElement` stays unmarked, exactly as in a host-embedded mount.
  */
 const PROJECT: SproutProject = { id: '/Users/dev/project', name: 'project', root: '/Users/dev/project' };
@@ -272,13 +272,13 @@ function lightHost(): SproutHost {
 }
 
 /**
- * The workspace rendered with the real components in the arranged layout: the
+ * The spaces rendered with the real components in the arranged layout: the
  * chat view (which renders the `@sprout/ui` CommandInput composer) and the
  * change list (`changes` → AgentChangesPanel) in the default arrangement.
  *
  * Mounted the way a host page mounts it — `providers="ambient"`, inside the
  * host's own `HostProvider` + `SproutProviders`. That is the mount the bug
- * report describes: the workspace root is themed, the host's `documentElement`
+ * report describes: the spaces root is themed, the host's `documentElement`
  * is NOT (the host owns its document), so a token the light pack omits falls
  * through to the package's dark `:root` default.
  */
@@ -305,7 +305,7 @@ beforeEach(() => {
   document.documentElement.removeAttribute('data-theme');
   document.documentElement.removeAttribute('data-theme-pack');
   // A host page registers its host with the module-level accessor before it
-  // mounts the workspace; `ThemeContext` reads the active host (not the React
+  // mounts the spaces; `ThemeContext` reads the active host (not the React
   // context) to resolve the mode, so the ambient mount below needs it.
   const restore = registerActiveHost(lightHost());
   registeredHostRestore = restore;
@@ -334,11 +334,11 @@ afterEach(() => {
 
 describe('a light workspace resolves the composer and the change list light', () => {
   it('leaves the host documentElement unmarked (the host owns its document)', async () => {
-    // The premise of the whole bug: in a host-embedded mount the workspace root
+    // The premise of the whole bug: in a host-embedded mount the spaces root
     // is themed and the host's `documentElement` is not, so an omitted pack
     // token falls through to the package's dark `:root` default.
     render(<ArrangedSpaces />);
-    const projectFolder = await screen.findByTestId('sprout-workspace');
+    const projectFolder = await screen.findByTestId('sprout-spaces');
     await waitFor(() => expect(projectFolder.getAttribute('data-theme')).toBe('light'));
     expect(document.documentElement.getAttribute('data-theme')).toBeNull();
   });
@@ -346,7 +346,7 @@ describe('a light workspace resolves the composer and the change list light', ()
   it('resolves the change list tokens to the light pack, not the package dark defaults', async () => {
     render(<ArrangedSpaces />);
     const panel = await waitFor(() => {
-      const found = document.querySelector('.sprout-workspace .agent-changes-panel');
+      const found = document.querySelector('.sprout-spaces .agent-changes-panel');
       expect(found).not.toBeNull();
       return found as HTMLElement;
     });
@@ -362,7 +362,7 @@ describe('a light workspace resolves the composer and the change list light', ()
     // The composer is @sprout/ui's CommandInput, rendered by the chat view.
     render(<ArrangedSpaces />);
     const composer = await waitFor(() => {
-      const found = document.querySelector('.sprout-workspace .command-input');
+      const found = document.querySelector('.sprout-spaces .command-input');
       expect(found).not.toBeNull();
       return found as HTMLElement;
     });
@@ -383,7 +383,7 @@ describe('a light workspace resolves the composer and the change list light', ()
     try {
       render(<ArrangedSpaces />);
       const composer = await waitFor(() => {
-        const found = document.querySelector('.sprout-workspace .command-input');
+        const found = document.querySelector('.sprout-spaces .command-input');
         expect(found).not.toBeNull();
         return found as HTMLElement;
       });

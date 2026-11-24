@@ -1,8 +1,8 @@
 /**
  * `createAgent` — Sprout's in-browser agent without Sprout's interface.
  *
- * The agent is the WASM module's full agent loop (the same one the workspace
- * runs in the browser): a persona, the host's tools, model calls through the
+ * The agent is the WASM module's full agent loop (the same one the spaces
+ * run in the browser): a persona, the host's tools, model calls through the
  * host's chat endpoint, files in the module's filesystem. The host renders
  * the conversation from the events.
  */
@@ -211,7 +211,7 @@ export async function createAgent(options: CreateAgentOptions): Promise<Headless
       if (disposed) throw new Error('Sprout agent: disposed');
       if (running) throw new Error('Sprout agent: a turn is already running');
       if (!input.trim() && !options?.images?.length) throw new Error('Sprout agent: empty message');
-      // Images go into the workspace's pasted-images folder, named in the
+      // Images go into the project folder's pasted-images folder, named in the
       // message the way a paste is; the agent sends them to a model that
       // takes images, and has another read them with its image tool.
       const message = options?.images?.length ? withImages(bridge, chatId, input, options.images) : input;
@@ -310,7 +310,7 @@ export function imageExtension(data: Uint8Array): string {
 let imageCounter = 0;
 
 /**
- * Writes a message's images into the workspace and names them in the
+ * Writes a message's images into the project folder and names them in the
  * message as the agent reads a pasted image (`[image: <path>]`).
  */
 export function withImages(bridge: SproutWasmBridge, chatId: string, message: string, images: MessageImage[]): string {

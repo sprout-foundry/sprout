@@ -1,13 +1,13 @@
 /**
- * The own-mode content of `SproutWorkspace`: what renders inside the chat and
- * editor units the composition mounts. Split from `SproutWorkspace` because
+ * The own-mode content of `SproutSpaces`: what renders inside the chat and
+ * editor units the composition mounts. Split from `SproutSpaces` because
  * both paths read the units' state, which only exists below their providers.
  *
  * - `ArrangedViews` — the `layout` path: the arranged views with their
  *   assembled props.
  *
  * The space-shell path without host `shellProps` (`ComposedSpaceShell`)
- * lives in `SproutWorkspaceSpaceShell`.
+ * lives in `ComposedSpaceShell`.
  *
  * Internal to the composition; not re-exported from the views entry.
  */
@@ -20,17 +20,17 @@ import { HostContext } from '../host';
 import { useSproutSpacesViewProps } from './SproutSpacesChat';
 import { resolveViewsArrangement, SLOT_ORDER, ViewsLayout } from './ViewsLayout';
 import type { ViewComponent, ViewsArrangement, ViewKind } from './ViewsLayout';
-import { useWorkspaceEditor } from './SpacesEditorContext';
-import { WorkspaceEditorView } from './SpacesEditorView';
+import { useSpacesEditor } from './SpacesEditorContext';
+import { SpacesEditorView } from './SpacesEditorView';
 import { SpacesFileTreeView } from './SpacesFileTreeView';
 
 /**
  * The components the composition renders in place of the primitives: the
- * assembled editor for `editor`, and a tree that reloads when the workspace's
+ * assembled editor for `editor`, and a tree that reloads when the spaces'
  * contents arrive for `fileTree`.
  */
 const ASSEMBLED_VIEW_COMPONENTS: Partial<Record<ViewKind, ViewComponent>> = {
-  editor: WorkspaceEditorView,
+  editor: SpacesEditorView,
   fileTree: SpacesFileTreeView,
 };
 
@@ -39,7 +39,7 @@ const HOST_EDITOR_VIEW_COMPONENTS: Partial<Record<ViewKind, ViewComponent>> = { 
 
 /** The editor shown in the center slot while files are open in an arrangement without one. */
 function OnDemandEditorView(): JSX.Element {
-  return <WorkspaceEditorView className="sprout-workspace-editor--on-demand" />;
+  return <SpacesEditorView className="sprout-spaces-editor--on-demand" />;
 }
 
 const ON_DEMAND_EDITOR_VIEW_COMPONENTS: Partial<Record<ViewKind, ViewComponent>> = {
@@ -92,7 +92,7 @@ export function ArrangedViews({
   );
   const props = useSproutSpacesViewProps(viewProps, { chatOverrides, previewPanel });
   useOpenInEditorRequests();
-  const { openFiles } = useWorkspaceEditor();
+  const { openFiles } = useSpacesEditor();
   const onDemandEditor = !viewProps?.editor && !arrangementHas(resolved, 'editor') && openFiles.length > 0;
   const shown = useMemo(
     () => (onDemandEditor ? { ...resolved, center: ['editor' as const, ...(resolved.center ?? [])] } : resolved),
@@ -130,13 +130,13 @@ export function usePreviewGatedArrangement(arrangement?: ViewsArrangement): View
 }
 
 /**
- * Open the files the rest of the workspace asks for — file links in the chat
+ * Open the files the rest of the spaces ask for — file links in the chat
  * and tool output dispatch `sprout:open-in-editor` — in the editor unit. The
  * standalone app handles the same event at its root (where it also switches
- * the view), so only the composed workspace listens here.
+ * the view), so only the composed spaces listen here.
  */
 export function useOpenInEditorRequests(onOpen?: () => void): void {
-  const { openFile } = useWorkspaceEditor();
+  const { openFile } = useSpacesEditor();
   const onOpenRef = useRef(onOpen);
   onOpenRef.current = onOpen;
   useEffect(() => {

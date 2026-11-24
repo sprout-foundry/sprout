@@ -1,5 +1,5 @@
 /**
- * The agent's blocking prompts as a workspace unit.
+ * The agent's blocking prompts as a spaces unit.
  *
  * While a turn runs, the agent can stop and wait for the user: a tool call
  * that needs approval (including the shell-command elevation choices and the
@@ -12,13 +12,13 @@
  *
  * Anything that mounts the chat unit must mount this with it, or a request
  * leaves the agent waiting with nothing on screen: Sprout's app root and an
- * own-mode `SproutWorkspace` both do. A host that composes its own stack
- * (`WorkspaceChatProvider` by hand) mounts it inside that provider.
+ * own-mode `SproutSpaces` both do. A host that composes its own stack
+ * (`SpacesChatProvider` by hand) mounts it inside that provider.
  *
  * The dialogs answer through the events transport the provider stack carries
  * (`useEvents()`), and the edit and shell approvals through their REST
  * decision endpoints on the active backend. The dialogs are fixed overlays,
- * so they open over the workspace wherever it is mounted, and a request from
+ * so they open over the spaces wherever they are mounted, and a request from
  * a chat other than the one on screen is shown too, named by the origin
  * notice.
  */
@@ -40,7 +40,7 @@ import { useSpacesChat } from './SpacesChatContext';
 /**
  * Render the agent's pending prompts from the chat unit's state. Renders
  * nothing while no request is pending. Must be mounted inside
- * `WorkspaceChatProvider` and the provider stack (`SproutProviders`).
+ * `SpacesChatProvider` and the provider stack (`SproutProviders`).
  */
 export function SpacesAgentPrompts(): JSX.Element {
   const events = useEvents();

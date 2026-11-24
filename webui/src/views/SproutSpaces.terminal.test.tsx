@@ -2,7 +2,7 @@
  * The composed space shell's terminal (own mode, no `layout`), per host.
  *
  * - A host with `capabilities.localTerminal` and no in-browser agent gets the
- *   PTY terminal docked under the shell, which Ctrl+` inside the workspace
+ *   PTY terminal docked under the shell, which Ctrl+` inside the spaces
  *   toggles; so does a host whose agent is a daemon, whose PTY it is.
  * - A host whose agent runs in the browser gets the docked terminal on the
  *   in-browser shell, even if it also declares `localTerminal`.
@@ -122,7 +122,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('SproutWorkspace composed shell terminal', () => {
+describe('SproutSpaces composed shell terminal', () => {
   it('docks the PTY terminal for a local-terminal host and toggles it with Ctrl+` inside the workspace', async () => {
     setActiveHost(ptyHost());
     renderSpaces(ptyHost());

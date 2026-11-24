@@ -1,5 +1,5 @@
 /**
- * useWorkspaceFileTree — the file tree's callbacks against the workspace
+ * useProjectFolderFileTree — the file tree's callbacks against the project folder
  * file API. Pins the listing shape (mapping and order), the create / delete /
  * rename calls, the selection pass-through, and that it needs no provider.
  */
@@ -23,7 +23,7 @@ function fakeFetch(body: unknown = { message: 'success' }) {
   return { fn, fetchFn: fn as unknown as typeof fetch };
 }
 
-describe('fetchWorkspaceFiles', () => {
+describe('fetchProjectFolderFiles', () => {
   it('lists a directory: directories first, ignored entries last, then by name', async () => {
     const { fn, fetchFn } = fakeFetch({
       message: 'success',
@@ -62,7 +62,7 @@ describe('fetchWorkspaceFiles', () => {
   });
 
   // The daemon sends BOTH spellings: `path` is absolute, `relative` is the
-  // workspace-relative one. The tree composes its node paths from rootPath +
+  // project-folder-relative one. The tree composes its node paths from rootPath +
   // child names, so a node carrying the absolute path matches nothing it
   // builds — ancestor expansion, selection and reveal all compare against
   // the relative form. Fixtures using a relative `path` hid this.
@@ -103,7 +103,7 @@ describe('fetchWorkspaceFiles', () => {
   });
 });
 
-describe('useWorkspaceFileTree', () => {
+describe('useProjectFolderFileTree', () => {
   it('returns FileTreeProps rooted at the workspace root by default, without a provider', async () => {
     const { fn, fetchFn } = fakeFetch({ message: 'success', files: [] });
     const { result } = renderHook(() => useProjectFolderFileTree({ fetchFn }));

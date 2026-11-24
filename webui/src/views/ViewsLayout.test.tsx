@@ -10,7 +10,7 @@
  * mocked to stubs that render a distinct testid and echo a received prop —
  * they need the webui context stack, which these tests do not provide (and
  * which is not the unit under test). FileTree is stubbed within a partial
- * @sprout/ui mock for the same reason (it fetches a workspace tree when
+ * @sprout/ui mock for the same reason (it fetches a project folder tree when
  * rendered bare). PreviewPane is NOT mocked: it is presentational and
  * renders without providers, so one case pins a real view in a slot.
  */

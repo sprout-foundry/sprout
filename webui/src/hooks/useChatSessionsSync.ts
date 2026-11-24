@@ -100,7 +100,7 @@ export const useChatSessionsSync = ({
       if (closedChatIdsRef.current.has(session.id)) return;
 
       // Every chat gets its own path-keyed tab; the active chat's opens
-      // focused, the rest in the background. openWorkspaceBuffer dedupes by
+      // focused, the rest in the background. openProjectFolderBuffer dedupes by
       // path, so a tab another handler (New chat) opened moments ago is
       // reused rather than doubled.
       const isActive = session.id === activeChatId;

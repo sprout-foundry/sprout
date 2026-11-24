@@ -474,7 +474,7 @@ describe('useCMView — bug-class regression', () => {
     expect(api.getContent()).toBe('new content');
   });
 
-  it('LSP-style callback fired after mount reads latest openWorkspaceBufferRef', () => {
+  it('LSP-style callback fired after mount reads latest openProjectFolderBufferRef', () => {
     const openProjectFolderBufferV1 = vi.fn();
     const openProjectFolderBufferV2 = vi.fn();
     const openProjectFolderBufferRef: React.MutableRefObject<any> = {

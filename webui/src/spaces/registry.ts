@@ -1,8 +1,8 @@
 /**
- * Workspace modes.
+ * Spaces.
  *
- * A *workspace* in sprout is the filesystem root the user connected to (see
- * `LocationSwitcher`, where "workspace" means the folder path). A **mode** is
+ * A *project folder* in sprout is the filesystem root the user connected to
+ * (see `LocationSwitcher`). A **mode** is
  * what the user is doing with that root: writing code, and later shipping.
  *
  * Modes are peers. Each supplies its own rail and content surface, and entering
@@ -48,7 +48,7 @@ export type SpaceId = 'code' | (string & {}); // eslint-disable-line @typescript
 
 export interface SpaceContext {
   /**
-   * Whether the workspace root has a mockup (`design/mockup.html`). The Code
+   * Whether the project folder has a mockup (`design/mockup.html`). The Code
    * shell's preview panel reads it to decide between the mockup and a dev
    * server's output; it never gates a mode.
    */
@@ -66,9 +66,9 @@ export interface Space {
    */
   hint: string;
   /**
-   * Whether this mode is offered for the current workspace. An unavailable mode
+   * Whether this mode is offered for the current project folder. An unavailable mode
    * is not listed at all (rather than listed-and-disabled): offering a surface
-   * the workspace cannot render is how a user ends up staring at an empty view
+   * the project folder cannot render is how a user ends up staring at an empty view
    * wondering what broke.
    */
   available: (ctx: SpaceContext) => boolean;
@@ -96,28 +96,28 @@ export interface SpaceRegistration {
   icon: LucideIcon;
   /** Switcher secondary text. Optional — defaults to empty. */
   hint?: string;
-  /** Whether this mode is offered for the given workspace. */
+  /** Whether this mode is offered for the given project folder. */
   available: (ctx: SpaceContext) => boolean;
   /** The mode's shell component. */
   Shell: ComponentType<SpacesShellProps>;
 }
 
-/** Removes the registration created by `registerWorkspaceMode`. */
+/** Removes the registration created by `registerSpace`. */
 export type UnregisterSpace = () => void;
 
 /**
- * The built-in baseline: the mode every workspace offers, and the last resort
- * when a configured default points at a mode the workspace does not. New
+ * The built-in baseline: the mode every project folder offers, and the last resort
+ * when a configured default points at a mode the project folder does not. New
  * sessions start in the configured default — see
- * `defaultWorkspaceMode` — which falls back to this when unset or unusable.
+ * `defaultSpace` — which falls back to this when unset or unusable.
  */
 export const BUILTIN_DEFAULT_WORKSPACE_MODE: SpaceId = 'code';
 
 /**
  * The built-in mode ids. These entries are part of the app's contract with
- * every workspace: the mode switcher, the default-mode resolution, and the
+ * every project folder: the mode switcher, the default-mode resolution, and the
  * surfaces themselves all assume Code exists. It is protected in both
- * directions — `registerWorkspaceMode` refuses to register over it, and the
+ * directions — `registerSpace` refuses to register over it, and the
  * returned disposers refuse to remove it — so no embedding shell or
  * accidental double-registration can leave the app without a usable mode.
  */
@@ -132,14 +132,14 @@ export function isBuiltinSpaceId(id: SpaceId): boolean {
  * Mode registry.
  *
  * The live array registrations write into: the built-ins register into it at
- * module load (below), and `registerWorkspaceMode` appends or replaces
+ * module load (below), and `registerSpace` appends or replaces
  * entries. Consumers import this one array, so a registration made after
  * import is visible to them — the switcher lists whatever the registry holds.
  *
  * Registration is a boot-time concern: the built-ins register at module load
  * and an embedding shell is expected to register its modes before the shell
  * renders. A later `availableModes` call reflects the registry as it stands;
- * a memoized mode list (e.g. inside `useWorkspaceMode`) picks up
+ * a memoized mode list (e.g. inside `useSpace`) picks up
  * late registrations on its next recomputation, not mid-render.
  */
 export const WORKSPACE_MODES: Space[] = [];
@@ -218,7 +218,7 @@ registerMode({
   Shell: CodeShell,
 });
 
-/** Modes offered for a workspace, in switcher order. */
+/** Modes offered for a project folder, in switcher order. */
 export function availableModes(ctx: SpaceContext): Space[] {
   return WORKSPACE_MODES.filter((mode) => mode.available(ctx));
 }
@@ -227,7 +227,7 @@ export function availableModes(ctx: SpaceContext): Space[] {
  * The default mode new sessions start in.
  *
  * The configured default (`config/defaultSpace.ts`) when it names a mode this
- * workspace actually offers — a mode that is unregistered, or registered but
+ * project folder actually offers — a mode that is unregistered, or registered but
  * unavailable here, degrades to the built-in baseline rather than stranding a
  * session in a mode with nothing to render. With no configuration, this is the
  * built-in default.
@@ -245,7 +245,7 @@ export function resolveSpace(id: SpaceId | null | undefined, ctx: SpaceContext):
   const modes = availableModes(ctx);
   const match = modes.find((mode) => mode.id === id);
   if (match) return match;
-  // No match: degrade to the configured default if the workspace offers it,
+  // No match: degrade to the configured default if the project folder offers it,
   // then the built-in baseline, then any registered built-in, then the first
   // mode at all — each rung guarantees a usable mode rather than `undefined`
   // (whose return type forbids and whose dereference would crash the shell).
@@ -255,9 +255,9 @@ export function resolveSpace(id: SpaceId | null | undefined, ctx: SpaceContext):
   if (builtin) return builtin;
   if (modes[0]) return modes[0];
   // Unreachable while the built-ins are registered and always available, but
-  // the module must still return a WorkspaceMode, so recreate the built-in
+  // the module must still return a Space, so recreate the built-in
   // default's definition rather than return nothing.
   const code = WORKSPACE_MODES.find((mode) => mode.id === BUILTIN_DEFAULT_WORKSPACE_MODE);
   if (code) return code;
-  throw new Error('resolveWorkspaceMode: no workspace modes registered');
+  throw new Error('resolveSpace: no spaces registered');
 }

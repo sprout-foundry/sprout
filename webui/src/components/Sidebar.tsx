@@ -567,9 +567,9 @@ function Sidebar({
                       sidebarCollapsed={effectiveSidebarCollapsed}
                     />
                   ) : (
-                    <div className="sidebar-static-workspace" title={staticProjectFolderLabel}>
-                      <FolderOpen size={14} className="sidebar-static-workspace-icon" />
-                      <span className="sidebar-static-workspace-label">{staticProjectFolderLabel}</span>
+                    <div className="sidebar-static-project-folder" title={staticProjectFolderLabel}>
+                      <FolderOpen size={14} className="sidebar-static-project-folder-icon" />
+                      <span className="sidebar-static-project-folder-label">{staticProjectFolderLabel}</span>
                     </div>
                   )}
                 </>

@@ -5,7 +5,7 @@ import { getSSHProxyContext } from '../services/clientSession';
 import { refreshProjectFolder, useProjectFolderState } from '../services/projectFolderStore';
 import { debugLog } from '../utils/log';
 
-interface SpacesBarProps {
+interface ProjectFolderBarProps {
   isConnected: boolean;
   /** Hide on mobile when sidebar is open */
   isMobileMenuOpen?: boolean;
@@ -17,17 +17,21 @@ interface BarState {
   isRemote: boolean;
 }
 
-const SpacesBar: React.FC<SpacesBarProps> = ({ isConnected, isMobileMenuOpen = false, isMobile = false }) => {
-  const { projectFolderSwitching: projectFolderSwitching } = useHostCapabilities();
+const ProjectFolderBar: React.FC<ProjectFolderBarProps> = ({
+  isConnected,
+  isMobileMenuOpen = false,
+  isMobile = false,
+}) => {
+  const { projectFolderSwitching } = useHostCapabilities();
   // A hosted build (bearer auth) runs on the host's machines, so "Local" would
   // be wrong; it names a host only when attached to a remote one.
   const hosted = useHost().transport.authMode === 'bearer';
-  const { projectFolder: projectFolder } = useProjectFolderState();
+  const { projectFolder } = useProjectFolderState();
 
   useEffect(() => {
     if (!isConnected) return;
     refreshProjectFolder().catch((err) => {
-      debugLog('[WorkspaceBar] Failed to fetch workspace:', err);
+      debugLog('[ProjectFolderBar] Failed to fetch workspace:', err);
     });
   }, [isConnected]);
 
@@ -50,17 +54,17 @@ const SpacesBar: React.FC<SpacesBarProps> = ({ isConnected, isMobileMenuOpen = f
   if ((!projectFolderSwitching || hosted) && !bar.isRemote) return null;
 
   return (
-    <div className={`workspace-bar${bar.isRemote ? ' workspace-bar--remote' : ''}`}>
-      <span className="workspace-bar-host" aria-hidden="true">
+    <div className={`project-folder-bar${bar.isRemote ? ' project-folder-bar--remote' : ''}`}>
+      <span className="project-folder-bar-host" aria-hidden="true">
         {bar.isRemote ? (
-          <Server size={11} className="workspace-bar-icon workspace-bar-icon--remote" />
+          <Server size={11} className="project-folder-bar-icon project-folder-bar-icon--remote" />
         ) : (
-          <Monitor size={11} className="workspace-bar-icon" />
+          <Monitor size={11} className="project-folder-bar-icon" />
         )}
-        <span className="workspace-bar-host-name">{bar.hostAlias ?? 'Local'}</span>
+        <span className="project-folder-bar-host-name">{bar.hostAlias ?? 'Local'}</span>
       </span>
     </div>
   );
 };
 
-export default SpacesBar;
+export default ProjectFolderBar;

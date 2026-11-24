@@ -100,7 +100,7 @@ export let supportsGit: boolean = capability('supportsGit', true, true);
 export let supportsChat: boolean = capability('supportsChat', true, true);
 
 /**
- * Workspace switching support - local mode only (single virtual FS in cloud).
+ * Project folder switching support - local mode only (single virtual FS in cloud).
  */
 export let supportsProjectFolderSwitching: boolean = capability('supportsProjectFolderSwitching', true, false);
 

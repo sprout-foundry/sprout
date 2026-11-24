@@ -1,5 +1,5 @@
 /**
- * workspaceSync — keeps this tab's project folder and the server's in agreement.
+ * projectFolderSync — keeps this tab's project folder and the server's in agreement.
  *
  * The tab remembers the project folder it is on (getTabProjectFolderPath). The server
  * can lose that choice: the client context is evicted after idle, or the
@@ -58,7 +58,7 @@ export async function reconcileTabProjectFolder(
       announceProjectFolderChanged(restoredRoot, response.daemon_root);
       return 'restored';
     } catch (err) {
-      debugLog('[workspaceSync] failed to restore the tab workspace:', err);
+      debugLog('[projectFolderSync] failed to restore the tab workspace:', err);
       return 'unresolved';
     }
   }
@@ -114,7 +114,7 @@ export function installProjectFolderReconnectSync(source: ReconnectSource, canSw
       const projectFolder = await refreshProjectFolder({ force: true });
       await reconcileTabProjectFolder(projectFolder, canSwitch);
     } catch (err) {
-      debugLog('[workspaceSync] reconnect workspace sync failed:', err);
+      debugLog('[projectFolderSync] reconnect workspace sync failed:', err);
     } finally {
       syncing = false;
     }

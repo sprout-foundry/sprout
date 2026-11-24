@@ -295,8 +295,8 @@ function ReviewSpacesTab({
   );
 
   return (
-    <div className="chat-shell review-workspace-shell">
-      <div className="chat-main review-workspace-main">
+    <div className="chat-shell review-spaces-shell">
+      <div className="chat-main review-spaces-main">
         <div className="chat-container">
           {!review && !isReviewLoading && !reviewError ? (
             <div className="welcome-message">

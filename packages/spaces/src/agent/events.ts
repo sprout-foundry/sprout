@@ -10,7 +10,7 @@ export interface RawAgentEvent {
   data?: Record<string, unknown>;
 }
 
-/** Context the translation needs: how to read a file and where the workspace is. */
+/** Context the translation needs: how to read a file and where the project folder is. */
 export interface EventMappingContext {
   projectFolder: string;
   readFile(path: string): string | null;
@@ -25,7 +25,7 @@ const DROPPED = new Set(['query_started', 'query_completed', 'input_required']);
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
 
-/** Workspace-relative form of a path the agent reported. */
+/** Project-folder-relative form of a path the agent reported. */
 export function toProjectFolderPath(path: string, root: string): string {
   const normalizedRoot = root.replace(/\/+$/, '') || '/';
   if (normalizedRoot !== '/' && path.startsWith(`${normalizedRoot}/`)) {
@@ -35,7 +35,7 @@ export function toProjectFolderPath(path: string, root: string): string {
   return path.replace(/^\.\//, '');
 }
 
-/** Absolute path in the agent's filesystem for a workspace-relative one. */
+/** Absolute path in the agent's filesystem for a project-folder-relative one. */
 export function toAbsolutePath(path: string, root: string): string {
   if (path.startsWith('/')) return path;
   const base = root.replace(/\/+$/, '');
@@ -174,7 +174,7 @@ export function mapAgentEvent(raw: RawAgentEvent, ctx: EventMappingContext): Age
 }
 
 /**
- * Tools that write a workspace file, and where the path comes from: an
+ * Tools that write a project folder file, and where the path comes from: an
  * argument, or a fixed file (the plan tools write `.sprout/plan.json`, plus
  * its rendered `.sprout/plan.md`).
  */

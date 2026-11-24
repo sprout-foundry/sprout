@@ -67,7 +67,7 @@ const baseProps = {
   onDiffModeChange: () => {},
 };
 
-describe('DiffWorkspaceTab default view seeding', () => {
+describe('DiffSpacesTab default view seeding', () => {
   it('defaults to text view for working-tree diffs', () => {
     render(<DiffSpacesTab {...baseProps} fullOriginal="a\n" fullModified="b\n" canSave />);
     expect(container!.querySelector('[data-testid="diff-surface"]')).not.toBeNull();

@@ -1,13 +1,13 @@
 /**
- * The agent's blocking prompts in a composed workspace (own mode).
+ * The agent's blocking prompts in composed spaces (own mode).
  *
  * A daemon agent that needs the user — a tool approval, an `ask_user`
  * question, a per-part shell approval — sends a request over the events
- * stream and waits. The composed workspace must show the dialog and send the
+ * stream and waits. The composed spaces must show the dialog and send the
  * answer back, in the full space shell and in an arranged layout alike;
  * otherwise the turn hangs with nothing on screen.
  *
- * The events transport is a fake that records what the workspace sends; the
+ * The events transport is a fake that records what the spaces send; the
  * provider stack, the chat unit and the dialogs are the real ones. The Code
  * shell and the chat view are stubbed, as they play no part in the prompts.
  */
@@ -56,7 +56,7 @@ import { SproutSpaces } from './SproutSpaces';
 const PROJECT = { id: 'acme/widgets', repoUrl: 'https://github.com/acme/widgets' };
 const CHAT_ONLY = { left: [], center: ['chat'], right: [], overlay: [] };
 
-/** The platform once a project's workspace runs: bearer transport, daemon behind the proxy. */
+/** The platform once a project's dev space runs: bearer transport, daemon behind the proxy. */
 function platformDaemonHost(): SproutHost {
   const base = headlessHost();
   return {
@@ -73,7 +73,7 @@ function platformDaemonHost(): SproutHost {
 
 let fetchMock: ReturnType<typeof vi.fn>;
 
-/** Deliver an event to everything subscribed to the workspace's transport. */
+/** Deliver an event to everything subscribed to the spaces' transport. */
 function emit(event: { type: string; data: Record<string, unknown> }): void {
   act(() => {
     for (const provider of providers) {
@@ -132,7 +132,7 @@ afterEach(() => {
   setActiveHost(headlessHost());
 });
 
-describe('SproutWorkspace agent prompts', () => {
+describe('SproutSpaces agent prompts', () => {
   it('shows a tool approval in the full space shell and sends the answer back', async () => {
     render(<SproutSpaces project={PROJECT} space="code" host={platformDaemonHost()} />);
     await screen.findByTestId('prompts-code-shell');

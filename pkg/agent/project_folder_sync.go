@@ -63,7 +63,7 @@ var (
 	ErrWriteHasUnsyncedEdits = errors.New("write refused: user has unsynced edits to this file")
 )
 
-// patchSeqNum assigns unique sequence numbers to workspace_patch events.
+// patchSeqNum assigns unique sequence numbers to project_folder_patch events.
 var patchSeqNum int64
 
 // nextPatchSeq returns the next patch sequence number. Thread-safe via

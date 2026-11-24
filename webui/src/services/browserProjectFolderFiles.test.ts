@@ -134,7 +134,7 @@ function makeHost(overrides: { browserFiles?: boolean; agent?: HostAgentBackend 
 
 const enc = new TextEncoder();
 
-describe('listBrowserWorkspaceFiles', () => {
+describe('listBrowserProjectFolderFiles', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGitCheckoutDiffers.mockResolvedValue(new Map());
@@ -192,7 +192,7 @@ describe('listBrowserWorkspaceFiles', () => {
   });
 });
 
-describe('readBrowserWorkspaceFile', () => {
+describe('readBrowserProjectFolderFile', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetAdapter.mockReturnValue(null);

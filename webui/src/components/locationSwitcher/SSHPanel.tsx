@@ -41,7 +41,7 @@ export interface SSHPanelProps {
 
 export const SSHPanel: React.FC<SSHPanelProps> = ({
   remoteContext,
-  projectFolder: projectFolder,
+  projectFolder,
   switchingState,
   sshFailure,
   showExpiredSessionRecovery,

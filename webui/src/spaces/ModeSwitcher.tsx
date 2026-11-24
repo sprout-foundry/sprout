@@ -1,11 +1,9 @@
 /**
  * Mode switcher — the dropdown on the shell's top-left brand button.
  *
- * Lists the modes available for the current workspace and switches between
- * them. Deliberately unnamed in the UI: the header already has a "workspace"
- * picker (the folder path, in `LocationSwitcher`), so a second thing called
- * "workspace" here would be ambiguous. The dropdown shows the mode labels and
- * a light header; that is enough to read.
+ * Lists the modes available for the current project folder and switches between
+ * them. Deliberately unnamed in the UI: the dropdown shows the mode labels
+ * and a light header; that is enough to read.
  *
  * Follows the disclosure pattern the rest of the shell's popovers use: a
  * trigger with `aria-expanded`, a listbox, click-outside and Escape to close,
@@ -45,7 +43,7 @@ function positionMenu(triggerRect: DOMRect, menuWidth: number, menuHeight: numbe
 }
 
 export interface ModeSwitcherProps {
-  /** Modes offered for the current workspace, in switcher order. */
+  /** Modes offered for the current project folder, in switcher order. */
   modes: Space[];
   /** The active mode's id. */
   activeId: SpaceId;
@@ -119,7 +117,7 @@ export default function ModeSwitcher({ modes, activeId, onSelect, trigger, trigg
     };
   }, [open]);
 
-  // A single-mode workspace has nothing to switch to; render the trigger
+  // A single-mode project folder has nothing to switch to; render the trigger
   // without the menu affordance rather than an empty popover.
   if (modes.length <= 1) {
     return (

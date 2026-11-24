@@ -6,7 +6,7 @@
  * Everything that reads as "the editor app" lives here.
  *
  * The preview is an editor buffer (`kind: 'preview'`), opened in the
- * rightmost pane so it sits beside the code. A workspace with a mockup shows
+ * rightmost pane so it sits beside the code. A project folder with a mockup shows
  * the mockup (`draw_mockup`'s `design/mockup.html`); otherwise the dev
  * server's output.
  */
@@ -31,7 +31,7 @@ import { repoSlug } from '../host/repoName';
 
 const PREVIEW_TOGGLE_COMMANDS: readonly string[] = [TOGGLE_PREVIEW_COMMAND];
 
-/** The preview buffer's key — one preview per workspace, reopened not duplicated. */
+/** The preview buffer's key — one preview per project folder, reopened not duplicated. */
 const PREVIEW_BUFFER_PATH = '__workspace/preview';
 
 const CodeShell: React.FC<SpacesShellProps> = ({
@@ -55,7 +55,7 @@ const CodeShell: React.FC<SpacesShellProps> = ({
 }) => {
   const { agentChanges: supportsAgentChanges } = useHostCapabilities();
   // host.8: the hosted build names the project by its repo slug (the browser
-  // IDE has no local workspace root); the hosted transport authenticates
+  // IDE has no local project folder); the hosted transport authenticates
   // against a platform (authMode 'bearer') — the former isCloud branch.
   const hosted = useHost().transport.authMode === 'bearer';
   const {
@@ -73,7 +73,7 @@ const CodeShell: React.FC<SpacesShellProps> = ({
     diffState,
   } = chat;
 
-  // The preview panel: the workspace's mockup when it has one, otherwise the
+  // The preview panel: the project folder's mockup when it has one, otherwise the
   // The preview is an editor buffer, not a docked panel: it opens in the
   // rightmost pane so it sits beside the code, and the split-screen model
   // gives it resize, tabs and close for free. A shell mounted outside an
@@ -188,7 +188,7 @@ const CodeShell: React.FC<SpacesShellProps> = ({
   const showPreview = previewAvailable && previewToggleHandled;
   const showMockup = mockup.present;
   // Open the preview the first time a mockup appears (a draw just landed, or
-  // the workspace was opened with one): that is the thing the person is
+  // the project folder was opened with one): that is the thing the person is
   // reacting to, so it is placed beside the code rather than summoned. It
   // opens without activating — a draw landing must not pull focus off the
   // code the person is writing from it.

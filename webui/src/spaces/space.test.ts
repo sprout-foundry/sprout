@@ -1,7 +1,7 @@
 /**
- * Workspace-mode registry, registration, and persistence.
+ * Space registry, registration, and persistence.
  *
- * The registry decides which modes a workspace offers; `registerWorkspaceMode`
+ * The registry decides which modes a project folder offers; `registerSpace`
  * is the one public way to put a mode in there (the built-ins
  * go through the same write path at load, minus the public API's built-in
  * guard); and the resolution rule decides what a stale persisted id degrades
@@ -70,7 +70,7 @@ describe('registry', () => {
   });
 });
 
-describe('registerWorkspaceMode', () => {
+describe('registerSpace', () => {
   let container: HTMLDivElement;
   let root: Root;
   /**
@@ -280,7 +280,7 @@ describe('registerWorkspaceMode', () => {
   });
 });
 
-describe('resolveWorkspaceMode', () => {
+describe('resolveSpace', () => {
   it('returns the requested mode when available', () => {
     expect(resolveSpace('code', withMockup).id).toBe('code');
     expect(resolveSpace('code', withoutMockup).id).toBe('code');
@@ -337,7 +337,7 @@ describe('resolveWorkspaceMode', () => {
       expect(resolveSpace(null, withMockup).id).toBe(BUILTIN_DEFAULT_WORKSPACE_MODE);
 
       WORKSPACE_MODES.splice(0, WORKSPACE_MODES.length);
-      expect(() => resolveSpace(null, withMockup)).toThrow(/no workspace modes registered/);
+      expect(() => resolveSpace(null, withMockup)).toThrow(/no spaces registered/);
     } finally {
       WORKSPACE_MODES.splice(0, WORKSPACE_MODES.length, ...snapshot);
       WORKSPACE_MODES.forEach((mode, index) => (mode.available = originals[index]));
@@ -389,7 +389,7 @@ describe('mode persistence', () => {
   });
 });
 
-describe('useWorkspaceMode contract', () => {
+describe('useSpace contract', () => {
   // The hook is exercised through its returned shape rather than a render,
   // since the shell integration is covered by the e2e specs.
   it('exports a callable hook', () => {

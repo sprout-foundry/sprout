@@ -254,7 +254,7 @@ export interface FileContentChangedData {
   size?: number;
 }
 
-/** File-change notification payload from WorkspacePatchEvent (no content — see WorkspacePatchEvent). */
+/** File-change notification payload from ProjectFolderPatchEvent (no content — see ProjectFolderPatchEvent). */
 export interface ProjectFolderPatchData {
   file_path: string;
   /**

@@ -1,6 +1,6 @@
 /* Workspace Picker Styles */
 
-.workspace-picker {
+.project-folder-picker {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -13,7 +13,7 @@
 
 /* ── Header ───────────────────────────────────────────────────────── */
 
-.workspace-picker-header {
+.project-folder-picker-header {
   display: flex;
   align-items: flex-start;
   gap: 16px;
@@ -24,7 +24,7 @@
   margin-bottom: 24px;
 }
 
-.workspace-picker-header-icon {
+.project-folder-picker-header-icon {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -36,20 +36,20 @@
   flex-shrink: 0;
 }
 
-.workspace-picker-title {
+.project-folder-picker-title {
   font-size: 18px;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 6px;
 }
 
-.workspace-picker-subtitle {
+.project-folder-picker-subtitle {
   font-size: 13px;
   color: var(--text-secondary);
   margin: 0;
 }
 
-.workspace-picker-path {
+.project-folder-picker-path {
   font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
   color: var(--text-primary);
   background: var(--editor-pane-bg);
@@ -60,11 +60,11 @@
 
 /* ── Sections ─────────────────────────────────────────────────────── */
 
-.workspace-picker-section {
+.project-folder-picker-section {
   margin-bottom: 24px;
 }
 
-.workspace-picker-section-title {
+.project-folder-picker-section-title {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
@@ -74,7 +74,7 @@
   gap: 8px;
 }
 
-.workspace-picker-empty {
+.project-folder-picker-empty {
   font-size: 13px;
   color: var(--text-secondary);
   font-style: italic;
@@ -84,7 +84,7 @@
 
 /* ── Switch failure banner ───────────────────────────────────────── */
 
-.workspace-picker-error {
+.project-folder-picker-error {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -99,17 +99,17 @@
   word-break: break-word;
 }
 
-.workspace-picker-error svg {
+.project-folder-picker-error svg {
   flex-shrink: 0;
   margin-top: 2px;
 }
 
 /* Spinner on an in-flight project row (lucide Loader2). */
-.workspace-picker .spin {
-  animation: workspace-picker-spin 1s linear infinite;
+.project-folder-picker .spin {
+  animation: project-folder-picker-spin 1s linear infinite;
 }
 
-@keyframes workspace-picker-spin {
+@keyframes project-folder-picker-spin {
   from {
     transform: rotate(0deg);
   }
@@ -120,7 +120,7 @@
 
 /* ── Project Rows ─────────────────────────────────────────────────── */
 
-.workspace-picker-row {
+.project-folder-picker-row {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -141,37 +141,37 @@
   appearance: none;
 }
 
-.workspace-picker-row:last-child {
+.project-folder-picker-row:last-child {
   margin-bottom: 0;
 }
 
-.workspace-picker-row:hover {
+.project-folder-picker-row:hover {
   border-color: var(--accent-color);
   background: var(--editor-pane-bg-secondary-hover);
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
-.workspace-picker-row:active {
+.project-folder-picker-row:active {
   transform: translateY(0);
   box-shadow: none;
 }
 
-.workspace-picker-row:focus {
+.project-folder-picker-row:focus {
   outline: 2px solid var(--accent-color);
   outline-offset: 2px;
 }
 
-.workspace-picker-row:focus:not(:focus-visible) {
+.project-folder-picker-row:focus:not(:focus-visible) {
   outline: none;
 }
 
-.workspace-picker-row:focus-visible {
+.project-folder-picker-row:focus-visible {
   outline: 2px solid var(--accent-color);
   outline-offset: 2px;
 }
 
-.workspace-picker-row-icon {
+.project-folder-picker-row-icon {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -179,7 +179,7 @@
   flex-shrink: 0;
 }
 
-.workspace-picker-row-info {
+.project-folder-picker-row-info {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -187,7 +187,7 @@
   min-width: 0;
 }
 
-.workspace-picker-row-name {
+.project-folder-picker-row-name {
   font-size: 14px;
   font-weight: 500;
   color: var(--text-primary);
@@ -196,7 +196,7 @@
   text-overflow: ellipsis;
 }
 
-.workspace-picker-row-time {
+.project-folder-picker-row-time {
   font-size: 12px;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -205,14 +205,14 @@
 
 /* ── Marker Badges ────────────────────────────────────────────────── */
 
-.workspace-picker-markers {
+.project-folder-picker-markers {
   display: inline-flex;
   gap: 4px;
   flex-wrap: nowrap;
   flex-shrink: 0;
 }
 
-.workspace-picker-marker {
+.project-folder-picker-marker {
   display: inline-block;
   padding: 2px 7px;
   font-size: 11px;
@@ -226,7 +226,7 @@
 
 /* ── Browse Button ────────────────────────────────────────────────── */
 
-.workspace-picker-browse-btn {
+.project-folder-picker-browse-btn {
   margin-top: auto;
   padding: 10px 20px;
   background: var(--editor-pane-bg-secondary);
@@ -246,70 +246,70 @@
   appearance: none;
 }
 
-.workspace-picker-browse-btn:hover {
+.project-folder-picker-browse-btn:hover {
   border-color: var(--accent-color);
   background: var(--editor-pane-bg-secondary-hover);
 }
 
-.workspace-picker-browse-btn:active {
+.project-folder-picker-browse-btn:active {
   transform: translateY(1px);
 }
 
-.workspace-picker-browse-btn:focus {
+.project-folder-picker-browse-btn:focus {
   outline: 2px solid var(--accent-color);
   outline-offset: 2px;
 }
 
-.workspace-picker-browse-btn:focus:not(:focus-visible) {
+.project-folder-picker-browse-btn:focus:not(:focus-visible) {
   outline: none;
 }
 
-.workspace-picker-browse-btn:focus-visible {
+.project-folder-picker-browse-btn:focus-visible {
   outline: 2px solid var(--accent-color);
   outline-offset: 2px;
 }
 
 /* ── Scrollbar ────────────────────────────────────────────────────── */
 
-.workspace-picker::-webkit-scrollbar {
+.project-folder-picker::-webkit-scrollbar {
   width: 8px;
 }
 
-.workspace-picker::-webkit-scrollbar-track {
+.project-folder-picker::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.workspace-picker::-webkit-scrollbar-thumb {
+.project-folder-picker::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
   border-radius: var(--radius-sm);
 }
 
-.workspace-picker::-webkit-scrollbar-thumb:hover {
+.project-folder-picker::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-thumb-hover);
 }
 
 /* ── Responsive ───────────────────────────────────────────────────── */
 
 @media (max-width: 768px) {
-  .workspace-picker {
+  .project-folder-picker {
     padding: 16px;
   }
 
-  .workspace-picker-header {
+  .project-folder-picker-header {
     flex-direction: column;
     gap: 12px;
     padding: 16px;
   }
 
-  .workspace-picker-row {
+  .project-folder-picker-row {
     flex-wrap: wrap;
   }
 
-  .workspace-picker-row-info {
+  .project-folder-picker-row-info {
     flex-wrap: wrap;
   }
 
-  .workspace-picker-row-time {
+  .project-folder-picker-row-time {
     width: 100%;
     padding-left: 30px;
     margin-top: 4px;

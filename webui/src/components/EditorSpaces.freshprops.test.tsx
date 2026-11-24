@@ -57,7 +57,7 @@ const baseProps = {
   handleOutlineNavigateToSymbol: vi.fn(),
 };
 
-describe('EditorWorkspace pane props', () => {
+describe('EditorSpaces pane props', () => {
   it('hands the pane the chat state of the current render, not the previous one', () => {
     const { rerender } = render(<EditorSpaces {...baseProps} chatProps={{ messages: [] }} />);
     expect(screen.getByTestId('pane-messages').textContent).toBe('0');

@@ -1,5 +1,5 @@
 /**
- * WorkspaceTerminalView — the arranged terminal, per host backend.
+ * SpacesTerminalView — the arranged terminal, per host backend.
  *
  * - A host whose agent runs in the browser gets a terminal on the WASM shell:
  *   a typed command runs in the shell and its output is written back.
@@ -156,7 +156,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('resolveWorkspaceTerminalBackend', () => {
+describe('resolveSpacesTerminalBackend', () => {
   it('prefers the in-browser shell, then a declared local terminal, else none', () => {
     expect(resolveSpacesTerminalBackend(wasmHost())).toBe('wasm');
     expect(resolveSpacesTerminalBackend(ptyHost())).toBe('pty');
@@ -164,10 +164,10 @@ describe('resolveWorkspaceTerminalBackend', () => {
   });
 });
 
-describe('WorkspaceTerminalView', () => {
+describe('SpacesTerminalView', () => {
   it('runs commands in the WASM shell for an in-browser-agent host and shows their output', async () => {
     renderView(wasmHost());
-    expect(screen.getByTestId('workspace-terminal')).toHaveAttribute('data-backend', 'wasm');
+    expect(screen.getByTestId('spaces-terminal')).toHaveAttribute('data-backend', 'wasm');
     await waitFor(() => expect(xterm.instances).toHaveLength(1));
     const term = xterm.instances[0];
     await waitFor(() => expect(term.written.join('')).toContain('user@sprout-wasm'));
@@ -184,7 +184,7 @@ describe('WorkspaceTerminalView', () => {
 
   it('attaches to the PTY through the host transport for a host with a local terminal', async () => {
     renderView(ptyHost());
-    expect(screen.getByTestId('workspace-terminal')).toHaveAttribute('data-backend', 'pty');
+    expect(screen.getByTestId('spaces-terminal')).toHaveAttribute('data-backend', 'pty');
 
     await waitFor(() => expect(RecordingWebSocket.urls).toHaveLength(1));
     expect(RecordingWebSocket.urls[0].startsWith('wss://backend.example/sprout/terminal')).toBe(true);
@@ -198,10 +198,10 @@ describe('WorkspaceTerminalView', () => {
 
   it('shows the unavailable state when the host offers no terminal', () => {
     renderView(makeTestHost({ localTerminal: false }));
-    expect(screen.getByTestId('workspace-terminal-unavailable')).toHaveTextContent(
+    expect(screen.getByTestId('spaces-terminal-unavailable')).toHaveTextContent(
       'Terminal not available in this workspace.',
     );
-    expect(screen.queryByTestId('workspace-terminal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('spaces-terminal')).not.toBeInTheDocument();
     expect(xterm.instances).toHaveLength(0);
   });
 
@@ -212,6 +212,6 @@ describe('WorkspaceTerminalView', () => {
         <SpacesTerminalView backend="none" unavailableMessage="No shell here" />
       </HostProvider>,
     );
-    expect(screen.getByTestId('workspace-terminal-unavailable')).toHaveTextContent('No shell here');
+    expect(screen.getByTestId('spaces-terminal-unavailable')).toHaveTextContent('No shell here');
   });
 });

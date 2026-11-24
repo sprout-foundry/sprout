@@ -1453,10 +1453,10 @@ func TestDetermineReconcileAction_EdgeCases(t *testing.T) {
 	}
 }
 
-// expectProjectFolderPatchEvent waits for a workspace_patch event on the given
-// channel, draining any non-workspace_patch events (e.g. file_changed) that
+// expectProjectFolderPatchEvent waits for a project_folder_patch event on the given
+// channel, draining any non-project_folder_patch events (e.g. file_changed) that
 // arrive first. Both events are published for each write, so the subscriber
-// channel sees both in order: file_changed, then workspace_patch.
+// channel sees both in order: file_changed, then project_folder_patch.
 func expectProjectFolderPatchEvent(t *testing.T, ch <-chan events.UIEvent, expectedPath, expectedAction string) map[string]interface{} {
 	t.Helper()
 
@@ -1482,26 +1482,26 @@ func expectProjectFolderPatchEvent(t *testing.T, ch <-chan events.UIEvent, expec
 
 				return data
 			}
-			// Not a workspace_patch event — skip it (e.g. file_changed)
+			// Not a project_folder_patch event — skip it (e.g. file_changed)
 			// and continue waiting.
 		case <-time.After(500 * time.Millisecond):
-			t.Fatal("timed out waiting for workspace_patch event")
+			t.Fatal("timed out waiting for project_folder_patch event")
 			return nil
 		}
 	}
 }
 
-// expectNoProjectFolderPatchEvent verifies that no workspace_patch event is
+// expectNoProjectFolderPatchEvent verifies that no project_folder_patch event is
 // published within the timeout window. Used for failure-path tests.
 func expectNoProjectFolderPatchEvent(t *testing.T, ch <-chan events.UIEvent) {
 	t.Helper()
 
 	select {
 	case event := <-ch:
-		// If we got an event, it should NOT be a workspace_patch.
+		// If we got an event, it should NOT be a project_folder_patch.
 		// It could be a file_changed or another event type.
 		assert.NotEqual(t, events.EventTypeProjectFolderPatch, event.Type,
-			"expected no workspace_patch event but got one")
+			"expected no project_folder_patch event but got one")
 	case <-time.After(100 * time.Millisecond):
 		// Good: no event published at all
 	}
@@ -1535,7 +1535,7 @@ func TestProjectFolderPatchEventCreation(t *testing.T) {
 }
 
 // TestWriteFileEmitsProjectFolderPatchEvent verifies that handleWriteFile
-// publishes a workspace_patch event with action "write" after a
+// publishes a project_folder_patch event with action "write" after a
 // successful file write, including a positive sequence number.
 func TestWriteFileEmitsProjectFolderPatchEvent(t *testing.T) {
 	agent, bus := newTestAgentWithEventBus(t)
@@ -1552,7 +1552,7 @@ func TestWriteFileEmitsProjectFolderPatchEvent(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, result, filePath, "result should mention the file path")
 
-	// Expect the workspace_patch event (helper drains file_changed first)
+	// Expect the project_folder_patch event (helper drains file_changed first)
 	data := expectProjectFolderPatchEvent(t, ch, filePath, "write")
 
 	// Content is no longer shipped; size reflects the written payload.
@@ -1560,7 +1560,7 @@ func TestWriteFileEmitsProjectFolderPatchEvent(t *testing.T) {
 }
 
 // TestEditFileEmitsProjectFolderPatchEvent verifies that handleEditFile
-// publishes a workspace_patch event with action "edit" after a
+// publishes a project_folder_patch event with action "edit" after a
 // successful file edit, including a positive sequence number.
 func TestEditFileEmitsProjectFolderPatchEvent(t *testing.T) {
 	agent, bus := newTestAgentWithEventBus(t)
@@ -1583,7 +1583,7 @@ func TestEditFileEmitsProjectFolderPatchEvent(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, result)
 
-	// Expect the workspace_patch event (helper drains file_changed first)
+	// Expect the project_folder_patch event (helper drains file_changed first)
 	data := expectProjectFolderPatchEvent(t, ch, filePath, "edit")
 
 	// Content is no longer shipped; assert the size grew past the initial
@@ -1594,7 +1594,7 @@ func TestEditFileEmitsProjectFolderPatchEvent(t *testing.T) {
 }
 
 // TestWriteStructuredFileEmitsProjectFolderPatchEvent verifies that
-// handleWriteStructuredFile publishes a workspace_patch event with
+// handleWriteStructuredFile publishes a project_folder_patch event with
 // action "write" for both JSON and YAML files.
 func TestWriteStructuredFileEmitsProjectFolderPatchEvent(t *testing.T) {
 	agent, bus := newTestAgentWithEventBus(t)
@@ -1617,7 +1617,7 @@ func TestWriteStructuredFileEmitsProjectFolderPatchEvent(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, result)
 
-	// Expect the workspace_patch event
+	// Expect the project_folder_patch event
 	eventData := expectProjectFolderPatchEvent(t, ch, filePath, "write")
 
 	// Content is no longer shipped; size reflects the serialized JSON.
@@ -1627,7 +1627,7 @@ func TestWriteStructuredFileEmitsProjectFolderPatchEvent(t *testing.T) {
 }
 
 // TestPatchStructuredFileEmitsProjectFolderPatchEvent verifies that
-// handlePatchStructuredFile publishes a workspace_patch event after
+// handlePatchStructuredFile publishes a project_folder_patch event after
 // a successful patch operation. The action is "write" since patches
 // go through writeFileContent.
 func TestPatchStructuredFileEmitsProjectFolderPatchEvent(t *testing.T) {
@@ -1669,7 +1669,7 @@ func TestPatchStructuredFileEmitsProjectFolderPatchEvent(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, result)
 
-	// Expect the workspace_patch event (action is "write" since it goes
+	// Expect the project_folder_patch event (action is "write" since it goes
 	// through writeFileContent)
 	eventData := expectProjectFolderPatchEvent(t, ch, filePath, "write")
 
@@ -1680,7 +1680,7 @@ func TestPatchStructuredFileEmitsProjectFolderPatchEvent(t *testing.T) {
 }
 
 // TestProjectFolderPatchSeqIncrement verifies that when multiple files are
-// written in sequence, the seq field in workspace_patch events is
+// written in sequence, the seq field in project_folder_patch events is
 // strictly increasing.
 func TestProjectFolderPatchSeqIncrement(t *testing.T) {
 	agent, bus := newTestAgentWithEventBus(t)
@@ -1704,22 +1704,22 @@ func TestProjectFolderPatchSeqIncrement(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Expect workspace_patch for file A
+	// Expect project_folder_patch for file A
 	dataA := expectProjectFolderPatchEvent(t, ch, fileA, "write")
 	seqA, ok := dataA["seq"].(int64)
 	require.True(t, ok, "seq A should be int64")
 
-	// Expect workspace_patch for file B
+	// Expect project_folder_patch for file B
 	dataB := expectProjectFolderPatchEvent(t, ch, fileB, "write")
 	seqB, ok := dataB["seq"].(int64)
 	require.True(t, ok, "seq B should be int64")
 
 	// Seq numbers must be strictly increasing
-	assert.Greater(t, seqB, seqA, "second workspace_patch seq (%d) should be greater than first (%d)", seqB, seqA)
+	assert.Greater(t, seqB, seqA, "second project_folder_patch seq (%d) should be greater than first (%d)", seqB, seqA)
 }
 
 // TestProjectFolderPatchEventIncludesMetadata verifies that event metadata
-// (client_id, chat_id) is merged into the workspace_patch event payload
+// (client_id, chat_id) is merged into the project_folder_patch event payload
 // via decorateEventPayload, the same as file_changed events.
 func TestProjectFolderPatchEventIncludesMetadata(t *testing.T) {
 	agent, bus := newTestAgentWithEventBus(t)
@@ -1741,7 +1741,7 @@ func TestProjectFolderPatchEventIncludesMetadata(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Get the workspace_patch event (helper drains file_changed first)
+	// Get the project_folder_patch event (helper drains file_changed first)
 	data := expectProjectFolderPatchEvent(t, ch, filePath, "write")
 
 	// Verify metadata was merged in by decorateEventPayload
@@ -1750,7 +1750,7 @@ func TestProjectFolderPatchEventIncludesMetadata(t *testing.T) {
 }
 
 // TestWriteFileNoProjectFolderPatchOnFailure verifies that when a write
-// fails, no workspace_patch event is published.
+// fails, no project_folder_patch event is published.
 //
 // Note: tools.WriteFile does os.MkdirAll on the parent, so a missing
 // directory is NOT a failure case — the prior version of this test
@@ -1777,12 +1777,12 @@ func TestWriteFileNoProjectFolderPatchOnFailure(t *testing.T) {
 	})
 	require.Error(t, err, "writing under a non-directory parent should fail")
 
-	// No workspace_patch should be published on failure
+	// No project_folder_patch should be published on failure
 	expectNoProjectFolderPatchEvent(t, ch)
 }
 
 // TestProjectFolderPatchRegisteredInOutboundTypes verifies that the
-// workspace_patch event type string is correctly defined and can be
+// project_folder_patch event type string is correctly defined and can be
 // added to the outbound registry. The actual presence in
 // allowedOutboundMessageTypes is maintained by the sync contract
 // (SP-034-6a) — this test ensures the event type constant and the
@@ -1801,10 +1801,10 @@ func TestProjectFolderPatchRegisteredInOutboundTypes(t *testing.T) {
 }
 
 // TestWriteFileEmitsBothEventsInOrder verifies that handleWriteFile
-// publishes both file_changed and workspace_patch events, and that they
-// arrive in the correct order: file_changed first, then workspace_patch.
+// publishes both file_changed and project_folder_patch events, and that they
+// arrive in the correct order: file_changed first, then project_folder_patch.
 // This ordering is important because the frontend may use file_changed
-// for general notification and workspace_patch for the actual content.
+// for general notification and project_folder_patch for the actual content.
 func TestWriteFileEmitsBothEventsInOrder(t *testing.T) {
 	agent, bus := newTestAgentWithEventBus(t)
 	ch := bus.Subscribe("patch_both_order_test")
@@ -1829,10 +1829,10 @@ func TestWriteFileEmitsBothEventsInOrder(t *testing.T) {
 	assert.Equal(t, filePath, data1["file_path"])
 	assert.Equal(t, "write", data1["action"])
 
-	// Second event should be workspace_patch
+	// Second event should be project_folder_patch
 	event2 := <-ch
 	assert.Equal(t, events.EventTypeProjectFolderPatch, event2.Type,
-		"second event should be workspace_patch")
+		"second event should be project_folder_patch")
 	data2, ok := event2.Data.(map[string]interface{})
 	require.True(t, ok, "project_folder_patch data should be a map")
 	assert.Equal(t, filePath, data2["file_path"])
@@ -1840,7 +1840,7 @@ func TestWriteFileEmitsBothEventsInOrder(t *testing.T) {
 	assert.Equal(t, len(content), data2["size"])
 }
 
-// expectProjectFolderPatchConflict checks the workspace_patch event data for
+// expectProjectFolderPatchConflict checks the project_folder_patch event data for
 // conflict-related fields. When expectConflict is true, it asserts that
 // the event contains conflict=true and the given theirs_path. When false,
 // it asserts that conflict and theirs_path keys are absent.
@@ -1860,7 +1860,7 @@ func expectProjectFolderPatchConflict(t *testing.T, data map[string]interface{},
 
 // TestWriteFileWithConflictRefused verifies that handleWriteFile REFUSES to
 // write when the file has unsynced browser edits (checkWriteStaleness blocks
-// it), so no workspace_patch event is emitted with conflict metadata. This
+// it), so no project_folder_patch event is emitted with conflict metadata. This
 // is correct: the agent must ask the user before overwriting. The conflict
 // detection via CheckPatchConflict in writeFileContent is only reachable when
 // the write succeeds (no staleness block).
@@ -1897,7 +1897,7 @@ func TestWriteFileWithConflictRefused(t *testing.T) {
 }
 
 // TestWriteFileWithoutConflictEmitsNoConflictFields verifies that when
-// a workspace_patch event is published for a file that has NO unsynced
+// a project_folder_patch event is published for a file that has NO unsynced
 // browser edits (BrowserSeq == LastSyncedBrowser), the event does NOT
 // include conflict or theirs_path keys.
 func TestWriteFileWithoutConflictEmitsNoConflictFields(t *testing.T) {
@@ -1922,7 +1922,7 @@ func TestWriteFileWithoutConflictEmitsNoConflictFields(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, result, filePath, "result should mention the file path")
 
-	// Expect the workspace_patch event WITHOUT conflict metadata
+	// Expect the project_folder_patch event WITHOUT conflict metadata
 	data := expectProjectFolderPatchEvent(t, ch, filePath, "write")
 
 	// Verify conflict fields are NOT present
@@ -1930,7 +1930,7 @@ func TestWriteFileWithoutConflictEmitsNoConflictFields(t *testing.T) {
 }
 
 // TestWriteFileNoMetadataEmitsNoConflictFields verifies that when there
-// is NO metadata for a file at all, the workspace_patch event does NOT
+// is NO metadata for a file at all, the project_folder_patch event does NOT
 // include conflict or theirs_path keys.
 func TestWriteFileNoMetadataEmitsNoConflictFields(t *testing.T) {
 	agent, bus := newTestAgentWithEventBus(t)
@@ -1953,7 +1953,7 @@ func TestWriteFileNoMetadataEmitsNoConflictFields(t *testing.T) {
 }
 
 // TestEditFileWithConflictEmitsConflictPatch verifies that when
-// handleEditFile publishes a workspace_patch event for a file with
+// handleEditFile publishes a project_folder_patch event for a file with
 // unsynced browser edits, the event includes conflict metadata.
 // Unlike handleWriteFile (which is blocked by checkWriteStaleness),
 // handleEditFile does NOT call checkWriteStaleness, so edits can
@@ -1986,7 +1986,7 @@ func TestEditFileWithConflictEmitsConflictPatch(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, result)
 
-	// Expect the workspace_patch event with conflict metadata
+	// Expect the project_folder_patch event with conflict metadata
 	data := expectProjectFolderPatchEvent(t, ch, filePath, "edit")
 
 	// Verify conflict fields are present
@@ -1994,7 +1994,7 @@ func TestEditFileWithConflictEmitsConflictPatch(t *testing.T) {
 }
 
 // TestEditFileWithoutConflictEmitsNoConflictFields verifies that when
-// handleEditFile publishes a workspace_patch event for a file with NO
+// handleEditFile publishes a project_folder_patch event for a file with NO
 // unsynced browser edits, the event does NOT include conflict fields.
 func TestEditFileWithoutConflictEmitsNoConflictFields(t *testing.T) {
 	agent, bus := newTestAgentWithEventBus(t)
@@ -2024,7 +2024,7 @@ func TestEditFileWithoutConflictEmitsNoConflictFields(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, result)
 
-	// Expect the workspace_patch event WITHOUT conflict metadata
+	// Expect the project_folder_patch event WITHOUT conflict metadata
 	data := expectProjectFolderPatchEvent(t, ch, filePath, "edit")
 
 	// Verify conflict fields are NOT present
@@ -2156,7 +2156,7 @@ func TestCheckPatchConflict_ContainerSeqDoesntMatter(t *testing.T) {
 // TestProjectFolderFileMetadata_HasUnsyncedBrowserEdits_True verifies that
 // HasUnsyncedBrowserEdits returns true when BrowserSeq > LastSyncedBrowser.
 // This is the core condition that drives conflict detection in both
-// CheckPatchConflict (workspace_patch enrichment) and ApplySyncOp
+// CheckPatchConflict (project_folder_patch enrichment) and ApplySyncOp
 // (browser→container conflict detection).
 func TestProjectFolderFileMetadata_HasUnsyncedBrowserEdits_True(t *testing.T) {
 	md := ProjectFolderFileMetadata{
@@ -2284,10 +2284,10 @@ func TestAgentSetAndGetFileMetadata_Overwrite(t *testing.T) {
 }
 
 // TestAgentCheckPatchConflict_Integration is an end-to-end test that
-// exercises the same conflict detection path used in workspace_patch
+// exercises the same conflict detection path used in project_folder_patch
 // event emission: set metadata with unsynced browser edits, then call
 // CheckPatchConflict and verify the result matches what the tool handlers
-// would see when publishing a workspace_patch event.
+// would see when publishing a project_folder_patch event.
 func TestAgentCheckPatchConflict_Integration(t *testing.T) {
 	a, _ := newTestAgentWithEventBus(t)
 

@@ -7,7 +7,7 @@ import { makeTestHost } from '../host/testHost';
 import ProjectFolderGateModal from './ProjectFolderGateModal';
 
 // A hoisted, mutable flag so the mode mock factory can flip
-// supportsWorkspaceSwitching per test (cloud mode = false).
+// supportsProjectFolderSwitching per test (cloud mode = false).
 const modeState = vi.hoisted(() => ({ cloud: false, studio: false }));
 vi.mock('../config/mode', () => ({
   // Getters read the live flags so toggling modeState at runtime
@@ -138,7 +138,7 @@ function renderModal(overrides: Record<string, unknown> = {}) {
 
 /** Find a picker row by its resolved path (set on the button's title attr). */
 function findRowByPath(path: string): HTMLButtonElement | null {
-  const rows = container!.querySelectorAll('[data-testid="workspace-picker-option"]');
+  const rows = container!.querySelectorAll('[data-testid="project-folder-picker-option"]');
   for (const row of Array.from(rows)) {
     if ((row as HTMLElement).title === path) return row as HTMLButtonElement;
   }
@@ -170,7 +170,7 @@ function setSelectValue(select: HTMLSelectElement, value: string): void {
 
 /** The text of every option in the starter chooser ('' if not rendered). */
 function starterSelectOptions(): string[] {
-  const select = container!.querySelector<HTMLSelectElement>('[data-testid="workspace-gate-starter-select"]');
+  const select = container!.querySelector<HTMLSelectElement>('[data-testid="project-folder-gate-starter-select"]');
   if (!select) return [];
   return Array.from(select.querySelectorAll('option')).map((o) => o.textContent ?? '');
 }
@@ -182,7 +182,7 @@ function starterSelectOptions(): string[] {
  */
 async function revealCreateForm(): Promise<void> {
   act(() => {
-    container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-new-btn"]')!.click();
+    container!.querySelector<HTMLButtonElement>('[data-testid="project-folder-gate-new-btn"]')!.click();
   });
   await act(async () => {});
 }
@@ -198,10 +198,10 @@ function stubReload(): ReturnType<typeof vi.fn> {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('WorkspaceGateModal', () => {
+describe('ProjectFolderGateModal', () => {
   it('renders the blocking overlay when needs_project_folder_selection && project_folder_is_home', () => {
     renderModal();
-    expect(container!.querySelector('[data-testid="workspace-gate-modal"]')).not.toBeNull();
+    expect(container!.querySelector('[data-testid="project-folder-gate-modal"]')).not.toBeNull();
   });
 
   it('renders the title and warning subtitle', () => {
@@ -213,7 +213,7 @@ describe('WorkspaceGateModal', () => {
 
   it('renders the home-consent button', () => {
     renderModal();
-    const btn = container!.querySelector('.workspace-gate-home-btn');
+    const btn = container!.querySelector('.project-folder-gate-home-btn');
     expect(btn).not.toBeNull();
     expect(btn!.textContent).toMatch(/use my home directory anyway/i);
   });
@@ -221,7 +221,7 @@ describe('WorkspaceGateModal', () => {
   it('calls onConsentHome when the home-consent button is clicked', () => {
     const props = renderModal();
     act(() => {
-      container!.querySelector('.workspace-gate-home-btn')!.click();
+      container!.querySelector('.project-folder-gate-home-btn')!.click();
     });
     expect(props.onConsentHome).toHaveBeenCalledTimes(1);
   });
@@ -234,9 +234,9 @@ describe('WorkspaceGateModal', () => {
       onConsentHome: vi.fn().mockRejectedValue(new Error('daemon stalled')),
     });
     await act(async () => {
-      container!.querySelector<HTMLButtonElement>('.workspace-gate-home-btn')!.click();
+      container!.querySelector<HTMLButtonElement>('.project-folder-gate-home-btn')!.click();
     });
-    const err = container!.querySelector('[data-testid="workspace-gate-error"]');
+    const err = container!.querySelector('[data-testid="project-folder-gate-error"]');
     expect(err).not.toBeNull();
     expect(err!.textContent).toContain('daemon stalled');
     expect(props.onConsentHome).toHaveBeenCalledTimes(1);
@@ -250,13 +250,13 @@ describe('WorkspaceGateModal', () => {
     await act(async () => {
       row!.click();
     });
-    const err = container!.querySelector('[data-testid="workspace-gate-error"]');
+    const err = container!.querySelector('[data-testid="project-folder-gate-error"]');
     expect(err).not.toBeNull();
     expect(err!.textContent).toContain('query_in_progress');
     expect(props.onSelectProjectFolder).toHaveBeenCalledTimes(1);
   });
 
-  it('calls onSelectWorkspace when a project row is clicked', () => {
+  it('calls onSelectProjectFolder when a project row is clicked', () => {
     const props = renderModal();
     // ProjectFolderPicker expands the home prefix (~/dev/myapp) for display,
     // but onSelect receives the raw path (/home/alice/dev/myapp).
@@ -280,16 +280,16 @@ describe('WorkspaceGateModal', () => {
     });
 
     renderModal();
-    expect(container!.querySelector('[data-testid="workspace-browser"]')).toBeNull();
+    expect(container!.querySelector('[data-testid="project-folder-browser"]')).toBeNull();
 
     await act(async () => {
-      container!.querySelector<HTMLButtonElement>('.workspace-picker-browse-btn')!.click();
+      container!.querySelector<HTMLButtonElement>('.project-folder-picker-browse-btn')!.click();
     });
 
-    const browser = container!.querySelector('[data-testid="workspace-browser"]');
+    const browser = container!.querySelector('[data-testid="project-folder-browser"]');
     expect(browser).not.toBeNull();
     // It must live inside the gate content, not somewhere behind the overlay.
-    expect(container!.querySelector('.workspace-gate-content')!.contains(browser)).toBe(true);
+    expect(container!.querySelector('.project-folder-gate-content')!.contains(browser)).toBe(true);
     expect(browseMock).toHaveBeenCalled();
   });
 
@@ -302,10 +302,10 @@ describe('WorkspaceGateModal', () => {
 
     const props = renderModal();
     await act(async () => {
-      container!.querySelector<HTMLButtonElement>('.workspace-picker-browse-btn')!.click();
+      container!.querySelector<HTMLButtonElement>('.project-folder-picker-browse-btn')!.click();
     });
     await act(async () => {
-      container!.querySelector<HTMLButtonElement>('[data-testid="workspace-browser-confirm"]')!.click();
+      container!.querySelector<HTMLButtonElement>('[data-testid="project-folder-browser-confirm"]')!.click();
     });
 
     expect(props.onSelectProjectFolder).toHaveBeenCalledWith('/home/alice/dev');
@@ -316,20 +316,20 @@ describe('WorkspaceGateModal', () => {
 
     renderModal();
     await act(async () => {
-      container!.querySelector<HTMLButtonElement>('.workspace-picker-browse-btn')!.click();
+      container!.querySelector<HTMLButtonElement>('.project-folder-picker-browse-btn')!.click();
     });
     await act(async () => {
-      container!.querySelector<HTMLButtonElement>('.workspace-browser-cancel')!.click();
+      container!.querySelector<HTMLButtonElement>('.project-folder-browser-cancel')!.click();
     });
 
-    expect(container!.querySelector('[data-testid="workspace-browser"]')).toBeNull();
-    expect(container!.querySelector('[data-testid="workspace-picker"]')).not.toBeNull();
+    expect(container!.querySelector('[data-testid="project-folder-browser"]')).toBeNull();
+    expect(container!.querySelector('[data-testid="project-folder-picker"]')).not.toBeNull();
   });
 
-  it('does NOT render in cloud mode (supportsWorkspaceSwitching = false)', () => {
+  it('does NOT render in cloud mode (supportsProjectFolderSwitching = false)', () => {
     modeState.cloud = true; // simulate cloud mode
     renderModal();
-    expect(container!.querySelector('[data-testid="workspace-gate-modal"]')).toBeNull();
+    expect(container!.querySelector('[data-testid="project-folder-gate-modal"]')).toBeNull();
   });
 
   // ── Studio variant (supportsFolderPicker = true) ────────────────────
@@ -342,22 +342,22 @@ describe('WorkspaceGateModal', () => {
   it('renders the studio variant instead of the desktop browse UI when supportsFolderPicker', () => {
     modeState.studio = true;
     renderModal();
-    expect(container!.querySelector('[data-testid="workspace-gate-modal"]')).not.toBeNull();
+    expect(container!.querySelector('[data-testid="project-folder-gate-modal"]')).not.toBeNull();
     expect(container!.textContent).toMatch(/choose a project folder/i);
     expect(container!.textContent).toMatch(/pick where this project lives/i);
-    expect(container!.querySelector('[data-testid="workspace-gate-pick-btn"]')).not.toBeNull();
-    expect(container!.querySelector('[data-testid="workspace-gate-new-btn"]')).not.toBeNull();
+    expect(container!.querySelector('[data-testid="project-folder-gate-pick-btn"]')).not.toBeNull();
+    expect(container!.querySelector('[data-testid="project-folder-gate-new-btn"]')).not.toBeNull();
     // The desktop picker (suggested/recent lists + Browse) must NOT render.
-    expect(container!.querySelector('[data-testid="workspace-picker"]')).toBeNull();
-    expect(container!.querySelector('.workspace-picker-browse-btn')).toBeNull();
-    expect(container!.querySelector('[data-testid="workspace-browser"]')).toBeNull();
+    expect(container!.querySelector('[data-testid="project-folder-picker"]')).toBeNull();
+    expect(container!.querySelector('.project-folder-picker-browse-btn')).toBeNull();
+    expect(container!.querySelector('[data-testid="project-folder-browser"]')).toBeNull();
   });
 
   it('keeps the studio variant out of the desktop variant (desktop unaffected)', () => {
     renderModal();
-    expect(container!.querySelector('[data-testid="workspace-gate-pick-btn"]')).toBeNull();
-    expect(container!.querySelector('[data-testid="workspace-gate-new-btn"]')).toBeNull();
-    expect(container!.querySelector('[data-testid="workspace-picker"]')).not.toBeNull();
+    expect(container!.querySelector('[data-testid="project-folder-gate-pick-btn"]')).toBeNull();
+    expect(container!.querySelector('[data-testid="project-folder-gate-new-btn"]')).toBeNull();
+    expect(container!.querySelector('[data-testid="project-folder-picker"]')).not.toBeNull();
   });
 
   it('reloads after a successful native folder pick', async () => {
@@ -368,7 +368,7 @@ describe('WorkspaceGateModal', () => {
 
     renderModal();
     await act(async () => {
-      container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-pick-btn"]')!.click();
+      container!.querySelector<HTMLButtonElement>('[data-testid="project-folder-gate-pick-btn"]')!.click();
     });
 
     expect(pickProjectFolderMock).toHaveBeenCalledTimes(1);
@@ -383,13 +383,13 @@ describe('WorkspaceGateModal', () => {
 
     renderModal();
     await act(async () => {
-      container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-pick-btn"]')!.click();
+      container!.querySelector<HTMLButtonElement>('[data-testid="project-folder-gate-pick-btn"]')!.click();
     });
 
     expect(reloadSpy).not.toHaveBeenCalled();
-    expect(container!.querySelector('[data-testid="workspace-gate-error"]')).toBeNull();
+    expect(container!.querySelector('[data-testid="project-folder-gate-error"]')).toBeNull();
     // Pending cleared → the button is usable again.
-    expect(container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-pick-btn"]')!.disabled).toBe(
+    expect(container!.querySelector<HTMLButtonElement>('[data-testid="project-folder-gate-pick-btn"]')!.disabled).toBe(
       false,
     );
   });
@@ -398,13 +398,13 @@ describe('WorkspaceGateModal', () => {
     modeState.studio = true;
     renderModal();
     act(() => {
-      container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-new-btn"]')!.click();
+      container!.querySelector<HTMLButtonElement>('[data-testid="project-folder-gate-new-btn"]')!.click();
     });
-    expect(container!.querySelector('[data-testid="workspace-gate-create-input"]')).not.toBeNull();
-    expect(container!.querySelector('[data-testid="workspace-gate-create-submit"]')).not.toBeNull();
+    expect(container!.querySelector('[data-testid="project-folder-gate-create-input"]')).not.toBeNull();
+    expect(container!.querySelector('[data-testid="project-folder-gate-create-submit"]')).not.toBeNull();
   });
 
-  it('invokes createWorkspaceNative with the entered name and reloads on success', async () => {
+  it('invokes createProjectFolderNative with the entered name and reloads on success', async () => {
     modeState.studio = true;
     const reloadSpy = vi.fn();
     Object.defineProperty(window, 'location', { value: { reload: reloadSpy }, writable: true });
@@ -412,14 +412,14 @@ describe('WorkspaceGateModal', () => {
 
     renderModal();
     act(() => {
-      container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-new-btn"]')!.click();
+      container!.querySelector<HTMLButtonElement>('[data-testid="project-folder-gate-new-btn"]')!.click();
     });
-    const input = container!.querySelector<HTMLInputElement>('[data-testid="workspace-gate-create-input"]')!;
+    const input = container!.querySelector<HTMLInputElement>('[data-testid="project-folder-gate-create-input"]')!;
     await act(async () => {
       setInputValue(input, 'fresh-project');
     });
     await act(async () => {
-      container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-create-submit"]')!.click();
+      container!.querySelector<HTMLButtonElement>('[data-testid="project-folder-gate-create-submit"]')!.click();
     });
 
     expect(createProjectFolderMock).toHaveBeenCalledTimes(1);
@@ -435,23 +435,23 @@ describe('WorkspaceGateModal', () => {
 
     renderModal();
     act(() => {
-      container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-new-btn"]')!.click();
+      container!.querySelector<HTMLButtonElement>('[data-testid="project-folder-gate-new-btn"]')!.click();
     });
-    const input = container!.querySelector<HTMLInputElement>('[data-testid="workspace-gate-create-input"]')!;
+    const input = container!.querySelector<HTMLInputElement>('[data-testid="project-folder-gate-create-input"]')!;
     await act(async () => {
       setInputValue(input, 'dupe');
     });
     await act(async () => {
-      container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-create-submit"]')!.click();
+      container!.querySelector<HTMLButtonElement>('[data-testid="project-folder-gate-create-submit"]')!.click();
     });
 
     expect(reloadSpy).not.toHaveBeenCalled();
-    const err = container!.querySelector('[data-testid="workspace-gate-error"]');
+    const err = container!.querySelector('[data-testid="project-folder-gate-error"]');
     expect(err).not.toBeNull();
     expect(err!.textContent).toMatch(/already exists/i);
   });
 
-  it('consents through POST /api/project-folder (setWorkspace with consentHome) and reloads', async () => {
+  it('consents through POST /api/project-folder (setProjectFolder with consentHome) and reloads', async () => {
     modeState.studio = true;
     const reloadSpy = vi.fn();
     Object.defineProperty(window, 'location', { value: { reload: reloadSpy }, writable: true });
@@ -469,7 +469,7 @@ describe('WorkspaceGateModal', () => {
 
     renderModal();
     await act(async () => {
-      container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-home-btn"]')!.click();
+      container!.querySelector<HTMLButtonElement>('[data-testid="project-folder-gate-home-btn"]')!.click();
     });
 
     // The api-service consent path: setProjectFolder(project_folder, consentHome=true)
@@ -490,7 +490,7 @@ describe('WorkspaceGateModal', () => {
 
     renderModal();
     await act(async () => {
-      container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-home-btn"]')!.click();
+      container!.querySelector<HTMLButtonElement>('[data-testid="project-folder-gate-home-btn"]')!.click();
     });
 
     expect(getProjectFolderMock).toHaveBeenCalled();
@@ -516,7 +516,7 @@ describe('WorkspaceGateModal', () => {
       expect(options[0]).toMatch(/blank/i); // "blank" is always first
       expect(options).toContain('fixture (v0.1.0, 4 files)');
       // Default selection is "blank".
-      const select = container!.querySelector<HTMLSelectElement>('[data-testid="workspace-gate-starter-select"]')!;
+      const select = container!.querySelector<HTMLSelectElement>('[data-testid="project-folder-gate-starter-select"]')!;
       expect(select.value).toBe('');
       expect(listStartersMock).toHaveBeenCalledTimes(1);
     });
@@ -527,7 +527,7 @@ describe('WorkspaceGateModal', () => {
 
       renderModal();
       await revealCreateForm();
-      const select = container!.querySelector<HTMLSelectElement>('[data-testid="workspace-gate-starter-select"]')!;
+      const select = container!.querySelector<HTMLSelectElement>('[data-testid="project-folder-gate-starter-select"]')!;
       await act(async () => {
         setSelectValue(select, 'fixture');
       });
@@ -552,16 +552,16 @@ describe('WorkspaceGateModal', () => {
 
       renderModal();
       await revealCreateForm();
-      const input = container!.querySelector<HTMLInputElement>('[data-testid="workspace-gate-create-input"]')!;
+      const input = container!.querySelector<HTMLInputElement>('[data-testid="project-folder-gate-create-input"]')!;
       await act(async () => {
         setInputValue(input, 'myproj');
       });
-      const select = container!.querySelector<HTMLSelectElement>('[data-testid="workspace-gate-starter-select"]')!;
+      const select = container!.querySelector<HTMLSelectElement>('[data-testid="project-folder-gate-starter-select"]')!;
       await act(async () => {
         setSelectValue(select, 'fixture');
       });
       await act(async () => {
-        container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-create-submit"]')!.click();
+        container!.querySelector<HTMLButtonElement>('[data-testid="project-folder-gate-create-submit"]')!.click();
       });
       await act(async () => {}); // flush getProjectFolder + instantiateStarter + reload.
 
@@ -585,13 +585,13 @@ describe('WorkspaceGateModal', () => {
 
       renderModal();
       await revealCreateForm();
-      const input = container!.querySelector<HTMLInputElement>('[data-testid="workspace-gate-create-input"]')!;
+      const input = container!.querySelector<HTMLInputElement>('[data-testid="project-folder-gate-create-input"]')!;
       await act(async () => {
         setInputValue(input, 'myproj');
       });
       // Leave the select at its default ("blank").
       await act(async () => {
-        container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-create-submit"]')!.click();
+        container!.querySelector<HTMLButtonElement>('[data-testid="project-folder-gate-create-submit"]')!.click();
       });
       await act(async () => {});
 
@@ -616,12 +616,12 @@ describe('WorkspaceGateModal', () => {
       expect(options[0]).toMatch(/blank/i);
 
       // Create still works (as a blank folder create).
-      const input = container!.querySelector<HTMLInputElement>('[data-testid="workspace-gate-create-input"]')!;
+      const input = container!.querySelector<HTMLInputElement>('[data-testid="project-folder-gate-create-input"]')!;
       await act(async () => {
         setInputValue(input, 'myproj');
       });
       await act(async () => {
-        container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-create-submit"]')!.click();
+        container!.querySelector<HTMLButtonElement>('[data-testid="project-folder-gate-create-submit"]')!.click();
       });
       await act(async () => {});
 

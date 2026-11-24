@@ -1,8 +1,8 @@
 /**
- * SproutWorkspace — switching the agent backend in place.
+ * SproutSpaces — switching the agent backend in place.
  *
  * A host that re-reads its transport (a new `transport.agent`) passes the
- * updated `host` to the mounted workspace; the composition re-wires the
+ * updated `host` to the mounted spaces; the composition re-wires the
  * backend without a re-mount. This pins what survives that swap:
  *
  * - the open editor tabs (the buffer manager under `SproutProviders` is not
@@ -151,7 +151,7 @@ afterEach(() => {
   WebSocketService.getInstance().setLocalAgentState('none');
 });
 
-describe('SproutWorkspace in-place backend swap', () => {
+describe('SproutSpaces in-place backend swap', () => {
   it('keeps the open editor tabs and the active chat across a wasm→daemon swap', async () => {
     // The seed is created once and passed to both renders (a stable reference):
     // the chat store is created from it and must not be re-created on the swap.
@@ -219,10 +219,10 @@ describe('SproutWorkspace in-place backend swap', () => {
   });
 });
 
-describe('SproutWorkspace in-place swap to a proxied daemon', () => {
+describe('SproutSpaces in-place swap to a proxied daemon', () => {
   it("reconnects the event stream to the daemon backend's socket, not the host's", async () => {
     // The platform's transport.wsURL is the platform's own socket; the running
-    // workspace's daemon events live behind its workspace proxy. The swap must
+    // dev space's daemon events live behind its dev space proxy. The swap must
     // reconnect to the daemon's socket, or the chat never receives the run.
     const base = headlessHost();
     const platformDaemonHost: SproutHost = {

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 )
@@ -191,4 +192,68 @@ func TestDefaultLinkName(t *testing.T) {
 	if got := DefaultLinkName(links(host), "127.0.0.1:11434"); got != host+"-11434" {
 		t.Fatalf("ollama second = %q, want %q", got, host+"-11434")
 	}
+}
+
+// Save refuses when a different link already holds the slot: two names
+// reducing to one slot must not overwrite each other's state.
+func TestSaveRefusesATakenSlot(t *testing.T) {
+	withTestConfig(t)
+	first := &State{LinkID: "link-1", Name: "My Box", Engine: "127.0.0.1:8006"}
+	if err := first.Save(); err != nil {
+		t.Fatal(err)
+	}
+	second := &State{LinkID: "link-2", Name: "My/Box", Engine: "127.0.0.1:8021"}
+	if err := second.Save(); err == nil {
+		t.Fatal("Save onto a taken slot succeeded")
+	}
+	// The same link re-saving itself is fine.
+	first.KeyRotatedAt = time.Now()
+	if err := first.Save(); err != nil {
+		t.Fatalf("re-saving the same link: %v", err)
+	}
+	st, err := LoadLink("My-Box")
+	if err != nil || st.LinkID != "link-1" {
+		t.Fatalf("first link = %+v, %v; must be untouched", st, err)
+	}
+}
+
+// The legacy single-named key is only read back while the machine has that
+// one link: with several links, the legacy key's owner is unknown and
+// handing it to any of them would cross-wire their identities.
+func TestLegacyKeyFallbackIsSoleLinkOnly(t *testing.T) {
+	withTestConfig(t)
+	if err := (&State{LinkID: "link-1", Name: "box", Engine: "127.0.0.1:8006"}).saveAt("box"); err != nil {
+		t.Fatal(err)
+	}
+	if err := (&State{LinkID: "link-2", Name: "box-8021", Engine: "127.0.0.1:8021"}).saveAt("box-8021"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := saveSecret(legacyAgentKey, "sfg_legacy_key"); err != nil {
+		t.Fatal(err)
+	}
+	// Two links: neither may pick up the legacy key.
+	if key, _ := LoadAPIKeyFor("box"); key != "" {
+		t.Fatalf("box picked up the legacy key (%q) with two links linked", key)
+	}
+	if key, _ := LoadAPIKeyFor("box-8021"); key != "" {
+		t.Fatalf("box-8021 picked up the legacy key (%q) with two links linked", key)
+	}
+	// One link: the fallback applies.
+	if err := os.Remove(filepath.Join(linksTestDir(), "box.json")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(linksTestDir(), "box-8021.json")); err != nil {
+		t.Fatal(err)
+	}
+	if err := (&State{LinkID: "link-3", Name: "solo", Engine: "sinter"}).saveAt("solo"); err != nil {
+		t.Fatal(err)
+	}
+	if key, _ := LoadAPIKeyFor("solo"); key != "sfg_legacy_key" {
+		t.Fatalf("solo key = %q, want the legacy key", key)
+	}
+}
+
+func linksTestDir() string {
+	dir, _ := LinksDir()
+	return dir
 }

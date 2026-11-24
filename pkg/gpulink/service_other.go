@@ -9,6 +9,11 @@ var errNoService = errors.New("installing the GPU link as a login service is sup
 // InstallService is unavailable on this OS.
 func InstallService(name string) (string, error) { return "", errNoService }
 
+// InstallAllServices is unavailable on this OS.
+func InstallAllServices(names []string) ([]string, error) {
+	return nil, errNoService
+}
+
 // UninstallService is unavailable on this OS.
 func UninstallService(slot string) error { return errNoService }
 

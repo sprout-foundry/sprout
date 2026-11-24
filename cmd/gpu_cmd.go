@@ -76,8 +76,11 @@ func init() {
 		&cobra.Command{Use: "rotate-key", Short: "Trade a link's key for a new one (a running agent moves to it when it restarts)", Args: cobra.NoArgs, RunE: runGPURotateKey},
 	)
 	for _, c := range gpuCmd.Commands() {
-		if c.Name() != "link" {
+		switch c.Name() {
+		case "start", "unlink", "rotate-key", "uninstall":
 			c.Flags().StringVar(&gpuName, "name", "", "which link (needed when several are linked; see `sprout gpu status`)")
+		case "install":
+			c.Flags().StringVar(&gpuName, "name", "", "install only this link's service (default: every link's)")
 		}
 	}
 	rootCmd.AddCommand(gpuCmd)
@@ -189,6 +192,11 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 	slot := gpulink.Slot(name)
 	if slot == "" {
 		return fmt.Errorf("link name %q has no usable file name; pick another with --name", name)
+	}
+	for _, old := range existing {
+		if old.Slot() == slot {
+			return fmt.Errorf("%q is already linked here as %q (engine %s); pass a different --name, or unlink it first with `sprout gpu unlink --name %s`", name, old.Name, old.Engine, slot)
+		}
 	}
 	keyStore, err := gpulink.SaveAPIKeyFor(slot, creds.APIKey)
 	if err != nil {

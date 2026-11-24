@@ -29,11 +29,17 @@ func EngineKeyName(slot string) string { return "sprout-gpu-" + slot + "-engine"
 func SaveAPIKeyFor(slot, key string) (string, error) { return saveSecret(AgentKeyName(slot), key) }
 
 // LoadAPIKeyFor reads a link's agent key, following one left by an older
-// sprout under the single-link name.
+// sprout under the single-link name. The legacy fallback only applies while
+// this machine has at most one link: with several, the legacy key's owner
+// is unknown and reading it into the wrong link would cross-wire their
+// identities.
 func LoadAPIKeyFor(slot string) (string, error) {
 	key, err := loadSecret(AgentKeyName(slot))
 	if err == nil && key != "" {
 		return key, nil
+	}
+	if !soleLink(slot) {
+		return "", err
 	}
 	legacy, legacyErr := loadSecret(legacyAgentKey)
 	if legacyErr == nil && legacy != "" {
@@ -41,6 +47,15 @@ func LoadAPIKeyFor(slot string) (string, error) {
 		return legacy, nil
 	}
 	return "", err
+}
+
+// soleLink reports whether slot is the only link on this machine.
+func soleLink(slot string) bool {
+	links, err := LoadLinks()
+	if err != nil {
+		return false
+	}
+	return len(links) == 1 && links[0].Slot() == slot
 }
 
 // SaveEngineKeyFor stores a link's engine key ("" removes it).
@@ -52,11 +67,16 @@ func SaveEngineKeyFor(slot, key string) error {
 	return err
 }
 
-// LoadEngineKeyFor reads a link's engine key; "" when there is none.
+// LoadEngineKeyFor reads a link's engine key; "" when there is none. The
+// legacy fallback only applies while this is the machine's only link (see
+// LoadAPIKeyFor).
 func LoadEngineKeyFor(slot string) string {
 	key, _ := loadSecret(EngineKeyName(slot))
 	if key != "" {
 		return key
+	}
+	if !soleLink(slot) {
+		return ""
 	}
 	legacy, _ := loadSecret(legacyEngineKey)
 	return legacy
@@ -100,7 +120,7 @@ func migrateLegacy() error {
 	if err := json.Unmarshal(data, st); err != nil {
 		return fmt.Errorf("parsing %s: %w", oldPath, err)
 	}
-	if err := st.Save(); err != nil {
+	if err := st.saveAt(st.Slot()); err != nil {
 		return err
 	}
 	// Keys move under the link's own names; the legacy entries go once the

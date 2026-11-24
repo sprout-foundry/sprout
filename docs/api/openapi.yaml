@@ -1531,7 +1531,7 @@ paths:
   /api/project-folder:
     get:
       description: Reports the requesting client's active project folder, whether it is a recognized project directory, and recent-project-folder metadata.
-      operationId: workspaceGet
+      operationId: projectFolderGet
       responses:
         "200":
           description: OK
@@ -1546,7 +1546,7 @@ paths:
         - workspace/instances
     post:
       description: Sets the requesting client's active project folder to the `path` in the body. The path must resolve within the daemon root.
-      operationId: workspaceSet
+      operationId: projectFolderSet
       responses:
         "200":
           description: OK
@@ -1562,7 +1562,7 @@ paths:
   /api/project-folder/browse:
     get:
       description: Lists the directories under the daemon root (the parent of the active project folder) so the client can pick a new project folder. Defaults to the daemon root when `path` is omitted.
-      operationId: workspaceBrowse
+      operationId: projectFolderBrowse
       responses:
         "200":
           description: OK
@@ -1578,7 +1578,7 @@ paths:
   /api/project-folder/projects:
     get:
       description: Lists the recent projects known to the client (the project folder picker) with their last-used ordering.
-      operationId: workspaceProjects
+      operationId: projectFolderProjects
       responses:
         "200":
           description: OK
@@ -1594,7 +1594,7 @@ paths:
   /api/project-folder/sync:
     post:
       description: Applies the pending file-sync operations for the project folder (the SP-046 workspace-sync surface).
-      operationId: workspaceSync
+      operationId: projectFolderSync
       responses:
         "200":
           description: OK
@@ -1610,7 +1610,7 @@ paths:
   /api/project-folder/takeover:
     post:
       description: Marks the requesting client as the active owner of the project folder, superseding the previous owner.
-      operationId: workspaceTakeover
+      operationId: projectFolderTakeover
       responses:
         "200":
           description: OK

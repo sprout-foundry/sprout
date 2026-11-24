@@ -105,7 +105,7 @@ export const syntheticEndpoints: CloudEndpoint[] = [
     methods: ['GET', 'POST'],
     category: 'synthetic',
     // NOTE: This response intentionally omits is_project, needs_project_folder_selection,
-    // suggested_projects, and recent_project_folders. The consuming code (workspaceApi.ts
+    // suggested_projects, and recent_project_folders. The consuming code (projectFolderApi.ts
     // toProjectFolderResponse) defaults these to false/[] via nullish coalescing.
     // In cloud mode, project folder selection is not needed — the WASM shell owns the
     // virtual filesystem root, so needs_project_folder_selection is effectively false.

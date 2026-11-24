@@ -3,7 +3,7 @@ import { useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
 import { copy } from '../../config/copy';
 import { searchForRepo } from '../../services/homeView';
-import { parseRepoRef } from '../../services/workspaceFs/workspaceGit';
+import { parseRepoRef } from '../../services/projectFolderFs/projectFolderGit';
 import GitHubRepoPicker from '../GitHubRepoPicker';
 import NewProjectDialog from '../layered/NewProjectDialog';
 import SproutLogo from '../SproutLogo';

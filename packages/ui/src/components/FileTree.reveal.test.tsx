@@ -82,7 +82,7 @@ describe("FileTree revealFile", () => {
           ref,
           onFileSelect: vi.fn(),
           onFetchFiles: net.fn,
-          workspaceRoot: "/w",
+          projectFolder: "/w",
         }),
       );
     });
@@ -142,7 +142,7 @@ describe("FileTree revealFile", () => {
           ref,
           onFileSelect: vi.fn(),
           onFetchFiles: net.fn,
-          workspaceRoot: "/w",
+          projectFolder: "/w",
         }),
       );
     });

@@ -1,0 +1,115 @@
+name: Publish @sprout-foundry/spaces
+
+# Publish only on explicit version tags (spaces-v*), like
+# publish-design.yml: a published version can never be overwritten, so
+# publishing on every push would fail (409) without a version bump.
+# The tag must match packages/spaces/package.json's version.
+#   git tag spaces-v1.0.0 -m "spaces v1.0.0"
+#   git push origin spaces-v1.0.0
+on:
+  push:
+    tags:
+      - "spaces-v*"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      # contents: write attaches the package to the tag's GitHub release.
+      contents: write
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@sprout-foundry"
+
+      - name: Check the tag matches the package version
+        if: startsWith(github.ref, 'refs/tags/spaces-v')
+        run: |
+          version="$(node -p "require('./packages/spaces/package.json').version")"
+          if [ "spaces-v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package version ${version}" >&2
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build the packages the spaces package depends on
+        run: |
+          npm run build -w @sprout/events
+          npm run build -w @sprout/ui
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.26
+
+      - name: Download Go modules
+        # prepare-grammars reads the grammar blobs from the module cache,
+        # which a changed go.sum leaves empty.
+        run: go mod download
+
+      - name: Prepare grammar blobs
+        # pkg/ast embeds the tree-sitter grammar blobs this generates; the
+        # WASM build fails without them.
+        run: make prepare-grammars
+
+      - name: Build the WASM the package ships
+        # The workspace package content-hashes webui/public/wasm/{sprout.wasm,
+        # wasm_exec.js} into dist/wasm/; build them first so the published
+        # artifact carries the real assets (and fails loudly if the toolchain
+        # cannot produce them).
+        run: ./scripts/build-wasm.sh
+
+      - name: Build the spaces package (production)
+        run: npm run build -w @sprout-foundry/spaces
+        env:
+          NODE_ENV: production
+
+      - name: Validate the build artifact
+        run: node docs/__tests__/spaces-package.test.js
+
+      - name: Check a host's re-bundle of the packed package
+        # Hosts install the tarball and bundle dist/ again with Vite; this
+        # packs it, builds a minimal host app against it and fails if any
+        # dynamic import loses its exports in that second bundle.
+        run: node packages/spaces/scripts/check-consumer-rebundle.mjs
+
+      - name: Pack the package
+        # One tarball is both what the registry publishes and what the
+        # release carries, so a host fetching it from either gets the same
+        # bytes (and the same hash).
+        id: pack
+        working-directory: packages/spaces
+        run: |
+          tgz="$(npm pack --silent | tail -n 1)"
+          sha256sum "$tgz" > SHA256SUMS
+          echo "tgz=$tgz" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to GitHub Packages
+        working-directory: packages/spaces
+        run: npm publish "${{ steps.pack.outputs.tgz }}"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attach the package to the tag's GitHub release
+        # Hosts that choose the runtime version at run time (the Sprout
+        # Foundry platform) fetch it from the public release instead of the
+        # registry, which needs a token even for a public package. Not the
+        # repository's latest release: that stays the CLI's.
+        if: startsWith(github.ref, 'refs/tags/spaces-v')
+        working-directory: packages/spaces
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME#spaces-v}"
+          gh release create "$GITHUB_REF_NAME" "${{ steps.pack.outputs.tgz }}" SHA256SUMS \
+            --title "@sprout-foundry/spaces $version" \
+            --notes "The @sprout-foundry/spaces $version package as published to GitHub Packages, and its SHA-256 (SHA256SUMS)." \
+            --latest=false

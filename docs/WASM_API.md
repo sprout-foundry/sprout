@@ -140,14 +140,14 @@ Returns the currently-configured endpoint (or `""` if unset).
 ### `applyFileMetadata(path, metadataJSON): {ok: true, path: string}`
 
 The platform's WS layer calls this when it learns about a new
-`WorkspaceFileMetadata` for a file (e.g. browser-side sequence bumps after
+`ProjectFolderFileMetadata` for a file (e.g. browser-side sequence bumps after
 the user types). The Go-side agent consults this on every `write_file` to
 detect unsynced browser edits and refuse with the
 `ErrWriteHasUnsyncedEdits` sentinel — agent reasoning should ask the user
 rather than retry.
 
 ```typescript
-type WorkspaceFileMetadata = {
+type ProjectFolderFileMetadata = {
   browser_seq:            number;
   container_seq:          number;
   last_synced_browser:    number;

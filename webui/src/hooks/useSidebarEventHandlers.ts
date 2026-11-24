@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import type { RefObject } from 'react';
 import type { FileTreeHandle } from '../components/SidebarFilesSection';
-import { useWorkspaceKeyDown } from '../contexts/HotkeyContext';
+import { useSpacesKeyDown } from '../contexts/HotkeyContext';
 import { useHostCapabilities } from '../host';
 import { useCommandHandler } from '../services/commandHandlers';
 import type { SectionTab } from './useSidebarState';
@@ -36,7 +36,7 @@ export function useSidebarEventHandlers({
   const { settings: supportsSettings } = useHostCapabilities();
   // Ctrl+\ or Cmd+\ to toggle sidebar width (collapsed/expanded). Scoped to
   // the project folder, so in an embed it fires only for keys pressed inside it.
-  useWorkspaceKeyDown((e) => {
+  useSpacesKeyDown((e) => {
     if (e.key === '\\' && (e.ctrlKey || e.metaKey) && onSidebarToggle) {
       e.preventDefault();
       onSidebarToggle();

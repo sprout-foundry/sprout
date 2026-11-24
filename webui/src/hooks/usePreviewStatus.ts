@@ -24,7 +24,7 @@ import { useSproutFetch } from '../contexts/SproutAdapterContext';
 import { getPreviewStatus, restartPreview, startPreview, stopPreview } from '../services/api/previewApi';
 import type { PreviewState } from '../services/api/types/preview';
 import type { SproutEvent } from '../types/events';
-import { changesProjectFolderFiles } from './workspaceFileEvents';
+import { changesProjectFolderFiles } from './projectFolderFileEvents';
 
 /** Poll cadence while the app is starting (readiness settles in the background). */
 const STARTING_POLL_MS = 1000;

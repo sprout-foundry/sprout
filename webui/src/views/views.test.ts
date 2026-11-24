@@ -19,7 +19,7 @@ import {
   PreviewPane,
   PreviewPanel,
   ExampleEmbedding,
-  SproutWorkspace,
+  SproutSpaces,
   ViewsLayout,
   createEmptyChatState,
   escalateCommand,
@@ -28,8 +28,8 @@ import {
   setEscalationPolicy,
   useEscalationTriggers,
   usePreviewStatus,
-  WorkspaceGitView,
-  WorkspaceSearchView,
+  SpacesGitView,
+  SpacesSearchView,
   copy,
   formatCopy,
   installCopy,
@@ -37,15 +37,15 @@ import {
   DEFAULT_COPY,
   COPY_KEYS,
   ESCALATION_TRIGGER_EVENT,
-  useWorkspaceMode,
-  WorkspaceEditorProvider,
-  WorkspaceEditorView,
-  fetchWorkspaceFiles,
-  useWorkspaceEditor,
-  useWorkspaceEditorProps,
-  useWorkspaceFileTree,
-  listBrowserWorkspaceFiles,
-  readBrowserWorkspaceFile,
+  useSpace,
+  SpacesEditorProvider,
+  SpacesEditorView,
+  fetchProjectFolderFiles,
+  useSpacesEditor,
+  useSpacesEditorProps,
+  useProjectFolderFileTree,
+  listBrowserProjectFolderFiles,
+  readBrowserProjectFolderFile,
   BrowserFilesUnavailableError,
 } from './index';
 import type {
@@ -67,18 +67,18 @@ import type {
   PreviewPaneProps,
   PreviewPanelProps,
   SproutProject,
-  SproutWorkspaceProps,
+  SproutSpacesProps,
   UseEscalationTriggersOptions,
   UsePreviewStatusReturn,
-  UseWorkspaceModeResult,
-  UseWorkspaceFileTreeOptions,
-  OpenWorkspaceFileOptions,
-  WorkspaceEditorFile,
-  WorkspaceEditorProps,
-  WorkspaceEditorProviderProps,
-  WorkspaceEditorValue,
-  WorkspaceEditorViewProps,
-  WorkspaceFileEntry,
+  UseSpaceResult,
+  UseProjectFolderFileTreeOptions,
+  OpenProjectFolderFileOptions,
+  SpacesEditorFile,
+  SpacesEditorProps,
+  SpacesEditorProviderProps,
+  SpacesEditorValue,
+  SpacesEditorViewProps,
+  ProjectFolderFileEntry,
 } from './index';
 
 // ── Runtime: all view exports are defined ─────────────────────────────
@@ -147,8 +147,8 @@ describe('views entry exports', () => {
   });
 
   it('registers the source control and search views under their kinds', () => {
-    expect(VIEWS_BY_KIND.git).toBe(WorkspaceGitView);
-    expect(VIEWS_BY_KIND.search).toBe(WorkspaceSearchView);
+    expect(VIEWS_BY_KIND.git).toBe(SpacesGitView);
+    expect(VIEWS_BY_KIND.search).toBe(SpacesSearchView);
   });
 
   // ── Copy keys (the embedding's wording seam) ─────────────────────────
@@ -172,8 +172,8 @@ describe('views entry exports', () => {
   });
 
   it('exports the workspace composition and its companion hook', () => {
-    expect(isReactComponent(SproutWorkspace)).toBe(true);
-    expect(typeof useWorkspaceMode).toBe('function');
+    expect(isReactComponent(SproutSpaces)).toBe(true);
+    expect(typeof useSpace).toBe('function');
   });
 
   it('exports the chat unit and the empty chat state a composition starts from', () => {
@@ -182,12 +182,12 @@ describe('views entry exports', () => {
   });
 
   it('exports the editor unit and the file tree hook', () => {
-    expect(isReactComponent(WorkspaceEditorProvider)).toBe(true);
-    expect(isReactComponent(WorkspaceEditorView)).toBe(true);
-    expect(typeof useWorkspaceEditor).toBe('function');
-    expect(typeof useWorkspaceEditorProps).toBe('function');
-    expect(typeof useWorkspaceFileTree).toBe('function');
-    expect(typeof fetchWorkspaceFiles).toBe('function');
+    expect(isReactComponent(SpacesEditorProvider)).toBe(true);
+    expect(isReactComponent(SpacesEditorView)).toBe(true);
+    expect(typeof useSpacesEditor).toBe('function');
+    expect(typeof useSpacesEditorProps).toBe('function');
+    expect(typeof useProjectFolderFileTree).toBe('function');
+    expect(typeof fetchProjectFolderFiles).toBe('function');
   });
 
   // ── The escalation seam ──────────────────────────────────────────────
@@ -209,11 +209,11 @@ describe('views entry exports', () => {
     expect(ESCALATION_TRIGGER_EVENT).toBe('sprout:escalation-trigger');
   });
 
-  // ── The in-browser workspace file API (the move-to-container seam) ────
+  // ── The in-browser project folder file API (the move-to-container seam) ────
 
   it('exports the two file functions and the stable gate-error class', () => {
-    expect(typeof listBrowserWorkspaceFiles).toBe('function');
-    expect(typeof readBrowserWorkspaceFile).toBe('function');
+    expect(typeof listBrowserProjectFolderFiles).toBe('function');
+    expect(typeof readBrowserProjectFolderFile).toBe('function');
     expect(typeof BrowserFilesUnavailableError).toBe('function');
     const err = new BrowserFilesUnavailableError('x');
     expect(err).toBeInstanceOf(Error);
@@ -221,7 +221,7 @@ describe('views entry exports', () => {
   });
 
   it('types a listing row with the fields a host needs', () => {
-    const row: WorkspaceFileEntry = {
+    const row: ProjectFolderFileEntry = {
       path: 'src/a.ts',
       size: 10,
       mode: 0o644,
@@ -276,28 +276,28 @@ describe('views entry typed props', () => {
   });
 
   it('accepts minimal editor unit and file tree hook values', () => {
-    const file: WorkspaceEditorFile = {
+    const file: SpacesEditorFile = {
       bufferId: 'b1',
       path: '/ws/a.ts',
-      workspacePath: 'a.ts',
+      projectFolderPath: 'a.ts',
       name: 'a.ts',
       isModified: false,
     };
-    const open: OpenWorkspaceFileOptions = { line: 3 };
-    const editor: WorkspaceEditorValue = {
+    const open: OpenProjectFolderFileOptions = { line: 3 };
+    const editor: SpacesEditorValue = {
       openFiles: [file],
       activeFile: file,
       openFile: () => 'b1',
       closeFile: async () => undefined,
       saveFile: async () => undefined,
     };
-    const editorProps: WorkspaceEditorProps = {
+    const editorProps: SpacesEditorProps = {
       fileTree: { onFileSelect: () => undefined, selectedFile: 'a.ts' },
       onFileClick: () => undefined,
     };
-    const providerProps: WorkspaceEditorProviderProps = { children: null };
-    const viewProps: WorkspaceEditorViewProps = { className: 'host-editor' };
-    const treeOptions: UseWorkspaceFileTreeOptions = { rootPath: '.', fetchFn: fetch };
+    const providerProps: SpacesEditorProviderProps = { children: null };
+    const viewProps: SpacesEditorViewProps = { className: 'host-editor' };
+    const treeOptions: UseProjectFolderFileTreeOptions = { rootPath: '.', fetchFn: fetch };
     expect(editor.openFile(file.path, open)).toBe('b1');
     expect(editorProps.fileTree.selectedFile).toBe('a.ts');
     expect(providerProps.children).toBeNull();
@@ -316,10 +316,10 @@ describe('views entry typed props', () => {
     expect(hookReturn.status).toBe('stopped');
   });
 
-  it('accepts minimal SproutWorkspace + useWorkspaceMode values', () => {
+  it('accepts minimal SproutSpaces + useSpace values', () => {
     const project: SproutProject = { id: '/ws', root: '/ws' };
-    const workspaceProps: SproutWorkspaceProps = { project, space: 'code', providers: 'ambient' };
-    const composedProps: SproutWorkspaceProps = {
+    const spacesProps: SproutSpacesProps = { project, space: 'code', providers: 'ambient' };
+    const composedProps: SproutSpacesProps = {
       project,
       space: 'code',
       layout: { center: ['chat'] },
@@ -327,7 +327,7 @@ describe('views entry typed props', () => {
       chatInitialState: createEmptyChatState(),
       chatFetch: (async () => new Response()) as unknown as typeof fetch,
     };
-    const modeResult: UseWorkspaceModeResult = {
+    const modeResult: UseSpaceResult = {
       mode: {
         id: 'code',
         label: 'Code',
@@ -340,7 +340,7 @@ describe('views entry typed props', () => {
       select: () => undefined,
       canSwitch: false,
     };
-    expect(workspaceProps.providers).toBe('ambient');
+    expect(spacesProps.providers).toBe('ambient');
     expect(modeResult.canSwitch).toBe(false);
     expect(composedProps.viewProps?.chat).toBeDefined();
     expect(composedProps.chatInitialState?.messages).toEqual([]);

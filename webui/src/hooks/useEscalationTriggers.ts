@@ -4,7 +4,7 @@
  *
  * Three trigger categories:
  *   1. Git push failure — a failed /api/git/push response on the project folder's
- *      request channel (services/workspaceResponses.ts)
+ *      request channel (services/projectFolderResponses.ts)
  *   2. VFS quota error — wasmShell.writeFile returns ENOSPC
  *   3. Command timeout — WASM terminal long-running command timeout
  *   4. Build commands — informational detection of npm install, make, cargo build
@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { useHostCapabilities } from '../host';
-import { onProjectFolderResponse } from '../services/workspaceResponses';
+import { onProjectFolderResponse } from '../services/projectFolderResponses';
 
 export interface EscalationTriggerEvent {
   /** Unique trigger identifier */

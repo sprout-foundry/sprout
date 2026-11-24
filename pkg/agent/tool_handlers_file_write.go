@@ -213,15 +213,15 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 		a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(path, "write", content))
 		a.Logger().Debug("Published file_changed event: %s (write)\n", path)
 
-		// Publish workspace_patch for real-time browser sync
+		// Publish project_folder_patch for real-time browser sync
 		seq := nextPatchSeq()
 		conflict, theirsPath := a.CheckPatchConflict(path)
 		if conflict {
 			a.publishEvent(events.EventTypeProjectFolderPatch, events.ProjectFolderPatchEvent(path, content, "write", seq, events.PatchConflictInfo{Conflict: true, TheirsPath: theirsPath}))
-			a.Logger().Debug("Published workspace_patch event with conflict: %s (seq=%d, theirs=%s)\n", path, seq, theirsPath)
+			a.Logger().Debug("Published project_folder_patch event with conflict: %s (seq=%d, theirs=%s)\n", path, seq, theirsPath)
 		} else {
 			a.publishEvent(events.EventTypeProjectFolderPatch, events.ProjectFolderPatchEvent(path, content, "write", seq))
-			a.Logger().Debug("Published workspace_patch event: %s (seq=%d)\n", path, seq)
+			a.Logger().Debug("Published project_folder_patch event: %s (seq=%d)\n", path, seq)
 		}
 
 		// Check for security concerns in the written content

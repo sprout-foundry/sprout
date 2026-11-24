@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { SproutEvent } from '../types/events';
-import { changesProjectFolderFiles } from './workspaceFileEvents';
+import { changesProjectFolderFiles } from './projectFolderFileEvents';
 
 const DEBOUNCE_MS = 600;
 

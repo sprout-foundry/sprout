@@ -169,7 +169,7 @@ export function ThemeProvider({ children }: ThemeProviderProps): JSX.Element {
     const mode: ThemeMode = hostTheme.rawMode === 'system' ? system : hostTheme.mode;
     const base = getThemePackForMode(mode);
     // The host's token overrides are NOT merged into the pack variables: they
-    // are scoped to the project folder (SproutWorkspace), so they must not
+    // are scoped to the project folder (SproutSpaces), so they must not
     // land on documentElement here. The pack keeps its own variables; the
     // overrides are applied on the root element instead.
     if (mode === hostTheme.mode) return base;
@@ -280,7 +280,7 @@ export function ThemeProvider({ children }: ThemeProviderProps): JSX.Element {
   );
 
   // The resolved theme is published through the context only. It is applied
-  // to the DOM by the project folder (`SproutWorkspace`), never here: this
+  // to the DOM by the project folder (`SproutSpaces`), never here: this
   // provider also runs in a host page, where `documentElement` belongs to the
   // host and writing the pack onto it would restyle the host's own chrome.
   // The project folder is the scope that should carry the theme, and custom

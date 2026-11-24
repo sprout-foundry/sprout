@@ -142,7 +142,7 @@ export interface CommandPaletteProps {
   isLoading?: boolean;
   /** The project folder's absolute path. File rows show their folder relative to
    *  it (nothing for a file at the root) instead of the full path. */
-  workspaceRoot?: string;
+  projectFolder?: string;
 }
 
 function relativeDirectory(filePath: string, projectFolder?: string): string {
@@ -168,7 +168,7 @@ function CommandPalette({
   onOpenFileInNewPane,
   recentFiles,
   isLoading = false,
-  workspaceRoot: projectFolder,
+  projectFolder,
 }: CommandPaletteProps): JSX.Element | null {
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<PaletteMode>(initialMode);

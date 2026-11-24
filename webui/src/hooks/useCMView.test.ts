@@ -474,7 +474,7 @@ describe('useCMView — bug-class regression', () => {
     expect(api.getContent()).toBe('new content');
   });
 
-  it('LSP-style callback fired after mount reads latest openWorkspaceBufferRef', () => {
+  it('LSP-style callback fired after mount reads latest openProjectFolderBufferRef', () => {
     const openProjectFolderBufferV1 = vi.fn();
     const openProjectFolderBufferV2 = vi.fn();
     const openProjectFolderBufferRef: React.MutableRefObject<any> = {
@@ -535,11 +535,11 @@ describe('useCMView — bug-class regression', () => {
       };
     });
 
-    function Wrapper({ openWorkspaceBuffer }: { openWorkspaceBuffer: (request: any) => void }) {
+    function Wrapper({ openProjectFolderBuffer }: { openProjectFolderBuffer: (request: any) => void }) {
       // EditorPane performs this assignment during every render. The
       // CodeMirror extension itself remains mounted with the getter captured
       // during the first render.
-      openProjectFolderBufferRef.current = openWorkspaceBuffer;
+      openProjectFolderBufferRef.current = openProjectFolderBuffer;
       api = useCMView({
         paneId: 'pane-1',
         editorRef,
@@ -561,14 +561,14 @@ describe('useCMView — bug-class regression', () => {
     }
 
     act(() => {
-      root.render(createElement(Wrapper, { openWorkspaceBuffer: openProjectFolderBufferV1 }));
+      root.render(createElement(Wrapper, { openProjectFolderBuffer: openProjectFolderBufferV1 }));
     });
     const viewAtMount = api!.view;
     expect(viewAtMount).not.toBeNull();
     expect(onDidMount).toHaveBeenCalledTimes(1);
 
     act(() => {
-      root.render(createElement(Wrapper, { openWorkspaceBuffer: openProjectFolderBufferV2 }));
+      root.render(createElement(Wrapper, { openProjectFolderBuffer: openProjectFolderBufferV2 }));
     });
 
     // The callback identity change is not a view-lifecycle input. The callback

@@ -4,7 +4,7 @@ import { parseFilePath } from '../utils/filePath';
 export interface UseFileHandlersOptions {
   onViewChange: (view: 'chat' | 'editor' | 'git') => void;
   openFile: (file: { path: string; name: string; isDir: boolean; size: number; modified: number; ext: string }) => void;
-  openWorkspaceBuffer: (options: {
+  openProjectFolderBuffer: (options: {
     kind: 'chat' | 'diff' | 'review' | 'file' | 'compare';
     path: string;
     title: string;
@@ -28,7 +28,7 @@ export interface UseFileHandlersReturn {
 export function useFileHandlers({
   onViewChange,
   openFile,
-  openWorkspaceBuffer,
+  openProjectFolderBuffer,
 }: UseFileHandlersOptions): UseFileHandlersReturn {
   const handleFileClick = useCallback(
     (filePath: string, lineNumber?: number) => {
@@ -55,7 +55,7 @@ export function useFileHandlers({
     (options: { path: string; diff: string; title: string }) => {
       const { fileName } = parseFilePath(options.path);
       onViewChange('editor');
-      openWorkspaceBuffer({
+      openProjectFolderBuffer({
         kind: 'diff',
         path: `__workspace/revision/${options.path}-${Date.now()}`,
         title: `${options.title}: ${fileName}`,
@@ -78,7 +78,7 @@ export function useFileHandlers({
         },
       });
     },
-    [onViewChange, openWorkspaceBuffer],
+    [onViewChange, openProjectFolderBuffer],
   );
 
   return { handleFileClick, handleOpenRevisionDiff };

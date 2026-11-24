@@ -33,7 +33,7 @@ import { clientFetch } from './services/clientSession';
 import { LocalEventsProvider } from './services/localEventsProvider';
 import { notificationBus } from './services/notificationBus';
 import { debugLog } from './utils/log';
-import { WorkspaceAgentPrompts, WorkspaceChatProvider, WorkspaceEditorProvider, useWorkspaceChat } from './views';
+import { SpacesAgentPrompts, SpacesChatProvider, SpacesEditorProvider, useSpacesChat } from './views';
 import './App.css';
 import './components/UpdateNotification.css';
 
@@ -81,7 +81,7 @@ function App() {
       modelSelectionRequest: null,
       outputVerbosity: 'default' as const,
       inputValue: '',
-      workspaceBusy: null,
+      projectFolderBusy: null,
     };
   }, []);
 
@@ -92,9 +92,9 @@ function App() {
   // provider); the stack's connection state follows the transport.
   return (
     <SproutProviders eventsProvider={eventsProvider}>
-      <WorkspaceChatProvider initialState={initialState} eventsProvider={eventsProvider} fetchFn={clientFetch}>
+      <SpacesChatProvider initialState={initialState} eventsProvider={eventsProvider} fetchFn={clientFetch}>
         <AppInner />
-      </WorkspaceChatProvider>
+      </SpacesChatProvider>
     </SproutProviders>
   );
 }
@@ -102,7 +102,7 @@ function App() {
 function AppInner() {
   const state = useAppStoreState();
   const events = useEvents();
-  const { setState, handleEvent, handleReconnect, chat: chatManager, refs: chatRefs } = useWorkspaceChat();
+  const { setState, handleEvent, handleReconnect, chat: chatManager, refs: chatRefs } = useSpacesChat();
 
   // Freeze the WebSocket when the tab is hidden (clean close so the backend
   // detaches) and resume + reattach when it returns to the foreground. Without
@@ -332,7 +332,7 @@ function AppInner() {
       <WasmLoadingOverlay isLoading={!!state.wasmLoading} error={state.wasmError} />
       <UIManager>
         <NotificationCenter />
-        <WorkspaceEditorProvider>
+        <SpacesEditorProvider>
           <AppContent
             state={state}
             isMobile={isMobile}
@@ -377,7 +377,7 @@ function AppInner() {
             onRenameChat={chatManager.handleRenameChat}
             perChatCache={state.perChatCache}
           />
-        </WorkspaceEditorProvider>
+        </SpacesEditorProvider>
         <UpdateNotification />
         <UpdateAvailableBanner />
         <EscalationListener />
@@ -387,7 +387,7 @@ function AppInner() {
         <DisconnectedOverlay isConnected={state.isConnected} />
         {/* The agent's blocking prompts (approvals, ask_user, passwords, edit and
             shell approvals) and the model picker, from the chat unit's state. */}
-        <WorkspaceAgentPrompts />
+        <SpacesAgentPrompts />
         <OnboardingDialog
           onboarding={onboarding}
           selectedProvider={selectedProvider}

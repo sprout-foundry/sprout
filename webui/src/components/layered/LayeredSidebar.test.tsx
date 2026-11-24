@@ -62,7 +62,7 @@ function renderSidebar(overrides: Partial<LayeredSidebarProps> = {}) {
     onSelectMode: vi.fn(),
     onModeSectionChange: vi.fn(),
     onSectionChange: vi.fn(),
-    workspaceRoot: '/home/ada/my-app',
+    projectFolder: '/home/ada/my-app',
     instances: [],
     renderSection: () => <div data-testid="section-panel">panel</div>,
     ...overrides,

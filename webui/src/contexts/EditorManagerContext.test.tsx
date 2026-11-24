@@ -180,9 +180,9 @@ describe('EditorManager tab pane management', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 2. openWorkspaceBuffer deactivates previous buffer but preserves paneId
+  // 2. openProjectFolderBuffer deactivates previous buffer but preserves paneId
   // -----------------------------------------------------------------------
-  it.skip('openWorkspaceBuffer deactivates previous buffer but preserves paneId', async () => {
+  it.skip('openProjectFolderBuffer deactivates previous buffer but preserves paneId', async () => {
     renderProvider();
 
     const activePaneId = ctx().activePaneId;
@@ -195,7 +195,7 @@ describe('EditorManager tab pane management', () => {
     // Open a diff project folder buffer (non-chat kind → targets activePaneId)
     let diffId: string;
     await actAndUpdateWithDelay(() => {
-      diffId = ctx().openWorkspaceBuffer({
+      diffId = ctx().openProjectFolderBuffer({
         kind: 'diff',
         path: '__workspace/diff-deactivate-test',
         title: 'Diff Test',
@@ -221,16 +221,16 @@ describe('EditorManager tab pane management', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 3. openWorkspaceBuffer with existing path reactivates instead of duping
+  // 3. openProjectFolderBuffer with existing path reactivates instead of duping
   // -----------------------------------------------------------------------
-  it('openWorkspaceBuffer with existing buffer activates it without creating duplicates', async () => {
+  it('openProjectFolderBuffer with existing buffer activates it without creating duplicates', async () => {
     renderProvider();
 
     const path = '__workspace/dedup-test';
 
     let buf1Id: string;
     await actAndUpdateWithDelay(() => {
-      buf1Id = ctx().openWorkspaceBuffer({
+      buf1Id = ctx().openProjectFolderBuffer({
         kind: 'review',
         path,
         title: 'Review Test',
@@ -242,7 +242,7 @@ describe('EditorManager tab pane management', () => {
     // Open again with the same path – must find the existing buffer
     let buf2Id: string;
     await actAndUpdateWithDelay(() => {
-      buf2Id = ctx().openWorkspaceBuffer({
+      buf2Id = ctx().openProjectFolderBuffer({
         kind: 'review',
         path,
         title: 'Review Test Updated',
@@ -471,9 +471,9 @@ describe('paneId preservation fix', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 3. openWorkspaceBuffer preserves paneId when opening project folder buffers
+  // 3. openProjectFolderBuffer preserves paneId when opening project folder buffers
   // -----------------------------------------------------------------------
-  it('openWorkspaceBuffer preserves paneId when switching to a new workspace buffer', async () => {
+  it('openProjectFolderBuffer preserves paneId when switching to a new workspace buffer', async () => {
     renderProvider();
 
     const paneId = ctx().activePaneId;
@@ -481,7 +481,7 @@ describe('paneId preservation fix', () => {
     // Open a review project folder buffer (non-chat targets activePaneId)
     let reviewId: string;
     await actAndUpdateWithDelay(() => {
-      reviewId = ctx().openWorkspaceBuffer({
+      reviewId = ctx().openProjectFolderBuffer({
         kind: 'review',
         path: '__workspace/review-preserve-test',
         title: 'Review',

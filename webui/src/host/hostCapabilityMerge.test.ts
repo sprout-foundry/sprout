@@ -3,7 +3,7 @@
  * the host (SP-160 §160b).
  *
  * A studio (`--native-fs`) dist ships a `capabilities.json` declaring
- * `supportsFolderPicker: true` / `supportsWorkspaceSwitching: true`, which its
+ * `supportsFolderPicker: true` / `supportsProjectFolderSwitching: true`, which its
  * shell reports to the webui through the installed adapter. The selected host
  * is the local host, whose own defaults leave `folderPicker` off; the entry
  * overlays the adapter's declared flags onto the host's capabilities so the
@@ -35,7 +35,7 @@ function adapterDeclaring(caps: Partial<APIAdapter>): APIAdapter {
     supportsSSH: false,
     supportsGit: true,
     supportsChat: true,
-    supportsWorkspaceSwitching: false,
+    supportsProjectFolderSwitching: false,
     supportsExport: false,
     supportsInstances: false,
     supportsLocalTerminal: false,
@@ -58,16 +58,16 @@ describe('host shell capabilities are restored through the host', () => {
     try {
       // The plain local build: folderPicker off, projectFolderSwitching on.
       expect(localHost.capabilities.folderPicker).toBe(false);
-      expect(localHost.capabilities.workspaceSwitching).toBe(true);
+      expect(localHost.capabilities.projectFolderSwitching).toBe(true);
 
-      const adapter = adapterDeclaring({ supportsFolderPicker: true, supportsWorkspaceSwitching: true });
+      const adapter = adapterDeclaring({ supportsFolderPicker: true, supportsProjectFolderSwitching: true });
       const result = applyHostCapabilities(localHost, adapter);
 
       // Same host object, mutated in place (the provider and accessor observe
       // the same instance), with the declared flags applied.
       expect(result).toBe(localHost);
       expect(localHost.capabilities.folderPicker).toBe(true);
-      expect(localHost.capabilities.workspaceSwitching).toBe(true);
+      expect(localHost.capabilities.projectFolderSwitching).toBe(true);
     } finally {
       Object.assign(localHost.capabilities, before);
     }
@@ -101,7 +101,7 @@ describe('host shell capabilities are restored through the host', () => {
       // own defaults: folderPicker off, projectFolderSwitching on.
       applyHostCapabilities(localHost, null);
       expect(localHost.capabilities.folderPicker).toBe(false);
-      expect(localHost.capabilities.workspaceSwitching).toBe(true);
+      expect(localHost.capabilities.projectFolderSwitching).toBe(true);
       expect(localHost.capabilities).toEqual(before);
     } finally {
       Object.assign(localHost.capabilities, before);
@@ -116,10 +116,10 @@ describe('host shell capabilities are restored through the host', () => {
     try {
       applyHostCapabilities(
         localHost,
-        adapterDeclaring({ supportsFolderPicker: false, supportsWorkspaceSwitching: false }),
+        adapterDeclaring({ supportsFolderPicker: false, supportsProjectFolderSwitching: false }),
       );
       expect(localHost.capabilities.folderPicker).toBe(false);
-      expect(localHost.capabilities.workspaceSwitching).toBe(false);
+      expect(localHost.capabilities.projectFolderSwitching).toBe(false);
     } finally {
       Object.assign(localHost.capabilities, before);
     }
@@ -161,13 +161,13 @@ describe('host shell capabilities are restored through the host', () => {
 
       applyHostCapabilities(
         localHost,
-        adapterDeclaring({ supportsFolderPicker: true, supportsWorkspaceSwitching: true }),
+        adapterDeclaring({ supportsFolderPicker: true, supportsProjectFolderSwitching: true }),
       );
       upsertActiveHostCapabilities();
 
       // The gate reads these live bindings; the studio variant now renders.
       expect(mode.supportsFolderPicker).toBe(true);
-      expect(mode.supportsWorkspaceSwitching).toBe(true);
+      expect(mode.supportsProjectFolderSwitching).toBe(true);
     } finally {
       Object.assign(localHost.capabilities, before);
     }
@@ -197,9 +197,9 @@ describe('host shell capabilities are restored through the host', () => {
       };
       window.addEventListener(ADAPTER_INSTALLED_EVENT, onAdapterInstalled);
       try {
-        installAdapter(adapterDeclaring({ supportsFolderPicker: true, supportsWorkspaceSwitching: true }));
+        installAdapter(adapterDeclaring({ supportsFolderPicker: true, supportsProjectFolderSwitching: true }));
         expect(mode.supportsFolderPicker).toBe(true);
-        expect(mode.supportsWorkspaceSwitching).toBe(true);
+        expect(mode.supportsProjectFolderSwitching).toBe(true);
       } finally {
         window.removeEventListener(ADAPTER_INSTALLED_EVENT, onAdapterInstalled);
       }
@@ -215,7 +215,7 @@ describe('host shell capabilities are restored through the host', () => {
     const before = snapshotCaps(cloudHost);
     try {
       // The cloud host's own flags: no project folder switching, no folder picker.
-      expect(cloudHost.capabilities.workspaceSwitching).toBe(false);
+      expect(cloudHost.capabilities.projectFolderSwitching).toBe(false);
       expect(cloudHost.capabilities.folderPicker).toBe(false);
 
       // A cloud adapter declares both off, so applying it is a no-op on the
@@ -224,12 +224,12 @@ describe('host shell capabilities are restored through the host', () => {
         cloudHost,
         adapterDeclaring({
           supportsFolderPicker: false,
-          supportsWorkspaceSwitching: false,
+          supportsProjectFolderSwitching: false,
           supportsInstances: true,
           supportsSSH: false,
         }),
       );
-      expect(cloudHost.capabilities.workspaceSwitching).toBe(false);
+      expect(cloudHost.capabilities.projectFolderSwitching).toBe(false);
       expect(cloudHost.capabilities.folderPicker).toBe(false);
       // Untouched fields keep their cloud values.
       expect(cloudHost.capabilities.instances).toBe(before.instances);

@@ -89,7 +89,7 @@ func getSyncEndpointFunc(_ js.Value, _ []js.Value) interface{} {
 // applyFileMetadataFunc lets the platform-side sync layer push a
 // ProjectFolderFileMetadata update into the running agent. The Go-side
 // staleness rule consults this on every write_file call (see
-// pkg/agent/workspace_sync.go).
+// pkg/agent/project_folder_sync.go).
 //
 // Signature: applyFileMetadata(path: string, metadataJSON: string): {ok: true}
 //
@@ -210,7 +210,7 @@ func stopHeartbeatFunc(_ js.Value, _ []js.Value) interface{} {
 }
 
 // ─── Theirs content stash ─────────────────────────────────────────
-// When a workspace_patch carries conflict metadata, the browser stores
+// When a project_folder_patch carries conflict metadata, the browser stores
 // the container's content under a .theirs path so the UI can render
 // a git-style diff. This is a process-level snapshot for free-tier WASM;
 // when the agent is wired up (Tier 2b), it routes through the agent.
@@ -223,7 +223,7 @@ var (
 // stashTheirsContent stores the "theirs" content for a conflict path.
 // callers MUST pass a normalized absolute path that matches the format
 // produced by the container-side CheckPatchConflict (see
-// pkg/agent/workspace_sync.go). Passing relative or unnormalized paths
+// pkg/agent/project_folder_sync.go). Passing relative or unnormalized paths
 // will cause lookups in the UI layer to fail silently.
 func stashTheirsContent(theirsPath, content string) {
 	theirsStashMu.Lock()
@@ -240,14 +240,14 @@ func peekTheirsContent(theirsPath string) (string, bool) {
 	return content, ok
 }
 
-// handleProjectFolderPatchConflictFunc processes an incoming workspace_patch
+// handleProjectFolderPatchConflictFunc processes an incoming project_folder_patch
 // that carries conflict metadata. When conflict is true, it writes the
 // container's content to the .theirs sibling file in the virtual
 // filesystem so the browser can show a git-style diff/conflict UI.
 //
 // IMPORTANT: the `theirsPath` parameter must be a normalized absolute
 // path that matches the format produced by the container-side
-// CheckPatchConflict (see pkg/agent/workspace_sync.go). This ensures
+// CheckPatchConflict (see pkg/agent/project_folder_sync.go). This ensures
 // the browser can locate the file in the virtual filesystem for the
 // diff UI. Passing a relative or unnormalized path will cause the
 // conflict UI to fail silently.

@@ -30,10 +30,10 @@ interface WebuiStatusBarProps {
    * project folder basename is shown as a clickable indicator on the left
    * side of the status bar (before the SproutStatusBar content).
    */
-  workspacePath?: string;
+  projectFolderPath?: string;
   /**
    * Overrides the project folder indicator's label. An embedding host's project
-   * name, shown instead of a basename derived from `workspacePath`.
+   * name, shown instead of a basename derived from `projectFolderPath`.
    */
   projectName?: string;
   /**
@@ -73,11 +73,11 @@ function StatusBar({
   buffer,
   encoding,
   indentation,
-  workspacePath: projectFolderPath,
+  projectFolderPath,
   projectName,
   onProjectFolderClick,
 }: WebuiStatusBarProps): JSX.Element {
-  const { git: supportsGit, workspaceSwitching: projectFolderSwitching, localTerminal } = useHostCapabilities();
+  const { git: supportsGit, projectFolderSwitching, localTerminal } = useHostCapabilities();
   // The hosted build's platform chooses the model for lower tiers; the badge
   // names that. host.8: the hosted transport authenticates against a platform
   // (authMode 'bearer') — the former isCloud branch.
@@ -145,7 +145,7 @@ function StatusBar({
     <div className="statusbar-wrapper" data-testid="status-bar">
       {projectFolderName && (
         <div
-          className="statusbar-item statusbar-item-workspace"
+          className="statusbar-item statusbar-item-project-folder"
           onClick={onProjectFolderClick}
           role="button"
           tabIndex={0}
@@ -163,7 +163,7 @@ function StatusBar({
                 ? `Repository: ${projectFolderName}`
                 : `Project folder: ${projectFolderName}`
           }
-          data-testid="status-bar-workspace"
+          data-testid="status-bar-project-folder"
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();

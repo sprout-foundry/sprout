@@ -2,7 +2,7 @@ import { createContext, useContext, useMemo, type ReactNode, useCallback, useSta
 import type { APIAdapter } from '../services/apiAdapter';
 import { getAdapter, ADAPTER_INSTALLED_EVENT } from '../services/apiAdapter';
 import { clientFetch, resolveWebUIClientId, WEBUI_CLIENT_ID_HEADER } from '../services/clientSession';
-import { publishProjectFolderResponse } from '../services/workspaceResponses';
+import { publishProjectFolderResponse } from '../services/projectFolderResponses';
 
 interface SproutAdapterContextValue {
   adapter: APIAdapter | null;

@@ -1,7 +1,7 @@
 // Regression: the diff viewer must not constantly rebuild itself.
 //
-// Root cause: `.workspace-tab` sized to its content inside the
-// row-flex `.editor-pane-host`, and `.workspace-diff-merge-wrapper` had no
+// Root cause: `.spaces-tab` sized to its content inside the
+// row-flex `.editor-pane-host`, and `.spaces-diff-merge-wrapper` had no
 // height bound. The merge wrapper's measured width therefore depended on
 // the rendered diff mode (unified content ≈ 604px, side-by-side ≈ 519px),
 // straddling NARROW_PANE_PX (560). The ResizeObserver-driven mode degrade
@@ -117,7 +117,7 @@ test('diff viewer does not constantly reload', async () => {
   // Layout: the merge container must be bounded by the pane, not by content.
   const layout = await page.evaluate(() => {
     const container = document.querySelector('.merge-view-container') as HTMLElement | null;
-    const tab = document.querySelector('.workspace-tab') as HTMLElement | null;
+    const tab = document.querySelector('.spaces-tab') as HTMLElement | null;
     const paneHost = document.querySelector('.editor-pane-host') as HTMLElement | null;
     return {
       containerH: container?.offsetHeight ?? 0,

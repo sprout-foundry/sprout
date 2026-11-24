@@ -69,7 +69,7 @@ export interface FileTreeProps {
   /** Callback after an item is deleted */
   onDeleteItem?: (path: string) => void;
   /** Workspace root path (for absolute path copying) */
-  workspaceRoot?: string;
+  projectFolder?: string;
   /** Optional pre-loaded file tree data. When provided, this takes priority over internal fetch for initial load.
    *  Consumers should memoize this prop (e.g., with useMemo) to avoid unnecessary re-renders. */
   files?: FileInfo[];
@@ -110,7 +110,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       onRefresh,
       onItemCreated,
       onDeleteItem,
-      workspaceRoot: projectFolder,
+      projectFolder,
       files: filesProp,
       onFetchFiles,
       onCreateFile,
@@ -280,7 +280,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
     // buffers (absolute — LSP document URIs need the real on-disk location),
     // the search panel and the tree itself (workspace-relative). The tree's
     // nodes are always workspace-relative, so an absolute path must lose its
-    // workspace-root prefix first. Splitting an absolute path unchanged
+    // project-folder-root prefix first. Splitting an absolute path unchanged
     // yields ancestors like "Users", "Users/dev" that match no node: nothing
     // expands and no row highlights.
     const toTreePath = useCallback(

@@ -193,12 +193,12 @@ Notes:
 | GET | `/api/instances/ssh-launch-status` | sshLaunchStatus | daemon, browser-local |
 | POST | `/api/instances/ssh-open` | sshOpen | daemon, browser-local |
 | GET | `/api/instances/ssh-sessions` | sshSessions | daemon, browser-local |
-| GET | `/api/project-folder` | workspaceGet | daemon, browser-local |
-| POST | `/api/project-folder` | workspaceSet | daemon, browser-local |
-| GET | `/api/project-folder/browse` | workspaceBrowse | daemon, in-browser WASM agent |
-| GET | `/api/project-folder/projects` | workspaceProjects | daemon |
-| POST | `/api/project-folder/sync` | workspaceSync | daemon |
-| POST | `/api/project-folder/takeover` | workspaceTakeover | daemon |
+| GET | `/api/project-folder` | projectFolderGet | daemon, browser-local |
+| POST | `/api/project-folder` | projectFolderSet | daemon, browser-local |
+| GET | `/api/project-folder/browse` | projectFolderBrowse | daemon, in-browser WASM agent |
+| GET | `/api/project-folder/projects` | projectFolderProjects | daemon |
+| POST | `/api/project-folder/sync` | projectFolderSync | daemon |
+| POST | `/api/project-folder/takeover` | projectFolderTakeover | daemon |
 
 Notes:
 - `/api/project-folder/projects` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)

@@ -29,7 +29,7 @@ export interface CommandPaletteSources {
   commands: CommandDef[];
   isLoading: boolean;
   recentFiles: RecentFileEntry[];
-  workspaceRoot: string;
+  projectFolder: string;
   onSearchFiles: (query: string) => Promise<FileResult[]>;
   onSearchSymbols: (query: string) => SymbolResult[];
   onSearchWorkspaceSymbols: (query: string) => Promise<SymbolResult[]>;
@@ -63,7 +63,7 @@ export function useCommandPaletteSources({ isOpen, openFile }: UseCommandPalette
   const {
     allFiles: paletteAllFiles,
     isLoadingFiles: paletteIsLoading,
-    workspaceRoot: paletteProjectFolder,
+    projectFolder: paletteProjectFolder,
   } = useFileIndex({
     apiService,
     isOpen,
@@ -190,7 +190,7 @@ export function useCommandPaletteSources({ isOpen, openFile }: UseCommandPalette
     commands: paletteCommands,
     isLoading: paletteIsLoading,
     recentFiles: paletteRecentFiles,
-    workspaceRoot: paletteProjectFolder,
+    projectFolder: paletteProjectFolder,
     onSearchFiles: handlePaletteSearchFiles,
     onSearchSymbols: handlePaletteSearchSymbols,
     onSearchWorkspaceSymbols: handlePaletteSearchWorkspaceSymbols,

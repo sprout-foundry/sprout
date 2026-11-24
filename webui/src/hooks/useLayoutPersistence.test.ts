@@ -65,7 +65,7 @@ describe('useLayoutPersistence — workspace-changed buffer survival', () => {
   function fireProjectFolderChanged() {
     projectFolderHandler?.(
       new CustomEvent('sprout:workspace-changed', {
-        detail: { workspaceRoot: '/other' },
+        detail: { projectFolder: '/other' },
       }),
     );
   }

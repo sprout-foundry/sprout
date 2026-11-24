@@ -19,7 +19,7 @@ import { createElement, type ReactElement, act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { OnboardingProviderOption } from '../services/api';
 import type { OnboardingState } from '../types/app';
-import { setProjectFolderGateOpen } from '../services/workspaceGate';
+import { setProjectFolderGateOpen } from '../services/projectFolderGate';
 import OnboardingDialog from './OnboardingDialog';
 
 // ---------------------------------------------------------------------------

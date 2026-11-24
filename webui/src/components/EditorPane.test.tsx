@@ -302,7 +302,7 @@ vi.mock('../hooks/useEditorContextMenu', () => {
       }, []);
       return {
         contextMenu: menuState,
-        workspaceRoot: wsRoot,
+        projectFolder: wsRoot,
         hideContextMenu: () => setMenuState(null),
         handleEditorContextMenu: (e: any) => {
           setMenuState({
@@ -499,7 +499,7 @@ vi.mock('./EditorContextMenu', () => {
         'Copy relative path',
       ),
     );
-    if (ctx.workspaceRoot) {
+    if (ctx.projectFolder) {
       items.push(
         React.createElement(
           'button',
@@ -907,7 +907,7 @@ const defaultMockEditorManager = {
   setBufferModified: vi.fn(),
   setBufferOriginalContent: vi.fn(),
   splitPane: vi.fn(),
-  openWorkspaceBuffer: vi.fn(),
+  openProjectFolderBuffer: vi.fn(),
   setBufferLanguageOverride: vi.fn(),
 };
 
@@ -1140,7 +1140,7 @@ describe('EditorPane', () => {
       expect(copyToClipboard).toHaveBeenCalledWith('src/components/EditorPane.tsx');
     });
 
-    it('"Copy absolute path" calls copyToClipboard with workspaceRoot + file path', async () => {
+    it('"Copy absolute path" calls copyToClipboard with projectFolder + file path', async () => {
       // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);

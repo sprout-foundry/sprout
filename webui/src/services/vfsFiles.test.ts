@@ -93,7 +93,7 @@ describe('listVfsFileEntries', () => {
   });
 });
 
-describe('resolveWorkspacePath', () => {
+describe('resolveProjectFolderPath', () => {
   it.each(['', '.', './', '/workspace', '/workspace/', 'workspace', 'workspace/', ' . '])(
     'reads %j as the workspace root',
     (raw) => {

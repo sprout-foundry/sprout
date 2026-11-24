@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
  *
  * Mirrors the CSS breakpoints (index.css): mobile is <768px. Kept as a
  * separate hook (not reuseSidebarState) so the sheet layer does not
- * depend on sidebar state plumbing — EditorWorkspace renders below
+ * depend on sidebar state plumbing — EditorSpaces renders below
  * AppContent's sidebar context in some test harnesses.
  */
 export function useIsMobileViewport(): boolean {

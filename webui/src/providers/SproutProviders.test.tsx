@@ -88,7 +88,7 @@ function Consumer(): JSX.Element {
       data-fetch={typeof fetch}
       data-notify={typeof addNotification}
       data-editor={typeof editor?.openFile}
-      data-buffers={typeof buffers?.openWorkspaceBuffer}
+      data-buffers={typeof buffers?.openProjectFolderBuffer}
       data-panes={typeof panes?.switchPane}
       data-hotkeys={hotkeys === null ? 'null' : 'loaded'}
       data-hotkeys-loaded={String(isLoaded)}

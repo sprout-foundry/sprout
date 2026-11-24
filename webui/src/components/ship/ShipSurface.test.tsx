@@ -11,7 +11,7 @@
 
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { ShipPayload } from '../../workspaces/ship';
+import type { ShipPayload } from '../../spaces/ship';
 import ShipSurface from './ShipSurface';
 
 function makePayload(overrides: Partial<ShipPayload> = {}): ShipPayload {

@@ -9,7 +9,7 @@ import (
 )
 
 // These tests cover the their-content stash mechanism used in
-// workspace_patch conflict handling. They run only in WASM builds
+// project_folder_patch conflict handling. They run only in WASM builds
 // since the stash functions are defined in sync_funcs.go which
 // requires js+wasm.
 

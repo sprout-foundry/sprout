@@ -36,7 +36,7 @@ function setup(opts: { sessions?: Partial<ChatSessionsApi>; api?: Partial<ChatAp
     messages: [],
     isProcessing: false,
     perChatCache: {},
-    workspaceBusy: null,
+    projectFolderBusy: null,
     activeChatId: null,
     ...opts.state,
   } as unknown as AppState;

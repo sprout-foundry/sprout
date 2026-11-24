@@ -123,7 +123,7 @@ async function openModifiedBuffer(path = '/w/conflict.ts', content = 'local edit
   renderProvider();
   let bufferId: string | null = null;
   await actAndUpdate(() => {
-    bufferId = ctx().openWorkspaceBuffer({
+    bufferId = ctx().openProjectFolderBuffer({
       kind: 'file',
       path,
       title: path.split('/').pop(),

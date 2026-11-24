@@ -1,7 +1,7 @@
 import { ChevronRight } from 'lucide-react';
 import { useMemo, useCallback, memo, useSyncExternalStore } from 'react';
 import type { KeyboardEvent } from 'react';
-import { getProjectFolderCwd, subscribeProjectFolderCwd } from '../services/workspaceCwd';
+import { getProjectFolderCwd, subscribeProjectFolderCwd } from '../services/projectFolderCwd';
 import { type SymbolInfo as BreadcrumbSymbol, type SymbolKind, KIND_ICONS } from '../utils/symbolUtils';
 import './EditorBreadcrumb.css';
 
@@ -56,7 +56,7 @@ export type { BreadcrumbSymbol };
 interface EditorBreadcrumbProps {
   filePath: string;
   /** The project folder; paths inside it show relative to it. */
-  workspaceRoot?: string;
+  projectFolder?: string;
   /** Name a top-level file too; for layouts without a tab strip to name it. */
   showFileName?: boolean;
   onNavigate?: (path: string) => void;
@@ -72,7 +72,7 @@ const getKindIcon = (kind: SymbolKind): string => (KIND_ICONS as Record<string, 
 
 function EditorBreadcrumb({
   filePath,
-  workspaceRoot: projectFolder = '',
+  projectFolder: projectFolder = '',
   showFileName = false,
   onNavigate,
   symbols,

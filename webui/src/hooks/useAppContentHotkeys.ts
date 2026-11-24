@@ -9,7 +9,7 @@ export interface UseAppContentHotkeysParams {
   onSidebarToggle: () => void;
   onTerminalExpandedChange: (expanded: boolean) => void;
   isTerminalExpanded: boolean;
-  openWorkspaceBuffer: (options: {
+  openProjectFolderBuffer: (options: {
     kind: 'file' | 'chat';
     path: string;
     title: string;
@@ -37,7 +37,7 @@ export const useAppContentHotkeys = ({
   onSidebarToggle,
   onTerminalExpandedChange,
   isTerminalExpanded,
-  openWorkspaceBuffer,
+  openProjectFolderBuffer,
   onViewChange,
   handlePrimaryViewChange,
   closeBuffer,
@@ -79,7 +79,7 @@ export const useAppContentHotkeys = ({
           setIsCommandPaletteOpen((prev) => !prev);
           break;
         case 'new_file':
-          openWorkspaceBuffer({
+          openProjectFolderBuffer({
             kind: 'file',
             path: `__workspace/untitled-${Date.now()}`,
             title: 'Untitled',
@@ -139,7 +139,7 @@ export const useAppContentHotkeys = ({
     onSidebarToggle,
     onTerminalExpandedChange,
     isTerminalExpanded,
-    openWorkspaceBuffer,
+    openProjectFolderBuffer,
     onViewChange,
     handlePrimaryViewChange,
     closeBuffer,

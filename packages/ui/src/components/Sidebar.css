@@ -492,7 +492,7 @@
   cursor: not-allowed;
 }
 
-.sidebar .workspace-actions {
+.sidebar .spaces-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;

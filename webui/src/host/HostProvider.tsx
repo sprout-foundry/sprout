@@ -24,7 +24,7 @@ export function headlessHost(): SproutHost {
       ssh: false,
       git: false,
       chat: false,
-      workspaceSwitching: false,
+      projectFolderSwitching: false,
       folderPicker: false,
       export: false,
       instances: false,

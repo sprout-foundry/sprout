@@ -69,7 +69,7 @@ function mount() {
 
 function projectFolderChanged(root: string) {
   act(() => {
-    window.dispatchEvent(new CustomEvent('sprout:workspace-changed', { detail: { workspaceRoot: root } }));
+    window.dispatchEvent(new CustomEvent('sprout:workspace-changed', { detail: { projectFolder: root } }));
   });
 }
 

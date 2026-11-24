@@ -50,7 +50,7 @@ export interface QueryProgress {
  * Released when the running chat's terminal event arrives (query_completed /
  * error / session_terminated), or when the user stops processing.
  */
-export interface WorkspaceBusyInfo {
+export interface ProjectFolderBusyInfo {
   /** The chat whose send was held back. */
   chatId: string;
   runningChatId: string;
@@ -107,8 +107,8 @@ export interface AppState {
   logs: LogEntry[];
   isProcessing: boolean;
   lastError: string | null;
-  /** 409 project_folder_busy payload (SP-142 §3) — see WorkspaceBusyInfo. */
-  workspaceBusy: WorkspaceBusyInfo | null;
+  /** 409 project_folder_busy payload (SP-142 §3) — see ProjectFolderBusyInfo. */
+  projectFolderBusy: ProjectFolderBusyInfo | null;
   currentView: ViewType;
   toolExecutions: ToolExecution[];
   queryProgress: QueryProgress | null;

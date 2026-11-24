@@ -148,7 +148,7 @@ async function toTxnError(res: Response, action: string): Promise<Error> {
  * "fly" is Fly specifically, "runner" pins one of the user's runners by id.
  * "cloud" (create only) is the cloud-only create the full-dev-space start
  * uses: the platform's cloud hosts, never the caller's runner — see
- * fullWorkspace.ts, which posts it directly rather than through here.
+ * cloudDevSpace.ts, which posts it directly rather than through here.
  */
 export type TxnHostChoice = { host: 'auto' } | { host: 'fly' } | { host: 'runner'; runnerId: string };
 

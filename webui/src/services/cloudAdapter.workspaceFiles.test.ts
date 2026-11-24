@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CloudAdapter } from './cloudAdapter';
 import { getVfsManifestSnapshot, untrackFileWrite } from './vfsFiles';
 import type { WasmDirEntry, WasmShell } from './wasmShell';
-import { createRestFs } from './workspaceFs/restFs';
+import { createRestFs } from './projectFolderFs/restFs';
 
 const ROOT = '/workspace';
 
@@ -309,7 +309,7 @@ describe.each([
     expect(memory.shell.readFile('README.md').error).toBeTruthy();
   });
 
-  it('serves the workspaceFs seam (workspace-relative paths) from the same files', async () => {
+  it('serves the projectFolderFs seam (workspace-relative paths) from the same files', async () => {
     const fs = createRestFs(adapter.fetch.bind(adapter));
     expect(await fs.read('src/main.ts')).toMatchObject({ ok: true, content: 'export const answer = 42;\n' });
     expect(await fs.write('repos/octocat/other/index.ts', 'x\n')).toEqual({ ok: true });

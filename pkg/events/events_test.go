@@ -21,7 +21,7 @@ func TestProjectFolderPatchEvent_NoConflictInfo(t *testing.T) {
 	assert.Equal(t, len("content"), data["size"], "size reflects the dropped content length")
 	assert.Equal(t, "write", data["action"])
 	assert.Equal(t, int64(42), data["seq"])
-	assert.NotContains(t, data, "content", "content must not be shipped in workspace_patch events")
+	assert.NotContains(t, data, "content", "content must not be shipped in project_folder_patch events")
 
 	// Must NOT contain conflict or theirs_path keys
 	assert.NotContains(t, data, "conflict", "no conflict key when called without conflict info")

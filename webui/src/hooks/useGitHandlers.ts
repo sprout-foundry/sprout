@@ -8,7 +8,7 @@
 import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { clientFetch } from '../services/clientSession';
-import { getProjectFolderCwd } from '../services/workspaceCwd';
+import { getProjectFolderCwd } from '../services/projectFolderCwd';
 import { debugLog } from '../utils/log';
 
 export interface UseGitHandlersOptions {
@@ -25,7 +25,7 @@ export interface UseGitHandlersReturn {
 
 /**
  * Merge the session working directory into a git POST body. `dir` is a
- * workspace-relative repo directory (services/workspaceCwd.ts); omitted
+ * workspace-relative repo directory (services/projectFolderCwd.ts); omitted
  * entirely when unset so the request stays byte-identical to today's.
  */
 function withCwdDir(body: Record<string, unknown>): Record<string, unknown> {

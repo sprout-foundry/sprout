@@ -284,7 +284,9 @@ export async function removeWorktree(path: string): Promise<{ message: string; p
   return res.json();
 }
 
-export async function checkoutWorktree(path: string): Promise<{ message: string; path: string; workspace: string }> {
+export async function checkoutWorktree(
+  path: string,
+): Promise<{ message: string; path: string; projectFolder: string }> {
   const res = await clientFetch('/api/git/worktree/checkout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

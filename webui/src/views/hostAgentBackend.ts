@@ -1,11 +1,11 @@
 /**
- * The host's agent backend, wired for a composed workspace.
+ * The host's agent backend, wired for composed spaces.
  *
  * A host states where the agent runs through its transport's `agent` field:
  * a daemon reachable through the host (the preferred backend — full tools, the
  * daemon is the source of truth) or the in-browser agent (the wasm backend).
- * This module turns that declaration into the wiring a mounted workspace needs,
- * so a host that mounts `SproutWorkspace` gets the backend it asked for with no
+ * This module turns that declaration into the wiring mounted spaces need,
+ * so a host that mounts `SproutSpaces` gets the backend it asked for with no
  * extra setup.
  *
  * For the wasm backend it does the two things the hosted build's own
@@ -18,7 +18,7 @@
  *   events use (`setAgentEventDispatcher` → `WebSocketService.deliverLocal`),
  *   so the chat reducer renders them.
  *
- * The repository the workspace opens comes from the host project's `repoUrl`
+ * The repository the spaces open comes from the host project's `repoUrl`
  * (carried on the adapter config), rather than the `?repo=` URL parameter. The
  * in-browser agent's model endpoint is read from the host's transport by the
  * wasm-local handlers when they write the provider config, so it is not
@@ -34,7 +34,7 @@
  * retiring the in-browser adapter (the cloud adapter the composition's wasm
  * wiring or the page's bootstrap installed, so the daemon backend's URLs drive
  * the calls again) and handing the connection state back to the events
- * socket. Re-mounting the workspace with a new transport also works and is
+ * socket. Re-mounting the spaces with a new transport also works and is
  * equivalent. An adapter of any other kind (one the host installed itself) is
  * never retired — the host owns it — and a superseded async wasm install (a
  * slower import that resolves after the switch) is discarded by generation,
@@ -74,7 +74,7 @@ let wireGeneration = 0;
  * sentinel, so an embedding host that names no URL stays on its own origin
  * rather than inheriting the daemon bootstrap's absolute URLs (which belong to
  * the daemon the page was served from, not to the host that mounted the
- * workspace). Only the bootstrap config's non-URL settings (nav items, egress
+ * spaces). Only the bootstrap config's non-URL settings (nav items, egress
  * proxy) are inherited.
  */
 async function buildWasmAdapter(host: SproutHost, repoUrl: string | undefined): Promise<CloudAdapter> {
@@ -108,7 +108,7 @@ async function installAgentEventDispatcher(): Promise<void> {
  * named the daemon (the daemon's own URLs drive the calls, and the events
  * socket's state is the connection state) — except it retires the in-browser
  * adapter, so a host that switches backends in place (a new `host` with a new
- * `agent` on the mounted workspace) hands its calls back to the daemon.
+ * `agent` on the mounted spaces) hands its calls back to the daemon.
  *
  * For the wasm backend the agent is reachable once the adapter and the event
  * dispatcher are installed, not when an events socket opens (a host may serve
@@ -155,13 +155,13 @@ export async function wireHostAgentBackend(host: SproutHost, repoUrl: string | u
     if (repoUrl) void importStartupRepo(adapter, repoUrl, 'host');
   } catch (err) {
     if (generation !== wireGeneration) return;
-    console.warn('[SproutWorkspace] in-browser agent wiring failed:', err);
+    console.warn('[SproutSpaces] in-browser agent wiring failed:', err);
     events.setLocalAgentState('none');
   }
 }
 
 /**
- * Undo what a mounted workspace's wiring declared for the page: the events
+ * Undo what mounted spaces' wiring declared for the page: the events
  * transport goes back to the socket's connection state and the host project
  * repo claim is released, so the next mount (or a host that names no backend)
  * starts clean. The adapter and the event dispatcher stay installed (see

@@ -23,7 +23,7 @@ export const Default: Story = {
   args: {
     files: mockFileTree,
     rootPath: '.',
-    workspaceRoot: '/home/user/demo',
+    projectFolder: '/home/user/demo',
     ...mockFileHandlers,
   },
 };
@@ -32,7 +32,7 @@ export const Empty: Story = {
   args: {
     files: emptyFileTree,
     rootPath: '.',
-    workspaceRoot: '/home/user/demo',
+    projectFolder: '/home/user/demo',
     ...mockFileHandlers,
   },
 };
@@ -46,7 +46,7 @@ export const WithSelectedFile: Story = {
         <FileTree
           files={mockFileTree}
           rootPath="."
-          workspaceRoot="/home/user/demo"
+          projectFolder="/home/user/demo"
           selectedFile={selectedFile}
           onFileSelect={(file) => setSelectedFile(file.path)}
           onRefresh={mockFileHandlers.onRefresh}
@@ -80,7 +80,7 @@ export const WithFilter: Story = {
           <FileTree
             files={mockFileTree}
             rootPath="."
-            workspaceRoot="/home/user/demo"
+            projectFolder="/home/user/demo"
             onFileSelect={mockFileHandlers.onFileSelect}
             onRefresh={mockFileHandlers.onRefresh}
             onItemCreated={mockFileHandlers.onItemCreated}
@@ -105,7 +105,7 @@ export const WithGitIgnored: Story = {
   args: {
     files: mockFileTree,
     rootPath: '.',
-    workspaceRoot: '/home/user/demo',
+    projectFolder: '/home/user/demo',
     ...mockFileHandlers,
   },
   parameters: {
@@ -130,7 +130,7 @@ export const InteractiveDemo: Story = {
           <FileTree
             files={mockFileTree}
             rootPath="."
-            workspaceRoot="/home/user/demo"
+            projectFolder="/home/user/demo"
             selectedFile={selectedFile}
             onFileSelect={(file) => setSelectedFile(file.path)}
             onRefresh={mockFileHandlers.onRefresh}
@@ -238,7 +238,7 @@ export const NestedDirectories: Story = {
           <FileTree
             files={nestedTree}
             rootPath="project"
-            workspaceRoot="/home/user/demo"
+            projectFolder="/home/user/demo"
             {...mockFileHandlers}
           />
         </div>
@@ -332,7 +332,7 @@ export const MixedFileTypes: Story = {
           <FileTree
             files={mixedFiles}
             rootPath="."
-            workspaceRoot="/home/user/demo"
+            projectFolder="/home/user/demo"
             {...mockFileHandlers}
           />
         </div>

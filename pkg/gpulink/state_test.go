@@ -3,6 +3,7 @@ package gpulink
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -173,6 +174,7 @@ func TestDefaultLinkName(t *testing.T) {
 	if err != nil || host == "" {
 		t.Skip("no hostname on this machine")
 	}
+	host = strings.TrimSuffix(host, ".local")
 	links := func(names ...string) []*State {
 		var out []*State
 		for _, n := range names {

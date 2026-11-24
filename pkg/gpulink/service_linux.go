@@ -61,9 +61,12 @@ func writeTemplate() (string, error) {
 }
 
 // InstallService registers `sprout gpu start --name <name>` as a systemd
-// user unit instance that starts at login and restarts if it exits, and
-// replaces the single unit an older sprout installed. The instance is the
-// link's slot: systemd instance names, like the state files, key on it.
+// user unit instance that starts at login and restarts if it exits. The
+// instance is the link's slot: systemd instance names, like the state
+// files, key on it. The single unit an older sprout installed is left in
+// place here — replacing it is InstallAllServices' job, once every link
+// has an instance — so a one-link install of a second link never leaves
+// the first link unserved.
 func InstallService(name string) (string, error) {
 	slot := Slot(name)
 	if slot == "" {
@@ -104,9 +107,12 @@ func InstallAllServices(names []string) ([]string, error) {
 		}
 		paths = append(paths, path)
 	}
-	uninstallLegacyService()
-	return paths, nil
+	return paths, uninstallLegacyService()
 }
+
+// ReplaceLegacyService stops and removes the single unit an older sprout
+// installed. Call it only when every link has its own instance.
+func ReplaceLegacyService() error { return uninstallLegacyService() }
 
 // UninstallService disables and removes one link's service instance. An
 // empty slot removes every instance, the template and the legacy unit.
@@ -135,15 +141,18 @@ func UninstallService(slot string) error {
 }
 
 // uninstallLegacyService stops and removes the single unit an older sprout
-// installed; instances have replaced it.
-func uninstallLegacyService() {
+// installed; per-link instances have replaced it.
+func uninstallLegacyService() error {
 	_ = exec.Command("systemctl", "--user", "disable", "--now", legacySystemdUnit).Run() //nolint:gosec // G204: fixed systemctl subcommand for the link's own unit
 	dir, err := systemdUserDir()
 	if err != nil {
-		return
+		return err
 	}
-	_ = os.Remove(filepath.Join(dir, legacySystemdUnit))
+	if err := os.Remove(filepath.Join(dir, legacySystemdUnit)); err != nil && !os.IsNotExist(err) {
+		return err
+	}
 	_ = exec.Command("systemctl", "--user", "daemon-reload").Run()
+	return nil
 }
 
 // LegacyServiceInstalled reports whether the single unit an older sprout
@@ -168,8 +177,8 @@ func ServiceNotice() string {
 }
 
 // ServiceState is whether a link's service is running, and how to see its log.
-func ServiceState(name string) (state, logs string) {
-	unit := instanceUnit(name)
+func ServiceState(slot string) (state, logs string) {
+	unit := instanceUnit(slot)
 	out, _ := exec.Command("systemctl", "--user", "is-active", unit).Output() //nolint:gosec // G204: fixed systemctl query for the link's own unit
 	state = strings.TrimSpace(string(out))
 	if state == "" {

@@ -92,8 +92,12 @@ func MoveKeysToFileStore() error {
 		return err
 	}
 	for _, st := range links {
-		if _, err := LoadAPIKeyFor(st.Slot()); err != nil {
+		key, err := LoadAPIKeyFor(st.Slot())
+		if err != nil {
 			return err
+		}
+		if key == "" {
+			return fmt.Errorf("the link %q has no agent key in the credential store; run `sprout gpu link` again", st.Name)
 		}
 		_ = LoadEngineKeyFor(st.Slot())
 	}
@@ -119,6 +123,21 @@ func migrateLegacy() error {
 	st := &State{Engine: DefaultEngine}
 	if err := json.Unmarshal(data, st); err != nil {
 		return fmt.Errorf("parsing %s: %w", oldPath, err)
+	}
+	// A per-link file at this slot (a link made after a downgrade, say) is
+	// newer than the legacy one; keep it and drop only the legacy file. The
+	// links dir is read directly: LoadLink would re-enter this migration
+	// while gpu.json is still on disk. saveAt is used for the same reason —
+	// Save's guard reads the links dir being created here.
+	path, err := statePath(st.Slot())
+	if err != nil {
+		return err
+	}
+	if existing, err := os.ReadFile(path); err == nil {
+		have := &State{Engine: DefaultEngine}
+		if json.Unmarshal(existing, have) == nil && have.Linked() {
+			return nil
+		}
 	}
 	if err := st.saveAt(st.Slot()); err != nil {
 		return err

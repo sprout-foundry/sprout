@@ -28,25 +28,24 @@ func AdoptLink(fromDir string) (bool, error) {
 	}
 
 	movedSlots, err := adoptDirLinks(fromDir, slots)
-	if err != nil {
-		return len(movedSlots) > 0, err
-	}
-	legacyMoved, err := adoptLegacyLink(fromDir, slots)
-	if legacyMoved {
-		movedSlots = append(movedSlots, "gpu.json")
-	}
-	// Only what moved goes: a link skipped above (the machine already has
-	// its slot) stays in the repo config untouched.
+	// Whatever moved goes from the repo config, error or not: its keys are
+	// already deleted there, so leaving the file would leave a link that
+	// can never adopt again.
 	for _, slot := range movedSlots {
 		_ = os.Remove(filepath.Join(fromDir, "gpu", "links", slot+".json"))
 	}
+	legacyMoved, legacyErr := adoptLegacyLink(fromDir, slots)
 	if legacyMoved {
+		movedSlots = append(movedSlots, "gpu.json")
 		_ = os.Remove(filepath.Join(fromDir, "gpu", "gpu.json"))
 	}
 	// Empty remains go too, so the repo config stops looking linked.
 	_ = os.Remove(filepath.Join(fromDir, "gpu", "links"))
 	_ = os.Remove(filepath.Join(fromDir, "gpu"))
-	return len(movedSlots) > 0, err
+	if err != nil {
+		return len(movedSlots) > 0, err
+	}
+	return len(movedSlots) > 0, legacyErr
 }
 
 // adoptDirLinks moves the gpu/links/*.json files the current sprout layout

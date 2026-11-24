@@ -120,6 +120,15 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 	if name == "" {
 		name = gpulink.DefaultLinkName(existing, gpuEngine)
 	}
+	slot := gpulink.Slot(name)
+	if slot == "" {
+		return fmt.Errorf("link name %q has no usable file name; pick another with --name", name)
+	}
+	for _, old := range existing {
+		if old.Slot() == slot {
+			return fmt.Errorf("%q is already linked here as %q (engine %s); pass a different --name, or unlink it first with `sprout gpu unlink --name %s`", name, old.Name, old.Engine, slot)
+		}
+	}
 	out := cmd.OutOrStdout()
 	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -187,15 +196,6 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 		}
 		if creds, err = pollGPULink(ctx, client, start); err != nil {
 			return err
-		}
-	}
-	slot := gpulink.Slot(name)
-	if slot == "" {
-		return fmt.Errorf("link name %q has no usable file name; pick another with --name", name)
-	}
-	for _, old := range existing {
-		if old.Slot() == slot {
-			return fmt.Errorf("%q is already linked here as %q (engine %s); pass a different --name, or unlink it first with `sprout gpu unlink --name %s`", name, old.Name, old.Engine, slot)
 		}
 	}
 	keyStore, err := gpulink.SaveAPIKeyFor(slot, creds.APIKey)

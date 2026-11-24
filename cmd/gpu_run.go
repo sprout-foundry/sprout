@@ -84,7 +84,7 @@ func runGPUStatus(cmd *cobra.Command, _ []string) error {
 		printGPULinkStatus(cmd.Context(), out, st)
 	}
 	if gpulink.LegacyServiceInstalled() {
-		_, _ = fmt.Fprintln(out, "\nThe single service an older sprout installed (sprout-gpu.service, or com.sprout.gpu) is still on disk but no longer used; `sprout gpu install` per link replaces it.")
+		_, _ = fmt.Fprintln(out, "\nThe single service an older sprout installed (sprout-gpu.service, or com.sprout.gpu) is still on disk; `sprout gpu install` (all links) replaces it with one service per link.")
 	}
 	return nil
 }
@@ -134,6 +134,15 @@ func runGPUInstall(cmd *cobra.Command, _ []string) error {
 			return fmt.Errorf("installing the service for %q: %w", st.Name, err)
 		}
 		_, _ = fmt.Fprintf(out, "Installed %s for %q.\n", path, st.Name)
+		// The single service an older sprout installed is replaced only
+		// once every link has its own instance; with one link that is now.
+		if len(links) == 1 {
+			if err := gpulink.ReplaceLegacyService(); err != nil {
+				return err
+			}
+		} else {
+			_, _ = fmt.Fprintln(out, "Other links are still served by the single service an older sprout installed; `sprout gpu install` (all links) replaces it.")
+		}
 		return nil
 	}
 	paths, err := gpulink.InstallAllServices(linkNames(links))

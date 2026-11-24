@@ -441,8 +441,8 @@ save cannot lock it out.
 
 After linking, choose one of the engine's models under **Account → Models**
 on the platform. Each link's key and engine key live in sprout's credential
-store under the link's name; its state is one file in the config directory's
-`gpu/links/<name>.json`.
+store under the link's slot — its name reduced to a file-safe form; its
+state is one file in the config directory's `gpu/links/<slot>.json`.
 
 **Several GPUs on one machine:** each link has its own name, state file, keys
 and background service (`sprout-gpu@<name>.service` on Linux,

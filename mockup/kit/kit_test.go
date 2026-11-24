@@ -187,3 +187,24 @@ func TestDarkPaletteKeepsDarkBandsDark(t *testing.T) {
 		t.Errorf("only a dark palette gets the dark-band override")
 	}
 }
+
+func TestWithChoice(t *testing.T) {
+	c := Choice{Kit: "clean", Palette: "sage-linen", Composition: "band", Font: "fraunces"}
+	out := WithChoice(`<!doctype html><html data-kit="soft" data-palette="terracotta" data-composition="hero" data-font="lato" data-lang="en"><body></body></html>`, c)
+	if got := ChoiceOf(out); got.Kit != "clean" || got.Palette != "sage-linen" || got.Composition != "band" || got.Font != "fraunces" {
+		t.Fatalf("choice = %+v", got)
+	}
+	if !strings.Contains(out, `data-lang="en"`) {
+		t.Error("the tag's other attributes were dropped")
+	}
+	// Empty fields are removed, leaving the document with the default.
+	out = WithChoice(`<!doctype html><html data-kit="soft" data-palette="sage-linen"><body></body></html>`, Choice{Palette: "sage-linen"})
+	if got := ChoiceOf(out); got.Kit != DefaultKit || got.Palette != "sage-linen" || got.Composition != "" || got.Font != "" {
+		t.Fatalf("choice = %+v", got)
+	}
+	// A document without an <html> tag is left alone.
+	plain := `<body>plain</body>`
+	if out := WithChoice(plain, c); out != plain {
+		t.Errorf("no html tag: document changed: %s", out)
+	}
+}

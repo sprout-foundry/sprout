@@ -15,6 +15,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"html"
 	"regexp"
 	"sort"
 	"strings"
@@ -244,11 +245,12 @@ const (
 )
 
 var (
-	htmlTagRe  = regexp.MustCompile(`(?is)<html\b[^>]*>`)
-	attrRe     = regexp.MustCompile(`(?i)\bdata-(kit|palette|composition|font)\s*=\s*["']([^"']*)["']`)
-	bodyOpenRe = regexp.MustCompile(`(?is)<body\b[^>]*>`)
-	iconRefRe  = regexp.MustCompile(`#i-([a-z0-9-]+)`)
-	blockRe    = regexp.MustCompile(`(?s)` + regexp.QuoteMeta(blockStart) + `.*?` + regexp.QuoteMeta(blockEnd))
+	htmlTagRe    = regexp.MustCompile(`(?is)<html\b[^>]*>`)
+	choiceAttrRe = regexp.MustCompile(`(?i)\sdata-(?:kit|palette|composition|font)\s*=\s*(?:"[^"]*"|'[^']*')`)
+	attrRe       = regexp.MustCompile(`(?i)\bdata-(kit|palette|composition|font)\s*=\s*["']([^"']*)["']`)
+	bodyOpenRe   = regexp.MustCompile(`(?is)<body\b[^>]*>`)
+	iconRefRe    = regexp.MustCompile(`#i-([a-z0-9-]+)`)
+	blockRe      = regexp.MustCompile(`(?s)` + regexp.QuoteMeta(blockStart) + `.*?` + regexp.QuoteMeta(blockEnd))
 )
 
 // Choice is the kit, palette, first-screen composition and heading font a
@@ -385,6 +387,43 @@ func Block(c Choice, iconNames []string) string {
 
 // darkPaletteCSS keeps section-dark dark on a dark palette.
 const darkPaletteCSS = `.section-dark{background:var(--soft);color:var(--text)}.section-dark h1,.section-dark h2,.section-dark h3,.section-dark .display{color:var(--text)}.section-dark .muted,.section-dark .lead{color:var(--muted)}`
+
+// WithChoice stamps c's kit, palette, composition and font on the document's
+// <html> tag: attributes the choice leaves empty are removed, so the document
+// asks for exactly the choice given. The tag's other attributes are left alone.
+func WithChoice(doc string, c Choice) string {
+	loc := htmlTagRe.FindStringIndex(doc)
+	if loc == nil {
+		return doc
+	}
+	tag := doc[loc[0]:loc[1]]
+	closing := tag[len(tag)-1:]
+	if strings.HasSuffix(tag, "/>") {
+		closing = "/>"
+		tag = strings.TrimSuffix(tag, "/>")
+	} else {
+		tag = strings.TrimSuffix(tag, ">")
+		closing = ">"
+	}
+	tag = choiceAttrRe.ReplaceAllString(tag, "")
+	var b strings.Builder
+	b.WriteString(tag)
+	add := func(name, value string) {
+		if value == "" {
+			return
+		}
+		b.WriteString(` `)
+		b.WriteString("data-" + name + `="`)
+		b.WriteString(html.EscapeString(value))
+		b.WriteString(`"`)
+	}
+	add("kit", c.Kit)
+	add("palette", c.Palette)
+	add("composition", c.Composition)
+	add("font", c.Font)
+	b.WriteString(closing)
+	return doc[:loc[0]] + b.String() + doc[loc[1]:]
+}
 
 // Strip removes what Assemble added, giving back the model's document.
 func Strip(doc string) string {

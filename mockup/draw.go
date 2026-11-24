@@ -75,6 +75,12 @@ type Request struct {
 	// different kit, palette, composition and font), keeping its text,
 	// screens and behaviour.
 	Fresh bool
+	// Keep, when set, is the design a whole redraw of an existing mockup must
+	// keep: the draw uses exactly that kit, palette, composition and font
+	// instead of choosing, and Avoid is ignored. When nil, a whole redraw
+	// with Saved set and Fresh unset keeps Saved's own choice, so an update
+	// keeps its design; only Fresh picks anew.
+	Keep *kit.Choice
 	// Direction is a design direction the draw leans toward when it suits
 	// the idea; empty picks one at random, so ideas alike do not all come
 	// out alike.
@@ -137,20 +143,33 @@ func Draw(ctx context.Context, stream StreamText, req Request, publish func(even
 		current = StripContent(kit.Strip(req.Saved))
 	}
 	d.saved = req.Content
-	d.steer = steerRequest(req.Avoid, req.Fresh, current)
-	if req.Look == nil && req.Root == "" {
-		direction := req.Direction
-		if direction == "" {
-			direction = Directions[rand.IntN(len(Directions))]
+	keep := req.Keep
+	if keep == nil && req.Saved != "" && !req.Fresh {
+		// An update keeps its design: the whole redraw (when the edits do
+		// not apply) uses the current mockup's own choice.
+		if c := kit.ChoiceOf(req.Saved); c.Uses {
+			keep = &c
 		}
-		d.steer += "\n\nFor this one, lean toward a " + direction + " look, where it suits the idea."
-		if comps := nudgeCompositions(); len(comps) > 0 {
-			d.steer += " Consider a `" + comps[rand.IntN(len(comps))] + "` first screen if the kit you choose offers it."
+	}
+	if keep != nil {
+		// Avoid is ignored: the current look is kept exactly.
+		d.steer = keepRequest(*keep)
+	} else {
+		d.steer = steerRequest(req.Avoid, req.Fresh, current)
+		if req.Look == nil && req.Root == "" {
+			direction := req.Direction
+			if direction == "" {
+				direction = Directions[rand.IntN(len(Directions))]
+			}
+			d.steer += "\n\nFor this one, lean toward a " + direction + " look, where it suits the idea."
+			if comps := nudgeCompositions(); len(comps) > 0 {
+				d.steer += " Consider a `" + comps[rand.IntN(len(comps))] + "` first screen if the kit you choose offers it."
+			}
+			d.steer += " Name only a kit, palette, composition and font from the lists.\n"
 		}
-		d.steer += " Name only a kit, palette, composition and font from the lists.\n"
 	}
 	note := ChangeNote(req.Change, req.Part)
-	if req.Fresh && current != "" && note == "" {
+	if req.Fresh && current != "" && note == "" && keep == nil {
 		note = freshNote
 	}
 	if req.Plan == nil && (current == "" || note == "") {
@@ -167,7 +186,7 @@ func Draw(ctx context.Context, stream StreamText, req Request, publish func(even
 			return Result{}, d.fail("the change took too long; try again")
 		}
 	}
-	return d.whole(ctx, req.Plan, current, note)
+	return d.whole(ctx, req.Plan, current, note, keep)
 }
 
 // ensureLook is the look pre-step: the project's saved look, or one recorded
@@ -234,7 +253,7 @@ func (d *draw) edit(ctx context.Context, current, note string) (string, bool) {
 
 // whole streams a whole document: from the plan, or from the current mockup
 // with the change.
-func (d *draw) whole(ctx context.Context, plan []byte, current, note string) (Result, error) {
+func (d *draw) whole(ctx context.Context, plan []byte, current, note string, keep *kit.Choice) (Result, error) {
 	d.start("whole")
 	var seq int
 	streamer := kit.Streamer{Look: d.look}
@@ -251,6 +270,13 @@ func (d *draw) whole(ctx context.Context, plan []byte, current, note string) (Re
 	source, ok := Clean(text)
 	if !ok {
 		return Result{}, d.fail("the mockup did not come out as a page; try again")
+	}
+	if keep != nil {
+		// A kept design must be kept exactly, whatever the model chose.
+		source = kit.WithChoice(source, *keep)
+		if d.look == nil && keep.Look != nil {
+			source = kit.WithLook(source, *keep.Look)
+		}
 	}
 	return d.finish(source, "whole"), nil
 }
@@ -320,6 +346,28 @@ func steerRequest(avoid []kit.Choice, fresh bool, current string) string {
 		return out + ".\n"
 	}
 	return out + " — unless the idea plainly needs one of them.\n"
+}
+
+// keepRequest tells the model the design it must keep: the exact kit,
+// palette, composition and font, so a whole redraw does not re-choose.
+func keepRequest(c kit.Choice) string {
+	var parts []string
+	if c.Kit != "" {
+		parts = append(parts, `data-kit="`+c.Kit+`"`)
+	}
+	if c.Palette != "" {
+		parts = append(parts, `data-palette="`+c.Palette+`"`)
+	}
+	if c.Composition != "" {
+		parts = append(parts, `data-composition="`+c.Composition+`"`)
+	}
+	if c.Font != "" {
+		parts = append(parts, `data-font="`+c.Font+`"`)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "\n\nKeep the current design exactly: put " + strings.Join(parts, ", ") + " on <html>. Do not choose a different kit, palette, composition or font.\n"
 }
 
 // nudgeCompositions are the compositions a draw may be nudged toward: all but

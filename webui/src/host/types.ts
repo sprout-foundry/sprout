@@ -436,7 +436,7 @@ export interface HostCapabilities {
   /** Agent chat. */
   chat: boolean;
   /** Switching between project folders (the project folder switcher UI). */
-  workspaceSwitching: boolean;
+  projectFolderSwitching: boolean;
   /** A native folder picker (host shells only; off for in-browser hosts). */
   folderPicker: boolean;
   /** Exporting the project folder to a local filesystem (no local FS means off). */

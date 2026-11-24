@@ -283,7 +283,7 @@ function Chat({
   chatId: _chatId,
   worktreePath,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  workspaceRoot: _projectFolder,
+  projectFolder: _projectFolder,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onWorktreeChange: _onWorktreeChange,
   // Provider availability

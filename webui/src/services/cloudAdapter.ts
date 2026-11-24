@@ -143,7 +143,7 @@ export class CloudAdapter implements APIAdapter {
   readonly supportsSSH = false;
   readonly supportsGit = true;
   readonly supportsChat = true;
-  readonly supportsWorkspaceSwitching = false;
+  readonly supportsProjectFolderSwitching = false;
   readonly supportsExport = false;
   readonly supportsInstances = true;
   readonly supportsLocalTerminal = false;

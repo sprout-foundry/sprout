@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net"
 	"net/url"
 	"os"
@@ -24,12 +23,13 @@ import (
 
 var gpuCmd = &cobra.Command{
 	Use:   "gpu",
-	Short: "Link a GPU you run to your platform account",
-	Long: `Link an inference engine this machine runs (Ollama, llama.cpp, vLLM, MLX,
+	Short: "Link GPUs you run to your platform account",
+	Long: `Link inference engines this machine runs (Ollama, llama.cpp, vLLM, MLX,
 LM Studio: anything that answers OpenAI's /v1/chat/completions) to your
-platform account, so your tasks and Sprout can run on its models. On an
-Apple Silicon Mac, sprout can serve the model itself with sinter (--sinter);
-it does so too when no --engine is given and nothing answers at Ollama's port.
+platform account — several per machine, one background service per link. On
+an Apple Silicon Mac, sprout can serve the model itself with sinter
+(--sinter); it does so too when no --engine is given and nothing answers at
+Ollama's port.
 
 The agent connects out to the platform: no port is opened on your network,
 and the platform reaches only the engine's model-serving paths.`,
@@ -57,8 +57,8 @@ func init() {
 	}
 	linkCmd.Flags().StringVar(&gpuEngine, "engine", gpulink.DefaultEngine, "host:port of the engine as this machine reaches it (Ollama 11434, llama.cpp 8080, vLLM 8000, LM Studio 1234); when not given and nothing answers there, Apple Silicon Macs serve with sinter")
 	linkCmd.Flags().StringVar(&gpuEngineKey, "engine-key", "", "the engine's own API key, if it requires one (stored in the credential store)")
-	linkCmd.Flags().StringVar(&gpuName, "name", "", "name shown on the platform (default: this machine's hostname)")
-	linkCmd.Flags().StringVar(&gpuPlatform, "platform", "", "platform URL (default $SPROUT_PLATFORM_URL, else the previous link, else "+runner.DefaultPlatformURL+")")
+	linkCmd.Flags().StringVar(&gpuName, "name", "", "name shown on the platform (default: this machine's hostname, or hostname-port when that name is already linked here)")
+	linkCmd.Flags().StringVar(&gpuPlatform, "platform", "", "platform URL (default $SPROUT_PLATFORM_URL, else an existing link's, else "+runner.DefaultPlatformURL+")")
 	linkCmd.Flags().BoolVar(&gpuNoBrowser, "no-browser", false, "print the approval URL without opening a browser (SSH sessions, headless machines)")
 	linkCmd.Flags().BoolVar(&gpuSinter, "sinter", false, "serve a model in-process with sinter instead of a server at --engine (Apple Silicon)")
 	linkCmd.Flags().BoolVar(&gpuFleet, "fleet", false, "link to the platform's own GPU fleet (a machine the platform owns or rents), approved by a platform admin, instead of to your account")
@@ -68,13 +68,21 @@ func init() {
 
 	gpuCmd.AddCommand(
 		linkCmd,
-		&cobra.Command{Use: "start", Short: "Serve the platform's requests to the engine in the foreground (what the background service runs)", Args: cobra.NoArgs, RunE: runGPUStart},
-		&cobra.Command{Use: "status", Short: "Show the link and whether the engine answers", Args: cobra.NoArgs, RunE: runGPUStatus},
-		&cobra.Command{Use: "install", Short: "Run the GPU link in the background, at login and after restarts (systemd user unit or launchd agent); `link` does this already", Args: cobra.NoArgs, RunE: runGPUInstall},
-		&cobra.Command{Use: "uninstall", Short: "Stop running the GPU link at login", Args: cobra.NoArgs, RunE: runGPUUninstall},
-		&cobra.Command{Use: "unlink", Short: "Forget the link on this machine", Args: cobra.NoArgs, RunE: runGPUUnlink},
-		&cobra.Command{Use: "rotate-key", Short: "Trade the link's key for a new one (a running agent moves to it when it restarts)", Args: cobra.NoArgs, RunE: runGPURotateKey},
+		&cobra.Command{Use: "start", Short: "Serve one link's requests to the engine in the foreground (what the background service runs)", Args: cobra.NoArgs, RunE: runGPUStart},
+		&cobra.Command{Use: "status", Short: "Show every link and whether its engine answers", Args: cobra.NoArgs, RunE: runGPUStatus},
+		&cobra.Command{Use: "install", Short: "Run the GPU links in the background, at login and after restarts (one systemd user-unit instance or launchd agent per link); `link` does this already", Args: cobra.NoArgs, RunE: runGPUInstall},
+		&cobra.Command{Use: "uninstall", Short: "Stop running the GPU links at login (all of them, or one with --name)", Args: cobra.NoArgs, RunE: runGPUUninstall},
+		&cobra.Command{Use: "unlink", Short: "Forget one link on this machine", Args: cobra.NoArgs, RunE: runGPUUnlink},
+		&cobra.Command{Use: "rotate-key", Short: "Trade a link's key for a new one (a running agent moves to it when it restarts)", Args: cobra.NoArgs, RunE: runGPURotateKey},
 	)
+	for _, c := range gpuCmd.Commands() {
+		switch c.Name() {
+		case "start", "unlink", "rotate-key", "uninstall":
+			c.Flags().StringVar(&gpuName, "name", "", "which link (needed when several are linked; see `sprout gpu status`)")
+		case "install":
+			c.Flags().StringVar(&gpuName, "name", "", "install only this link's service (default: every link's)")
+		}
+	}
 	rootCmd.AddCommand(gpuCmd)
 }
 
@@ -88,11 +96,11 @@ func validEngine(addr string) error {
 }
 
 func runGPULink(cmd *cobra.Command, _ []string) error {
-	st, err := gpulink.LoadState()
+	existing, err := gpulink.LoadLinks()
 	if err != nil {
 		return err
 	}
-	platform := resolveLinkPlatform(gpuPlatform, os.Getenv("SPROUT_PLATFORM_URL"), st.PlatformURL)
+	platform := gpuLinkPlatform(existing)
 	if u, err := url.Parse(platform); err != nil || (u.Scheme != "https" && u.Hostname() != "localhost" && u.Hostname() != "127.0.0.1") {
 		return fmt.Errorf("platform URL must be https (got %q)", platform)
 	}
@@ -110,7 +118,16 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 	}
 	name := gpuName
 	if name == "" {
-		name, _ = os.Hostname()
+		name = gpulink.DefaultLinkName(existing, gpuEngine)
+	}
+	slot := gpulink.Slot(name)
+	if slot == "" {
+		return fmt.Errorf("link name %q has no usable file name; pick another with --name", name)
+	}
+	for _, old := range existing {
+		if old.Slot() == slot {
+			return fmt.Errorf("%q is already linked here as %q (engine %s); pass a different --name, or unlink it first with `sprout gpu unlink --name %s`", name, old.Name, old.Engine, slot)
+		}
 	}
 	out := cmd.OutOrStdout()
 	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
@@ -181,21 +198,22 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 	}
-	keyStore, err := gpulink.SaveAPIKey(creds.APIKey)
+	keyStore, err := gpulink.SaveAPIKeyFor(slot, creds.APIKey)
 	if err != nil {
 		return fmt.Errorf("storing the GPU link key failed (%w); remove %q under Account → My GPUs and link again", err, name)
 	}
-	if err := gpulink.SaveEngineKey(gpuEngineKey); err != nil {
+	if err := gpulink.SaveEngineKeyFor(slot, gpuEngineKey); err != nil {
 		return fmt.Errorf("storing the engine key: %w", err)
 	}
-	st.PlatformURL = strings.TrimRight(platform, "/")
-	st.LinkID = creds.LinkID
-	st.Name = name
-	st.Account = creds.AccountEmail
-	st.Engine = gpuEngine
-	st.Model = ""
-	st.Fleet = gpuFleet
-	st.KeyRotatedAt = time.Now().UTC()
+	st := &gpulink.State{
+		PlatformURL:  strings.TrimRight(platform, "/"),
+		LinkID:       creds.LinkID,
+		Name:         name,
+		Account:      creds.AccountEmail,
+		Engine:       gpuEngine,
+		Fleet:        gpuFleet,
+		KeyRotatedAt: time.Now().UTC(),
+	}
 	if useSinter {
 		st.Engine = gpulink.EngineSinter
 		st.Model = sinterDir
@@ -208,7 +226,7 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 	} else {
 		_, _ = fmt.Fprintf(out, "Linked as %q%s (key stored in the %s).\n", name, platformauth.LinkedTo(creds.AccountEmail), keyStore)
 	}
-	startGPUService(out)
+	startGPUService(out, st)
 	if gpuFleet {
 		_, _ = fmt.Fprintln(out, "Then add it as a Linked GPU (fleet) provider under Admin → LLM providers.")
 	} else {
@@ -217,16 +235,41 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
+// gpuLinkPlatform resolves the platform URL: --platform, then
+// $SPROUT_PLATFORM_URL, then an existing link's, then the default.
+func gpuLinkPlatform(existing []*gpulink.State) string {
+	saved := ""
+	for _, st := range existing {
+		if st.PlatformURL != "" {
+			saved = st.PlatformURL
+			break
+		}
+	}
+	return resolveLinkPlatform(gpuPlatform, os.Getenv("SPROUT_PLATFORM_URL"), saved)
+}
+
 // startGPUService runs the link in the background (the login service),
 // unless --no-service, or says how to when this OS has no service.
-func startGPUService(out io.Writer) {
+func startGPUService(out io.Writer, st *gpulink.State) {
 	if gpuNoService {
-		_, _ = fmt.Fprintln(out, "Start it with `sprout gpu start`, or `sprout gpu install` to run it in the background.")
+		_, _ = fmt.Fprintf(out, "Start it with `sprout gpu start --name %s`, or `sprout gpu install` to run every link in the background.\n", st.Slot())
 		return
 	}
-	path, err := gpulink.InstallService()
+	// The single service an older sprout installed names no link in its
+	// `sprout gpu start`, so it cannot serve several links: once this link
+	// exists, every link gets its own instance and the single service
+	// retires. (Without this, its next restart crash-loops on "several
+	// GPUs are linked; pass --name" and drops the links it served.)
+	if gpulink.LegacyServiceInstalled() {
+		if links, err := gpulink.LoadLinks(); err == nil && len(links) > 0 {
+			if _, err := gpulink.InstallAllServices(linkNames(links)); err != nil {
+				_, _ = fmt.Fprintf(out, "Could not replace the older single service (%v); run `sprout gpu install` to replace it.\n", err)
+			}
+		}
+	}
+	path, err := gpulink.InstallService(st.Name)
 	if err != nil {
-		_, _ = fmt.Fprintf(out, "Could not run it in the background (%v); start it with `sprout gpu start`.\n", err)
+		_, _ = fmt.Fprintf(out, "Could not run it in the background (%v); start it with `sprout gpu start --name %s`.\n", err, st.Slot())
 		return
 	}
 	_, _ = fmt.Fprintf(out, "Running in the background (%s), at login and after restarts; `sprout gpu status` shows it.\n", path)
@@ -263,158 +306,38 @@ func pollGPULink(ctx context.Context, client *gpulink.Client, start *runner.Devi
 	}
 }
 
-func loadLinkedGPU() (*gpulink.State, string, error) {
-	st, err := gpulink.LoadState()
+// gpuTarget resolves --name to one saved link (the only one when no name is
+// given) with its credential slot.
+func gpuTarget() (*gpulink.State, string, error) {
+	links, err := gpulink.LoadLinks()
 	if err != nil {
 		return nil, "", err
 	}
-	if !st.Linked() {
+	if len(links) == 0 {
 		return nil, "", errors.New("no GPU is linked on this machine; run `sprout gpu link` first")
 	}
-	key, err := gpulink.LoadAPIKey()
+	if gpuName == "" {
+		if len(links) > 1 {
+			return nil, "", errors.New("several GPUs are linked on this machine; pass --name (see `sprout gpu status`)")
+		}
+		return links[0], links[0].Slot(), nil
+	}
+	slot := gpulink.Slot(gpuName)
+	for _, st := range links {
+		if st.Slot() == slot {
+			return st, slot, nil
+		}
+	}
+	return nil, "", fmt.Errorf("no GPU is linked under %q; see `sprout gpu status`", gpuName)
+}
+
+// gpuAPIKey reads a link's agent key, saying what to do when it is gone.
+func gpuAPIKey(st *gpulink.State, slot string) (string, error) {
+	key, err := gpulink.LoadAPIKeyFor(slot)
 	if err != nil || key == "" {
-		return nil, "", errors.New("the GPU link key is missing from the credential store; run `sprout gpu link` again")
+		return "", fmt.Errorf("the key for %q is missing from the credential store; run `sprout gpu link` again", st.Name)
 	}
-	return st, key, nil
-}
-
-func runGPUStart(cmd *cobra.Command, _ []string) error {
-	st, key, err := loadLinkedGPU()
-	if err != nil {
-		return err
-	}
-	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	log := slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), nil)).With("gpu", st.Name)
-	agent := &gpulink.Agent{State: st, APIKey: key, EngineKey: gpulink.LoadEngineKey(), Log: log, ReloadKey: gpulink.LoadAPIKey}
-	if st.Fleet {
-		// A fleet GPU keeps a tunnel to each of two platform replicas and
-		// rotates its key monthly.
-		agent.Tunnels = 2
-		agent.RotateEvery = gpulink.FleetKeyRotation
-		agent.RotatedAt = st.KeyRotatedAt
-		agent.SaveKey = func(k string) error { _, err := gpulink.SaveAPIKey(k); return err }
-		agent.OnRotated = func(at time.Time) {
-			st.KeyRotatedAt = at
-			if err := st.Save(); err != nil {
-				log.Warn("recording the key rotation", "err", err)
-			}
-		}
-	}
-	if st.Engine == gpulink.EngineSinter {
-		handler, model, unload, err := gpulink.SinterHandler(st.Model)
-		if err != nil {
-			return err
-		}
-		defer unload()
-		agent.Local = handler
-		log.Info("serving with sinter", "model", model)
-	} else if _, err := gpulink.EngineModels(ctx, st.Engine, agent.EngineKey); err != nil {
-		// The tunnel still opens: the engine may start later, and the
-		// platform picks its models up within a minute.
-		log.Warn("the engine is not answering; requests fail until it starts (or link again with `sprout gpu link --sinter`)", "engine", st.Engine, "err", err)
-	}
-	log.Info("starting", "platform", st.PlatformURL, "engine", st.Engine)
-	return agent.Run(ctx)
-}
-
-func runGPUStatus(cmd *cobra.Command, _ []string) error {
-	out := cmd.OutOrStdout()
-	st, err := gpulink.LoadState()
-	if err != nil {
-		return err
-	}
-	if !st.Linked() {
-		_, _ = fmt.Fprintln(out, "No GPU is linked on this machine. Run `sprout gpu link --engine host:port`.")
-		return nil
-	}
-	_, _ = fmt.Fprintf(out, "Linked as %q to %s\nAccount: %s\nEngine: %s\n", st.Name, st.PlatformURL, firstNonEmpty(st.Account, "(not recorded; link again to see it)"), st.Engine)
-	if state, logs := gpulink.ServiceState(); state != "" {
-		_, _ = fmt.Fprintf(out, "Service: %s\n", state)
-		if logs != "" {
-			_, _ = fmt.Fprintf(out, "Service log: %s\n", logs)
-		}
-	}
-	if st.Engine == gpulink.EngineSinter {
-		_, _ = fmt.Fprintf(out, "Model: %s (served in-process by `sprout gpu start`)\n", st.Model)
-		return nil
-	}
-	models, err := gpulink.EngineModels(cmd.Context(), st.Engine, gpulink.LoadEngineKey())
-	if err != nil {
-		_, _ = fmt.Fprintf(out, "The engine is not answering: %v\n", err)
-		return nil
-	}
-	_, _ = fmt.Fprintf(out, "The engine serves: %s\n", strings.Join(models, ", "))
-	return nil
-}
-
-func runGPUInstall(cmd *cobra.Command, _ []string) error {
-	if _, _, err := loadLinkedGPU(); err != nil {
-		return err
-	}
-	// The service runs without a login session, where the OS keyring is out
-	// of reach: an older link's keys move to the file store now, while it
-	// opens.
-	if err := gpulink.MoveKeysToFileStore(); err != nil {
-		return fmt.Errorf("the GPU link key could not be moved where the service can read it (%w); run `sprout gpu link` again", err)
-	}
-	path, err := gpulink.InstallService()
-	if err != nil {
-		return err
-	}
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Installed %s; the GPU link runs in the background, at login and after restarts.\n", path)
-	if note := gpulink.ServiceNotice(); note != "" {
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), note)
-	}
-	return nil
-}
-
-func runGPUUninstall(cmd *cobra.Command, _ []string) error {
-	if err := gpulink.UninstallService(); err != nil {
-		return err
-	}
-	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "The GPU link no longer runs at login.")
-	return nil
-}
-
-func runGPUUnlink(cmd *cobra.Command, _ []string) error {
-	st, err := gpulink.LoadState()
-	if err != nil {
-		return err
-	}
-	_ = gpulink.UninstallService()
-	if err := gpulink.Remove(); err != nil {
-		return err
-	}
-	name := st.Name
-	if name == "" {
-		name = "this GPU"
-	}
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Forgot the link on this machine. Remove %q under Account → My GPUs on the platform too.\n", name)
-	return nil
-}
-
-func runGPURotateKey(cmd *cobra.Command, _ []string) error {
-	st, key, err := loadLinkedGPU()
-	if err != nil {
-		return err
-	}
-	next, err := gpulink.RotateKey(cmd.Context(), st.PlatformURL, st.LinkID, key)
-	if err != nil {
-		return err
-	}
-	keyStore, err := gpulink.SaveAPIKey(next)
-	if err != nil {
-		// The platform keeps the current key working until the new one is
-		// used, so nothing is lost.
-		return fmt.Errorf("storing the new key failed (%w); the current key keeps working", err)
-	}
-	st.KeyRotatedAt = time.Now().UTC()
-	if err := st.Save(); err != nil {
-		return err
-	}
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Rotated the key for %q (stored in the %s). A running agent keeps the old key until it restarts; the old key stops working once the new one connects.\n", st.Name, keyStore)
-	return nil
+	return key, nil
 }
 
 // isGPUCommand reports whether cmd is `sprout gpu` or one of its subcommands.

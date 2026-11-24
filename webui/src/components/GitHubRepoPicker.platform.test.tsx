@@ -7,7 +7,7 @@ const { mockClone, platform } = vi.hoisted(() => ({
   platform: { connected: true },
 }));
 
-vi.mock('../services/workspaceClone', () => ({
+vi.mock('../services/projectFolderClone', () => ({
   cloneIntoProjectFolder: (...args: unknown[]) => mockClone(...args),
 }));
 vi.mock('./ThemedDialog', () => ({ showThemedConfirm: vi.fn() }));

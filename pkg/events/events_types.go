@@ -317,7 +317,7 @@ type eventDelivery struct {
 	publishWG     *sync.WaitGroup
 }
 
-// PatchConflictInfo holds optional conflict metadata for a workspace_patch event.
+// PatchConflictInfo holds optional conflict metadata for a project_folder_patch event.
 type PatchConflictInfo struct {
 	Conflict   bool
 	TheirsPath string

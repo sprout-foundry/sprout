@@ -43,7 +43,7 @@
     "@lezer/go": "^1.0.1",
     "@replit/codemirror-minimap": "^0.5.2",
     "@sprout-foundry/design": "file:../packages/design",
-    "@sprout-foundry/workspace": "file:../packages/workspace",
+    "@sprout-foundry/spaces": "file:../packages/spaces",
     "@sprout/events": "file:../packages/events",
     "@sprout/ui": "file:../packages/ui",
     "@types/react": "^18.2.0",

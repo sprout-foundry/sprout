@@ -1,5 +1,5 @@
 /**
- * Ask the workspace to open a file in its editor. The composed workspace and
+ * Ask the spaces to open a file in its editor. The composed spaces and
  * the standalone app both handle the `sprout:open-in-editor` request, so a
  * view rendered without an explicit open handler still reaches the editor.
  */

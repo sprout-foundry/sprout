@@ -43,7 +43,7 @@ const (
 	contractHumaGitGo           = "pkg/webui/huma_git.go"
 	contractHumaSettingsGo      = "pkg/webui/huma_settings.go"
 	contractHumaSettingsMiscGo  = "pkg/webui/huma_settings_misc.go"
-	contractHumaProjectFolderGo = "pkg/webui/huma_workspace.go"
+	contractHumaProjectFolderGo = "pkg/webui/huma_project_folder.go"
 	contractHumaTerminalGo      = "pkg/webui/huma_terminal.go"
 	contractHumaSyncTxnGo       = "pkg/webui/huma_sync_txn.go"
 	contractHumaCommandGo       = "pkg/webui/huma_command.go"

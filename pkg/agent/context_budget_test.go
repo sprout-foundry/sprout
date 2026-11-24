@@ -147,10 +147,14 @@ func TestSP125_LowContextMode_32K(t *testing.T) {
 		t.Errorf("lite prompt + AGENTS.md should be > 1.5K tokens, got ~%d (empty?)", promptTokens)
 	}
 
-	// (d) Compaction trigger should be 0.85.
+	// (d) Compaction trigger: the LCM profile asks for 0.85, but the
+	// no-overflow clamp (1 - EstimationErrorPercent = 0.70) binds first, so
+	// the effective window-share trigger is 0.70. An unclamped 0.85 would let
+	// the underestimating raw heuristic sit below the trigger while the true
+	// size is already over the window (see TestCompactionTriggerClampedToNoOverflow).
 	trigger := agent.computeCompactionTriggerFraction()
-	if trigger != 0.85 {
-		t.Errorf("expected compaction trigger 0.85, got %.2f", trigger)
+	if trigger != 0.70 {
+		t.Errorf("expected clamped compaction trigger 0.70, got %.2f", trigger)
 	}
 
 	// (e) Recent turns to preserve should be 2.
@@ -268,6 +272,50 @@ func TestRel2_SmallWindowUnaffected(t *testing.T) {
 	want := 1.0 - totalReservedFraction() // 0.70
 	if got := a.compactionTriggerFractionFor(128 * 1024); math.Abs(got-want) > 1e-9 {
 		t.Fatalf("128K window: trigger = %v, want %v (share unchanged)", got, want)
+	}
+}
+
+// TestRel2_SmallWindowFloorZoneClamp pins the bound on small windows: the
+// output budget's floor step re-inflates a starved budget to MinOutputTokens
+// even when remaining is below the floor, so every input in
+// [window-MinOutputTokens+1, window-1] produces a request that overflows the
+// window (see TestCalculateOutputBudget_FloorViolatesHardCap). The window-share
+// clamp alone (0.70) fires deep inside that zone on a small window — 69% of a
+// 32K window vs a zone that starts at ~49% — so the effective trigger must be
+// clamped to the zone edge (window-MinOutputTokens), never above it.
+func TestRel2_SmallWindowFloorZoneClamp(t *testing.T) {
+	// This bound is estimate-space (best effort): it keeps the estimated input
+	// at or below the zone edge. A true-size guarantee is not possible in
+	// estimate space — the floor defect in CalculateOutputBudget (re-inflating
+	// to MinOutputTokens near the window) remains the real guarantee gap.
+	// Note the side effect: on 32K the derived continuation target falls below
+	// minContinuationTargetTokens, so continuation compaction is disabled and
+	// the settle-margin fallback (settle at 0.70 of the trigger) is used.
+	a := &Agent{} // bare agent: default 300K ceiling, base share 0.70.
+
+	// 32K window: the zone edge is below the 0.70 share, so it binds.
+	if got, want := a.compactionTriggerFractionFor(32_000), float64(32_000-api.MinOutputTokens)/32_000; math.Abs(got-want) > 1e-9 {
+		t.Fatalf("32K window: trigger = %v, want %v (zone edge)", got, want)
+	}
+	// 128K window: the zone edge (0.875) is above the 0.70 share, so the
+	// window-share clamp binds and the small-window bound is inert.
+	if got, want := a.compactionTriggerFractionFor(128*1024), 1.0-totalReservedFraction(); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("128K window: trigger = %v, want %v (share unchanged)", got, want)
+	}
+	// 1M window: the 300K ceiling binds above the zone edge, as before.
+	if got, want := a.compactionTriggerFractionFor(1_000_000), float64(defaultCompactionCeilingTokens)/1_000_000; math.Abs(got-want) > 1e-9 {
+		t.Fatalf("1M window: trigger = %v, want %v (300K ceiling)", got, want)
+	}
+
+	// The zone edge must keep the estimated input at or below the boundary
+	// where the floor step stops overflowing (see the budget-shape test).
+	for _, window := range []int{16_384, 32_000, 64_000} {
+		frac := a.compactionTriggerFractionFor(window)
+		estInput := frac * float64(window)
+		if window > api.MinOutputTokens && estInput > float64(window-api.MinOutputTokens) {
+			t.Errorf("window=%d: estimated input %.0f exceeds the floor-overflow zone edge %d",
+				window, estInput, window-api.MinOutputTokens)
+		}
 	}
 }
 
@@ -425,5 +473,68 @@ func TestContinuationCompactionFor(t *testing.T) {
 	}
 	if cc := continuationCompactionFor(16_000, 0.85); cc != nil {
 		t.Errorf("16K window: %+v, want none", cc)
+	}
+}
+
+// TestCompactionUnderestimateBound pins the relationship between the
+// no-overflow clamp bound and the documented worst-case underestimate of the
+// token estimate: bound == 1 - EstimationErrorPercent/100. If the estimator's
+// documented error band ever changes, this test forces a deliberate decision
+// about whether the trigger clamp moves with it.
+func TestCompactionUnderestimateBound(t *testing.T) {
+	want := float64(api.EstimationErrorPercent) / 100
+	if got := compactionUnderestimateBound(); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("compactionUnderestimateBound = %v, want %v", got, want)
+	}
+}
+
+// TestCompactionTriggerClampedToNoOverflow is the regression test for the
+// anchor-invalidation trigger gap: right after a compaction pass the token
+// anchor is invalid, so the next trigger decision runs on the RAW heuristic,
+// which the estimator documents as underestimating by up to EstimationErrorPercent
+// (30%) on tool-heavy prompts. A profile trigger above (1 - 0.30 = 0.70) —
+// e.g. LCM's 0.85 — therefore lets the raw estimate sit below the trigger
+// while the TRUE size is already over the window, and the proactive
+// compaction under-reacts. The clamp forces the window-share trigger to at
+// most 0.70 so the worst-case underestimate still crosses the trigger before
+// the true size does.
+func TestCompactionTriggerClampedToNoOverflow(t *testing.T) {
+	cases := []struct {
+		profileFraction float64 // ContextProfile.CompactionTriggerFraction (0 = default)
+		want            float64
+	}{
+		{0, 0.70},    // default: 1 - 0.30 = 0.70, at the bound exactly
+		{0.85, 0.70}, // an aggressive profile must clamp DOWN to the bound
+		{0.90, 0.70}, // an even more aggressive profile still clamps to the bound
+		{0.60, 0.60}, // a profile already at/below the bound is unchanged
+		{0.50, 0.50}, // aggressive profiles pass through untouched
+	}
+	for _, tc := range cases {
+		a := &Agent{}
+		if tc.profileFraction > 0 {
+			a.contextProfile.CompactionTriggerFraction = tc.profileFraction
+		}
+		if got := a.computeCompactionTriggerFraction(); math.Abs(got-tc.want) > 1e-9 {
+			t.Errorf("profile fraction %v: trigger = %v, want %v", tc.profileFraction, got, tc.want)
+		}
+	}
+}
+
+// TestCompactionTriggerNoOverflowAtWorstCase pins the property the clamp
+// exists to guarantee: for ANY trigger fraction this function returns, the
+// worst-case true size at the trigger (estimate / (1 - band)) never exceeds
+// the window. In other words the trigger always fires before the true prompt
+// crosses the window, even at the estimator's documented worst-case error.
+func TestCompactionTriggerNoOverflowAtWorstCase(t *testing.T) {
+	const band = 0.30 // mirrors api.EstimationErrorPercent; keep in sync
+	for f := 0.0; f <= 1.0; f += 0.01 {
+		a := &Agent{}
+		a.contextProfile.CompactionTriggerFraction = f
+		trigger := a.computeCompactionTriggerFraction()
+		// worst-case true size at trigger, as a share of the window
+		worstCaseTrue := trigger / (1.0 - band)
+		if worstCaseTrue > 1.0+1e-9 {
+			t.Fatalf("profile %v: trigger %v, worst-case true size %v exceeds the window — proactive compaction under-reacts", f, trigger, worstCaseTrue)
+		}
 	}
 }

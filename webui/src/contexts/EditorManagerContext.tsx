@@ -50,7 +50,7 @@ interface EditorManagerContextValue {
     modified: number;
     ext?: string;
   }) => string;
-  openWorkspaceBuffer: (options: {
+  openProjectFolderBuffer: (options: {
     kind: 'chat' | 'diff' | 'review' | 'file' | 'compare' | 'preview';
     path: string;
     title: string;
@@ -266,7 +266,7 @@ const CombinedContextProvider: React.FC<{
       buffers: buffer.buffers,
       buffersRef: buffer.buffersRef,
       openFile: buffer.openFile,
-      openWorkspaceBuffer: buffer.openWorkspaceBuffer,
+      openProjectFolderBuffer: buffer.openProjectFolderBuffer,
       openCompareBuffer: buffer.openCompareBuffer,
       closeBuffer: buffer.closeBuffer,
       reorderBuffers: buffer.reorderBuffers,
@@ -318,7 +318,7 @@ const CombinedContextProvider: React.FC<{
     [
       buffer.buffers,
       buffer.openFile,
-      buffer.openWorkspaceBuffer,
+      buffer.openProjectFolderBuffer,
       buffer.openCompareBuffer,
       buffer.closeBuffer,
       buffer.reorderBuffers,

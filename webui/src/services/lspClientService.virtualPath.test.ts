@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { resolveEditorFilePath } from './lspClientService';
 
-vi.mock('./workspaceStore', () => ({
-  getWorkspaceRoot: () => '/w',
+vi.mock('./projectFolderStore', () => ({
+  getProjectFolder: () => '/w',
 }));
 
 const ROOT = '/Users/dev/proj';

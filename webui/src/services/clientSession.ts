@@ -2,7 +2,7 @@ import { getActiveHost } from '../host/accessor';
 import { backendURLs } from '../host/agentBackend';
 import { debugLog } from '../utils/log';
 import { getAdapter } from './apiAdapter';
-import { publishProjectFolderResponse } from './workspaceResponses';
+import { publishProjectFolderResponse } from './projectFolderResponses';
 
 export const WEBUI_CLIENT_ID_HEADER = 'X-Sprout-Client-ID';
 export const WEBUI_CLIENT_ID_QUERY_PARAM = 'client_id';
@@ -515,7 +515,7 @@ export function persistTabProjectFolderPath(projectFolderPath: string): void {
   try {
     window.localStorage.setItem(projectFolderPathStorageKey(), projectFolderPath);
   } catch (err) {
-    debugLog('[persistTabWorkspacePath] failed to persist workspace path:', err);
+    debugLog('[persistTabProjectFolderPath] failed to persist workspace path:', err);
   }
 }
 
@@ -531,7 +531,7 @@ export function getTabProjectFolderPath(): string {
   try {
     return window.localStorage.getItem(projectFolderPathStorageKey()) || '';
   } catch (err) {
-    debugLog('[getTabWorkspacePath] failed to read workspace path:', err);
+    debugLog('[getTabProjectFolderPath] failed to read workspace path:', err);
     return '';
   }
 }

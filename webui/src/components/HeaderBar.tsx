@@ -12,7 +12,7 @@ import MenuBar from './MenuBar';
 import { CreditsChip } from './CreditsChip';
 import { UsageChip } from './UsageChip';
 import { UserMenu } from './UserMenu';
-import DevSpaceBar from './WorkspaceBar';
+import DevSpaceBar from './ProjectFolderBar';
 
 export interface HeaderBarProps {
   isMobile: boolean;

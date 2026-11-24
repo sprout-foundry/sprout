@@ -50,7 +50,7 @@ import type {
   InstantiateStarterParams,
   InstantiateStarterResponse,
 } from './types';
-import * as projectFolderApi from './workspaceApi';
+import * as projectFolderApi from './projectFolderApi';
 
 class ApiService {
   private static instance: ApiService;

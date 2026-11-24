@@ -38,7 +38,7 @@ export interface UseHotkeyCommandHandlerOptions {
  * Each command has exactly one handler in the app. The app-level commands
  * (palette, sidebar, terminal toggle, view switches, new/close editor) belong
  * to useAppContentHotkeys, and the pane commands (focus_split_*,
- * split_editor_*) to EditorWorkspace, which owns the split layout; this hook
+ * split_editor_*) to EditorSpaces, which owns the split layout; this hook
  * leaves those alone so nothing runs twice.
  */
 export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions): void {

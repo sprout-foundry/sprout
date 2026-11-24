@@ -21,7 +21,7 @@ export interface RepoImportCacheEntry {
   importedAt: string;
 }
 
-const DB_NAME = 'sprout-workspace';
+const DB_NAME = 'sprout-spaces';
 const DB_VERSION = 1;
 const STORE = 'repo-imports';
 const LAST_REPO_KEY = '__last_repo__';

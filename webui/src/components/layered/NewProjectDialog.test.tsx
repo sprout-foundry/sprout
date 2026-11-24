@@ -39,7 +39,7 @@ beforeEach(() => {
       ssh: false,
       git: true,
       chat: true,
-      workspaceSwitching: false,
+      projectFolderSwitching: false,
       folderPicker: false,
       export: false,
       instances: true,

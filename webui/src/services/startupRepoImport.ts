@@ -3,7 +3,7 @@
  *
  * The cloud adapter can be installed from two places: the bootstrap (the
  * hosted build's entry, whose repo is the bootstrap's or the `?repo=` deep
- * link) and a mounted `SproutWorkspace` with a wasm backend (whose repo is the
+ * link) and a mounted `SproutSpaces` with a wasm backend (whose repo is the
  * host project's `repoUrl`). Both import through here, so:
  *
  * - a repo is imported once per page, not on every mount, host change or

@@ -24,7 +24,7 @@ import {
   type BufferLayoutEntry,
   type LayoutSnapshot,
 } from '../services/layoutPersistence';
-import { ensureProjectFolder } from '../services/workspaceStore';
+import { ensureProjectFolder } from '../services/projectFolderStore';
 import type { EditorBuffer, EditorPane, PaneLayout, PaneSize } from '../types/editor';
 import { resolveEditorFilePath, getLSPClientService } from '../services/lspClientService';
 import { debugLog } from '../utils/log';
@@ -448,7 +448,7 @@ export function useLayoutPersistence({
   useEffect(() => {
     const handleProjectFolderChanged = (event: Event) => {
       const detail = (event as CustomEvent).detail;
-      const nextRoot = typeof detail?.workspaceRoot === 'string' ? detail.workspaceRoot : '';
+      const nextRoot = typeof detail?.projectFolder === 'string' ? detail.projectFolder : '';
       if (nextRoot) {
         getLSPClientService().setProjectFolder(nextRoot);
         // The server returning to the project folder this tab already shows (a

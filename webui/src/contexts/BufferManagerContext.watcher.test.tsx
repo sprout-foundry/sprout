@@ -98,7 +98,7 @@ describe('external file watcher integration (rewired into BufferManagerProvider)
     // Open a clean file buffer with known content.
     let bufferId: string | null = null;
     await actAndUpdate(async () => {
-      bufferId = ctx().openWorkspaceBuffer({
+      bufferId = ctx().openProjectFolderBuffer({
         kind: 'file',
         path: '/w/a.ts',
         title: 'a.ts',
@@ -133,7 +133,7 @@ describe('external file watcher integration (rewired into BufferManagerProvider)
 
     let bufferId: string | null = null;
     await actAndUpdate(async () => {
-      bufferId = ctx().openWorkspaceBuffer({
+      bufferId = ctx().openProjectFolderBuffer({
         kind: 'file',
         path: '/w/unchanged.ts',
         title: 'unchanged.ts',

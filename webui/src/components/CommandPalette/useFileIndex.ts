@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ApiService } from '../../services/api';
 import { clientFetch } from '../../services/clientSession';
-import { ensureProjectFolder, getWorkspaceRoot } from '../../services/workspaceStore';
+import { ensureProjectFolder, getProjectFolder } from '../../services/projectFolderStore';
 import { debugLog, type useLog } from '../../utils/log';
 import type { FileResult } from './CommandPalette';
 import { MAX_INDEXED_FILES, MAX_INDEXED_DIRECTORIES, SKIP_DIRECTORIES, MAX_DIRECTORY_DEPTH } from './constants';
 
 interface UseFileIndexResult {
   allFiles: FileResult[];
-  workspaceRoot: string;
+  projectFolder: string;
   isLoadingFiles: boolean;
 }
 
@@ -28,7 +28,7 @@ interface FileIndexResponse {
   files?: Array<{ name?: unknown; path?: unknown; type?: unknown }>;
   truncated?: boolean;
   message?: string;
-  workspace?: string;
+  projectFolder?: string;
 }
 
 /**
@@ -48,7 +48,7 @@ async function fetchBulkIndex(fallbackRoot: string): Promise<FileResult[]> {
     throw new Error(`file-index ${response.status}`);
   }
   const data = (await response.json()) as FileIndexResponse;
-  const root = String(data.workspace || fallbackRoot || '').replace(/\/+$/, '');
+  const root = String(data.projectFolder || fallbackRoot || '').replace(/\/+$/, '');
   const entries = Array.isArray(data.files) ? data.files : [];
   const files: FileResult[] = [];
   for (const entry of entries) {
@@ -131,7 +131,7 @@ function useFileIndex(options: UseFileIndexOptions): UseFileIndexResult {
         setProjectFolder(resolvedRoot);
       } catch (err) {
         // Index against the last known root rather than none.
-        resolvedRoot = getWorkspaceRoot();
+        resolvedRoot = getProjectFolder();
         if (!cancelled) setProjectFolder(resolvedRoot);
         debugLog('[FileIndex] Failed to fetch workspace root:', err);
       }
@@ -188,7 +188,7 @@ function useFileIndex(options: UseFileIndexOptions): UseFileIndexResult {
     };
   }, [apiService, isOpen, log]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { allFiles, workspaceRoot: projectFolder, isLoadingFiles };
+  return { allFiles, projectFolder, isLoadingFiles };
 }
 
 export default useFileIndex;

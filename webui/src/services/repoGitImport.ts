@@ -24,7 +24,7 @@ import { MAX_CLONE_BYTES } from './gitHttpLimit';
 import { NATIVE_FS_ENABLED } from './nativeFsStubs/nativeFsFlag';
 import { NATIVE_GIT_ENABLED } from './nativeGitStubs/nativeGitFlag';
 import type { WasmShell } from './wasmShell';
-import { GIT_REPO_CHANGED_EVENT } from './workspaceClone';
+import { GIT_REPO_CHANGED_EVENT } from './projectFolderClone';
 
 /** How the imported repository's git state was set up. */
 export type RepoImportHistory = 'clone' | 'snapshot' | 'none';
@@ -66,7 +66,7 @@ export async function restoreRepoWithBrowserGit(repoURL: string, deps: RepoGitIm
     const [gitModule, bridge, projectFolderGit] = await Promise.all([
       import('./browserGit'),
       import('./browserGitBridge'),
-      import('./workspaceFs/workspaceGit'),
+      import('./projectFolderFs/projectFolderGit'),
     ]);
     bridge.ensureBrowserGitBridge(shell, deps.author);
     bg = gitModule;

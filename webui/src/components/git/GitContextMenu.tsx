@@ -4,7 +4,7 @@ import { copyToClipboard } from '../../utils/clipboard';
 
 export interface GitContextMenuProps {
   contextMenu: { x: number; y: number; section: FileSection; file: GitFile } | null;
-  workspaceRoot?: string;
+  projectFolder?: string;
   onPreviewFile: (section: FileSection, path: string) => void;
   onOpenFile?: (path: string) => void;
   onStageFile: (path: string) => void;
@@ -21,7 +21,7 @@ export interface GitContextMenuProps {
 
 function GitContextMenu({
   contextMenu,
-  workspaceRoot: projectFolder,
+  projectFolder,
   onPreviewFile,
   onOpenFile,
   onStageFile,

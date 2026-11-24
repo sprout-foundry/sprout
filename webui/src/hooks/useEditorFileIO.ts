@@ -166,7 +166,7 @@ export function useEditorFileIO(
     setBufferOriginalContent,
     setBufferExternallyModified,
     clearBufferExternallyModified,
-    openWorkspaceBuffer,
+    openProjectFolderBuffer,
   } = useEditorManager();
 
   // API service singleton
@@ -932,7 +932,7 @@ export function useEditorFileIO(
               const diffText = generateUnifiedDiff(editorContent, diskContent, 'Editor', 'Disk');
               if (!diffText) return;
 
-              openWorkspaceBuffer({
+              openProjectFolderBuffer({
                 kind: 'diff',
                 path: `diff:${filePath}`,
                 title: `Diff: ${currentBuffer.file.name} (editor ↔ disk)`,
@@ -944,7 +944,7 @@ export function useEditorFileIO(
                   sourcePath: filePath,
                   diffType: 'external-change',
                   defaultView: 'text',
-                  // WorkspacePane's diff renderer reads metadata.diff as a
+                  // SpacesPane's diff renderer reads metadata.diff as a
                   // GitDiffResponse; without it the tab shows
                   // "(no diff available)".
                   diff: {
@@ -980,7 +980,7 @@ export function useEditorFileIO(
     applyExternalFileContent,
     clearBufferExternallyModified,
     setBufferExternallyModified,
-    openWorkspaceBuffer,
+    openProjectFolderBuffer,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {

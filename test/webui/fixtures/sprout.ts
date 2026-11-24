@@ -114,7 +114,7 @@ export async function startSprout(opts: StartSproutOptions = {}): Promise<Sprout
 
   // Create temp directories
   const configDir = createTempDir('sprout-e2e-config-');
-  const workspaceDir = userWorkspace ?? createTempDir('sprout-e2e-workspace-');
+  const workspaceDir = userWorkspace ?? createTempDir('sprout-e2e-project-folder-');
 
   // Pick a free port
   const port = userPort ?? (await pickFreePort());

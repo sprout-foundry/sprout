@@ -57,8 +57,8 @@ describe('chat tab bookkeeping', () => {
     vi.spyOn(Date, 'now').mockImplementation(() => ++now);
     act(() => {
       const open = { kind: 'chat', path: '__workspace/chat/c2', title: 'Chat 2', metadata: { chatId: 'c2' } };
-      latest.openWorkspaceBuffer({ ...open, activate: false });
-      latest.openWorkspaceBuffer({ ...open, title: 'New Chat' });
+      latest.openProjectFolderBuffer({ ...open, activate: false });
+      latest.openProjectFolderBuffer({ ...open, title: 'New Chat' });
     });
     expect(chatTabs().filter((b) => b.metadata?.chatId === 'c2')).toHaveLength(1);
     vi.restoreAllMocks();
@@ -70,7 +70,7 @@ describe('chat tab bookkeeping', () => {
     vi.spyOn(Date, 'now').mockImplementation(() => ++now);
     let placeholder;
     act(() => {
-      placeholder = latest.openWorkspaceBuffer({
+      placeholder = latest.openProjectFolderBuffer({
         kind: 'chat',
         path: '__workspace/chat/creating-1',
         title: 'Creating…',
@@ -78,7 +78,7 @@ describe('chat tab bookkeeping', () => {
     });
     let real;
     await act(async () => {
-      real = latest.openWorkspaceBuffer({
+      real = latest.openProjectFolderBuffer({
         kind: 'chat',
         path: '__workspace/chat/c9',
         title: 'New Chat',
@@ -121,7 +121,7 @@ describe('chat tab bookkeeping', () => {
     expect(latest.paneLayout).toBe('split-vertical');
 
     act(() => {
-      latest.openWorkspaceBuffer({
+      latest.openProjectFolderBuffer({
         kind: 'chat',
         path: '__workspace/chat/c7',
         title: 'Chat 7',
@@ -149,10 +149,10 @@ describe('chat tab bookkeeping', () => {
     let now = 9_000;
     vi.spyOn(Date, 'now').mockImplementation(() => ++now);
     act(() => {
-      latest.openWorkspaceBuffer({ kind: 'file', path: 'notes.md', title: 'notes.md' });
+      latest.openProjectFolderBuffer({ kind: 'file', path: 'notes.md', title: 'notes.md' });
     });
     act(() => {
-      latest.openWorkspaceBuffer({
+      latest.openProjectFolderBuffer({
         kind: 'chat',
         path: '__workspace/chat/c2',
         title: 'Chat 2',

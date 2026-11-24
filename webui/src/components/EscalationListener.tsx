@@ -547,7 +547,7 @@ export function EscalationListener() {
             ) : null}
 
             {devSpaceError ? (
-              <p className="escalation-toast-task-error" data-testid="escalation-toast-workspace-error">
+              <p className="escalation-toast-task-error" data-testid="escalation-toast-dev-space-error">
                 {devSpaceError}
               </p>
             ) : null}
@@ -648,7 +648,7 @@ export function EscalationListener() {
                     className="escalation-toast-action"
                     onClick={handleStartDevSpace}
                     disabled={startingDevSpace}
-                    data-testid="escalation-toast-start-workspace"
+                    data-testid="escalation-toast-start-dev-space"
                   >
                     {startingDevSpace ? (
                       <Loader2 size={14} className="spinner" aria-hidden="true" />

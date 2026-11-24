@@ -13,7 +13,7 @@ import {
   switchChatSession,
   type ChatSessionsApi,
 } from '../services/chatSessions';
-import type { AppState, WorkspaceBusyInfo } from '../types/app';
+import type { AppState, ProjectFolderBusyInfo } from '../types/app';
 import { debugLog } from '../utils/log';
 import { toUserErrorMessage } from '../utils/errorMessage';
 import { notificationBus } from '../services/notificationBus';
@@ -93,7 +93,7 @@ export interface UseChatSessionManagerParams {
   queuedMessagesRef: React.MutableRefObject<QueuedMessage[]>;
   isProcessing: boolean;
   /** The chat held back by project_folder_busy, if any; its queued messages wait for the running chat. */
-  workspaceBusy?: WorkspaceBusyInfo | null;
+  projectFolderBusy?: ProjectFolderBusyInfo | null;
   /**
    * The chat transport. Omitted, the app's own `ApiService` singleton is
    * used; an embedding supplies one bound to its fetch so sends reach its
@@ -151,7 +151,7 @@ export function useChatSessionManager({
   activeChatIdRef,
   queuedMessagesRef,
   isProcessing,
-  workspaceBusy: projectFolderBusy = null,
+  projectFolderBusy: projectFolderBusy = null,
   api,
   sessions,
 }: UseChatSessionManagerParams): UseChatSessionManagerReturn {
@@ -699,7 +699,7 @@ export function useChatSessionManager({
             isProcessing: false,
             inputValue: '',
             messages: prev.messages.filter((m) => m.id !== userBubbleId),
-            workspaceBusy: {
+            projectFolderBusy: {
               chatId: targetChatId ?? '',
               runningChatId: busy.runningChatId ?? '',
               runningChatName: busy.runningChatName ?? 'another chat',
@@ -1012,7 +1012,9 @@ export function useChatSessionManager({
         .then((resp) => {
           const running = (resp.chat_sessions ?? []).find((c) => c.id === runningChatId);
           if (running?.active_query) return;
-          setState((prev) => (prev.workspaceBusy?.runningChatId === runningChatId ? { workspaceBusy: null } : {}));
+          setState((prev) =>
+            prev.projectFolderBusy?.runningChatId === runningChatId ? { projectFolderBusy: null } : {},
+          );
         })
         .catch((err) => debugLog('[chat] busy re-check failed:', err));
     }, WORKSPACE_BUSY_RECHECK_MS);

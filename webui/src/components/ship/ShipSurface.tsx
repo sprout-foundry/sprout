@@ -15,7 +15,7 @@
 
 import { AlertTriangle, ArrowUpRight, ChevronRight, Loader2, Rocket, Undo2 } from 'lucide-react';
 import React from 'react';
-import type { ShipDeployKind, ShipDeployState, ShipHistoryEntry, ShipPayload } from '../../workspaces/ship';
+import type { ShipDeployKind, ShipDeployState, ShipHistoryEntry, ShipPayload } from '../../spaces/ship';
 import './ShipSurface.css';
 
 export interface ShipSurfaceProps {

@@ -302,7 +302,7 @@ if (!isNodeEnv) {
 // Reset all mocks before each test
 beforeEach(() => {
   vi.clearAllMocks();
-  // The project folder store (services/workspaceStore.ts) is a module singleton;
+  // The project folder store (services/projectFolderStore.ts) is a module singleton;
   // start every test without a cached project folder or pending retry. Reached
   // through a global so this file does not import the store ahead of a test
   // file's vi.mock of the API service.

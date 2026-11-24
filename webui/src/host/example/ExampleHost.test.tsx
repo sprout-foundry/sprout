@@ -14,7 +14,7 @@
 
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MonitorPlay } from 'lucide-react';
-import { registerWorkspaceMode } from '../../views/index';
+import { registerSpace } from '../../views/index';
 import { HostProvider, useHost } from '../index';
 import type { HostNotification, HostNavigationIntent } from '../index';
 import type { ExampleHostState } from './ExampleHost';
@@ -50,7 +50,7 @@ describe('the example host builds a real SproutHost', () => {
     expect(host.transport.authMode).toBe('bearer');
     expect(host.entitlements?.usageSummary?.label).toBe('42 example credits remaining');
     expect(host.capabilities.chat).toBe(true);
-    expect(host.capabilities.workspaceSwitching).toBe(true);
+    expect(host.capabilities.projectFolderSwitching).toBe(true);
   });
 });
 
@@ -86,7 +86,7 @@ describe('the example host renders with its own chrome and theme', () => {
 
 describe('the example host mounts the registered spaces and switches between them', () => {
   it('offers every registered space and mounts the active one', () => {
-    const dispose = registerWorkspaceMode(secondSpace);
+    const dispose = registerSpace(secondSpace);
     try {
       const state = freshState();
       render(<ExampleHost host={createExampleHost(state)} state={state} />);
@@ -100,7 +100,7 @@ describe('the example host mounts the registered spaces and switches between the
   });
 
   it('switching spaces mounts the other shell (the layout re-arranges)', () => {
-    const dispose = registerWorkspaceMode(secondSpace);
+    const dispose = registerSpace(secondSpace);
     try {
       const state = freshState();
       render(<ExampleHost host={createExampleHost(state)} state={state} />);
@@ -124,7 +124,7 @@ describe('the example host mounts the registered spaces and switches between the
   });
 
   it('can mount a space a host registered through the public API', () => {
-    const dispose = registerWorkspaceMode({
+    const dispose = registerSpace({
       id: 'example-preview',
       label: 'Example Preview',
       icon: MonitorPlay,

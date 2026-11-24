@@ -48,7 +48,7 @@ import {
   resolveEditorFilePath,
   LSPClientService,
 } from './lspClientService';
-import { __resetProjectFolderCwdForTests } from './workspaceCwd';
+import { __resetProjectFolderCwdForTests } from './projectFolderCwd';
 
 // ── getFileURI tests ──────────────────────────────────────────────────
 

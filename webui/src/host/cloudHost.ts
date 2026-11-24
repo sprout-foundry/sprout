@@ -193,7 +193,7 @@ export const cloudHost: SproutHost = {
     ssh: false, // the hosted (WASM) shell has no host SSH access
     git: true, // browser-native git (isomorphic-git)
     chat: true, // agent chat via the BYOK proxy
-    workspaceSwitching: false, // single virtual FS in cloud
+    projectFolderSwitching: false, // single virtual FS in cloud
     export: false, // no local filesystem to export to
     instances: true, // the platform serves the instances API
     localTerminal: false, // WASM terminal, not a local PTY

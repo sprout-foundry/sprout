@@ -960,15 +960,15 @@ function renderCursorIntegrationHarness(opts: {
 
   function Harness({
     settingsToggle,
-    openWorkspaceBuffer,
+    openProjectFolderBuffer,
   }: {
     settingsToggle: number;
-    openWorkspaceBuffer: OpenProjectFolderBufferFn;
+    openProjectFolderBuffer: OpenProjectFolderBufferFn;
   }) {
     // The bug being guarded against: the parent's settings-callback identity
     // changes on every render. EditorPane mirrors this through a ref so the
     // CodeMirror mount never sees the unstable identity. We do the same here.
-    openProjectFolderBufferRef.current = openWorkspaceBuffer;
+    openProjectFolderBufferRef.current = openProjectFolderBuffer;
     settingsRef.current = { ...baseSettingsForIntegration, editorFontSize: 13 + settingsToggle };
 
     const cmViewApi = useCMView({
@@ -1002,7 +1002,7 @@ function renderCursorIntegrationHarness(opts: {
     root.render(
       createElement(Harness, {
         settingsToggle: 0,
-        openWorkspaceBuffer: opts.onOpenProjectFolderBuffer,
+        openProjectFolderBuffer: opts.onOpenProjectFolderBuffer,
       }),
     );
   });
@@ -1018,9 +1018,9 @@ function renderCursorIntegrationHarness(opts: {
     cursorHookReturn: () => cursorHookReturn,
     buildExtensions,
     compartments,
-    reRender: (settingsToggle: number, openWorkspaceBuffer: OpenProjectFolderBufferFn) => {
+    reRender: (settingsToggle: number, openProjectFolderBuffer: OpenProjectFolderBufferFn) => {
       act(() => {
-        root.render(createElement(Harness, { settingsToggle, openWorkspaceBuffer }));
+        root.render(createElement(Harness, { settingsToggle, openProjectFolderBuffer }));
       });
     },
   };
@@ -1055,8 +1055,8 @@ describe('useEditorCursor — EditorView identity across settings-callback re-re
     expect(viewAtMount!.state.selection.main.head).toBe(6);
 
     // Simulate a "settings toggle" re-render where the parent passes a fresh
-    // arrow function for openWorkspaceBuffer. The pre-fix code used
-    // `useRef(openWorkspaceBuffer)` which captured v1 forever; the fix
+    // arrow function for openProjectFolderBuffer. The pre-fix code used
+    // `useRef(openProjectFolderBuffer)` which captured v1 forever; the fix
     // reassigns .current every render.
     harness.reRender(1, openProjectFolderBufferV2);
     expect(harness.cmViewApiRef.current!.view).toBe(viewAtMount);

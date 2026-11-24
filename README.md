@@ -113,7 +113,7 @@ Requirements: **Go 1.26+** and **Node.js 22+**.
 git clone https://github.com/sprout-foundry/sprout.git
 cd sprout
 make prepare-grammars        # editor language grammars (Make targets run it automatically)
-make build-all               # WASM shell + embedded web UI + Go binary + @sprout-foundry/workspace
+make build-all               # WASM shell + embedded web UI + Go binary + @sprout-foundry/spaces
 ./sprout                     # run from the repo root
 ```
 
@@ -142,7 +142,7 @@ Agent guidance for working in this repo: [AGENTS.md](AGENTS.md). Contribution ru
 - **CLI** (`sprout`, Go) — cobra command tree (`agent`, `plan`, `commit`, `review`, `pr`, `search`, `service`, …)
 - **Web UI** (`webui/`, React 18 + Vite + TypeScript) — built by `make deploy-ui`, embedded in the binary
 - **`@sprout/ui`** (`packages/ui`) — shared component library, `npm install @sprout/ui` [consumes it standalone](docs/CONSUMPTION_GUIDE.md); `@sprout/events` ships the event schemas
-- **`@sprout-foundry/workspace`** (`packages/workspace`) — the composition API a host mounts (SP-160); built by `make build-workspace-package` into `packages/workspace/dist`
+- **`@sprout-foundry/spaces`** (`packages/spaces`) — the composition API a host mounts (SP-160); built by `make build-spaces-package` into `packages/spaces/dist`
 - **Provider catalog** (`pkg/providercatalog/providers.json`) — embedded in the binary, refreshed from GitHub at startup
 - **Sister project** `sprout-foundry` pins a `SPROUT_VERSION` and ships the binary in Docker images — integration contract: [docs/FOUNDRY_CHAT_CONTRACT.md](docs/FOUNDRY_CHAT_CONTRACT.md)
 

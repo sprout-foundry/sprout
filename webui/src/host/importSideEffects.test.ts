@@ -3,7 +3,7 @@
  * calls on import").
  *
  * The host entry is part of the package's static import graph: a host that
- * imports `@sprout-foundry/workspace` (and the web UI's own entry that
+ * imports `@sprout-foundry/spaces` (and the web UI's own entry that
  * imports the host) evaluates these modules eagerly. Any fetch at module
  * scope — the cloud host resolving its entitlements, or a platform-URL
  * helper reaching the bootstrap adapter — would then run for every importer,

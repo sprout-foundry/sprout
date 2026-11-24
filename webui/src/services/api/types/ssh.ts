@@ -76,7 +76,7 @@ export class SSHProjectFolderOpenError extends Error {
   constructor(payload: SSHOpenErrorPayload) {
     const baseMessage = payload.error || 'Failed to open the SSH project folder';
     super(payload.step ? `${baseMessage} (${payload.step})` : baseMessage);
-    this.name = 'SSHWorkspaceOpenError';
+    this.name = 'SSHProjectFolderOpenError';
     this.step = payload.step;
     this.details = payload.details;
     this.logPath = payload.log_path;

@@ -82,11 +82,32 @@ jobs:
           timeout-minutes: "30"
           debug: "false"
 
+      # The sprout-agent action exits 0 even when it fails to produce a
+      # review (see review.json "not created" runs), so the job would go
+      # green with nothing posted. Check here — never fail this step, just
+      # record whether a valid review.json exists; the retry and the final
+      # gate key off it.
+      - name: Check review.json was produced
+        id: review
+        env:
+          REVIEW_JSON: /tmp/sprout-run-${{ github.run_id }}-1/review.json
+        run: |
+          if [ -f "$REVIEW_JSON" ] && jq -e '
+            {summary: (.summary|type=="string"),
+             approval_status: (.approval_status|IN("approve","request_changes","comment")),
+             comments: (.comments|type=="array" and all(.[]; (.file|type=="string") and (.line|type=="number") and (.body|type=="string")))}
+          ' "$REVIEW_JSON" > /dev/null 2>&1; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::review.json missing or invalid ($REVIEW_JSON) — retry will run"
+          fi
+
       # Sprout installs from GitHub releases on every run; a single
       # transient 503 from the release CDN fails the whole job. Retry
       # once; skipped when the first attempt succeeds.
       - name: Retry review (transient install failures)
-        if: failure()
+        if: failure() || steps.review.outputs.ok != 'true'
         uses: sprout-foundry/sprout-agent@v1
         with:
           mode: "review"
@@ -101,3 +122,19 @@ jobs:
           comment-threshold: "medium"
           timeout-minutes: "30"
           debug: "false"
+
+      # Final gate: whatever happened, the job is green only if a valid
+      # review.json exists at the end. This is the step that decides the
+      # job conclusion, so the review-pr check goes red when the reviewer
+      # cannot produce a review — instead of reporting success with
+      # nothing posted.
+      - name: Require review.json
+        if: always()
+        run: |
+          REVIEW_JSON=$(ls /tmp/sprout-run-${{ github.run_id }}-*/review.json 2>/dev/null | head -1 || true)
+          test -n "$REVIEW_JSON" && test -f "$REVIEW_JSON" || { echo "::error::review.json was not produced by the retry either (no /tmp/sprout-run-${{ github.run_id }}-*/review.json found)"; exit 1; }
+          jq -e '
+            {summary: (.summary|type=="string"),
+             approval_status: (.approval_status|IN("approve","request_changes","comment")),
+             comments: (.comments|type=="array" and all(.[]; (.file|type=="string") and (.line|type=="number") and (.body|type=="string")))}
+          ' "$REVIEW_JSON" > /dev/null || { echo "::error::review.json failed validation"; exit 1; }

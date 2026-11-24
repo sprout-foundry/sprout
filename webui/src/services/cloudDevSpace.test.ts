@@ -1,5 +1,5 @@
 /**
- * Tests for fullWorkspace.ts — the full-dev-space availability probe and
+ * Tests for cloudDevSpace.ts — the full-dev-space availability probe and
  * the create-and-enter launch.
  *
  * The probe reads the typed availability endpoint (GET /dev-space/availability):

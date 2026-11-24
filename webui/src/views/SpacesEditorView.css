@@ -1,0 +1,37 @@
+/*
+ * The assembled editor view: tabs over one editor pane, filling its slot.
+ * Placement beyond that is the host's.
+ */
+
+.sprout-spaces-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.sprout-spaces-editor__pane {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/*
+ * The editor composed spaces show in the center slot while files are
+ * open in an arrangement that places no editor: the slot is split between it
+ * and the views the host placed there, rather than the editor's full height
+ * pushing them out of view.
+ */
+.sprout-spaces .sprout-views-layout__slot:has(> .sprout-spaces-editor--on-demand) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sprout-spaces .sprout-views-layout__slot:has(> .sprout-spaces-editor--on-demand) > * {
+  flex: 1 1 0;
+  min-height: 0;
+}

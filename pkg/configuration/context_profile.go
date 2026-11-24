@@ -85,8 +85,14 @@ var lowContextProfile = ContextProfile{
 		"mcp_tools",
 		"mcp_refresh",
 	},
-	SystemPromptPath:          "prompts/system_prompt.lite.md",
-	CompactionTriggerFraction: 0.85,
+	SystemPromptPath: "prompts/system_prompt.lite.md",
+	// The 0.85 proposal was overridden by the no-overflow clamp in
+	// computeCompactionTriggerFraction: an LCM trigger above
+	// 1 - EstimationErrorPercent lets the underestimating token estimate sit
+	// below the trigger while the true size is already over the window.
+	// 0.70 is the effective trigger for every profile (the profile no longer
+	// needs an explicit override).
+	CompactionTriggerFraction: 0.70,
 	RecentTurnsToPreserve:     2,
 	RepoMapDefaultDepth:       1,
 }

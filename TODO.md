@@ -4,7 +4,7 @@ Work that needs a human decision or external accounts. Everything else lives
 in `roadmap/` (`SP-###.md` files are authoritative); completed work lives in
 git history.
 
-- Publish `@sprout-foundry/workspace` 1.1.0 (hosted chat, hc.1–hc.6): push
+- Publish `@sprout-foundry/spaces` 1.1.0 (hosted chat, hc.1–hc.6): push
   `main`, then `git tag workspace-v1.1.0 -m "workspace v1.1.0"` and push the
   tag; the publish workflow does the rest.
 

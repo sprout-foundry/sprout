@@ -18,7 +18,7 @@ import type { FC } from 'react';
 export interface EditorContextMenuProps {
   contextMenu: {
     contextMenu: { x: number; y: number; hasSelection: boolean; languageId?: string } | null;
-    workspaceRoot: string | null;
+    projectFolder: string | null;
     hideContextMenu: () => void;
     handleCopySelection: () => void;
     handleGoToDefinitionFromMenu: () => void;
@@ -40,7 +40,7 @@ export function areContextMenuEqual(prev: EditorContextMenuProps, next: EditorCo
   const nc = next.contextMenu;
 
   if (pc.contextMenu !== nc.contextMenu) return false;
-  if (pc.workspaceRoot !== nc.workspaceRoot) return false;
+  if (pc.projectFolder !== nc.projectFolder) return false;
   if (pc.hideContextMenu !== nc.hideContextMenu) return false;
   if (pc.handleCopySelection !== nc.handleCopySelection) return false;
   if (pc.handleGoToDefinitionFromMenu !== nc.handleGoToDefinitionFromMenu) return false;
@@ -58,7 +58,7 @@ export function areContextMenuEqual(prev: EditorContextMenuProps, next: EditorCo
  * Component that renders the editor context menu.
  */
 const EditorContextMenuImpl: FC<EditorContextMenuProps> = ({ contextMenu: ctx, isSemanticLanguage }) => {
-  const { contextMenu, workspaceRoot: projectFolder } = ctx;
+  const { contextMenu, projectFolder } = ctx;
 
   return (
     <ContextMenu

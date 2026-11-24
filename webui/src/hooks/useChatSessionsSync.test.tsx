@@ -37,7 +37,7 @@ function setup(opts: {
     closable: Array<[string, boolean]>;
   } = { open: [], pinned: [], closable: [] };
 
-  const openWorkspaceBuffer = (o: {
+  const openProjectFolderBuffer = (o: {
     kind: 'chat';
     path: string;
     title: string;
@@ -48,7 +48,7 @@ function setup(opts: {
   }) => {
     const id = o.path;
     calls.open.push({ id, isPinned: o.isPinned, isClosable: o.isClosable, activate: o.activate });
-    // Mirror openWorkspaceBuffer: register a new buffer so subsequent runs dedupe.
+    // Mirror openProjectFolderBuffer: register a new buffer so subsequent runs dedupe.
     const chatId = o.metadata?.chatId as string;
     opts.buffers.set(
       id,
@@ -85,7 +85,7 @@ function setup(opts: {
         opts.closedIds?.push(id);
         opts.buffers.delete(id);
       },
-      openWorkspaceBuffer: openWorkspaceBuffer as never,
+      openProjectFolderBuffer: openProjectFolderBuffer as never,
     }),
   );
 
@@ -144,7 +144,7 @@ describe('useChatSessionsSync', () => {
           closedIds.push(id);
           buffers.delete(id);
         },
-        openWorkspaceBuffer: ((o: { path: string; metadata?: Record<string, unknown> }) => {
+        openProjectFolderBuffer: ((o: { path: string; metadata?: Record<string, unknown> }) => {
           buffers.set(o.path, tab(String(o.metadata?.chatId)));
           return o.path;
         }) as never,
@@ -179,7 +179,7 @@ describe('useChatSessionsSync', () => {
         updateBufferTitle: vi.fn(),
         setBufferPinned: vi.fn(),
         setBufferClosable: vi.fn(),
-        openWorkspaceBuffer: ((o: { path: string; activate?: boolean; metadata?: Record<string, unknown> }) => {
+        openProjectFolderBuffer: ((o: { path: string; activate?: boolean; metadata?: Record<string, unknown> }) => {
           opened.push({ path: o.path, activate: o.activate });
           buffers.set(o.path, makeBuffer({ id: o.path, metadata: { chatId: o.metadata?.chatId } }));
           return o.path;

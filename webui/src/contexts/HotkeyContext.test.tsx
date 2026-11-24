@@ -572,7 +572,7 @@ describe('embedded workspace (no app shell)', () => {
     window.addEventListener('keydown', hostKeydown);
   });
 
-  async function mountWorkspace(): Promise<void> {
+  async function mountSpaces(): Promise<void> {
     act(() => {
       root.render(createElement(HotkeyProvider, null, createElement('button', { 'data-testid': 'inside' }, 'x')));
     });
@@ -593,7 +593,7 @@ describe('embedded workspace (no app shell)', () => {
   }
 
   it('leaves keys pressed outside the workspace to the host page', async () => {
-    await mountWorkspace();
+    await mountSpaces();
     const unregister = registerCommandHandler(['save_file']);
     const outside = document.createElement('button');
     document.body.appendChild(outside);
@@ -608,7 +608,7 @@ describe('embedded workspace (no app shell)', () => {
   });
 
   it('leaves a bound shortcut alone when nothing handles its command', async () => {
-    await mountWorkspace();
+    await mountSpaces();
     for (const key of ['s', 'w', '1']) {
       const ev = press(inside, { key, ctrlKey: true });
       expect(ev.defaultPrevented).toBe(false);
@@ -618,7 +618,7 @@ describe('embedded workspace (no app shell)', () => {
   });
 
   it('handles and consumes a shortcut inside the workspace once a handler is registered', async () => {
-    await mountWorkspace();
+    await mountSpaces();
     const unregister = registerCommandHandler(['save_file']);
 
     const ev = press(inside, { key: 's', ctrlKey: true });
@@ -637,7 +637,7 @@ describe('embedded workspace (no app shell)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Tests: the sidebar's Cmd/Ctrl+\ toggle (useWorkspaceKeyDown)
+// Tests: the sidebar's Cmd/Ctrl+\ toggle (useSpacesKeyDown)
 // ---------------------------------------------------------------------------
 
 describe('sidebar toggle shortcut', () => {

@@ -12,7 +12,7 @@ import {
   resolveCdTarget,
   subscribeProjectFolderCwd,
   projectFolderCwdLabel,
-} from '../services/workspaceCwd';
+} from '../services/projectFolderCwd';
 
 /**
  * Native-mode interactive console (Track R, terminal portion).
@@ -31,7 +31,7 @@ import {
  * the console tracks a session directory (validated against the native fs
  * via a suppressed `pwd` spawn before committing, chrooted to the project folder
  * root) and passes it with every spawn. Without a session `cd`, spawns use
- * the shared project folder cwd (services/workspaceCwd.ts; project folder when
+ * the shared project folder cwd (services/projectFolderCwd.ts; project folder when
  * unset — exactly the pre-cwd behavior).
  */
 
@@ -85,7 +85,7 @@ export function NativeTerminalConsole(): React.ReactElement {
   const busyRef = useRef(false);
   const runLineRef = useRef<(line: string) => void>(() => {});
 
-  // Working directory shared with Files / Git / Agent (services/workspaceCwd).
+  // Working directory shared with Files / Git / Agent (services/projectFolderCwd).
   // Kept in a ref so the line-editor closure (created once on mount) always
   // renders the CURRENT prompt; re-renders on cwd change are unnecessary.
   const cwdRef = useRef(getProjectFolderCwd());

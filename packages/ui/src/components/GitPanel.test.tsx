@@ -1314,7 +1314,7 @@ describe('GitPanel', () => {
     act(() => {
       root.render(createElement(GitSidebarPanel, {
         ...makeAllProps({
-          workspaceRoot: '/home/user/project',
+          projectFolder: '/home/user/project',
           gitStatus: makeGitStatus(),
         }),
       }));

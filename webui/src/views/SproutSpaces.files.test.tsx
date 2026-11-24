@@ -1,0 +1,250 @@
+/**
+ * SproutSpaces — the files and editor units of arranged spaces.
+ *
+ * Own-mode spaces with a `layout` assemble a working `fileTree` (the
+ * project folder file API), an `editor` rendered from the editor unit, and a
+ * `changes` panel whose file clicks open the editor; a kind the host supplies
+ * through `viewProps` wins. The tree, the bare editor primitive, the editor
+ * pane and the composite views are stubbed with nodes that expose the props
+ * the composition handed them; the provider stack and the editor unit are
+ * the real ones. Because the editor pane is stubbed, no file is read here:
+ * `SproutSpaces.fileSelect.test.tsx` covers selection with the real tree
+ * and editor, as the package mounts them.
+ */
+
+import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../services/localEventsProvider', () => ({
+  LocalEventsProvider: class {
+    connect = vi.fn();
+    disconnect = vi.fn();
+    onEvent = vi.fn();
+    removeEvent = vi.fn();
+    sendEvent = vi.fn();
+    isConnected = vi.fn(() => true);
+    onReconnect = vi.fn();
+    freeze = vi.fn();
+    resume = vi.fn();
+    resetAndReconnect = vi.fn();
+    getQueuedMessageCount = vi.fn(() => 0);
+  },
+}));
+vi.mock('../components/ChatView', () => ({ default: () => <div data-testid="files-test-chat" /> }));
+vi.mock('../components/AgentChangesPanel', () => ({
+  default: (props: { onFileClick?: (path: string) => void }) => (
+    <button type="button" data-testid="files-test-changes" onClick={() => props.onFileClick?.('src/changed.ts')}>
+      changes
+    </button>
+  ),
+}));
+vi.mock('./hostAgentBackend', () => ({ wireHostAgentBackend: vi.fn(), resetHostAgentBackend: vi.fn() }));
+vi.mock('../services/apiFileCheck', () => ({ checkFilesModified: vi.fn().mockResolvedValue({ modified: [] }) }));
+vi.mock('../services/api', () => {
+  const instance = {
+    getHotkeys: async () => ({ hotkeys: [], platform: 'test' }),
+    applyHotkeyPreset: async () => ({ hotkeys: [] }),
+    getProjectFolder: async () => ({ project_folder: '' }),
+    getStats: async () => ({}),
+    getSettings: async () => ({}),
+  };
+  return { ApiService: { getInstance: () => instance } };
+});
+vi.mock('../components/EditorPane', async () => {
+  const { useEditorManager } = await import('../contexts/EditorManagerContext');
+  return {
+    default: ({ paneId }: { paneId: string }) => {
+      const { panes, buffers } = useEditorManager();
+      const buffer = buffers.get(panes.find((p) => p.id === paneId)?.bufferId ?? '');
+      return <div data-testid="files-test-editor-pane" data-path={buffer?.file.path} />;
+    },
+  };
+});
+vi.mock('@sprout/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@sprout/ui')>();
+  return {
+    ...actual,
+    FileTree: (props: {
+      onFileSelect: (file: { path: string; name: string; isDir: boolean }) => void;
+      selectedFile?: string;
+      onFetchFiles?: (path: string) => Promise<unknown>;
+      onDeletePath?: (path: string, isDir: boolean) => Promise<void>;
+    }) => (
+      <div
+        data-testid="files-test-tree"
+        data-selected={props.selectedFile ?? ''}
+        data-has-fetch={String(typeof props.onFetchFiles === 'function')}
+      >
+        <button
+          type="button"
+          data-testid="files-test-tree-select"
+          onClick={() => props.onFileSelect({ path: 'src/app.ts', name: 'app.ts', isDir: false })}
+        >
+          select
+        </button>
+        <button type="button" data-testid="files-test-tree-fetch" onClick={() => void props.onFetchFiles?.('.')}>
+          fetch
+        </button>
+        <button
+          type="button"
+          data-testid="files-test-tree-delete"
+          onClick={() => void props.onDeletePath?.('src/app.ts', false)}
+        >
+          delete
+        </button>
+      </div>
+    ),
+    Editor: (props: { value?: string }) => <div data-testid="files-test-primitive-editor" data-value={props.value} />,
+  };
+});
+
+import type { SproutHost } from '../host';
+import { setActiveHost } from '../host/accessor';
+import { headlessHost } from '../host/HostProvider';
+import { SproutSpaces } from './SproutSpaces';
+import type { SproutProject } from './SproutSpaces';
+import type { ViewsArrangement } from './ViewsLayout';
+
+const PROJECT: SproutProject = { id: 'acme/widgets', repoUrl: 'https://github.com/acme/widgets' };
+const IDE: ViewsArrangement = { left: ['fileTree'], center: ['editor', 'chat'], right: ['changes'], overlay: [] };
+/** Files beside the chat with no editor placed: selection must still show the file. */
+const NO_EDITOR: ViewsArrangement = { left: ['fileTree'], center: ['chat'], right: ['changes'] };
+
+function makeHost(): SproutHost {
+  return {
+    ...headlessHost(),
+    transport: { apiBaseURL: 'https://host.test', wsURL: '', authMode: 'none' },
+  };
+}
+
+const fetchSpy = vi.fn(async (_url: unknown, _init?: RequestInit) => ({
+  ok: true,
+  status: 200,
+  statusText: 'OK',
+  headers: new Headers({ 'content-type': 'application/json' }),
+  json: async () => ({ message: 'success', files: [] }),
+  text: async () => '',
+}));
+
+beforeAll(() => {
+  // @ts-expect-error — declare the React act-environment flag for act() mode
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+});
+
+beforeEach(() => {
+  localStorage.clear();
+  localStorage.setItem('sprout-welcome-dismissed', 'true');
+  setActiveHost(headlessHost());
+  vi.stubGlobal('fetch', fetchSpy);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.clearAllMocks();
+});
+
+describe('SproutSpaces files and editor', () => {
+  it('assembles a working file tree against the host transport', async () => {
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={IDE} />);
+    const tree = await screen.findByTestId('files-test-tree');
+    expect(tree).toHaveAttribute('data-has-fetch', 'true');
+
+    await act(async () => {
+      screen.getByTestId('files-test-tree-fetch').click();
+    });
+    const urls = fetchSpy.mock.calls.map(([url]) => String(url));
+    expect(urls.some((url) => url.includes('https://host.test') && url.includes('/api/files?path=.'))).toBe(true);
+  });
+
+  it('renders the assembled editor for an arranged editor, and a file picked in the tree opens in it', async () => {
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={IDE} />);
+    const projectFolder = await screen.findByTestId('sprout-spaces');
+    expect(within(projectFolder).getByTestId('spaces-editor')).toBeInTheDocument();
+    expect(within(projectFolder).queryByTestId('files-test-primitive-editor')).not.toBeInTheDocument();
+
+    act(() => {
+      screen.getByTestId('files-test-tree-select').click();
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('files-test-editor-pane')).toHaveAttribute('data-path', 'src/app.ts'),
+    );
+    expect(screen.getByTestId('files-test-tree')).toHaveAttribute('data-selected', 'src/app.ts');
+  });
+
+  it('shows the editor in the center slot for a file picked in a tree arranged without one', async () => {
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={NO_EDITOR} />);
+    await screen.findByTestId('files-test-tree');
+    expect(screen.queryByTestId('spaces-editor')).not.toBeInTheDocument();
+
+    act(() => {
+      screen.getByTestId('files-test-tree-select').click();
+    });
+
+    const center = screen.getByTestId('views-slot-center');
+    await waitFor(() =>
+      expect(within(center).getByTestId('files-test-editor-pane')).toHaveAttribute('data-path', 'src/app.ts'),
+    );
+    expect(within(center).getByTestId('files-test-chat')).toBeInTheDocument();
+  });
+
+  it('closes the open file when the tree deletes it, through the same buffer manager', async () => {
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={NO_EDITOR} />);
+    await screen.findByTestId('files-test-tree');
+    act(() => {
+      screen.getByTestId('files-test-tree-select').click();
+    });
+    await screen.findByTestId('spaces-editor');
+
+    await act(async () => {
+      screen.getByTestId('files-test-tree-delete').click();
+    });
+    expect(fetchSpy.mock.calls.some(([url]) => String(url).includes('/api/delete'))).toBe(true);
+    await waitFor(() => expect(screen.queryByTestId('spaces-editor')).not.toBeInTheDocument());
+  });
+
+  it('opens a changed file in the editor from the changes panel and from an open-in-editor request', async () => {
+    render(<SproutSpaces project={PROJECT} space="code" host={makeHost()} layout={IDE} />);
+    await screen.findByTestId('sprout-spaces');
+
+    act(() => {
+      screen.getByTestId('files-test-changes').click();
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('files-test-editor-pane')).toHaveAttribute('data-path', 'src/changed.ts'),
+    );
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('sprout:open-in-editor', { detail: { path: 'README.md' } }));
+    });
+    await waitFor(() => expect(screen.getByTestId('files-test-editor-pane')).toHaveAttribute('data-path', 'README.md'));
+  });
+
+  it('lets the host replace the tree and the editor through viewProps', async () => {
+    const onFileSelect = vi.fn();
+    render(
+      <SproutSpaces
+        project={PROJECT}
+        space="code"
+        host={makeHost()}
+        layout={IDE}
+        viewProps={{ fileTree: { onFileSelect, selectedFile: 'host.txt' }, editor: { value: 'host buffer' } }}
+      />,
+    );
+    const projectFolder = await screen.findByTestId('sprout-spaces');
+
+    const tree = within(projectFolder).getByTestId('files-test-tree');
+    expect(tree).toHaveAttribute('data-selected', 'host.txt');
+    expect(tree).toHaveAttribute('data-has-fetch', 'false');
+    act(() => {
+      screen.getByTestId('files-test-tree-select').click();
+    });
+    expect(onFileSelect).toHaveBeenCalledWith(expect.objectContaining({ path: 'src/app.ts' }));
+
+    expect(within(projectFolder).getByTestId('files-test-primitive-editor')).toHaveAttribute(
+      'data-value',
+      'host buffer',
+    );
+    expect(within(projectFolder).queryByTestId('spaces-editor')).not.toBeInTheDocument();
+  });
+});

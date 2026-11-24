@@ -119,6 +119,9 @@ form.is-done .form-done{display:flex}form.is-done .form-fields{display:none}
 /* Footer */
 .footer{padding:3rem 0;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
 .footer .row{justify-content:space-between}
+/* Note shown when a link cannot leave the first look */
+.go-note{position:fixed;left:50%;bottom:1.25rem;transform:translateX(-50%);z-index:60;max-width:min(28rem,90vw);background:var(--text);color:var(--bg);padding:.55rem 1rem;border-radius:var(--radius-sm);font-size:.85rem;text-align:center;box-shadow:var(--shadow-lg);pointer-events:none}
+
 /* Screens: one shown at a time. Before the runtime runs (while the mockup is
    still being written) only the first shows; then the runtime switches them. */
 body:not(.screens-ready) [data-screen]~[data-screen]{display:none}

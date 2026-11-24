@@ -103,7 +103,9 @@ It is added to your document for you, so do not copy any of it.
   `<section data-screen="id">`; anything with `data-go="id"` switches to
   that screen (the kit does the switching and hides all but the first, so
   write no script or CSS for it). A one-page site is one screen with its
-  sections; its navigation links scroll to them with `href="#id"`.
+  sections; its navigation links scroll to them with `href="#id"`. Every
+  link to another screen uses `data-go` with that screen's id, never an
+  href to a page.
   Tabs: a `data-tabs` container holding buttons with `data-tab="id"` and
   panels with `data-panel="id"`.
 - Write a `<script>` (last, before `</body>`) only for behaviour the plan

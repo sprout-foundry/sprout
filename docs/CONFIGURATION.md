@@ -184,7 +184,7 @@ PDF analysis settings for OCR processing. When enabled, uses the specified provi
 
 #### `memory_prompt` and `memory_prompt_max_bytes`
 
-How memories (`<config dir>/memories/*.md`) enter the system prompt. Every request carries the system prompt, so with a large memory store this is the biggest share of a request's fixed tokens.
+How memories (`<config dir>/memories/*.md`) enter the conversation's first user message. Every request replays that message as prefix, so with a large memory store this is the biggest share of a request's fixed tokens.
 
 - `"index"` (default, or unset): one line per memory, its name and first line of text. The model reads the bodies it needs with `manage_memory` (`read`, `search`).
 - `"full"`: every memory body, alphabetically, up to `memory_prompt_max_bytes` (default 50 000 bytes, about 12 500 tokens).

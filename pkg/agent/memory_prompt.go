@@ -33,7 +33,7 @@ func normalizeMemoryPromptMode(mode string) (normalized string, ok bool) {
 	}
 }
 
-// LoadMemoriesForPromptMode formats the memories for the system prompt in the given mode.
+// LoadMemoriesForPromptMode formats the memories for the conversation's first user message in the given mode.
 // maxBytes <= 0 uses maxMemoryPromptBytes. Every request carries the result, so the index
 // mode (the default) keeps a large memory store from costing thousands of tokens a request.
 //

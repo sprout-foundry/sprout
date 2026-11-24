@@ -56,12 +56,9 @@ func GetEmbeddedSystemPrompt() (string, error) {
 	}
 	promptContent = filesystem.LocalizeScratchDir(promptContent)
 
-	// The project context file and the working directory go in the conversation's first user
-	// message (workspace_context.go), so the system prompt is the same in every directory.
-	if memories := LoadMemoriesForPrompt(); memories != "" {
-		promptContent = promptContent + memories
-	}
-
+	// Everything that varies by session (project context, working directory, memories) goes
+	// in the conversation's first user message (workspace_context.go), so the system prompt
+	// stays the same for every session regardless of memory edits.
 	return promptContent, nil
 }
 
@@ -78,8 +75,9 @@ func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, pro
 	}
 	promptContent = filesystem.LocalizeScratchDir(promptContent)
 
-	// The project context file and the working directory go in the conversation's first user
-	// message (workspace_context.go), so the system prompt is the same in every directory.
+	// The project context file, the working directory and the memory block go in the
+	// conversation's first user message (workspace_context.go), so the system prompt is the
+	// same in every directory and across sessions.
 	contextFiles, err := LoadContextFiles()
 	if err == nil && contextFiles != "" {
 		// AGENTS.md is always injected. In LCM, warn if the file is large.
@@ -101,11 +99,6 @@ func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, pro
 					tokens, pct, windowLabel)
 			}
 		}
-	}
-
-	memories := LoadMemoriesForPromptMode(profile.MemoryPrompt, profile.MemoryPromptMaxBytes)
-	if memories != "" {
-		promptContent = promptContent + memories
 	}
 
 	return promptContent, nil

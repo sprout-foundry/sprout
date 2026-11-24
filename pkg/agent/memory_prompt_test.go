@@ -86,7 +86,6 @@ func TestMemorySummary(t *testing.T) {
 	}
 }
 
-
 // TestRenderStableUnderEdit covers the prefix-stability contract: rendering a set of
 // memories, editing one body (and separately adding one), must leave every other entry
 // byte-identical between the two renderings — so a session's prefix still matches after

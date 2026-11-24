@@ -87,3 +87,91 @@ func TestStripUserMessageEnvelope(t *testing.T) {
 		t.Fatalf("a message without a block = %q", got)
 	}
 }
+
+// TestMemoryBlockInFirstUserMessage covers the move of memories out of the system prompt:
+// after a memory is created, the system prompt carries no memory text, the first user message
+// does, and two sessions started with different memory sets produce byte-identical system
+// prompts.
+func TestMemoryBlockInFirstUserMessage(t *testing.T) {
+	first := newTestAgent(t)
+	if err := SaveMemory("alpha", "# Alpha\nPrefer table-driven tests."); err != nil {
+		t.Fatalf("SaveMemory: %v", err)
+	}
+	firstFirst := first.withWorkspaceContext("fix the bug")
+	if !strings.Contains(firstFirst, "## Memories") || !strings.Contains(firstFirst, "`alpha`") {
+		t.Fatalf("first user message lacks the memory block:\n%s", firstFirst)
+	}
+	second := newTestAgent(t)
+	if err := SaveMemory("beta", "# Beta\nUse merge, never rebase."); err != nil {
+		t.Fatalf("SaveMemory beta: %v", err)
+	}
+	secondFirst := second.withWorkspaceContext("fix the bug")
+	if !strings.Contains(secondFirst, "`beta`") {
+		t.Fatalf("second session's first message lacks beta:\n%s", secondFirst)
+	}
+	if strings.Contains(secondFirst, "`alpha`") {
+		t.Fatalf("second session's first message leaked the first session's memory:\n%s", secondFirst)
+	}
+	// The memory block is the only session-varying content of the first message.
+	if firstFirst == secondFirst {
+		t.Fatalf("first messages of two sessions with different memory sets are identical:\n%s", firstFirst)
+	}
+
+	// Both system prompts must be byte-identical and memory-free. The memory block is not
+	// built for the system prompt at all any more.
+	firstPrompt, err := GetEmbeddedSystemPromptForProfile(configuration.ContextProfile{Mode: configuration.ContextModeFull}, "", 200_000, first.currentProjectFolder())
+	if err != nil {
+		t.Fatalf("GetEmbeddedSystemPromptForProfile (first): %v", err)
+	}
+	secondPrompt, err := GetEmbeddedSystemPromptForProfile(configuration.ContextProfile{Mode: configuration.ContextModeFull}, "", 200_000, second.currentProjectFolder())
+	if err != nil {
+		t.Fatalf("GetEmbeddedSystemPromptForProfile (second): %v", err)
+	}
+	if firstPrompt != secondPrompt {
+		t.Fatalf("system prompts differ across sessions with different memory sets:\nfirst:\n%s\nsecond:\n%s", firstPrompt, secondPrompt)
+	}
+	if strings.Contains(firstPrompt, "## Memories") || strings.Contains(firstPrompt, "alpha") || strings.Contains(firstPrompt, "beta") {
+		t.Fatalf("profile system prompt carries memory text:\n%s", firstPrompt)
+	}
+	prompt, err := GetEmbeddedSystemPrompt()
+	if err != nil {
+		t.Fatalf("GetEmbeddedSystemPrompt: %v", err)
+	}
+	if strings.Contains(prompt, "## Memories") || strings.Contains(prompt, "alpha") || strings.Contains(prompt, "beta") {
+		t.Fatalf("embedded system prompt carries memory text:\n%s", prompt)
+	}
+}
+
+// TestMemoryBlockStableAcrossAgentStart: the memory block is stamped once at the first
+// message; a mid-session memory write must not change a session's already-stamped message.
+func TestMemoryBlockStableAcrossAgentStart(t *testing.T) {
+	ag := newTestAgent(t)
+	if err := SaveMemory("alpha", "# Alpha\nAlpha body."); err != nil {
+		t.Fatalf("SaveMemory: %v", err)
+	}
+	stamped := ag.withWorkspaceContext("fix the bug")
+	if err := SaveMemory("beta", "# Beta\nBeta body."); err != nil {
+		t.Fatalf("SaveMemory beta: %v", err)
+	}
+	if strings.Contains(stamped, "beta") {
+		t.Fatalf("mid-session memory write leaked into the stamped first message:\n%s", stamped)
+	}
+	// A later turn must not re-add the block.
+	ag.AddMessage(api.Message{Role: "user", Content: stamped})
+	if got := ag.withWorkspaceContext("and the next one"); got != "and the next one" {
+		t.Fatalf("a later turn re-prefixed the message: %q", got)
+	}
+}
+
+// TestNoMemoriesNoBlock: an agent with an empty memory store gets no stray
+// "## Memories" heading in the first user message.
+func TestNoMemoriesNoBlock(t *testing.T) {
+	ag := newTestAgent(t)
+	first := ag.withWorkspaceContext("fix the bug")
+	if strings.Contains(first, "## Memories") {
+		t.Fatalf("first user message carries a stray memory block:\n%s", first)
+	}
+	if !strings.HasSuffix(first, "</workspace-context>\n\nfix the bug") {
+		t.Fatalf("workspace block should still be stamped:\n%s", first)
+	}
+}

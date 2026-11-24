@@ -12,11 +12,8 @@ on:
   schedule:
     - cron: '0 7 * * *'
 
-# pull-requests: read lets golangci-lint-action diff new-issue detection
-# against the PR base via the GitHub API.
 permissions:
   contents: read
-  pull-requests: read
 
 jobs:
   # Primary gate: ubuntu runs the full pipeline (lint, build, vitest, unit
@@ -296,31 +293,13 @@ jobs:
         shellcheck docker/workspace/entrypoint.sh docker/workspace/git-credential-sprout
 
     - name: Lint Go (new code only)
-      # New-code gate: the repo predates golangci-lint, so a full-repo gate
-      # would block every PR on the historical backlog (431 findings as of
-      # 2026-09-19, see `make lint-go`). only-new-issues diffs against the
-      # PR base or the push range. Needs a full fetch for accurate diffs
-      # and pull-requests: read for the GitHub-API diff path. The action's
-      # diff has no base on schedule/dispatch events, which would fall back
-      # to whole-tree linting against the backlog; on those events diff
-      # since the latest release tag instead via make lint-go-new. The same
-      # applies to huge push commits (a squash merge of a 300+ file PR): the
-      # action fetches the diff through the GitHub API, which caps patches
-      # at 300 files (HTTP 406) and silently falls back to whole-tree
-      # linting — so push events use the release-tag diff too.
-      if: github.event_name == 'pull_request'
-      uses: golangci/golangci-lint-action@v9
-      with:
-        # v2.13.2: prebuilt binaries must be built with a Go version >= the
-        # repo's toolchain (go.mod: 1.26.6). v2.5.0 shipped go1.25 builds and
-        # exits with "language version lower than targeted" on every run.
-        version: v2.13.2
-        only-new-issues: true
-
-    - name: Lint Go (new code only, since latest release)
-      if: github.event_name != 'pull_request'
+      # The repo predates golangci-lint, so only new code is gated: PRs from
+      # their base, other events since the latest release tag. The diff is
+      # local because golangci-lint-action's API diff stops at 300 files and
+      # then lints the whole tree.
       run: |
-        rev=$(git describe --tags --match='v*' --abbrev=0)
+        rev='${{ github.event.pull_request.base.sha }}'
+        [ -n "$rev" ] || rev=$(git describe --tags --match='v*' --abbrev=0)
         make lint-go-new NEW_FROM_REV="$rev"
 
     - name: Set up Node.js
@@ -491,22 +470,13 @@ jobs:
       run: make fmt-check
 
     - name: Lint Go (new code only)
-      # Same new-code gate as the `test` job — see the note there. The
-      # action's only-new-issues diff has no base on schedule/dispatch
-      # events, and caps API-fetched patches at 300 files (huge squash
-      # pushes 406 and fall back to whole-tree linting against the
-      # historical backlog); those events diff since the latest release
-      # tag instead via make lint-go-new.
-      if: github.event_name == 'pull_request'
-      uses: golangci/golangci-lint-action@v9
-      with:
-        version: v2.13.2
-        only-new-issues: true
-
-    - name: Lint Go (new code only, since latest release)
-      if: github.event_name != 'pull_request'
+      # The repo predates golangci-lint, so only new code is gated: PRs from
+      # their base, other events since the latest release tag. The diff is
+      # local because golangci-lint-action's API diff stops at 300 files and
+      # then lints the whole tree.
       run: |
-        rev=$(git describe --tags --match='v*' --abbrev=0)
+        rev='${{ github.event.pull_request.base.sha }}'
+        [ -n "$rev" ] || rev=$(git describe --tags --match='v*' --abbrev=0)
         make lint-go-new NEW_FROM_REV="$rev"
 
     - name: Set up Node.js

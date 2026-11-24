@@ -1,0 +1,51 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "output.setMetadata",
+      "params": {
+        "key": "source",
+        "value": "conformance-test"
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "Hello!"
+      }
+    },
+    {
+      "id": 4,
+      "method": "agent.run",
+      "params": {
+        "query": "metadata test"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 2,
+      "type": "noError"
+    },
+    {
+      "id": 4,
+      "type": "noError"
+    },
+    {
+      "eventType": "query_started",
+      "type": "event"
+    }
+  ],
+  "description": "Event metadata set via SetEventMetadata is merged into published events",
+  "name": "event_metadata"
+}

@@ -1,0 +1,77 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.blockUntil",
+      "params": {}
+    },
+    {
+      "id": 3,
+      "method": "agent.injectInput",
+      "params": {
+        "input": "first input"
+      }
+    },
+    {
+      "id": 4,
+      "method": "agent.injectInput",
+      "params": {
+        "input": "second input"
+      }
+    },
+    {
+      "id": 5,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "done"
+      }
+    },
+    {
+      "id": 51,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "acknowledged"
+      }
+    },
+    {
+      "id": 6,
+      "method": "agent.run",
+      "params": {
+        "query": "start"
+      }
+    },
+    {
+      "id": 7,
+      "method": "mock.release",
+      "params": {}
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 3,
+      "type": "noError"
+    },
+    {
+      "id": 4,
+      "result": {
+        "accepted": false
+      },
+      "type": "response"
+    },
+    {
+      "id": 6,
+      "type": "noError"
+    }
+  ],
+  "description": "Second injectInput when one already queued returns false (slot full)",
+  "name": "inject_full"
+}

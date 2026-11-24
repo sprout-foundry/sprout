@@ -401,6 +401,13 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// recovery-on-overflow) uses sprout's configuration end-to-end. All three
 	// fields are nil-tolerant on the seed side, so any that aren't configured
 	// here simply fall back to seed's defaults.
+	//
+	// Note the seed side pins the run's opening brief (the first user message)
+	// verbatim through every compaction path — substitution, checkpoint
+	// compaction, the LLM summarizer and continuation compaction — and
+	// preserves it across pruner strategies and the agentic headroom pass.
+	// Do not pass a demoting/stubbing summarizer or a pruner that drops the
+	// first user message here; that is the bug this cascade is pinned against.
 	if optWrap := a.state.GetOptimizer(); optWrap != nil {
 		opts.Optimizer = optWrap.Inner()
 	}

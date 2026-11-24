@@ -1,0 +1,49 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addMalformedResponse",
+      "params": {
+        "content": "{\"name\": \"weather\", \"arguments\": ..."
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "Recovery response."
+      }
+    },
+    {
+      "id": 4,
+      "method": "agent.run",
+      "params": {
+        "query": "test"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 4,
+      "type": "noError"
+    },
+    {
+      "id": 4,
+      "result": {
+        "result": "Recovery response."
+      },
+      "type": "response"
+    }
+  ],
+  "description": "Validator detects truncated tool call responses (ending with ... or abrupt cutoff)",
+  "name": "validator_truncated"
+}

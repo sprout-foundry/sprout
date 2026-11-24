@@ -1,0 +1,12 @@
+{
+  "__runCommand": "sprout agent --workflow-config process/roadmap_workflow.json",
+  "continue_on_error": true,
+  "initial": {
+    "max_iterations": 500,
+    "persona": "orchestrator",
+    "prompt_file": "process/roadmap_workflow_prompt.md",
+    "skip_prompt": true
+  },
+  "no_web_ui": true,
+  "persist_runtime_overrides": false
+}

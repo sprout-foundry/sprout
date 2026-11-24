@@ -1,0 +1,74 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.withTokenEstimate",
+      "params": {
+        "estimate": 50
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "First"
+      }
+    },
+    {
+      "id": 4,
+      "method": "agent.run",
+      "params": {
+        "query": "q1"
+      }
+    },
+    {
+      "id": 5,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "Second"
+      }
+    },
+    {
+      "id": 6,
+      "method": "agent.run",
+      "params": {
+        "query": "q2"
+      }
+    },
+    {
+      "id": 7,
+      "method": "state.tokens",
+      "params": {}
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 4,
+      "type": "noError"
+    },
+    {
+      "id": 6,
+      "type": "noError"
+    },
+    {
+      "id": 7,
+      "type": "noError"
+    },
+    {
+      "greaterThan": 0,
+      "path": "tokens",
+      "type": "state"
+    }
+  ],
+  "description": "Tokens accumulate across multiple queries",
+  "name": "token_accumulation"
+}

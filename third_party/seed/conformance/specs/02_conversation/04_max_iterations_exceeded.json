@@ -1,0 +1,77 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {
+        "maxIterations": 1
+      }
+    },
+    {
+      "id": 2,
+      "method": "mock.addTool",
+      "params": {
+        "description": "Get weather",
+        "name": "weather",
+        "parameters": {
+          "properties": {
+            "location": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addToolCallResponse",
+      "params": {
+        "calls": [
+          {
+            "arguments": {
+              "location": "NYC"
+            },
+            "id": "call_1",
+            "name": "weather"
+          }
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "method": "mock.addToolResult",
+      "params": {
+        "content": "Sunny, 72°F",
+        "toolCallId": "call_1"
+      }
+    },
+    {
+      "id": 5,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "Should not reach here"
+      }
+    },
+    {
+      "id": 6,
+      "method": "agent.run",
+      "params": {
+        "query": "What's the weather?"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "errorType": "max_iterations",
+      "id": 6,
+      "type": "error"
+    }
+  ],
+  "description": "ErrMaxIterations when maxIterations limit reached during tool loop",
+  "name": "max_iterations_exceeded"
+}

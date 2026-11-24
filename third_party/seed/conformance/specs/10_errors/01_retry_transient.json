@@ -1,0 +1,55 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addError",
+      "params": {
+        "errorType": "transient",
+        "message": "500 server error"
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "Success on retry."
+      }
+    },
+    {
+      "id": 4,
+      "method": "agent.run",
+      "params": {
+        "query": "retry me"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 4,
+      "type": "noError"
+    },
+    {
+      "id": 4,
+      "result": {
+        "result": "Success on retry."
+      },
+      "type": "response"
+    },
+    {
+      "equals": 2,
+      "path": "callCount",
+      "type": "mock"
+    }
+  ],
+  "description": "Transient errors are retried until success",
+  "name": "retry_transient"
+}

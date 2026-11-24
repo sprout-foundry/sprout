@@ -1,0 +1,73 @@
+{
+  "name": "xml_blocks",
+  "description": "Fallback parser extracts tool calls from XML-style function tags",
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addTool",
+      "params": {
+        "name": "weather",
+        "description": "Get weather",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addMalformedResponse",
+      "params": {
+        "content": "<function=weather>{\"location\": \"London\"}</function>"
+      }
+    },
+    {
+      "id": 4,
+      "method": "mock.addToolResult",
+      "params": {
+        "toolCallId": "call_auto_1",
+        "content": "Sunny"
+      }
+    },
+    {
+      "id": 5,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "London is sunny."
+      }
+    },
+    {
+      "id": 6,
+      "method": "agent.run",
+      "params": {
+        "query": "Weather?"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 6,
+      "type": "noError"
+    },
+    {
+      "id": 6,
+      "result": {
+        "result": "London is sunny."
+      },
+      "type": "response"
+    }
+  ]
+}

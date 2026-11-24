@@ -1,0 +1,94 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {
+        "optimizer": {
+          "toolCategories": {
+            "shell_command": "shell_command"
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "method": "mock.addTool",
+      "params": {
+        "description": "Run shell command",
+        "name": "shell_command",
+        "parameters": {
+          "properties": {
+            "command": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addToolCallResponse",
+      "params": {
+        "calls": [
+          {
+            "arguments": {
+              "command": "date"
+            },
+            "id": "call_1",
+            "name": "shell_command"
+          },
+          {
+            "arguments": {
+              "command": "date"
+            },
+            "id": "call_2",
+            "name": "shell_command"
+          }
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "method": "mock.addToolResult",
+      "params": {
+        "content": "2025-01-01",
+        "toolCallId": "call_1"
+      }
+    },
+    {
+      "id": 5,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "Done."
+      }
+    },
+    {
+      "id": 6,
+      "method": "agent.run",
+      "params": {
+        "query": "Run the command"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 6,
+      "type": "noError"
+    },
+    {
+      "id": 6,
+      "result": {
+        "result": "Done."
+      },
+      "type": "response"
+    }
+  ],
+  "description": "Conversation optimizer deduplicates identical shell commands within a turn",
+  "name": "shell_command_dedup"
+}

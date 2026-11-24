@@ -1,0 +1,50 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addStreamChunks",
+      "params": {
+        "chunks": [
+          {
+            "content": "A"
+          },
+          {
+            "content": "B"
+          },
+          {
+            "content": "C"
+          }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "method": "agent.runStream",
+      "params": {
+        "query": "Events"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 3,
+      "type": "noError"
+    },
+    {
+      "count": 3,
+      "eventType": "stream_chunk",
+      "type": "events"
+    }
+  ],
+  "description": "stream_chunk events are published for each chunk during streaming",
+  "name": "stream_events"
+}

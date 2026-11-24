@@ -1,0 +1,8 @@
+.sprout
+/runner
+/seed-agent
+/seed-cli
+/watchdog
+/coverage.out
+__pycache__/
+*.pyc

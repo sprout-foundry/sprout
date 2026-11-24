@@ -1,0 +1,83 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "First"
+      }
+    },
+    {
+      "id": 3,
+      "method": "agent.run",
+      "params": {
+        "query": "q1"
+      }
+    },
+    {
+      "id": 4,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "Second"
+      }
+    },
+    {
+      "id": 5,
+      "method": "agent.run",
+      "params": {
+        "query": "q2"
+      }
+    },
+    {
+      "id": 6,
+      "method": "state.len",
+      "params": {}
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 3,
+      "type": "noError"
+    },
+    {
+      "id": 3,
+      "result": {
+        "result": "First"
+      },
+      "type": "response"
+    },
+    {
+      "id": 5,
+      "type": "noError"
+    },
+    {
+      "id": 5,
+      "result": {
+        "result": "Second"
+      },
+      "type": "response"
+    },
+    {
+      "id": 6,
+      "type": "noError"
+    },
+    {
+      "id": 6,
+      "result": {
+        "len": 4
+      },
+      "type": "response"
+    }
+  ],
+  "description": "Sequential runs accumulate state in messages",
+  "name": "agent_multiple_queries"
+}

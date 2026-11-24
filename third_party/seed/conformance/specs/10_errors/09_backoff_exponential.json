@@ -1,0 +1,58 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {
+        "retryConfig": {
+          "initialDelay": 100,
+          "maxAttempts": 3,
+          "maxDelay": 1000,
+          "multiplier": 2
+        }
+      }
+    },
+    {
+      "id": 2,
+      "method": "mock.addError",
+      "params": {
+        "errorType": "transient",
+        "message": "500"
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addError",
+      "params": {
+        "errorType": "transient",
+        "message": "500"
+      }
+    },
+    {
+      "id": 4,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "success"
+      }
+    },
+    {
+      "id": 5,
+      "method": "agent.run",
+      "params": {
+        "query": "backoff test"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 5,
+      "type": "noError"
+    }
+  ],
+  "description": "Placeholder: Backoff delay grows exponentially across retries. Tested via event timestamps between retry attempts.",
+  "name": "backoff_exponential"
+}

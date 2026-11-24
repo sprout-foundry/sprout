@@ -1,0 +1,42 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addError",
+      "params": {
+        "errorType": "context_overflow",
+        "message": "context length exceeded"
+      }
+    },
+    {
+      "id": 3,
+      "method": "agent.run",
+      "params": {
+        "query": "overflow me"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "errorType": "context_overflow",
+      "id": 3,
+      "type": "error"
+    },
+    {
+      "equals": 1,
+      "path": "callCount",
+      "type": "mock"
+    }
+  ],
+  "description": "Context overflow errors return immediately without retry",
+  "name": "overflow_fails_fast"
+}

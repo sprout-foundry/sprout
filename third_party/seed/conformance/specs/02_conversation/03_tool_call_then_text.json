@@ -1,0 +1,86 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addTool",
+      "params": {
+        "description": "Calculate a value",
+        "name": "calculate",
+        "parameters": {
+          "properties": {
+            "expression": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addToolCallResponse",
+      "params": {
+        "calls": [
+          {
+            "arguments": {
+              "expression": "2+2"
+            },
+            "id": "call_1",
+            "name": "calculate"
+          }
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "method": "mock.addToolResult",
+      "params": {
+        "content": "4",
+        "toolCallId": "call_1"
+      }
+    },
+    {
+      "id": 5,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "The answer is 4."
+      }
+    },
+    {
+      "id": 6,
+      "method": "agent.run",
+      "params": {
+        "query": "What is 2+2?"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 6,
+      "type": "noError"
+    },
+    {
+      "id": 6,
+      "result": {
+        "result": "The answer is 4."
+      },
+      "type": "response"
+    },
+    {
+      "equals": 1,
+      "path": "executorCallCount",
+      "type": "mock"
+    }
+  ],
+  "description": "Tool call → result injected → next provider call returns final text",
+  "name": "tool_call_then_text"
+}

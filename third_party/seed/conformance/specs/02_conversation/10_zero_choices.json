@@ -1,0 +1,25 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addError",
+      "params": {
+        "errorType": "zero_choices",
+        "message": "No choices returned"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    }
+  ],
+  "description": "Placeholder: provider returns ChatResponse with empty Choices array → ErrZeroChoices. Requires mock support for zero-choice responses.",
+  "name": "zero_choices"
+}

@@ -1,0 +1,45 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.withInfo",
+      "params": {
+        "model": "mock-model-v2",
+        "provider": "mock-v2"
+      }
+    },
+    {
+      "id": 3,
+      "method": "agent.providerInfo",
+      "params": {}
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 2,
+      "type": "noError"
+    },
+    {
+      "id": 3,
+      "type": "noError"
+    },
+    {
+      "id": 3,
+      "result": {
+        "model": "mock-model-v2"
+      },
+      "type": "response"
+    }
+  ],
+  "description": "SetProvider swaps the provider at runtime; providerInfo reflects the new provider",
+  "name": "set_provider_swap"
+}

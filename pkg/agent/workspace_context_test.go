@@ -1,6 +1,9 @@
 package agent
 
 import (
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -173,5 +176,103 @@ func TestNoMemoriesNoBlock(t *testing.T) {
 	}
 	if !strings.HasSuffix(first, "</workspace-context>\n\nfix the bug") {
 		t.Fatalf("workspace block should still be stamped:\n%s", first)
+	}
+}
+
+// TestCrossSessionPromptPrefixStable guards issue #178: the stable prompt
+// prefix — the system message and the tools array — must be byte-identical
+// across sessions. Two sessions in different workspaces, with a memory created
+// and edited between them, must send the same prefix; the per-session variance
+// lives in the first user message (workspace + memory block), not the prefix.
+// Hashes are sha256 over the serialized JSON so the assertion is exact.
+func TestCrossSessionPromptPrefixStable(t *testing.T) {
+	// Both sessions share one config/memory dir, like two sessions started
+	// from the same ~/.sprout.
+	configDir := t.TempDir() + "/.sprout"
+	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("GIT_EDITOR", "true")
+	t.Setenv("GIT_SEQUENCE_EDITOR", "true")
+	t.Setenv("GIT_MERGE_AUTOEDIT", "no")
+	mgr, err := configuration.NewManagerWithDir(configDir)
+	if err != nil {
+		t.Fatalf("NewManagerWithDir: %v", err)
+	}
+	if err := mgr.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.SkipPrompt = true
+		return nil
+	}); err != nil {
+		t.Fatalf("set SkipPrompt: %v", err)
+	}
+	newSession := func(folder string) *Agent {
+		t.Helper()
+		ag, err := NewAgentWithModel("test:test")
+		if err != nil {
+			t.Fatalf("NewAgentWithModel: %v", err)
+		}
+		// Replace the internally-built manager with the shared one so both
+		// sessions read and write the same memory store.
+		ag.configManager = mgr
+		ag.SetProjectFolder(folder)
+		return ag
+	}
+
+	// Build the request the agent would send: the system message the client
+	// puts first and the tool roster offered alongside it.
+	type requestPrefix struct {
+		systemHash string
+		toolsHash  string
+		firstMsg   string
+	}
+	buildRequest := func(ag *Agent) requestPrefix {
+		t.Helper()
+		sysMessage := map[string]string{"role": "system", "content": ag.GetSystemPrompt()}
+		sysJSON, err := json.Marshal(sysMessage)
+		if err != nil {
+			t.Fatalf("marshal system message: %v", err)
+		}
+		tools := ag.getOptimizedToolDefinitions(nil)
+		toolsJSON, err := json.Marshal(tools)
+		if err != nil {
+			t.Fatalf("marshal tools: %v", err)
+		}
+		return requestPrefix{
+			systemHash: fmt.Sprintf("%x", sha256.Sum256(sysJSON)),
+			toolsHash:  fmt.Sprintf("%x", sha256.Sum256(toolsJSON)),
+			firstMsg:   ag.withWorkspaceContext("fix the bug"),
+		}
+	}
+
+	// Session 1: empty memory store, first working directory.
+	session1 := newSession(t.TempDir())
+	req1 := buildRequest(session1)
+
+	// A memory is created — and then edited — between the two sessions.
+	if err := SaveMemory("alpha", "# Alpha\nfirst version."); err != nil {
+		t.Fatalf("SaveMemory alpha: %v", err)
+	}
+	if err := SaveMemory("alpha", "# Alpha\nedited body."); err != nil {
+		t.Fatalf("edit SaveMemory alpha: %v", err)
+	}
+
+	// Session 2: same config, second working directory, after the edit.
+	session2 := newSession(t.TempDir())
+	req2 := buildRequest(session2)
+
+	if !strings.Contains(req2.firstMsg, "`alpha`") {
+		t.Fatalf("second session's first message lacks the memory created between sessions:\n%s", req2.firstMsg)
+	}
+	if strings.Contains(req1.firstMsg, "`alpha`") {
+		t.Fatalf("session 1's first message leaks a memory created after it started:\n%s", req1.firstMsg)
+	}
+	if req1.firstMsg == req2.firstMsg {
+		t.Fatalf("first user messages are identical across workspaces and memory stores:\n%s", req1.firstMsg)
+	}
+
+	// The stable prefix must be byte-identical across sessions.
+	if req1.systemHash != req2.systemHash {
+		t.Errorf("system message differs across sessions:\nfirst:  %s\nsecond: %s", req1.systemHash, req2.systemHash)
+	}
+	if req1.toolsHash != req2.toolsHash {
+		t.Errorf("tools array differs across sessions:\nfirst:  %s\nsecond: %s", req1.toolsHash, req2.toolsHash)
 	}
 }

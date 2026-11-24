@@ -323,24 +323,29 @@ in §"Implementation Design".)
 
 ---
 
-### Lever 4: Aggressive Compaction Trigger
+### Lever 4: Compaction Trigger
 
 **Today:** `computeCompactionTriggerFraction()` returns 0.70 (reserves
 30% for response + thinking + tool I/O). Compaction fires via the SP-066
 substitute → rollup → compact pipeline.
 
-**Proposal:** In LCM, raise the trigger to 0.85 (reserve only 15%) and
-reduce `recentTurnsToPreserve` from 5 → 2.
+**Proposal:** In LCM, raise the trigger to 0.85 (reserve only 15%).
+**Deliberately overridden by the no-overflow clamp** (see the note below) —
+the effective trigger is 0.70 for every profile.
 
-**Savings:** Indirect — lets the model work closer to the window edge
-before compacting. Effectively +4,800 tokens of working room.
+**Savings:** Not realized. The original +4,800-token working-room claim does
+not hold: the token estimate underestimates the true count by up to
+EstimationErrorPercent (30%), so a trigger above 1 - 0.30 = 0.70 lets the
+raw heuristic sit below the trigger while the true size is already over the
+window. The clamp keeps the trigger conservative: at the trigger the
+worst-case true size is at most the window.
 
 **Cost:** Config tweak in `context_budget.go`. Low.
 
-**Trade-off:** Tighter margins mean the model may truncate mid-tool-call
-more often. Reducing `recentTurnsToPreserve` means the model loses recent
-context sooner — it may repeat itself or forget a just-read file. For short
-sessions (the LCM use case) this is acceptable.
+**Trade-off:** Tighter margins would let the model work closer to the window
+edge; the clamp deliberately sacrifices that working room for safety.
+Reducing `recentTurnsToPreserve` (5 → 2) stands unchanged — it is not
+related to the trigger fraction.
 
 ---
 
@@ -383,7 +388,7 @@ positive at 32K.
 Lever 1 (tool subset, 8 tools):  −3,685
 Lever 2 (lite prompt):          −5,100
 Lever 3 (AGENTS.md kept):         +0  (revised 2026-07-20 — no longer skipped)
-Lever 4 (tighter trigger):      +4,800 effective
+Lever 4 (tighter trigger):       0 (clamped by the no-overflow bound)
 Lever 5 (no proactive ctx):     −1,000
 ─────────────────────────────────────────
 New fixed floor:  ~6,400 tokens  (20% of 32K)   [was ~16,000 / 50%]

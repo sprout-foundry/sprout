@@ -1,6 +1,100 @@
 package api
 
-import "testing"
+import (
+	"testing"
+)
+
+// TestCalculateOutputBudget_FloorViolatesHardCap pins the deliberate floor
+// posture in the output budget: the floor step re-inflates a starved budget
+// to MinOutputTokens even when that puts input+budget ABOVE the context
+// limit. That is intentional — degrading to `remaining` near the window edge
+// starves reasoning-only turns (a 2–5K max_tokens finish=length no-op), and
+// a rejected request is then recovered by the overflow path, which is
+// strictly better than a guaranteed no-op turn. The floor step is therefore
+// a deliberate trade-off, not a bug.
+//
+// The consequence is that every input in [contextLimit-MinOutputTokens+1,
+// contextLimit-1] produces a request the provider must reject as an overflow.
+// The zone is explicit so callers know it exists: the proactive compaction
+// trigger (see pkg/agent/context_budget.go) is clamped to the zone edge —
+// (window-MinOutputTokens) — so the estimate never enters it, and the
+// overflow-recovery path is the backstop for anything that slips through.
+func TestCalculateOutputBudget_FloorViolatesHardCap(t *testing.T) {
+	for _, c := range []int{32000, 131072, 200000} {
+		// Walk input downward from just under the window and collect the
+		// contiguous violating range (inputs whose returned budget makes
+		// input+budget exceed the window, i.e. a guaranteed-overflow request).
+		violLo := -1
+		violHi := -1
+		for input := c - 1; input >= 0; input-- {
+			budget, _ := CalculateOutputBudget(c, input)
+			if input+budget > c {
+				if violLo < 0 {
+					violLo = input // first (highest) violating input
+				}
+				violHi = input // last (lowest) violating input
+			}
+		}
+		if c <= MinOutputTokens {
+			if violLo >= 0 {
+				t.Fatalf("window=%d (<= floor): expected no violating inputs, got range [%d,%d]", c, violHi, violLo)
+			}
+			continue
+		}
+		// The violating inputs are exactly the top MinOutputTokens: the floor
+		// re-inflates the budget to MinOutputTokens even when remaining < floor.
+		// The highest violating input is c-1; the lowest is c-MinOutputTokens+1
+		// (at c-MinOutputTokens the sum equals the window exactly, not over).
+		wantLargest := c - 1
+		wantSmallest := c - MinOutputTokens + 1
+		if violLo != wantLargest || violHi != wantSmallest {
+			t.Fatalf("window=%d: violating input range [%d,%d], want [%d,%d] (the floor overflows the window for these)",
+				c, violHi, violLo, wantSmallest, wantLargest)
+		}
+		// Concrete overflow at the top of the range.
+		if budget, _ := CalculateOutputBudget(c, wantLargest); wantLargest+budget <= c {
+			t.Fatalf("window=%d: input=%d + budget=%d does not exceed the window (test math broken)", c, wantLargest, budget)
+		}
+	}
+}
+
+// TestLCMTriggerNearGuaranteedOverflowZone ties the LCM trigger to the
+// guaranteed-overflow zone above: at a 131072 (132K) window the pre-clamp LCM
+// trigger (0.85) sits just below the zone that starts at 131072-MinOutputTokens
+// (114688), so a single large tool-result dump crossing ~3.4K tokens pushes
+// the prompt into the guaranteed-overflow zone before the next trigger check.
+// This is the precondition for the reject-then-recover (or bottomed-out error)
+// failure on small windows. The clamp fix (context_budget.go) drops the LCM
+// window-share trigger to 0.70, well clear of the zone on 132K+ windows, and
+// clamps the effective trigger on small windows to the zone edge itself
+// (window-MinOutputTokens), so the estimate never enters the zone there either.
+func TestLCMTriggerNearGuaranteedOverflowZone(t *testing.T) {
+	const (
+		window      = 131072 // 132K LCM window
+		preFixFrac  = 0.85   // LCM profile trigger before the no-overflow clamp
+		clampedFrac = 0.70   // after the clamp (1 - EstimationErrorPercent/100)
+	)
+	zoneStart := window - MinOutputTokens // guaranteed-overflow zone begins here
+
+	// Pre-fix: the 0.85 trigger lands a single large-tool-dump below the zone.
+	preFixFiresAt := preFixFrac * float64(window)
+	gapToZone := float64(zoneStart) - preFixFiresAt // tokens a single dump must add
+	if preFixFiresAt >= float64(zoneStart) {
+		t.Fatalf("pre-fix 0.85 trigger (%.0f) should sit below the overflow zone (%d)", preFixFiresAt, zoneStart)
+	}
+	if gapToZone > 5000 {
+		t.Fatalf("pre-fix trigger-to-zone gap %.0f is larger than expected (~3.4K); fixture changed", gapToZone)
+	}
+	t.Logf("LCM 0.85 trigger fires at %.0f; a single %d-token tool dump enters the guaranteed-overflow zone", preFixFiresAt, int(gapToZone)+1)
+
+	// Post-fix: the clamped 0.70 trigger is well clear of the zone.
+	postFixFiresAt := clampedFrac * float64(window)
+	if postFixFiresAt >= float64(zoneStart) {
+		t.Fatalf("clamped 0.70 trigger (%.0f) still touches the overflow zone (%d) — clamp not conservative enough", postFixFiresAt, zoneStart)
+	}
+	margin := float64(zoneStart) - postFixFiresAt
+	t.Logf("clamped 0.70 trigger fires at %.0f; %d tokens of headroom below the overflow zone", postFixFiresAt, int(margin))
+}
 
 // TestCalculateOutputBudgetMonotone guards the shape of the budget curve:
 // a larger estimated input must never yield a larger output budget. This

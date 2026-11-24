@@ -51,7 +51,7 @@ func TestResolveContextProfileReturnsExactLowContextPreset(t *testing.T) {
 			"mcp_refresh",
 		},
 		SystemPromptPath:          "prompts/system_prompt.lite.md",
-		CompactionTriggerFraction: 0.85,
+		CompactionTriggerFraction: 0.70,
 		RecentTurnsToPreserve:     2,
 		RepoMapDefaultDepth:       1,
 	}, profile)
@@ -280,7 +280,7 @@ func assertLowContextProfile(t *testing.T, profile ContextProfile) {
 			"mcp_refresh",
 		},
 		SystemPromptPath:          "prompts/system_prompt.lite.md",
-		CompactionTriggerFraction: 0.85,
+		CompactionTriggerFraction: 0.70,
 		RecentTurnsToPreserve:     2,
 		RepoMapDefaultDepth:       1,
 	}, profile)

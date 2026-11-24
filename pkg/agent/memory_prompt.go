@@ -3,12 +3,13 @@ package agent
 import (
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 )
 
 // Memory prompt modes (config memory_prompt).
 const (
-	MemoryPromptFull  = "full"  // every body, up to the byte cap
+	MemoryPromptFull  = "full"  // every body, up to the per-memory cap
 	MemoryPromptIndex = "index" // names and first lines; bodies are read on demand with manage_memory
 	MemoryPromptOff   = "off"   // nothing; manage_memory still lists, searches and reads them
 )
@@ -35,6 +36,12 @@ func normalizeMemoryPromptMode(mode string) (normalized string, ok bool) {
 // LoadMemoriesForPromptMode formats the memories for the system prompt in the given mode.
 // maxBytes <= 0 uses maxMemoryPromptBytes. Every request carries the result, so the index
 // mode (the default) keeps a large memory store from costing thousands of tokens a request.
+//
+// Rendering is deterministic and stable under edits: memories are sorted by name with a
+// stable comparator (so directory-read order cannot drift the block), no timestamps, counts
+// or other volatile text appear beyond the omission notice(s), and a fixed per-memory cap
+// bounds each entry — a memory over the cap is omitted without moving the inclusion or
+// ordering of any other memory. memory_prompt_max_bytes / maxBytes stays as the outer guard.
 func LoadMemoriesForPromptMode(mode string, maxBytes int) string {
 	normalized, ok := normalizeMemoryPromptMode(mode)
 	if !ok {
@@ -51,6 +58,11 @@ func LoadMemoriesForPromptMode(mode string, maxBytes int) string {
 	if err != nil || len(memories) == 0 {
 		return ""
 	}
+	// Explicit in the renderer: LoadAllMemories sorts too, but the block must not
+	// depend on that order or on directory-read order.
+	sort.SliceStable(memories, func(i, j int) bool {
+		return memories[i].Name < memories[j].Name
+	})
 
 	var sb strings.Builder
 	sb.WriteString("\n\n---\n\n## Memories\n\n")
@@ -63,6 +75,8 @@ func LoadMemoriesForPromptMode(mode string, maxBytes int) string {
 	}
 
 	written := 0
+	omittedPerMemory := 0
+	omittedOuter := 0
 	for i, memory := range memories {
 		var entry string
 		if index {
@@ -70,13 +84,22 @@ func LoadMemoriesForPromptMode(mode string, maxBytes int) string {
 		} else {
 			entry = fmt.Sprintf("### %s\n%s\n\n", memory.Name, memoryBody(memory.Content))
 		}
+		if len(entry) > maxMemoryEntryBytes {
+			omittedPerMemory++
+			continue
+		}
 		if written+len(entry) > maxBytes {
-			fmt.Fprintf(&sb, "*[%d additional memory file(s) omitted — total size exceeded %d bytes]*\n\n",
-				len(memories)-i, maxBytes)
+			omittedOuter += len(memories) - i // every remaining entry: outer guard
 			break
 		}
 		sb.WriteString(entry)
 		written += len(entry)
+	}
+	if omittedPerMemory > 0 {
+		fmt.Fprintf(&sb, "*[%d memory file(s) omitted — per-memory cap %d bytes]*\n\n", omittedPerMemory, maxMemoryEntryBytes)
+	}
+	if omittedOuter > 0 {
+		fmt.Fprintf(&sb, "*[%d memory file(s) omitted — total guard %d bytes]*\n\n", omittedOuter, maxBytes)
 	}
 	return sb.String()
 }

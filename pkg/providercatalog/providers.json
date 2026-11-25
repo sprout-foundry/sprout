@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-23T21:30:08Z",
+  "updated_at": "2026-11-24T20:12:29Z",
   "source": "refresh_provider_catalog",
   "onboarding_order": [
     "deepinfra",
@@ -1594,9 +1594,16 @@
         {
           "id": "hy4",
           "name": "hy4",
-          "input_cost": 0.417,
-          "output_cost": 1.2505,
-          "cached_input_cost": 0.020999999999999998
+          "description": "Hy4 - Tencent's flagship open-weight MoE model (770B total, 49B active) with 1M context, image understanding and a built-in draft model for faster decoding",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning"
+          ],
+          "input_cost": 0.834,
+          "output_cost": 2.501,
+          "cached_input_cost": 0.042
         },
         {
           "id": "inkling-2-small",
@@ -3007,7 +3014,7 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.0434,
+          "input_cost": 0.045599999999999995,
           "output_cost": 0.3,
           "cached_input_cost": 0.035
         },
@@ -3047,9 +3054,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.21559999999999999,
-          "output_cost": 0.6468,
-          "cached_input_cost": 0.00686
+          "input_cost": 0.44,
+          "output_cost": 1.32,
+          "cached_input_cost": 0.028
         },
         {
           "id": "deepseek/deepseek-v4-flash-vision-exp:batch",
@@ -3076,9 +3083,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.8999999999999999,
-          "output_cost": 1.5,
-          "cached_input_cost": 0.19999999999999998
+          "input_cost": 1.28,
+          "output_cost": 2.56,
+          "cached_input_cost": 0.108
         },
         {
           "id": "deepseek/deepseek-v4-pro-0813",
@@ -3119,9 +3126,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.3,
-          "output_cost": 1.2,
-          "cached_input_cost": 0.006
+          "input_cost": 0.050699999999999995,
+          "output_cost": 0.20279999999999998,
+          "cached_input_cost": 0.001014
         },
         {
           "id": "deepseek/deepseek-v4.1-flash-1017",
@@ -4249,9 +4256,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.06,
-          "output_cost": 0.18,
-          "cached_input_cost": 0.012
+          "input_cost": 0.075,
+          "output_cost": 0.22499999999999998,
+          "cached_input_cost": 0.015
         },
         {
           "id": "inclusionai/ling-3.2-flash:free",
@@ -4465,9 +4472,9 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.02,
-          "output_cost": 0.04,
-          "cached_input_cost": 0.025
+          "input_cost": 0.049999999999999996,
+          "output_cost": 0.08,
+          "cached_input_cost": 0.024999999999999998
         },
         {
           "id": "meta-llama/llama-3.2-1b-instruct",
@@ -4781,15 +4788,15 @@
           "id": "minimax/minimax-m2.5",
           "name": "MiniMax: MiniMax M2.5",
           "description": "MiniMax-M2.5 is a SOTA large language model designed for real-world productivity. Trained in a diverse range of complex real-world digital working environments, M2.5 builds upon the coding expertise of M2.1...",
-          "context_length": 198000,
+          "context_length": 65536,
           "tags": [
             "tools",
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.27,
-          "output_cost": 0.95,
-          "cached_input_cost": 0.03
+          "input_cost": 0.3,
+          "output_cost": 1.2,
+          "cached_input_cost": 0.06
         },
         {
           "id": "minimax/minimax-m2.7",
@@ -5069,9 +5076,9 @@
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.44,
-          "output_cost": 2.2,
-          "cached_input_cost": 0.044
+          "input_cost": 0.4,
+          "output_cost": 2,
+          "cached_input_cost": 0.04
         },
         {
           "id": "mistralai/mistral-medium-3-5",
@@ -5111,9 +5118,9 @@
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.44,
-          "output_cost": 2.2,
-          "cached_input_cost": 0.044
+          "input_cost": 0.4,
+          "output_cost": 2,
+          "cached_input_cost": 0.04
         },
         {
           "id": "mistralai/mistral-medium-3.1:batch",
@@ -5290,7 +5297,7 @@
           "tags": [
             "tools"
           ],
-          "input_cost": 0.5700000000000001,
+          "input_cost": 0.57,
           "output_cost": 2.3
         },
         {
@@ -5766,9 +5773,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.07,
+          "input_cost": 0.049999999999999996,
           "output_cost": 0.19999999999999998,
-          "cached_input_cost": 0.04
+          "cached_input_cost": 0.01
         },
         {
           "id": "nvidia/nemotron-3.5-lightning:free",
@@ -8552,9 +8559,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.035,
-          "output_cost": 1.5,
-          "cached_input_cost": 0.0175
+          "input_cost": 0.06,
+          "output_cost": 1.96,
+          "cached_input_cost": 0.059
         },
         {
           "id": "qwen/qwen3.8-27b:batch",
@@ -8950,7 +8957,7 @@
           "id": "stepfun/step-3.7-flash",
           "name": "StepFun: Step 3.7 Flash",
           "description": "Step 3.7 Flash is StepFun's latest high-efficiency multimodal Mixture-of-Experts model. It pairs a 196B-parameter language backbone with a vision encoder for native image and video understanding, activating roughly 11B parameters...",
-          "context_length": 262144,
+          "context_length": 256000,
           "tags": [
             "tools",
             "vision",
@@ -9028,9 +9035,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.14,
-          "output_cost": 0.58,
-          "cached_input_cost": 0.035
+          "input_cost": 0.0825,
+          "output_cost": 0.33,
+          "cached_input_cost": 0.020625
         },
         {
           "id": "tencent/hy3-preview",
@@ -9535,16 +9542,16 @@
           "id": "xiaomi/mimo-v2.5",
           "name": "Xiaomi: MiMo-V2.5",
           "description": "MiMo-V2.5 is a native omnimodal model by Xiaomi. It delivers Pro-level agentic performance at roughly half the inference cost, while surpassing MiMo-V2-Omni in multimodal perception across image and video understanding...",
-          "context_length": 1000000,
+          "context_length": 1050000,
           "tags": [
             "tools",
             "vision",
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.39999999999999997,
-          "output_cost": 2,
-          "cached_input_cost": 0.08
+          "input_cost": 0.119,
+          "output_cost": 0.238,
+          "cached_input_cost": 0.00255
         },
         {
           "id": "xiaomi/mimo-v2.5-pro",
@@ -10009,9 +10016,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.0434,
-          "output_cost": 0.3,
-          "cached_input_cost": 0.035
+          "input_cost": 0.04532,
+          "output_cost": 0.13596,
+          "cached_input_cost": 0.001442
         },
         {
           "id": "~google/gemini-flash-latest",
@@ -10187,8 +10194,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.0475,
-          "output_cost": 0.07289999999999999,
+          "input_cost": 0.0356,
+          "output_cost": 0.08149999999999999,
           "cached_input_cost": 0.03
         },
         {
@@ -11099,7 +11106,8 @@
             "structured_output"
           ],
           "input_cost": 0.037,
-          "output_cost": 0.17
+          "output_cost": 0.17,
+          "cached_input_cost": 0.019
         },
         {
           "id": "openai/gpt-oss-120b-Ultra",
@@ -11125,7 +11133,8 @@
             "structured_output"
           ],
           "input_cost": 0.030000000000000002,
-          "output_cost": 0.13999999999999999
+          "output_cost": 0.13999999999999999,
+          "cached_input_cost": 0.015
         },
         {
           "id": "Qwen/Qwen2.5-72B-Instruct",
@@ -11410,7 +11419,8 @@
             "structured_output"
           ],
           "input_cost": 0.2,
-          "output_cost": 2.5
+          "output_cost": 2.5,
+          "cached_input_cost": 0.05
         },
         {
           "id": "Sao10K/L3-8B-Lunaris-v1-Turbo",
@@ -11461,7 +11471,22 @@
             "structured_output"
           ],
           "input_cost": 0.834,
-          "output_cost": 2.501
+          "output_cost": 2.501,
+          "cached_input_cost": 0.042
+        },
+        {
+          "id": "tencent/Hy4-flash",
+          "name": "tencent/Hy4-flash",
+          "description": "Hy4 flash is the most cost-effective model from the Tencent Hy Team, with 220B total parameters (including 64B Engram n-gram embedding parameters), 12B activated per token, text and image input, and a 1M-token context window. It combines hybrid sparse and sliding-window attention, LatentMoE and Engram, and scores slightly above Hy4 preview on everyday productivity tasks at a fraction of the cost.",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.06999999999999999,
+          "output_cost": 0.28099999999999997
         },
         {
           "id": "tencent/Hy4-preview",
@@ -11476,6 +11501,20 @@
           "input_cost": 0.834,
           "output_cost": 2.501,
           "cached_input_cost": 0.042
+        },
+        {
+          "id": "thinkingmachines/Inkling-2-Mini",
+          "name": "thinkingmachines/Inkling-2-Mini",
+          "description": "Inkling 2 Mini is a general-purpose multimodal model that accepts text and image inputs and generates text outputs. It is intended for use in English and other languages, and across multiple coding languages.",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.075,
+          "output_cost": 0.3
         },
         {
           "id": "thinkingmachines/Inkling-2-Small",
@@ -11672,9 +11711,9 @@
             "vision",
             "reasoning"
           ],
-          "input_cost": 0.3,
-          "output_cost": 1.2,
-          "cached_input_cost": 0.03
+          "input_cost": 0.195,
+          "output_cost": 0.78,
+          "cached_input_cost": 0.02
         },
         {
           "id": "google/gemma-4-31B-turbo-TEE",
@@ -11852,7 +11891,17 @@
         },
         {
           "id": "Qwen/Qwen4-Max",
-          "name": "Qwen/Qwen4-Max"
+          "name": "Qwen/Qwen4-Max",
+          "description": "Qwen4 Max is Qwen's flagship 1M-context mixture-of-experts model with text, image, and video input on Chutes public compute",
+          "context_length": 1000000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning"
+          ],
+          "input_cost": 1.5,
+          "output_cost": 4.5,
+          "cached_input_cost": 0.075
         },
         {
           "id": "tencent/Hy4",
@@ -11928,9 +11977,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 1.225,
-          "output_cost": 3.85,
-          "cached_input_cost": 0.245
+          "input_cost": 0.8,
+          "output_cost": 2.5,
+          "cached_input_cost": 0.16
         }
       ]
     },

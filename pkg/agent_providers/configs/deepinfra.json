@@ -1428,6 +1428,36 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.003,
+        "context_length": 1048576,
+        "description": "Hy4 Flash is the cost-effective model from the Tencent Hy Team, with 220B total parameters (12B activated per token), text and image input and a 1M-token context window. It combines hybrid sparse and sliding-window attention, LatentMoE and Engram, and scores slightly above Hy4 preview on everyday productivity tasks.",
+        "id": "tencent/Hy4-flash",
+        "input_cost": 0.07,
+        "name": "Hy4 Flash",
+        "output_cost": 0.281,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.015,
+        "context_length": 1048576,
+        "description": "Inkling 2 Mini is a small general-purpose multimodal model from Thinking Machines Lab that accepts text and image inputs and generates text. It targets agentic and tool-use systems, coding assistants and RAG, and is the lab's first looped transformer, running its middle layers three times per token.",
+        "id": "thinkingmachines/Inkling-2-Mini",
+        "input_cost": 0.075,
+        "name": "Inkling 2 Mini",
+        "output_cost": 0.3,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

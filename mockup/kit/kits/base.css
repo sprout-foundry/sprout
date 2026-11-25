@@ -48,7 +48,7 @@ p{margin:0 0 1em}
   .nav-brand{flex-basis:100%;min-height:2.1rem;font-size:1.1rem}
   .nav-links{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem 1rem;flex-basis:100%;width:100%;margin-left:0}
   .nav-links a{white-space:nowrap}
-  .nav-links .btn{order:-1;flex-shrink:0}
+  .nav-links .btn{flex-shrink:0}
 }
 /* Hero */
 .hero{padding:var(--hero,6.5rem) 0 var(--section,5.5rem)}

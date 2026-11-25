@@ -508,6 +508,23 @@ func (s *Streamer) Feed(chunk string) string {
 // Catalog is the kit's reference for the model: the kits, the palettes by
 // mood, and the icon names.
 func Catalog() string {
+	return catalog(BasePalettes())
+}
+
+// CatalogFor is the kit's reference with only the given palettes listed: the
+// shortlist a draw offers the model, so it names a palette from that list
+// and not from the full catalogue.
+func CatalogFor(shortlist []Palette) string {
+	return catalog(shortlist)
+}
+
+// catalog lists the kits, compositions and fonts in full, and the palettes
+// given (or all base palettes when nil).
+func catalog(shortlist []Palette) string {
+	palettes := shortlist
+	if len(palettes) == 0 {
+		palettes = BasePalettes()
+	}
 	var b strings.Builder
 	b.WriteString("Kits (data-kit), each with what it suits, the first-screen compositions it suits, the heading fonts that suit it, and how its pages are built:\n")
 	for _, k := range kitNames {
@@ -525,10 +542,7 @@ func Catalog() string {
 	b.WriteString("\nModifiers on <html>, each optional: data-density=\"airy|compact\", data-corners=\"sharp|round\", data-contrast=\"high\", data-scale=\"large|small\" (the headline size).\n")
 	b.WriteString("\nPalettes (data-palette), with their mood and colours; \"-soft\" ones have a tinted background, \"-dark\" ones are dark. The primary colour carries the buttons and highlights, so pick a palette whose primary suits the feel (a vivid one for an energetic product, a grey one only for a quiet look):\n")
 	for _, p := range palettes {
-		if strings.HasSuffix(p.ID, "-soft") || strings.HasSuffix(p.ID, "-dark") {
-			continue
-		}
-		fmt.Fprintf(&b, "- %s (also -soft, -dark): %s; primary %s, accent %s\n", p.ID, p.Mood, p.Colors["primary"], p.Colors["accent"])
+		fmt.Fprintf(&b, "- %s (also -soft, -dark): %s; family %s; primary %s, accent %s\n", p.ID, p.Mood, p.Family(), p.Colors["primary"], p.Colors["accent"])
 	}
 	names := make([]string, 0, len(icons))
 	for n := range icons {

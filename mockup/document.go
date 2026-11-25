@@ -38,12 +38,23 @@ var (
 )
 
 // charter and editCharter are the prompts without their version
-// line, followed by the design kit's catalogue.
-func charter() string     { return withKitCatalog(charterFile) }
-func editCharter() string { return withKitCatalog(editFile) }
+// line, followed by the design kit's catalogue. A shortlist, when given,
+// is listed instead of the full catalogue, so the model names a palette
+// from it.
+func charter(shortlist []kit.Palette) string { return withKitCatalog(charterFile, shortlist) }
+func editCharter() string                   { return withKitCatalog(editFile, nil) }
 
-func withKitCatalog(text string) string {
-	return stripCharterVersion(text) + "\n\n## The kit's catalogue\n\n" + kit.Catalog()
+// withKitCatalog returns the prompt with the kit's catalogue appended; when
+// a shortlist is given, the palette section lists only those palettes, so
+// the model names one from the shortlist rather than from the whole kit.
+func withKitCatalog(text string, shortlist []kit.Palette) string {
+	cat := kit.Catalog()
+	if shortlist != nil {
+		cat = kit.CatalogFor(shortlist)
+		cat += "\n\n## Palette shortlist\n\nPick the palette from the shortlist above — do not name a palette that is not in it. " +
+			"A colour the person named in their words always wins.\n"
+	}
+	return stripCharterVersion(text) + "\n\n## The kit's catalogue\n\n" + cat
 }
 
 func stripCharterVersion(text string) string {

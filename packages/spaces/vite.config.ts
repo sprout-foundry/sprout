@@ -25,7 +25,7 @@ const libraryConfig: InlineConfig = {
   root: __dirname,
   plugins: [],
   resolve: {
-    // The workspace bundles `@sprout/ui` (its host modules import the
+    // The package bundles `@sprout/ui` (its host modules import the
     // notification bus from it). Resolve the package to its source barrel,
     // not its pre-built `dist/index.esm.js`: a built barrel is a monolith
     // Rollup cannot tree-shake, so importing the bus would drag the whole
@@ -101,12 +101,12 @@ const libraryConfig: InlineConfig = {
  */
 type DynamicEdges = Map<string, Set<string>>;
 
-const ANALYSIS_DONE = "workspace-chunk-graph-analysis-complete";
+const ANALYSIS_DONE = "spaces-chunk-graph-analysis-complete";
 
 async function sharedDynamicImports(config: InlineConfig): Promise<DynamicEdges> {
   const edges: DynamicEdges = new Map();
   const collect: Plugin = {
-    name: "workspace:collect-shared-dynamic-imports",
+    name: "spaces:collect-shared-dynamic-imports",
     buildEnd(error) {
       if (error) return;
       const entries = new Set<string>();
@@ -163,7 +163,7 @@ function dynamicImportsIn(node: unknown, found: AstNode[]): AstNode[] {
 
 function staticSharedDynamicImports(edges: DynamicEdges): Plugin {
   return {
-    name: "workspace:static-shared-dynamic-imports",
+    name: "spaces:static-shared-dynamic-imports",
     // After the TypeScript/JSX transform, so the code parses as plain JS.
     enforce: "post",
     async transform(code, id) {

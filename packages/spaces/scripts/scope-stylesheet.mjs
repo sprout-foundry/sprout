@@ -1,17 +1,17 @@
-// Scope the package's bundled stylesheet to the workspace root and emit it
+// Scope the package's bundled stylesheet to the spaces root and emit it
 // as the package's one stable stylesheet artifact.
 //
 // vite's library build concatenates every CSS module the views graph reaches
-// into one asset (`chunks/workspace.css`) that is written in the *app's*
+// into CSS assets under `chunks/`, written in the *app's*
 // global vocabulary: token declarations on `:root`, `body`/`html` rules and
 // element selectors such as `select.styled-select`. Loaded on a host page
 // that stylesheet would leak onto the host's own DOM outside the mounted
-// workspace. This pass rewrites it so every rule applies only inside the
-// workspace root (`.sprout-spaces`, the class `SproutSpaces` renders)
+// spaces. This pass rewrites it so every rule applies only inside the
+// spaces root (`.sprout-spaces`, the class `SproutSpaces` renders)
 // and writes the result to the package's declared `dist/spaces.css`.
 //
 // The rewrite is textual and deliberately conservative: it rewrites only the
-// selectors that would otherwise escape the workspace root and leaves every
+// selectors that would otherwise escape the spaces root and leaves every
 // spaces-rooted (already class-scoped) rule byte-for-byte alone, so the
 // stylesheet cannot be broken by a selector grammar it does not model.
 
@@ -29,7 +29,7 @@ const packageDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const dist = resolve(packageDir, "dist");
 const chunksDir = resolve(dist, "chunks");
 
-/** The workspace root class `SproutSpaces` renders (webui `sprout-spaces`). */
+/** The spaces root class `SproutSpaces` renders (webui `sprout-spaces`). */
 export const WORKSPACE_ROOT_CLASS = ".sprout-spaces";
 /** The stable artifact path the package ships and its `exports` map declares. */
 export const STYLESHEET_PATH = "dist/spaces.css";
@@ -74,7 +74,7 @@ export function isLeakingSelector(selector) {
   if (s === "*") return true;
   const first = firstCompound(s);
   // A class in the first compound anchors the selector to a component (or the
-  // workspace root), so it cannot match a host element at the top level.
+  // spaces root), so it cannot match a host element at the top level.
   if (first.includes(".")) return false;
   // Otherwise the selector reaches elements by name (`body`, `select`), by the
   // universal `*`, or by a bare attribute (`[data-theme=dark] .x`) — all of
@@ -91,14 +91,14 @@ function splitSelectorList(list) {
 }
 
 /**
- * Rewrite ONE selector so it only matches inside the workspace root.
+ * Rewrite ONE selector so it only matches inside the spaces root.
  *
  * - A leading `:root` (the app's global token block, its light-theme block,
- *   and `:root[data-theme] .child` guards) becomes the workspace root class,
+ *   and `:root[data-theme] .child` guards) becomes the spaces root class,
  *   plus `[data-theme]` when the original carried it — the tokens land on the
- *   workspace root and the theme guard still applies within it.
+ *   spaces root and the theme guard still applies within it.
  * - A leading `:root.some-class` (e.g. `:root.phone-tab-bar-shown`) keeps the
- *   class on the workspace root.
+ *   class on the spaces root.
  * - A leak (bare element/universal) gets the spaces-root descendant prefix.
  * - Everything else is untouched.
  */
@@ -109,7 +109,7 @@ function scopeSelector(selector) {
     return `${WORKSPACE_ROOT_CLASS}${rest}`;
   }
   // A bare attribute guard (`[data-theme='light'] .x`) is authored for the
-  // element that carries the attribute. The workspace root carries it, so the
+  // element that carries the attribute. The spaces root carries it, so the
   // guard must be compounded onto the root (`.sprout-spaces[data-theme=…]`)
   // — a descendant prefix would only match a nested element that has the
   // attribute, which never exists.

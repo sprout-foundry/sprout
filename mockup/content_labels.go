@@ -8,11 +8,13 @@ import (
 )
 
 var (
-	priceRe = regexp.MustCompile(`(?i)^(from\s+)?[£$€]\s?\d[\d,]*(\.\d\d)?(\s?(each|pp|a head|per \w+|/\s?\w+))?$|^\d[\d,]*(\.\d\d)?\s?(€|pts?|points)$`)
-	timeRe  = regexp.MustCompile(`(?i)^(\w+day,?\s+)?\d{1,2}([:.]\d{2})?\s?(am|pm)?(\s?[–-]\s?\d{1,2}([:.]\d{2})?\s?(am|pm)?)?$`)
-	dateRe  = regexp.MustCompile(`(?i)^(mon|tues|wednes|thurs|fri|satur|sun)day\b|\b\d{1,2}(st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}(st|nd|rd|th)?\b`)
-	phoneRe = regexp.MustCompile(`^\+?[\d ()-]{9,}$`)
-	emailRe = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[a-z]{2,}$`)
+	priceRe   = regexp.MustCompile(`(?i)^(from\s+)?[£$€]\s?\d[\d,]*(\.\d\d)?(\s?(each|pp|a head|per \w+|/\s?\w+))?$|^\d[\d,]*(\.\d\d)?\s?(€|pts?|points)$`)
+	timeRe    = regexp.MustCompile(`(?i)^(\w+day,?\s+)?\d{1,2}([:.]\d{2})?\s?(am|pm)?(\s?[–-]\s?\d{1,2}([:.]\d{2})?\s?(am|pm)?)?$`)
+	dateRe    = regexp.MustCompile(`(?i)^(mon|tues|wednes|thurs|fri|satur|sun)day\b|\b\d{1,2}(st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}(st|nd|rd|th)?\b`)
+	phoneRe   = regexp.MustCompile(`^\+?[\d ()-]{9,}$`)
+	numberRe  = regexp.MustCompile(`^\d{1,3}\.?$`)
+	weekdayRe = regexp.MustCompile(`(?i)^(mon|tue|tues|wed|wednes|thu|thur|thurs|fri|sat|satur|sun)(day)?\.?$`)
+	emailRe   = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[a-z]{2,}$`)
 )
 
 // textLabel names a piece of text by what it says or the kit part it is, for
@@ -31,9 +33,13 @@ func textLabel(text, class string) string {
 		return "Email"
 	case phoneRe.MatchString(t) && strings.Count(t, " ") < 5:
 		return "Phone"
+	case numberRe.MatchString(t):
+		return "Number"
 	case has("time") || timeRe.MatchString(t):
 		return "Time"
-	case has("day") || (len(t) < 40 && dateRe.MatchString(t)):
+	case has("day") || weekdayRe.MatchString(t):
+		return "Day"
+	case has("date") || (len(t) < 40 && dateRe.MatchString(t)):
 		return "Date"
 	case has("eyebrow") || has("kicker"):
 		return "Small label"

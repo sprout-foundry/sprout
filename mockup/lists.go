@@ -112,8 +112,11 @@ func markList(f *frame, fields []Field, heading string, nav bool, ids *listIDs) 
 	}
 	id := ids.take(attr(f.token, listIDAttr))
 	setAttr(&f.token, listIDAttr, id)
-	first := fields[items[0].fieldsAt:items[0].fieldsEnd]
-	l := List{ID: id, Name: listName(named, heading), Columns: listColumns(first), Items: len(items)}
+	parts := make([][]Field, len(items))
+	for i, it := range items {
+		parts[i] = fields[it.fieldsAt:it.fieldsEnd]
+	}
+	l := List{ID: id, Name: listName(named, attr(f.token, labelAttr), heading), Columns: listColumns(parts), Items: len(items)}
 	for i, it := range items {
 		for col := range fields[it.fieldsAt:it.fieldsEnd] {
 			fl := &fields[it.fieldsAt+col]
@@ -142,6 +145,11 @@ func looksLikeList(children, items []*frame, fields []Field) bool {
 	}
 	// Two lines of one part each are a pair, not a list.
 	if parts == 1 && len(items) < minOneColumnItems {
+		return false
+	}
+	// A first item shaped unlike the rest (a hero card beside smaller cards)
+	// makes the row a layout, not a list.
+	if len(items) > 2 && shapeOf(fields, items[0]) != shapeOf(fields, items[1]) && shapeOf(fields, items[1]) == shapeOf(fields, items[2]) {
 		return false
 	}
 	actions := 0
@@ -177,29 +185,62 @@ func listItemTag(c *frame) bool {
 	return true
 }
 
-func listName(named, heading string) string {
-	if named != "" {
-		if strings.ContainsAny(named, " '") {
-			return named
+// shapeOf is an item's parts by the kind of element each is, so two items of
+// one kind compare alike whatever their words.
+func shapeOf(fields []Field, it *frame) string {
+	var b strings.Builder
+	for _, fl := range fields[it.fieldsAt:it.fieldsEnd] {
+		switch fl.Label {
+		case "Button", "Link", "Main heading", "Small label", "Intro":
+			b.WriteString(fl.Label)
+		default:
+			b.WriteString("part")
 		}
-		return humanize(named)
+		b.WriteByte('|')
 	}
-	if h := strings.TrimSpace(heading); h != "" {
+	return b.String()
+}
+
+// listName is what the items are: the page's own name for the list, else the
+// list's own label, else the heading above it when that is a short name
+// rather than a sentence.
+func listName(named, label, heading string) string {
+	for _, n := range []string{named, label} {
+		if n = strings.TrimSpace(n); n != "" {
+			if strings.ContainsAny(n, " '") {
+				return n
+			}
+			return humanize(n)
+		}
+	}
+	if h := strings.TrimSpace(heading); h != "" && shortName(h) {
 		return h
 	}
 	return "Items"
+}
+
+// shortName reports whether text reads as a name ("This week's bakes",
+// "Prices") rather than a sentence ("Two lengths, one simple price.").
+func shortName(text string) bool {
+	return len(strings.Fields(text)) <= 4 && !strings.ContainsAny(text, ".,!?:;")
 }
 
 // genericColumns are labels that name an element, not what it holds: a
 // list's columns take plain names for them.
 var genericColumns = map[string]bool{"Text": true, "Heading": true, "Main heading": true, "Small label": true, "Intro": true, "List item": true, "Table cell": true}
 
-func listColumns(first []Field) []string {
+// listColumns names each part of the items once: by the label the items
+// share for it, the words their labels share ("Sourdough price", "Rye
+// price": Price), or what the part holds; never two names run together, and
+// no two columns named alike.
+func listColumns(items [][]Field) []string {
+	first := items[0]
 	cols := make([]string, 0, len(first))
 	generic := 0
-	for _, fl := range first {
-		label := fl.Label
-		if genericColumns[label] {
+	seen := map[string]int{}
+	for c := range first {
+		label := columnLabel(items, c)
+		if label == "" || genericColumns[label] {
 			switch generic {
 			case 0:
 				label = "Name"
@@ -210,9 +251,61 @@ func listColumns(first []Field) []string {
 			}
 			generic++
 		}
+		if n := seen[label]; n > 0 {
+			seen[label]++
+			label = fmt.Sprintf("%s %d", label, n+1)
+		} else {
+			seen[label] = 1
+		}
 		cols = append(cols, label)
 	}
 	return cols
+}
+
+// columnLabel is the name of the items' part c, or "" for a plain text part.
+func columnLabel(items [][]Field, c int) string {
+	var labels []string
+	for _, it := range items {
+		if c < len(it) {
+			labels = append(labels, strings.TrimSpace(it[c].Label))
+		}
+	}
+	same := true
+	for _, l := range labels[1:] {
+		if !strings.EqualFold(l, labels[0]) {
+			same = false
+			break
+		}
+	}
+	if same && len(strings.Fields(labels[0])) <= 3 {
+		return labels[0]
+	}
+	if !same {
+		if tail := sharedTail(labels); tail != "" {
+			return tail
+		}
+	}
+	return textLabel(items[0][c].Text, "")
+}
+
+// sharedTail is the last words every label ends with, capitalised ("price"
+// of "Sourdough price" and "Rye & seed price"), or "".
+func sharedTail(labels []string) string {
+	words := strings.Fields(strings.ToLower(labels[0]))
+	n := len(words)
+	for _, l := range labels[1:] {
+		w := strings.Fields(strings.ToLower(l))
+		k := 0
+		for k < n && k < len(w) && words[len(words)-1-k] == w[len(w)-1-k] {
+			k++
+		}
+		n = k
+	}
+	if n == 0 || n == len(words) {
+		return ""
+	}
+	tail := strings.Join(words[len(words)-n:], " ")
+	return strings.ToUpper(tail[:1]) + tail[1:]
 }
 
 // ErrNoList is a list change naming a list or item the page does not have.

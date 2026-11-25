@@ -86,7 +86,7 @@ It is added to your document for you, so do not copy any of it.
     no `media-caption`. Keep art panels without a picture slot modest: one
     per page at most, never the whole width of a first screen.
   - More sections: `timetable` (rows of `day`, a line, `time`), `facts` (a
-    strip of short facts, each a `strong` and a `span`), `area-list` (a
+    strip of short facts, each a `<div>` holding a `<strong>` and a `<span>`), `area-list` (a
     `<ul>` of places), `compare` (two panels: before and after, or two
     options), `faq` (`<details>` with a `<summary>` question), `story` (a
     `blockquote` beside a few lines about the person).

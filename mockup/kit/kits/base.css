@@ -190,8 +190,8 @@ body.screens-ready [data-screen]:not(.is-shown){display:none}
 @media (max-width:620px){.timetable>*{grid-template-columns:1fr auto}.timetable .day{grid-column:1/-1}}
 .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
 .facts>*{background:var(--surface);padding:1.1rem 1.25rem}
-.facts strong{display:block;font-family:var(--font-head);font-size:1.15rem;color:var(--text)}
-.facts span{color:var(--muted);font-size:.9rem}
+.facts strong,.facts .strong{display:block;font-family:var(--font-head);font-size:1.15rem;color:var(--text)}
+.facts span:not(.strong){color:var(--muted);font-size:.9rem}
 .area-list{display:flex;flex-wrap:wrap;gap:.5rem 0;list-style:none;margin:0;padding:0;font-family:var(--font-head);font-size:1.2rem}
 .area-list>li:not(:last-child)::after{content:"·";margin:0 .7rem;color:var(--muted)}
 .compare{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:var(--grid-gap,1.5rem)}

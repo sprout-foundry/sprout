@@ -158,7 +158,7 @@ func TestDraw_FreshAndAvoid(t *testing.T) {
 		t.Fatalf("mode = %s, asked %d", res.Mode, len(*asked))
 	}
 	ask := (*asked)[0]
-	for _, want := range []string{"a different look", "a kit other than soft, craft", "terracotta", "a first-screen composition other than art"} {
+	for _, want := range []string{"a different look", "a kit other than soft, craft", "a palette family other than", "a first-screen composition other than art"} {
 		if !strings.Contains(ask, want) {
 			t.Errorf("the request does not say %q:\n%s", want, ask)
 		}
@@ -169,7 +169,7 @@ func TestDraw_FreshAndAvoid(t *testing.T) {
 }
 
 func TestSteerRequestIsEmptyWithNothingToAvoid(t *testing.T) {
-	if s := steerRequest(nil, false, ""); s != "" {
+	if s := steerRequest(nil, false, "", nil); s != "" {
 		t.Errorf("steer = %q", s)
 	}
 }

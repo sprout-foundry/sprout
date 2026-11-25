@@ -102,7 +102,7 @@ func TestChangeNote(t *testing.T) {
 }
 
 func TestMockupChartersAreEmbedded(t *testing.T) {
-	if c := charter(); !strings.Contains(c, "data-screen") || !strings.Contains(c, "data-go") || strings.HasPrefix(c, "charter-version:") {
+	if c := charter(nil); !strings.Contains(c, "data-screen") || !strings.Contains(c, "data-go") || strings.HasPrefix(c, "charter-version:") {
 		t.Errorf("mockup charter = %.80q", c)
 	}
 	if c := editCharter(); !strings.Contains(c, "<<<FIND") || strings.HasPrefix(c, "charter-version:") {

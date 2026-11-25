@@ -85,6 +85,9 @@ type Request struct {
 	// the idea; empty picks one at random, so ideas alike do not all come
 	// out alike.
 	Direction string
+	// Seed makes the palette shortlist reproducible (tests, replays);
+	// zero draws one at random.
+	Seed int64
 }
 
 // Directions are the design directions a draw leans toward, one at random.
@@ -151,11 +154,23 @@ func Draw(ctx context.Context, stream StreamText, req Request, publish func(even
 			keep = &c
 		}
 	}
+	if keep == nil {
+		// The palette shortlist: the small, family-spanning set of base
+		// palettes the model is offered instead of the full catalogue.
+		tokens, named := briefWords(req.Plan, req.Change)
+		d.named = named
+		avoid := avoidedFamilies(req.Avoid, req.Fresh, current, named)
+		seed := req.Seed
+		if seed == 0 {
+			seed = rand.Int64()
+		}
+		d.shortlist = kit.Shortlist(tokens, named, avoid, seed, ShortlistSize)
+	}
 	if keep != nil {
 		// Avoid is ignored: the current look is kept exactly.
 		d.steer = keepRequest(*keep)
 	} else {
-		d.steer = steerRequest(req.Avoid, req.Fresh, current)
+		d.steer = steerRequest(req.Avoid, req.Fresh, current, d.named)
 		if req.Look == nil && req.Root == "" {
 			direction := req.Direction
 			if direction == "" {
@@ -223,6 +238,11 @@ type draw struct {
 	lookNotes string
 	// steer is what the draw steers away from (steerRequest).
 	steer string
+	// shortlist is the palette shortlist offered in the charter (nil when
+	// the current design is kept exactly).
+	shortlist []kit.Palette
+	// named is the colour families the person named in their words.
+	named []string
 }
 
 func (d *draw) emit(event string, data map[string]any) {
@@ -257,7 +277,7 @@ func (d *draw) whole(ctx context.Context, plan []byte, current, note string, kee
 	d.start("whole")
 	var seq int
 	streamer := kit.Streamer{Look: d.look}
-	text, err := d.stream(ctx, charter(), wholeRequest(plan, current, note)+lookRequest(d.look, d.lookNotes, false)+d.steer, func(chunk string) {
+	text, err := d.stream(ctx, charter(d.shortlist), wholeRequest(plan, current, note)+lookRequest(d.look, d.lookNotes, false)+d.steer, func(chunk string) {
 		seq++
 		d.emit(EventChunk, map[string]any{"seq": seq, "chunk": streamer.Feed(chunk)})
 	})
@@ -308,14 +328,19 @@ const freshNote = "Draw this in a different look: another kit, palette, first-sc
 // steerRequest tells the draw what to steer away from: the person's recent
 // looks, and, for a different look on purpose, the current one. It names the
 // kits, palettes and compositions to leave out this time.
-func steerRequest(avoid []kit.Choice, fresh bool, current string) string {
+// steerRequest tells the draw what to steer away from: the person's recent
+// looks, and, for a different look on purpose, the current one. It names the
+// kits and compositions to leave out and, when the brief does not name a
+// colour, the colour families to leave out too — a different look means a
+// different family, not just a different palette within it.
+func steerRequest(avoid []kit.Choice, fresh bool, current string, named []string) string {
 	if fresh && current != "" {
 		avoid = append([]kit.Choice{kit.ChoiceOf(current)}, avoid...)
 	}
 	if len(avoid) > 4 {
 		avoid = avoid[:4]
 	}
-	var kits, palettes, comps []string
+	var kits, comps, families []string
 	add := func(list *[]string, v string) {
 		if v == "" {
 			return
@@ -329,18 +354,27 @@ func steerRequest(avoid []kit.Choice, fresh bool, current string) string {
 	}
 	for _, c := range avoid {
 		add(&kits, c.Kit)
-		add(&palettes, strings.TrimSuffix(strings.TrimSuffix(c.Palette, "-soft"), "-dark"))
 		add(&comps, c.Composition)
+		add(&families, familyOfChoice(c))
 	}
-	if len(kits) == 0 {
+	if len(kits) == 0 && len(families) == 0 && len(comps) == 0 {
 		return ""
 	}
-	out := "\n\nThis person's recent first looks used these, so this one must look different: use a kit other than " + strings.Join(kits, ", ")
-	if len(palettes) > 0 {
-		out += "; a palette other than " + strings.Join(palettes, ", ")
+	out := "\n\nThis person's recent first looks used these, so this one must look different:"
+	if len(kits) > 0 {
+		out += " use a kit other than " + strings.Join(kits, ", ")
+	}
+	if len(families) > 0 && len(named) == 0 {
+		if len(kits) > 0 {
+			out += ";"
+		}
+		out += " a palette family other than " + strings.Join(families, ", ")
 	}
 	if len(comps) > 0 {
-		out += "; a first-screen composition other than " + strings.Join(comps, ", ")
+		if len(kits) > 0 || (len(families) > 0 && len(named) == 0) {
+			out += ";"
+		}
+		out += " a first-screen composition other than " + strings.Join(comps, ", ")
 	}
 	if fresh {
 		return out + ".\n"

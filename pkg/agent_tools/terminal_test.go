@@ -20,6 +20,7 @@ type mockTerminalManager struct {
 	executeBackgroundFunc   func(ctx context.Context, chatID, command string) (string, error)
 	getBackgroundOutputFunc func(sessionID string) (string, error)
 	stopBackgroundFunc      func(sessionID string) error
+	stopForChatFunc         func(chatID string) []string
 	isSessionActiveFunc     func(sessionID string) bool
 	backgroundDoneFunc      func(sessionID string) (<-chan struct{}, bool)
 	backgroundExitCodeFunc  func(sessionID string) int
@@ -56,6 +57,13 @@ func (m *mockTerminalManager) GetBackgroundOutput(sessionID string) (string, err
 func (m *mockTerminalManager) StopBackgroundSession(sessionID string) error {
 	if m.stopBackgroundFunc != nil {
 		return m.stopBackgroundFunc(sessionID)
+	}
+	return nil
+}
+
+func (m *mockTerminalManager) StopBackgroundSessionsForChat(chatID string) []string {
+	if m.stopForChatFunc != nil {
+		return m.stopForChatFunc(chatID)
 	}
 	return nil
 }

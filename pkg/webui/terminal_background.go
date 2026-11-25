@@ -343,6 +343,27 @@ func (tm *TerminalManager) StopBackgroundSession(sessionID string) error {
 	return err
 }
 
+// StopBackgroundSessionsForChat stops every active background command
+// session owned by chatID and returns the session IDs whose stop sequence
+// this call ran. Session rotation (/clear) uses it: the chat's unattended
+// commands must not keep running or announce completions into the next
+// conversation. A session reaped between the listing and the stop is
+// already gone; its result is left untouched and it is not reported.
+func (tm *TerminalManager) StopBackgroundSessionsForChat(chatID string) []string {
+	if chatID == "" {
+		return nil
+	}
+	var stopped []string
+	for _, id := range tm.listBackgroundSessionIDsForChat(chatID) {
+		if err := tm.StopBackgroundSession(id); err != nil {
+			// Reaped between the listing and the stop — nothing left to do.
+			continue
+		}
+		stopped = append(stopped, id)
+	}
+	return stopped
+}
+
 // IsSessionActive checks whether a session is still active.
 func (tm *TerminalManager) IsSessionActive(sessionID string) bool {
 	session, exists := tm.GetSession(sessionID)

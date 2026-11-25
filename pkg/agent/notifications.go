@@ -414,6 +414,14 @@ func (a *Agent) TryAutoResume() bool {
 	// race here, and the loser must not burn a resume slot on an empty
 	// drain. DrainNotifications is atomic, so exactly one caller gets the
 	// batch.
+	//
+	// Capture the generation BEFORE the drain: a batch drained under
+	// generation N belongs to N. Captured after, a rotation landing in the
+	// window would tag the old session's batch with the new generation and
+	// the gate below would wave it through — the leak this check exists to
+	// prevent. Reading early is conservative in the safe direction: a bump
+	// after the capture drops a still-live batch, never leaks one.
+	bgGen := a.BackgroundGeneration()
 	notifications := a.DrainNotifications()
 	if len(notifications) == 0 {
 		return false
@@ -426,15 +434,18 @@ func (a *Agent) TryAutoResume() bool {
 	}
 	msg := FormatWakeupBatch(notifications)
 	display := FormatWakeupDisplay(notifications)
+	// If a rotation lands between here and the resume turn, the completions
+	// are follow-ups for a conversation the user closed — the generation
+	// gate drops them instead of posting them into the new session.
 
 	if fn := a.wakeupWakeFn.Load(); fn != nil {
-		// REPL-owned resume. Stash the batch; the wake function kicks the
-		// REPL out of ReadLine and the loop's autoQueued drain runs it.
-		// The display is stashed for the same turn — prepareQueryRun
-		// picks it up when the REPL runs the batch.
+		// REPL-owned resume. Stash the batch with its generation; the wake
+		// function kicks the REPL out of ReadLine and the loop's autoQueued
+		// drain runs it. The display is stashed for the same turn —
+		// prepareQueryRun picks it up when the REPL runs the batch.
 		a.setPendingQueryDisplay(display)
 		a.wakeupMu.Lock()
-		a.pendingWakeupResume = append(a.pendingWakeupResume, msg)
+		a.pendingWakeupResume = append(a.pendingWakeupResume, wakeupResumeBatch{gen: bgGen, msg: msg})
 		a.wakeupMu.Unlock()
 		(*fn)()
 		return true
@@ -448,6 +459,10 @@ func (a *Agent) TryAutoResume() bool {
 				a.Logger().Debug("[wakeup] auto-resume panicked: %v\n", r)
 			}
 		}()
+		if !a.generationUnchanged(bgGen) {
+			a.Logger().Debug("[wakeup] dropping resume batch — session rotated since drain\n")
+			return
+		}
 		a.setPendingQueryDisplay(display)
 		tokensBefore := a.GetTotalTokens()
 		_, err := a.ProcessQueryWithContinuityAs(QuerySourceAutoResume, msg)
@@ -546,10 +561,18 @@ func (a *Agent) SetWakeupWakeFn(fn func()) {
 	a.wakeupWakeFn.Store(&fn)
 }
 
-// DrainWakeupForREPL returns and clears stashed wakeup batches destined
-// for the REPL loop. Called by the REPL after ReadLine returns
-// ErrWakeupPending (or at the top of each loop iteration) so the resume
-// turn runs as an auto-queued turn through the normal machinery.
+// DrainWakeupForREPL returns the stashed wakeup batches destined for the
+// REPL loop, dropping any whose background generation moved since the
+// stash (a /clear between the drain and the wake). Called by the REPL
+// after ReadLine returns ErrWakeupPending (or at the top of each loop
+// iteration) so the resume turn runs as an auto-queued turn through the
+// normal machinery.
+//
+// Lock order: wakeupMu → notifMu (via generationUnchanged). No path takes
+// them the other way around — keep it that way. subagent_background's
+// finishBackground additionally nests bgMu → notifMu for the same gate;
+// stopSessionBackgroundWork releases notifMu before touching bgMu, so the
+// reverse nesting never happens.
 func (a *Agent) DrainWakeupForREPL() []string {
 	if a == nil {
 		return nil
@@ -559,7 +582,14 @@ func (a *Agent) DrainWakeupForREPL() []string {
 	if len(a.pendingWakeupResume) == 0 {
 		return nil
 	}
-	out := a.pendingWakeupResume
+	var out []string
+	for _, b := range a.pendingWakeupResume {
+		if !a.generationUnchanged(b.gen) {
+			a.Logger().Debug("[wakeup] dropping stashed resume batch — session rotated since stash\n")
+			continue
+		}
+		out = append(out, b.msg)
+	}
 	a.pendingWakeupResume = nil
 	return out
 }

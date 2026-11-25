@@ -46,6 +46,17 @@ type BackgroundNotifier interface {
 	NotifyCompletionLabeled(sessionID, kind, content, label string)
 }
 
+// CompletionGate is an optional BackgroundNotifier extension for hosts
+// that can invalidate in-flight background work (a session rotation such
+// as /clear ends the conversation the command was started in). Watchers
+// capture BackgroundGeneration when they start and skip the notification
+// when the generation moved — the completion belongs to a conversation
+// that no longer exists, and announcing it would post follow-ups about
+// old work into the new one.
+type CompletionGate interface {
+	BackgroundGeneration() uint64
+}
+
 // ToolHandler defines the interface for a tool that can be invoked by the agent.
 type ToolHandler interface {
 	// Name returns the unique tool identifier (e.g., "read_file").

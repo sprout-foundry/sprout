@@ -218,6 +218,37 @@ func (r *SubagentRunner) CancelAll() {
 	})
 }
 
+// cancelBackgroundTasks cancels every unfinished background task without
+// touching foreground (in-turn) subagents — the rotation counterpart of
+// CancelAll. A cancelled task's finishBackground records "cancelled",
+// which already suppresses its completion notification.
+func (r *SubagentRunner) cancelBackgroundTasks() {
+	r.bgMu.Lock()
+	defer r.bgMu.Unlock()
+	for _, t := range r.bg {
+		if t.cancel != nil && !t.isDone() {
+			t.cancel()
+		}
+	}
+}
+
+// waitBackgroundDone waits up to max total for the cancelled background
+// tasks' run goroutines to reach their terminal write, so rotation does
+// not race the status records /tasks and the background registry read.
+// Best-effort: a task that misses the deadline still has its notification
+// suppressed by the generation gate.
+func (r *SubagentRunner) waitBackgroundDone(max time.Duration) {
+	timer := time.NewTimer(max)
+	defer timer.Stop()
+	for _, t := range r.backgroundTasks() {
+		select {
+		case <-t.done:
+		case <-timer.C:
+			return
+		}
+	}
+}
+
 // InjectInputIntoActive delivers a steering message to the PRIMARY agent
 // first. Only if the primary's channel is full or unavailable does it
 // fall back to the deepest (most-recently-started) running subagent.

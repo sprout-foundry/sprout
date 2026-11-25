@@ -252,6 +252,19 @@ func (h *shellCommandHandler) startWakeupWatcher(ctx context.Context, env ToolEn
 		watchCtx = context.Background()
 	}
 
+	// Capture the host's background generation now; if it moves before the
+	// session finishes, the conversation this command belongs to was rotated
+	// away (/clear) and the completion must stay silent. Hosts without the
+	// gate (tests, embedders) never invalidate.
+	liveGeneration := uint64(0)
+	if gated, ok := notifier.(CompletionGate); ok {
+		liveGeneration = gated.BackgroundGeneration()
+	}
+	generationLive := func() bool {
+		gated, ok := notifier.(CompletionGate)
+		return !ok || gated.BackgroundGeneration() == liveGeneration
+	}
+
 	if tm := TerminalManagerFromContext(ctx); tm != nil {
 		if doneCh, ok := tm.BackgroundDoneChan(sessionID); ok {
 			// Sentinel-equipped session: the channel closes on real command
@@ -310,6 +323,9 @@ func (h *shellCommandHandler) startWakeupWatcher(ctx context.Context, env ToolEn
 					return
 				default:
 				}
+				if !generationLive() {
+					return
+				}
 				notifier.NotifyCompletionLabeled(sessionID, "shell_bg_timeout",
 					fmt.Sprintf("Background session %s still running after %ds (wakeup deadline reached).\nIt will be notified again when it completes.",
 						sessionID, timeoutSec), label)
@@ -329,6 +345,9 @@ func (h *shellCommandHandler) startWakeupWatcher(ctx context.Context, env ToolEn
 			// This is the first observation point — capture them so the
 			// changes panel and recovery reflect reality. Best-effort.
 			trackBackgroundMutation(env, sessionID, "completed")
+			if !generationLive() {
+				return
+			}
 			notifier.NotifyCompletionLabeled(sessionID, "shell_bg",
 				formatShellBgCompletion(sessionID, getExitCode(), tailOfSessionOutput(ctx, sessionID)), label)
 		case <-watchCtx.Done():

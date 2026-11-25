@@ -41,6 +41,14 @@ type backgroundTask struct {
 	// stoppedByTool suppresses the completion notification: the primary
 	// asked for the stop, so there is nothing to wake it for.
 	stoppedByTool bool
+
+	// gen is the agent's background generation when the task started.
+	// finishBackground drops the notification when the generation moved —
+	// the session rotated away underneath the task (RotateSession's
+	// stopSessionBackgroundWork), so the new session must not hear about
+	// it. A cancelled task is already silent; this covers a task that
+	// finishes on its own in the rotation window.
+	gen uint64
 }
 
 func (t *backgroundTask) isDone() bool {
@@ -97,6 +105,7 @@ func (r *SubagentRunner) registerBackground(kind, persona, label string, cancel 
 		Started: time.Now(),
 		cancel:  cancel,
 		done:    make(chan struct{}),
+		gen:     r.parentAgent.BackgroundGeneration(),
 	}
 	r.bg[t.ID] = t
 	r.bgOrder = append(r.bgOrder, t.ID)
@@ -162,7 +171,8 @@ func (a *Agent) finishBackground(t *backgroundTask, status, result string) {
 		status = "stopped"
 	}
 	t.status, t.result, t.finished = status, result, time.Now()
-	notify := !t.stoppedByTool && status != "cancelled"
+	notify := !t.stoppedByTool && status != "cancelled" &&
+		a.generationUnchanged(t.gen)
 	r.bgMu.Unlock()
 	close(t.done)
 

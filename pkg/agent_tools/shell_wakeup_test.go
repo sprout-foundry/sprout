@@ -88,6 +88,10 @@ func (f *fakeWakeupTerminal) StopBackgroundSession(_ string) error {
 	return nil
 }
 
+func (f *fakeWakeupTerminal) StopBackgroundSessionsForChat(_ string) []string {
+	return nil
+}
+
 // wakeupNotification is one recorded NotifyCompletion call. seq is a
 // monotonically increasing counter so tests can assert notification ordering.
 type wakeupNotification struct {
@@ -132,6 +136,30 @@ func (n *fakeWakeupNotifier) all() []wakeupNotification {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	return append([]wakeupNotification(nil), n.calls...)
+}
+
+// gatedWakeupNotifier embeds the plain fake and implements the optional
+// CompletionGate the way the agent does, with a mutable generation.
+type gatedWakeupNotifier struct {
+	fakeWakeupNotifier
+	gen uint64
+}
+
+func (g *gatedWakeupNotifier) BackgroundGeneration() uint64 { return g.gen }
+
+// startGatedWakeupWatcherForTest is startWakeupWatcherForTest with a
+// gate-capable notifier; the tests bump gen to simulate a session
+// rotation invalidating the command's conversation.
+func startGatedWakeupWatcherForTest(t *testing.T, sessionID string, timeoutSec int, initialGen uint64) (*fakeWakeupTerminal, *gatedWakeupNotifier, context.CancelFunc) {
+	t.Helper()
+	watchCtx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	tm := newFakeWakeupTerminal(sessionID)
+	notifier := &gatedWakeupNotifier{gen: initialGen}
+	env := ToolEnv{Notifier: notifier, LifetimeCtx: watchCtx}
+	resultJSON := fmt.Sprintf(`{"session_id":%q,"status":"running"}`, sessionID)
+	new(shellCommandHandler).startWakeupWatcher(WithTerminalManager(watchCtx, tm), env, resultJSON, timeoutSec, "make build")
+	return tm, notifier, cancel
 }
 
 // startWakeupWatcherForTest wires up the fake terminal and notifier and starts
@@ -336,4 +364,63 @@ func TestWakeupWatcher_BPMDeadlineThenCompletion(t *testing.T) {
 		"BPM completion must carry the real exit code, got: %q", completions[0].content)
 	require.Less(t, notifier.of("shell_bg_timeout")[0].seq, completions[0].seq,
 		"shell_bg_timeout must be notified before shell_bg")
+}
+
+// =============================================================================
+// Session-rotation gate (GH #148)
+// =============================================================================
+
+// A completion that lands after the host invalidated the command's
+// conversation (session rotation — /clear) must stay silent. The watcher
+// captured the generation at start; the test bumps it to simulate the
+// rotation, then completes the session.
+func TestWakeupWatcher_RotationGateSuppressesCompletion(t *testing.T) {
+	const sessionID = "bg-rot-1"
+	tm, notifier, cancel := startGatedWakeupWatcherForTest(t, sessionID, 0, 0)
+	defer cancel()
+
+	// Rotate before the command completes.
+	notifier.gen = 1
+
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		tm.markInactive()
+	}()
+
+	requireNoMoreNotifications(t, &notifier.fakeWakeupNotifier, 1500*time.Millisecond)
+	require.Empty(t, notifier.all(),
+		"completion after rotation must be silent, got: %+v", notifier.all())
+}
+
+// Same gate, timeout path: a deadline heads-up that fires after the
+// rotation is equally stale.
+func TestWakeupWatcher_RotationGateSuppressesTimeout(t *testing.T) {
+	const sessionID = "bg-rot-2"
+	_, notifier, cancel := startGatedWakeupWatcherForTest(t, sessionID, 1, 0)
+	defer cancel()
+
+	// Rotate before the deadline fires.
+	notifier.gen = 1
+
+	requireNoMoreNotifications(t, &notifier.fakeWakeupNotifier, 2*time.Second)
+	require.Empty(t, notifier.all(),
+		"deadline heads-up after rotation must be silent, got: %+v", notifier.all())
+}
+
+// The gate is per-watch, not global: a command started in the new session
+// captures the post-rotation generation at watcher start and still reports
+// normally.
+func TestWakeupWatcher_NewSessionWorkStillNotifies(t *testing.T) {
+	const sessionID = "bg-rot-3"
+	tm, notifier, cancel := startGatedWakeupWatcherForTest(t, sessionID, 0, 1)
+	defer cancel()
+
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		tm.markInactive()
+	}()
+
+	require.True(t, waitForKind(t, &notifier.fakeWakeupNotifier, "shell_bg", 1, 3*time.Second),
+		"work started after rotation must still notify")
+	require.Len(t, notifier.of("shell_bg"), 1)
 }

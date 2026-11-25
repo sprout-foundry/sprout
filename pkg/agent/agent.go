@@ -208,6 +208,20 @@ type Agent struct {
 	pendingNotifications []Notification
 	notifMu              sync.Mutex
 
+	// bgGeneration bumps whenever a session rotation invalidates the
+	// conversation's in-flight background work. Producers (subagent tasks,
+	// automate watchers, shell wakeup watchers) capture it when the work
+	// starts and re-check it at completion: a mismatch means the completion
+	// belongs to a rotated-away session and must not reach the new one.
+	// Guarded by notifMu.
+	bgGeneration uint64
+
+	// inProcessWorkflowCancels holds the cancel funcs of in-process
+	// automate workflows running for this agent. RunWorkflowLoopInProcess
+	// derives the loop's interrupt context from the caller's ctx, so
+	// cancelling these ends the workflow's LLM calls. Guarded by notifMu.
+	inProcessWorkflowCancels map[string]context.CancelFunc
+
 	// Turn journal for crash recovery (SP-138). Non-nil only while a turn is
 	// in flight; presence of the journal file on disk means a session ended
 	// with a turn in progress. journalMu guards open/close against appends
@@ -242,10 +256,10 @@ type Agent struct {
 	// delegatedOutcomesMu; head-trimmed past delegatedOutcomeCap.
 	delegatedOutcomes   []DelegatedTaskOutcome
 	delegatedOutcomesMu sync.Mutex
-	// pendingWakeupResume holds formatted wakeup batches stashed by
-	// TryAutoResume for the REPL to run as auto-queued turns. Guarded
+	// pendingWakeupResume holds wakeup turns stashed by TryAutoResume for
+	// the REPL to run as auto-queued turns (see wakeupResumeBatch). Guarded
 	// by wakeupMu.
-	pendingWakeupResume []string
+	pendingWakeupResume []wakeupResumeBatch
 
 	// wakeupInFlight tracks auto-resume goroutines spawned by
 	// TryAutoResume's headless path. The query guard is NOT a teardown

@@ -100,14 +100,21 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 		// Capture variables for the goroutine closure.
 		wfName := filepath.Base(wfPath)
 		wfDesc := desc
+		bgGen := a.BackgroundGeneration()
 
-		// Launch the in-process workflow runner as a goroutine.
+		// Launch the in-process workflow runner as a goroutine. The loop
+		// derives its cancellation from the ctx handed to
+		// RunWorkflowLoopInProcess, so register the cancel with the agent:
+		// session rotation (/clear) ends the workflow instead of leaving it
+		// burning tokens for a conversation nobody is reading.
+		runCtx, runCancel := context.WithCancel(context.Background())
+		a.trackInProcessWorkflow(sessionID, runCancel)
 		go func() {
-			// Use a background context so the goroutine survives the
-			// parent agent's current query. Cancellation propagation
-			// is handled internally by RunWorkflowLoopInProcess via
-			// the interrupt context derived from the parent.
-			result, runErr := RunWorkflowLoopInProcess(context.Background(), a, wfPath, a.eventBus)
+			defer a.untrackInProcessWorkflow(sessionID)
+			// Cancellation propagates through runCtx into the loop's
+			// interrupt context, so a rotation ends the workflow's LLM
+			// calls instead of leaving them burning tokens unread.
+			result, runErr := RunWorkflowLoopInProcess(runCtx, a, wfPath, a.eventBus)
 
 			status := "success"
 			if runErr != nil || (result != nil && result.Error != nil) {
@@ -122,6 +129,11 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 				sessionID, wfName, status, totalCost,
 			))
 
+			// A session rotation (e.g. /clear) invalidated this workflow's
+			// conversation: end the session but stay quiet in the new one.
+			if !a.generationUnchanged(bgGen) {
+				return
+			}
 			injectMsg := buildInProcessCompletionMessage(wfName, wfDesc, sessionID, status, result)
 			a.QueueNotification(Notification{
 				Content:   injectMsg,
@@ -209,6 +221,7 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 		// Capture variables for goroutine closure
 		wfName := filepath.Base(wfPath)
 		wfDesc := desc
+		bgGen := a.BackgroundGeneration()
 
 		go func() {
 			bgCtx := context.Background()
@@ -226,6 +239,12 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 				a.publishEvent(events.EventTypeAutomateSessionEnded, events.AutomateSessionEndedEvent(
 					sessionID, wfName, status, 0,
 				))
+				// A session rotation (e.g. /clear) stopped this workflow's
+				// process and invalidated its conversation: stay quiet in
+				// the new session.
+				if !a.generationUnchanged(bgGen) {
+					return
+				}
 				injectMsg := buildAutomateCompletionMessage(wfName, wfDesc, sessionID, status, exitCode, proc.GetOutputPath())
 				a.QueueNotification(Notification{
 					Content:   injectMsg,

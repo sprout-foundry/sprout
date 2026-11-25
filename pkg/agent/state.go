@@ -408,6 +408,18 @@ func (a *Agent) RotateSession() (string, error) {
 	newID := newSessionID()
 	a.SetSessionID(newID)
 
+	// End the prior session's background work (subagent tasks, background
+	// shells, the chat's PTY sessions) and drop its queued completions —
+	// otherwise a completion from the cleared conversation auto-resumes
+	// into the new one and posts follow-ups for work the user closed out
+	// (GH #148). Runs only after the snapshot above succeeded: a failed
+	// rotate must not kill the still-current session's work. Late in the
+	// rotation so the invalidated window is as small as possible: anything
+	// a concurrent turn started before this point still counts as the old
+	// session's work, which is the intent — the conversation it reports
+	// to is gone either way.
+	a.stopSessionBackgroundWork()
+
 	// Reset the tracker for the new session: fresh revisionID under the
 	// new session, empty buffer. Committed entries above were already
 	// persisted to the history store, so the timeline tab still shows

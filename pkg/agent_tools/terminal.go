@@ -34,6 +34,13 @@ type TerminalAccess interface {
 	// session is not found or is not a background session.
 	StopBackgroundSession(sessionID string) error
 
+	// StopBackgroundSessionsForChat stops every active background command
+	// session owned by chatID and returns the stopped session IDs. Used by
+	// session rotation (e.g. /clear): the conversation is gone, so its
+	// unattended commands must not keep running or report completions
+	// into the next conversation.
+	StopBackgroundSessionsForChat(chatID string) []string
+
 	// IsSessionActive checks whether a session (by ID) is still active.
 	// Returns false if the session doesn't exist or has terminated.
 	IsSessionActive(sessionID string) bool

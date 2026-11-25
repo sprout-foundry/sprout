@@ -34,7 +34,7 @@ func (c *ClearCommand) Description() string {
 
 // Usage returns the detailed help text shown by `/help clear`.
 func (c *ClearCommand) Usage() string {
-	return "/clear   Close the current session and start a new one. The previous session stays available in /sessions.\n"
+	return "/clear   Close the current session and start a new one. The previous session stays available in /sessions, and its background tasks (shell commands, subagents, workflows) are stopped rather than left posting follow-ups into the new session.\n"
 }
 
 func (c *ClearCommand) Execute(args []string, chatAgent *agent.Agent) error {

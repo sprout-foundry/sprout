@@ -99,6 +99,11 @@ func markList(f *frame, fields []Field, heading string, nav bool, ids *listIDs) 
 	if named == "" && !looksLikeList(f.children, items, fields) {
 		return List{}, false
 	}
+	// Cards each naming a different fact are facts even where the drawing
+	// called them a list.
+	if named != "" && distinctFacts(items, fields) {
+		return List{}, false
+	}
 	if len(items) == 0 {
 		return List{}, false
 	}
@@ -147,6 +152,11 @@ func looksLikeList(children, items []*frame, fields []Field) bool {
 	if parts == 1 && len(items) < minOneColumnItems {
 		return false
 	}
+	// Cards each naming a different fact ("Party date", "Party place") are
+	// the page's facts side by side, not repeated items.
+	if distinctFacts(items, fields) {
+		return false
+	}
 	// A first item shaped unlike the rest (a hero card beside smaller cards)
 	// makes the row a layout, not a list.
 	if len(items) > 2 && shapeOf(fields, items[0]) != shapeOf(fields, items[1]) && shapeOf(fields, items[1]) == shapeOf(fields, items[2]) {
@@ -183,6 +193,27 @@ func listItemTag(c *frame) bool {
 		}
 	}
 	return true
+}
+
+// distinctFacts reports whether every item's first part carries its own
+// specific label, all different and sharing no ending, the way a row of fact
+// cards does; repeated items share their labels or an ending of them.
+func distinctFacts(items []*frame, fields []Field) bool {
+	labels := make([]string, 0, len(items))
+	seen := map[string]bool{}
+	for _, it := range items {
+		if it.fieldsEnd <= it.fieldsAt {
+			return false
+		}
+		l := strings.TrimSpace(fields[it.fieldsAt].Label)
+		key := strings.ToLower(l)
+		if l == "" || genericColumns[l] || textLabel(fields[it.fieldsAt].Text, "") == l || seen[key] {
+			return false
+		}
+		seen[key] = true
+		labels = append(labels, l)
+	}
+	return sharedTail(labels) == ""
 }
 
 // shapeOf is an item's parts by the kind of element each is, so two items of

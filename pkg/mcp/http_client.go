@@ -200,9 +200,12 @@ func (c *MCPHTTPClient) sendRequestOnce(ctx context.Context, method string, para
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	req.Header.Set("MCP-Protocol-Version", "2025-06-18")
 
-	// Configured headers first (explicit wins), then resolved credentials,
-	// then the built-in auth heuristic, then an OAuth token when the server
-	// has a completed login.
+	// Configured headers first (explicit wins), then resolved credentials.
+	// An OAuth login then owns the Authorization header even when the config
+	// also resolves one: the OAuth token is the managed credential (refreshed
+	// on expiry), a stored header is static and goes stale — e.g. the
+	// sign-in token `sprout login` keeps before the server was switched to
+	// OAuth. A login only exists after an explicit `mcp_refresh login`.
 	if headers, headerErr := buildRequestHeaders(c.config.Name, &c.config); headerErr != nil {
 		if c.logger != nil {
 			c.logger.LogProcessStep(fmt.Sprintf("[WARN] Failed to build request headers for %s: %v", c.config.Name, headerErr))
@@ -212,10 +215,8 @@ func (c *MCPHTTPClient) sendRequestOnce(ctx context.Context, method string, para
 			req.Header.Set(headerName, headerValue)
 		}
 	}
-	if oauthToken, oauthErr := EnsureFreshAccessToken(ctx, c.config.Name); oauthErr == nil && oauthToken != "" {
-		if req.Header.Get("Authorization") == "" {
-			req.Header.Set("Authorization", "Bearer "+oauthToken)
-		}
+	if oauthToken, oauthErr := EnsureFreshAccessToken(ctx, c.config.Name, c.config.URL); oauthErr == nil && oauthToken != "" {
+		req.Header.Set("Authorization", "Bearer "+oauthToken)
 	}
 
 	// Add session ID header if available (for subsequent requests after
@@ -314,10 +315,10 @@ func (c *MCPHTTPClient) sendNotification(ctx context.Context, method string) (*M
 			req.Header.Set(headerName, headerValue)
 		}
 	}
-	if oauthToken, oauthErr := EnsureFreshAccessToken(ctx, c.config.Name); oauthErr == nil && oauthToken != "" {
-		if req.Header.Get("Authorization") == "" {
-			req.Header.Set("Authorization", "Bearer "+oauthToken)
-		}
+	// Same ownership rule as sendRequestOnce: an OAuth login wins over a
+	// stored Authorization header.
+	if oauthToken, oauthErr := EnsureFreshAccessToken(ctx, c.config.Name, c.config.URL); oauthErr == nil && oauthToken != "" {
+		req.Header.Set("Authorization", "Bearer "+oauthToken)
 	}
 
 	c.mu.RLock()

@@ -1,0 +1,67 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "Response done."
+      }
+    },
+    {
+      "id": 3,
+      "method": "agent.run",
+      "params": {
+        "query": "Hi"
+      }
+    },
+    {
+      "id": 4,
+      "method": "agent.checkpoints",
+      "params": {}
+    },
+    {
+      "id": 5,
+      "method": "state.clearCheckpoints",
+      "params": {}
+    },
+    {
+      "id": 6,
+      "method": "agent.checkpoints",
+      "params": {}
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 3,
+      "type": "noError"
+    },
+    {
+      "id": 4,
+      "type": "noError"
+    },
+    {
+      "notEmpty": true,
+      "path": "checkpoints",
+      "type": "state"
+    },
+    {
+      "id": 5,
+      "type": "noError"
+    },
+    {
+      "id": 6,
+      "type": "noError"
+    }
+  ],
+  "description": "ClearCheckpoints removes all stored checkpoints",
+  "name": "clear_checkpoints"
+}

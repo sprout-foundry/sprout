@@ -1,0 +1,46 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {
+        "optimizer": {
+          "toolCategories": {
+            "read_file": "file_read"
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "method": "mock.addTool",
+      "params": {
+        "description": "Read a file",
+        "name": "read_file",
+        "parameters": {
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "ok"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    }
+  ],
+  "description": "Placeholder: Optimizer preserves the latest tool result, replaces older identical results with masked summaries. Requires multi-turn dedup scenario.",
+  "name": "preserves_latest"
+}

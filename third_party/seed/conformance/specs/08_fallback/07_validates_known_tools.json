@@ -1,0 +1,73 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addTool",
+      "params": {
+        "description": "Get weather",
+        "name": "weather",
+        "parameters": {
+          "properties": {
+            "location": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addMalformedResponse",
+      "params": {
+        "content": "Known: {\"name\": \"weather\", \"arguments\": {\"location\": \"NYC\"}}\nUnknown: {\"name\": \"nonexistent\", \"arguments\": {\"x\": 1}}"
+      }
+    },
+    {
+      "id": 4,
+      "method": "mock.addToolResult",
+      "params": {
+        "content": "Sunny",
+        "toolCallId": "call_auto_1"
+      }
+    },
+    {
+      "id": 5,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "Done."
+      }
+    },
+    {
+      "id": 6,
+      "method": "agent.run",
+      "params": {
+        "query": "Weather?"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 6,
+      "type": "noError"
+    },
+    {
+      "id": 6,
+      "result": {
+        "result": "Done."
+      },
+      "type": "response"
+    }
+  ],
+  "description": "Fallback parser validates tool calls against known registered tools",
+  "name": "validates_known_tools"
+}

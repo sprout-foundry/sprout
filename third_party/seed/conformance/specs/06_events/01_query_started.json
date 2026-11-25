@@ -1,0 +1,39 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "Hello!"
+      }
+    },
+    {
+      "id": 3,
+      "method": "agent.run",
+      "params": {
+        "query": "Hi"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 3,
+      "type": "noError"
+    },
+    {
+      "eventType": "query_started",
+      "type": "event"
+    }
+  ],
+  "description": "query_started event published with query and model",
+  "name": "query_started"
+}

@@ -1,0 +1,50 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addTextResponseWithFinish",
+      "params": {
+        "content": "This is a partial ",
+        "finishReason": "length"
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "response that completed."
+      }
+    },
+    {
+      "id": 4,
+      "method": "agent.run",
+      "params": {
+        "query": "Tell me something"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 4,
+      "type": "noError"
+    },
+    {
+      "id": 4,
+      "result": {
+        "result": "response that completed."
+      },
+      "type": "response"
+    }
+  ],
+  "description": "Provider returns finish_reason=length; agent adds continuation and retries",
+  "name": "finish_reason_length"
+}

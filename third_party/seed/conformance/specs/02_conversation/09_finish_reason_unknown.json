@@ -1,0 +1,50 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addTextResponseWithFinish",
+      "params": {
+        "content": "partial",
+        "finishReason": "unknown"
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "completed response"
+      }
+    },
+    {
+      "id": 4,
+      "method": "agent.run",
+      "params": {
+        "query": "Tell me something"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 4,
+      "type": "noError"
+    },
+    {
+      "id": 4,
+      "result": {
+        "result": "completed response"
+      },
+      "type": "response"
+    }
+  ],
+  "description": "Provider returns unknown finish_reason; treated as incomplete continuation",
+  "name": "finish_reason_unknown"
+}

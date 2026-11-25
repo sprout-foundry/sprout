@@ -1,0 +1,55 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addError",
+      "params": {
+        "errorType": "rate_limit",
+        "message": "429 too many requests"
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "Success after rate limit."
+      }
+    },
+    {
+      "id": 4,
+      "method": "agent.run",
+      "params": {
+        "query": "rate limit me"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 4,
+      "type": "noError"
+    },
+    {
+      "id": 4,
+      "result": {
+        "result": "Success after rate limit."
+      },
+      "type": "response"
+    },
+    {
+      "equals": 2,
+      "path": "callCount",
+      "type": "mock"
+    }
+  ],
+  "description": "Rate limit errors are retried with backoff until success",
+  "name": "retry_rate_limit"
+}

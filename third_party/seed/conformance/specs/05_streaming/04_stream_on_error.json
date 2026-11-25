@@ -1,0 +1,37 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addError",
+      "params": {
+        "errorType": "transient",
+        "message": "stream failed"
+      }
+    },
+    {
+      "id": 3,
+      "method": "agent.runStream",
+      "params": {
+        "query": "Fail me"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "errorType": "transient",
+      "id": 3,
+      "type": "error"
+    }
+  ],
+  "description": "Stream OnError fires when provider errors during streaming",
+  "name": "stream_on_error"
+}

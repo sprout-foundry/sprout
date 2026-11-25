@@ -1,0 +1,27 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {
+        "compactionTriggerFraction": 0.85,
+        "maxTokens": 2000
+      }
+    },
+    {
+      "id": 2,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "ok"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    }
+  ],
+  "description": "Placeholder: Correct max_tokens value derived from context window and compaction fraction. Requires provider token tracking.",
+  "name": "max_tokens_derivation"
+}

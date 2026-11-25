@@ -1,0 +1,49 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "Turn complete."
+      }
+    },
+    {
+      "id": 3,
+      "method": "agent.run",
+      "params": {
+        "query": "test turn"
+      }
+    },
+    {
+      "id": 4,
+      "method": "agent.checkpoints",
+      "params": {}
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 3,
+      "type": "noError"
+    },
+    {
+      "id": 4,
+      "type": "noError"
+    },
+    {
+      "notEmpty": true,
+      "path": "checkpoints",
+      "type": "state"
+    }
+  ],
+  "description": "Checkpoint built on completed turn is stored and retrievable",
+  "name": "turn_checkpoint"
+}

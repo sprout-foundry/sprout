@@ -1,0 +1,45 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addTextResponseWithFinish",
+      "params": {
+        "content": "filtered",
+        "finishReason": "content_filter"
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addTextResponseWithFinish",
+      "params": {
+        "content": "filtered again",
+        "finishReason": "content_filter"
+      }
+    },
+    {
+      "id": 4,
+      "method": "agent.run",
+      "params": {
+        "query": "Tell me something"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "errorType": "content_filtered",
+      "id": 4,
+      "type": "error"
+    }
+  ],
+  "description": "Provider returns finish_reason=content_filter; retry once then return ContentFilteredError",
+  "name": "finish_reason_content_filter"
+}

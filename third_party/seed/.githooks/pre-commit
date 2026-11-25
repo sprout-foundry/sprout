@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Pre-commit hook: run gofmt to catch formatting issues before commit
+set -e
+
+# Get list of staged .go files
+FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' || true)
+
+if [ -z "$FILES" ]; then
+    exit 0
+fi
+
+# Check formatting — gofmt -l expects file paths as arguments
+UNFORMATTED=$(echo "$FILES" | xargs gofmt -l 2>/dev/null || true)
+
+if [ -n "$UNFORMATTED" ]; then
+    echo "Error: The following files are not gofmt'd:"
+    echo "$UNFORMATTED"
+    echo "Fix with: go fmt ./..."
+    exit 1
+fi
+
+exit 0

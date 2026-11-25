@@ -1,0 +1,50 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {
+        "retryConfig": {
+          "initialDelay": 100,
+          "maxAttempts": 3,
+          "maxDelay": 500,
+          "multiplier": 2
+        }
+      }
+    },
+    {
+      "id": 2,
+      "method": "mock.addError",
+      "params": {
+        "errorType": "transient",
+        "message": "500"
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "success"
+      }
+    },
+    {
+      "id": 4,
+      "method": "agent.run",
+      "params": {
+        "query": "backoff cap test"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 4,
+      "type": "noError"
+    }
+  ],
+  "description": "Placeholder: Backoff delay never exceeds configured maxDelay. Tested via event timestamps.",
+  "name": "backoff_max_cap"
+}

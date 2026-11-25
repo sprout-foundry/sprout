@@ -1,0 +1,72 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "agent.pause",
+      "params": {}
+    },
+    {
+      "id": 3,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "test"
+      }
+    },
+    {
+      "id": 4,
+      "method": "agent.run",
+      "params": {
+        "query": "hi"
+      }
+    },
+    {
+      "id": 5,
+      "method": "agent.resume",
+      "params": {}
+    },
+    {
+      "id": 6,
+      "method": "agent.run",
+      "params": {
+        "query": "hi"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 2,
+      "type": "noError"
+    },
+    {
+      "errorType": "paused",
+      "id": 4,
+      "type": "error"
+    },
+    {
+      "id": 5,
+      "type": "noError"
+    },
+    {
+      "id": 6,
+      "type": "noError"
+    },
+    {
+      "id": 6,
+      "result": {
+        "result": "test"
+      },
+      "type": "response"
+    }
+  ],
+  "description": "Pause returns ErrPaused; Resume allows Run again",
+  "name": "agent_pause_resume"
+}

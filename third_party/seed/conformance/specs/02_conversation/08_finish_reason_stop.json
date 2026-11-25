@@ -1,0 +1,43 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addTextResponseWithFinish",
+      "params": {
+        "content": "All done!",
+        "finishReason": "stop"
+      }
+    },
+    {
+      "id": 3,
+      "method": "agent.run",
+      "params": {
+        "query": "Bye"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 3,
+      "type": "noError"
+    },
+    {
+      "id": 3,
+      "result": {
+        "result": "All done!"
+      },
+      "type": "response"
+    }
+  ],
+  "description": "Provider returns finish_reason=stop; normal completion",
+  "name": "finish_reason_stop"
+}

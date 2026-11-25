@@ -1,0 +1,63 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.blockUntil",
+      "params": {}
+    },
+    {
+      "id": 3,
+      "method": "agent.steer",
+      "params": {
+        "message": "Please be concise."
+      }
+    },
+    {
+      "id": 4,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "OK."
+      }
+    },
+    {
+      "id": 5,
+      "method": "agent.run",
+      "params": {
+        "query": "tell me a story"
+      }
+    },
+    {
+      "id": 6,
+      "method": "mock.release",
+      "params": {}
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 3,
+      "type": "noError"
+    },
+    {
+      "id": 5,
+      "type": "noError"
+    },
+    {
+      "id": 5,
+      "result": {
+        "result": "OK."
+      },
+      "type": "response"
+    }
+  ],
+  "description": "Steering message appears in next provider request and is consumed after one use",
+  "name": "steer_message"
+}

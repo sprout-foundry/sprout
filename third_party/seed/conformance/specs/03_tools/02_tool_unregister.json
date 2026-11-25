@@ -1,0 +1,40 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addTool",
+      "params": {
+        "description": "Search",
+        "name": "search",
+        "parameters": {
+          "properties": {
+            "query": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "ok"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    }
+  ],
+  "description": "Placeholder: Unregister a tool and verify it is no longer available. Requires CLI support for tool unregister method.",
+  "name": "tool_unregister"
+}

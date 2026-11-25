@@ -1,0 +1,86 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addTool",
+      "params": {
+        "description": "Get weather for a location",
+        "name": "weather",
+        "parameters": {
+          "properties": {
+            "location": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addToolCallResponse",
+      "params": {
+        "calls": [
+          {
+            "arguments": {
+              "location": "NYC"
+            },
+            "id": "call_1",
+            "name": "weather"
+          }
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "method": "mock.addToolResult",
+      "params": {
+        "content": "Sunny, 72°F",
+        "toolCallId": "call_1"
+      }
+    },
+    {
+      "id": 5,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "The weather in NYC is sunny and 72°F."
+      }
+    },
+    {
+      "id": 6,
+      "method": "agent.run",
+      "params": {
+        "query": "What's the weather in NYC?"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 6,
+      "type": "noError"
+    },
+    {
+      "id": 6,
+      "result": {
+        "result": "The weather in NYC is sunny and 72°F."
+      },
+      "type": "response"
+    },
+    {
+      "equals": 1,
+      "path": "executorCallCount",
+      "type": "mock"
+    }
+  ],
+  "description": "Tool call → execute → loop continues to final text response",
+  "name": "single_tool_call"
+}

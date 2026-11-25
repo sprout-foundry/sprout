@@ -1,0 +1,36 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addTool",
+      "params": {
+        "description": "Fast parallel-safe tool",
+        "name": "fast",
+        "parameters": {
+          "properties": {},
+          "type": "object"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "ok"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    }
+  ],
+  "description": "Placeholder: Tools marked SafeForParallel are executed concurrently. Requires parallel execution configuration and timing assertions.",
+  "name": "parallel_execution"
+}

@@ -1,0 +1,58 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addTool",
+      "params": {
+        "description": "Get weather",
+        "name": "weather",
+        "parameters": {
+          "properties": {
+            "location": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addMalformedResponse",
+      "params": {
+        "content": "I will now call the weather tool to check NYC. Let me do that."
+      }
+    },
+    {
+      "id": 4,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "Recovered."
+      }
+    },
+    {
+      "id": 5,
+      "method": "agent.run",
+      "params": {
+        "query": "Weather?"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 5,
+      "type": "noError"
+    }
+  ],
+  "description": "Validator rejects tentative/planning language after tool calls (e.g., 'I will now call...')",
+  "name": "tentative_post_tool"
+}

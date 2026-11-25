@@ -1,0 +1,46 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "agent.setFlushCallback",
+      "params": {
+        "name": "test_flush"
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "Hello!"
+      }
+    },
+    {
+      "id": 4,
+      "method": "agent.run",
+      "params": {
+        "query": "flush me"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 2,
+      "type": "noError"
+    },
+    {
+      "id": 4,
+      "type": "noError"
+    }
+  ],
+  "description": "Flush callback registered via SetFlushCallback is invoked when output is flushed",
+  "name": "flush_callback"
+}

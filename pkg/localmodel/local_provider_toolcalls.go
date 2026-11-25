@@ -29,6 +29,8 @@ func parseLocalToolCalls(arch, text string) (string, []api.ToolCall) {
 		return remaining, calls
 	case gemmaArch:
 		return parseGemmaToolCalls(text)
+	case minicpm5Arch:
+		return parseMiniCPM5ToolCalls(text)
 	default:
 		return parseQwenToolCalls(text)
 	}
@@ -218,6 +220,8 @@ func formatToolsPrompt(arch string, tools []api.Tool) string {
 			toolJSONs = append(toolJSONs, string(j))
 		}
 		return "<|im_start|>system\nList of tools: [" + strings.Join(toolJSONs, ", ") + "]<|im_end|>\n"
+	case minicpm5Arch:
+		return formatMiniCPM5ToolsPrompt(tools)
 	default:
 		return formatQwenToolsPrompt(tools)
 	}

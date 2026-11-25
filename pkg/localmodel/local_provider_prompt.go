@@ -34,9 +34,9 @@ const localRawContentMetaKey = "sprout_local_raw"
 // specific tool prompt formatting. enableThinking selects the generation
 // cue on preserve-thinking template families (Qwen3.8: open <think>\n cue
 // vs the closed empty block); other families render identically either way.
-func buildPrompt(model *llm.Model, messages []api.Message, tools []api.Tool, enableThinking bool) string {
+func buildPrompt(model *llm.Model, modelDir string, messages []api.Message, tools []api.Tool, enableThinking bool) string {
 	cfg := model.Config()
-	arch := cfg.Arch
+	arch := effectiveArch(cfg, modelDir)
 	isGemma := arch == gemmaArch
 
 	// Gemma native format: tool responses are named — resolve each tool
@@ -120,8 +120,9 @@ func leadingSystemMessages(messages []api.Message) []api.Message {
 // buildPrompt's output for any messages/tools sharing this same leading
 // sequence and tool list (system messages never go through buildPrompt's
 // tool/assistant content rewrites, so no divergence there).
-func staticPromptPrefix(model *llm.Model, sysMsgs []api.Message, tools []api.Tool) string {
-	arch := model.Config().Arch
+func staticPromptPrefix(model *llm.Model, modelDir string, sysMsgs []api.Message, tools []api.Tool) string {
+	cfg := model.Config()
+	arch := effectiveArch(cfg, modelDir)
 	msgs := make([]llm.ChatMessage, len(sysMsgs))
 	for i, m := range sysMsgs {
 		msgs[i] = llm.ChatMessage{Role: m.Role, Content: m.Content}
@@ -157,12 +158,12 @@ func staticPromptPrefix(model *llm.Model, sysMsgs []api.Message, tools []api.Too
 // every request. Errors are logged, not propagated: this is an optimization,
 // not required for correctness (Generate's own per-conversation caching
 // works fine without it).
-func warmSystemPrefix(model *llm.Model, messages []api.Message, tools []api.Tool) {
+func warmSystemPrefix(model *llm.Model, modelDir string, messages []api.Message, tools []api.Tool) {
 	sysMsgs := leadingSystemMessages(messages)
 	if len(sysMsgs) == 0 {
 		return
 	}
-	if err := model.WarmSystemPrefix(staticPromptPrefix(model, sysMsgs, tools)); err != nil && localDebug() {
+	if err := model.WarmSystemPrefix(staticPromptPrefix(model, modelDir, sysMsgs, tools)); err != nil && localDebug() {
 		log.Printf("local: warm system prefix: %v", err)
 	}
 }
@@ -172,6 +173,8 @@ func convertToolResponse(arch, content string) llm.ChatMessage {
 	switch arch {
 	case "lfm2":
 		return llm.ChatMessage{Role: "user", Content: content}
+	case minicpm5Arch:
+		return convertMiniCPM5ToolResponse(content)
 	default:
 		return llm.ChatMessage{Role: "user", Content: "<tool_response>\n" + content + "\n</tool_response>"}
 	}
@@ -185,6 +188,8 @@ func formatAssistantToolCalls(arch string, toolCalls []api.ToolCall) string {
 		return formatLFM2AssistantToolCalls(toolCalls)
 	case gemmaArch:
 		return gemmaFormatAssistantToolCalls(toolCalls)
+	case minicpm5Arch:
+		return formatMiniCPM5AssistantToolCalls(toolCalls)
 	default:
 		return formatQwenAssistantToolCalls(toolCalls)
 	}

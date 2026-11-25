@@ -5,6 +5,7 @@ package main
 
 import (
 	_ "github.com/sprout-foundry/sinter/llm/lfm2"
+	_ "github.com/sprout-foundry/sinter/llm/qwen2"
 	_ "github.com/sprout-foundry/sinter/llm/qwen3"
 	_ "github.com/sprout-foundry/sinter/llm/qwen35"
 )

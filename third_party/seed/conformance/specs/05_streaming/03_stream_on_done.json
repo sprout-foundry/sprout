@@ -1,0 +1,53 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addStreamChunks",
+      "params": {
+        "chunks": [
+          {
+            "content": "Part1"
+          },
+          {
+            "content": "Part2"
+          }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "method": "agent.runStream",
+      "params": {
+        "query": "Stream me"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 3,
+      "type": "noError"
+    },
+    {
+      "id": 3,
+      "result": {
+        "result": "Part1Part2"
+      },
+      "type": "response"
+    },
+    {
+      "eventType": "query_completed",
+      "type": "event"
+    }
+  ],
+  "description": "Stream completes and OnDone fires with final response",
+  "name": "stream_on_done"
+}

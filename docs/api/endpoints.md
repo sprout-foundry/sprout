@@ -193,18 +193,17 @@ Notes:
 | GET | `/api/instances/ssh-launch-status` | sshLaunchStatus | daemon, browser-local |
 | POST | `/api/instances/ssh-open` | sshOpen | daemon, browser-local |
 | GET | `/api/instances/ssh-sessions` | sshSessions | daemon, browser-local |
-| GET | `/api/workspace` | workspaceGet | daemon, browser-local |
-| POST | `/api/workspace` | workspaceSet | daemon, browser-local |
-| GET | `/api/workspace/browse` | workspaceBrowse | daemon, in-browser WASM agent |
-| GET | `/api/workspace/projects` | workspaceProjects | daemon |
-| GET | `/api/workspace/symbols` | workspaceSymbols | daemon, browser-local |
-| POST | `/api/workspace/sync` | workspaceSync | daemon |
-| POST | `/api/workspace/takeover` | workspaceTakeover | daemon |
+| GET | `/api/project-folder` | projectFolderGet | daemon, browser-local |
+| POST | `/api/project-folder` | projectFolderSet | daemon, browser-local |
+| GET | `/api/project-folder/browse` | projectFolderBrowse | daemon, in-browser WASM agent |
+| GET | `/api/project-folder/projects` | projectFolderProjects | daemon |
+| POST | `/api/project-folder/sync` | projectFolderSync | daemon |
+| POST | `/api/project-folder/takeover` | projectFolderTakeover | daemon |
 
 Notes:
-- `/api/workspace/projects` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
-- `/api/workspace/sync` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
-- `/api/workspace/takeover` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
+- `/api/project-folder/projects` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
+- `/api/project-folder/sync` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
+- `/api/project-folder/takeover` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 
 ## sync/txn
 
@@ -332,6 +331,7 @@ Notes:
 | GET | `/api/proxy/chat/status` | proxyChatStatus | daemon |
 | POST | `/api/proxy/chat/stop` | proxyChatStop | daemon |
 | GET | `/api/proxy/stats` | proxyStats | daemon |
+| GET | `/api/workspace/symbols` | workspaceSymbols | daemon, browser-local |
 | any | `/asset-manifest.json` | handleAssetManifest | daemon |
 | any | `/assets/` | handleAssets | daemon |
 | any | `/browserconfig.xml` | handleBrowserConfig | daemon |

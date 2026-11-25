@@ -18,9 +18,9 @@ import { visibleCommands } from './constants';
 import useFileIndex from './useFileIndex';
 
 export interface UseCommandPaletteSourcesOptions {
-  /** Whether the palette is open; the workspace file index is built only while it is. */
+  /** Whether the palette is open; the project folder file index is built only while it is. */
   isOpen: boolean;
-  /** Open a workspace file, optionally at a line. */
+  /** Open a project folder file, optionally at a line. */
   openFile: (path: string, options?: { line?: number }) => unknown;
 }
 
@@ -29,7 +29,7 @@ export interface CommandPaletteSources {
   commands: CommandDef[];
   isLoading: boolean;
   recentFiles: RecentFileEntry[];
-  workspaceRoot: string;
+  projectFolder: string;
   onSearchFiles: (query: string) => Promise<FileResult[]>;
   onSearchSymbols: (query: string) => SymbolResult[];
   onSearchWorkspaceSymbols: (query: string) => Promise<SymbolResult[]>;
@@ -37,10 +37,10 @@ export interface CommandPaletteSources {
 }
 
 /**
- * The command palette's data: the command list, the workspace file index and
+ * The command palette's data: the command list, the project folder file index and
  * its fuzzy search, the per-workspace recent files, and symbol search in the
- * active buffer and across the workspace. The standalone app's palette and the
- * composed workspace's palette unit both read it, so the two list and search
+ * active buffer and across the project folder. The standalone app's palette and the
+ * composed project folder's palette unit both read it, so the two list and search
  * the same things; each supplies its own open state and file opener.
  */
 export function useCommandPaletteSources({ isOpen, openFile }: UseCommandPaletteSourcesOptions): CommandPaletteSources {
@@ -49,7 +49,7 @@ export function useCommandPaletteSources({ isOpen, openFile }: UseCommandPalette
   const { buffers, activeBufferId } = useEditorManager();
   const currentBuffer = activeBufferId ? buffers.get(activeBufferId) : null;
 
-  // Pre-index workspace files only while the palette is open. The fuzzy
+  // Pre-index project folder files only while the palette is open. The fuzzy
   // filter then runs against this in-memory list for instant results.
   const paletteLog = useLog();
   // Bake the user's current keybinding next to each command so the palette
@@ -63,7 +63,7 @@ export function useCommandPaletteSources({ isOpen, openFile }: UseCommandPalette
   const {
     allFiles: paletteAllFiles,
     isLoadingFiles: paletteIsLoading,
-    workspaceRoot: paletteWorkspaceRoot,
+    projectFolder: paletteProjectFolder,
   } = useFileIndex({
     apiService,
     isOpen,
@@ -80,21 +80,21 @@ export function useCommandPaletteSources({ isOpen, openFile }: UseCommandPalette
   // Most-recently-opened files for the palette's idle landing list.
   // Persisted across sessions, keyed PER WORKSPACE (paletteRecents v2): the
   // old v1 store was one browser-global list of absolute paths, so files
-  // from the previous folder stayed in the palette after a workspace switch
-  // and clicking one opened a path in the wrong workspace. v2 buckets by
+  // from the previous folder stayed in the palette after a project folder switch
+  // and clicking one opened a path in the wrong project folder. v2 buckets by
   // root with workspace-relative paths — a cross-workspace leak is
   // structurally impossible.
   const [paletteRecentFiles, setPaletteRecentFiles] = useState<RecentFileEntry[]>([]);
-  // Load the current workspace's bucket when the root is known (and reload
+  // Load the current project folder's bucket when the root is known (and reload
   // when it changes — worktree switches arrive without a remount).
   useEffect(() => {
-    setPaletteRecentFiles(loadRecentFiles(paletteWorkspaceRoot));
-  }, [paletteWorkspaceRoot]);
+    setPaletteRecentFiles(loadRecentFiles(paletteProjectFolder));
+  }, [paletteProjectFolder]);
   const recordRecentFile = useCallback(
     (file: RecentFileEntry) => {
-      setPaletteRecentFiles(recordRecentFileInStore(paletteWorkspaceRoot, file));
+      setPaletteRecentFiles(recordRecentFileInStore(paletteProjectFolder, file));
     },
-    [paletteWorkspaceRoot],
+    [paletteProjectFolder],
   );
   // Watch the editor manager's buffer set so *any* path that opens a file
   // (palette, file tree, hotkey, drag-drop, layout restore…) contributes to
@@ -117,20 +117,20 @@ export function useCommandPaletteSources({ isOpen, openFile }: UseCommandPalette
     }
   }, [buffers, recordRecentFile]);
   // A freshly-built index tells us which paths actually exist in this
-  // workspace; drop stale recents (deleted files, renamed paths) against it.
+  // project folder; drop stale recents (deleted files, renamed paths) against it.
   // Runs only after a bulk load, keyed by root so it re-arms on switches.
   const lastPruneRootRef = useRef<string>('');
   useEffect(() => {
-    if (!paletteWorkspaceRoot || lastPruneRootRef.current === paletteWorkspaceRoot) return;
+    if (!paletteProjectFolder || lastPruneRootRef.current === paletteProjectFolder) return;
     if (paletteIsLoading) return;
     if (paletteAllFiles.length === 0) return;
-    lastPruneRootRef.current = paletteWorkspaceRoot;
+    lastPruneRootRef.current = paletteProjectFolder;
     const known = new Set(paletteAllFiles.map((f) => f.path));
     setPaletteRecentFiles((prev) => {
-      const next = pruneRecentFiles(paletteWorkspaceRoot, (p) => known.has(p));
+      const next = pruneRecentFiles(paletteProjectFolder, (p) => known.has(p));
       return next === prev ? prev : next;
     });
-  }, [paletteWorkspaceRoot, paletteAllFiles, paletteIsLoading]);
+  }, [paletteProjectFolder, paletteAllFiles, paletteIsLoading]);
   const handlePaletteSearchSymbols = useCallback(
     (query: string) => {
       const content = currentBuffer?.content;
@@ -176,7 +176,7 @@ export function useCommandPaletteSources({ isOpen, openFile }: UseCommandPalette
     },
     [sproutFetch],
   );
-  // Open a file at a specific line. Used by workspace symbol clicks: the
+  // Open a file at a specific line. Used by project folder symbol clicks: the
   // user picks a symbol that lives elsewhere; we load that file then fire
   // the goto-line event after the editor has mounted the buffer.
   const handlePaletteOpenFileAtLine = useCallback(
@@ -190,7 +190,7 @@ export function useCommandPaletteSources({ isOpen, openFile }: UseCommandPalette
     commands: paletteCommands,
     isLoading: paletteIsLoading,
     recentFiles: paletteRecentFiles,
-    workspaceRoot: paletteWorkspaceRoot,
+    projectFolder: paletteProjectFolder,
     onSearchFiles: handlePaletteSearchFiles,
     onSearchSymbols: handlePaletteSearchSymbols,
     onSearchWorkspaceSymbols: handlePaletteSearchWorkspaceSymbols,

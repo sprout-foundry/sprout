@@ -100,9 +100,9 @@ export let supportsGit: boolean = capability('supportsGit', true, true);
 export let supportsChat: boolean = capability('supportsChat', true, true);
 
 /**
- * Workspace switching support - local mode only (single virtual FS in cloud).
+ * Project folder switching support - local mode only (single virtual FS in cloud).
  */
-export let supportsWorkspaceSwitching: boolean = capability('supportsWorkspaceSwitching', true, false);
+export let supportsProjectFolderSwitching: boolean = capability('supportsProjectFolderSwitching', true, false);
 
 /**
  * Native folder-picker support - studio shells only (bridge files channel).
@@ -171,7 +171,7 @@ const CAPABILITY_REFRESH: Array<{
     | 'supportsSSH'
     | 'supportsGit'
     | 'supportsChat'
-    | 'supportsWorkspaceSwitching'
+    | 'supportsProjectFolderSwitching'
     | 'supportsFolderPicker'
     | 'supportsExport'
     | 'supportsInstances'
@@ -184,7 +184,12 @@ const CAPABILITY_REFRESH: Array<{
   { key: 'supportsSSH', local: true, cloud: false, set: (v) => (supportsSSH = v) },
   { key: 'supportsGit', local: true, cloud: true, set: (v) => (supportsGit = v) },
   { key: 'supportsChat', local: true, cloud: true, set: (v) => (supportsChat = v) },
-  { key: 'supportsWorkspaceSwitching', local: true, cloud: false, set: (v) => (supportsWorkspaceSwitching = v) },
+  {
+    key: 'supportsProjectFolderSwitching',
+    local: true,
+    cloud: false,
+    set: (v) => (supportsProjectFolderSwitching = v),
+  },
   { key: 'supportsFolderPicker', local: false, cloud: false, set: (v) => (supportsFolderPicker = v) },
   { key: 'supportsExport', local: true, cloud: false, set: (v) => (supportsExport = v) },
   { key: 'supportsInstances', local: false, cloud: true, set: (v) => (supportsInstances = v) },
@@ -203,7 +208,7 @@ function refreshFromAdapter(): void {
 
 // Host-set refresh: when an active host exists, every host-derivable binding
 // resolves from host.capabilities. The field names map 1:1 to HostCapabilities
-// (ssh, git, chat, workspaceSwitching, folderPicker, export, instances,
+// (ssh, git, chat, projectFolderSwitching, folderPicker, export, instances,
 // localTerminal, settings, automations, agentChanges). Idempotent: re-setting
 // from the same (stable) host yields the same values.
 const HOST_REFRESH: Array<{
@@ -211,7 +216,7 @@ const HOST_REFRESH: Array<{
     | 'ssh'
     | 'git'
     | 'chat'
-    | 'workspaceSwitching'
+    | 'projectFolderSwitching'
     | 'folderPicker'
     | 'export'
     | 'instances'
@@ -225,7 +230,7 @@ const HOST_REFRESH: Array<{
   { field: 'ssh', set: (v) => (supportsSSH = v) },
   { field: 'git', set: (v) => (supportsGit = v) },
   { field: 'chat', set: (v) => (supportsChat = v) },
-  { field: 'workspaceSwitching', set: (v) => (supportsWorkspaceSwitching = v) },
+  { field: 'projectFolderSwitching', set: (v) => (supportsProjectFolderSwitching = v) },
   { field: 'folderPicker', set: (v) => (supportsFolderPicker = v) },
   { field: 'export', set: (v) => (supportsExport = v) },
   { field: 'instances', set: (v) => (supportsInstances = v) },

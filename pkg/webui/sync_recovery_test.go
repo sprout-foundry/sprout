@@ -41,10 +41,10 @@ func newSyncTestAgent(t *testing.T) *agent.Agent {
 // set to "editor" so that isProviderAvailable* returns false, causing
 // getClientAgent to return ErrNoProviderConfigured. Returns the config dir.
 //
-// The workspace isolation matters: the provider gate is workspace-aware, so
-// a test server running with the repo's own workspace (a dev checkout's
+// The project folder isolation matters: the provider gate is project-folder-aware, so
+// a test server running with the repo's own project folder (a dev checkout's
 // pkg/webui/.sprout may configure a real provider) would allow agent creation.
-// Pointing the server's and default client's workspace roots at a temp dir
+// Pointing the server's and default client's project folders at a temp dir
 // keeps "no provider" semantics regardless of the checkout's local state.
 func newNoProviderConfig(t *testing.T, server *ReactWebServer) string {
 	t.Helper()
@@ -53,9 +53,9 @@ func newNoProviderConfig(t *testing.T, server *ReactWebServer) string {
 
 	if server != nil {
 		server.mutex.Lock()
-		server.workspaceRoot = tmpDir
+		server.projectFolder = tmpDir
 		if ctx := server.clientContexts[defaultWebClientID]; ctx != nil {
-			ctx.WorkspaceRoot = tmpDir
+			ctx.ProjectFolder = tmpDir
 		}
 		server.mutex.Unlock()
 	}
@@ -105,13 +105,13 @@ func TestHandleContainerRecoveryWithSeqs_Success(t *testing.T) {
 	server := newTestHeartbeatServer(t)
 
 	ag := newSyncTestAgent(t)
-	ag.SetFileMetadata("foo.txt", agent.WorkspaceFileMetadata{
+	ag.SetFileMetadata("foo.txt", agent.ProjectFolderFileMetadata{
 		BrowserSeq:          3,
 		ContainerSeq:        5,
 		LastSyncedBrowser:   3,
 		LastSyncedContainer: 3,
 	})
-	ag.SetFileMetadata("bar.txt", agent.WorkspaceFileMetadata{
+	ag.SetFileMetadata("bar.txt", agent.ProjectFolderFileMetadata{
 		BrowserSeq:          2,
 		ContainerSeq:        2,
 		LastSyncedBrowser:   2,
@@ -529,7 +529,7 @@ func TestHandleSyncRecoverMessage_Success_SyncOK(t *testing.T) {
 	pair := newTestingConnPair(t)
 
 	ag := newSyncTestAgent(t)
-	ag.SetFileMetadata("in_sync.txt", agent.WorkspaceFileMetadata{
+	ag.SetFileMetadata("in_sync.txt", agent.ProjectFolderFileMetadata{
 		BrowserSeq:          5,
 		ContainerSeq:        5,
 		LastSyncedBrowser:   5,

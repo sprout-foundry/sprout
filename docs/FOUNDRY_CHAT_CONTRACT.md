@@ -41,7 +41,7 @@ Check the status of a chat session.
 | `chat_id` | `chat_id` | No | Session identifier for continuity |
 | `provider` | `provider` | No | LLM provider override (e.g., `"openai"`) |
 | `model` | `model` | No | Model override (e.g., `"gpt-4"`) |
-| `workspace_root` | `workspace_root` | No | Project root for file context |
+| `project_folder` | `project_folder` | No | Project root for file context |
 | `system_prompt` | `system_prompt` | No | Custom system prompt |
 | _(from URL path)_ | `steer` | No | Set to `true` when path is `/api/query/steer` |
 

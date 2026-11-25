@@ -1,0 +1,36 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addTool",
+      "params": {
+        "description": "Returns large content",
+        "name": "big_file",
+        "parameters": {
+          "properties": {},
+          "type": "object"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "ok"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    }
+  ],
+  "description": "Placeholder: Large tool results are truncated to max configured length. Requires CLI-level truncation configuration.",
+  "name": "tool_result_truncation"
+}

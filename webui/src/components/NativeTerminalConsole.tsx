@@ -7,7 +7,12 @@ import {
   getTerminalFontFamilyExport,
   FONT_SIZE_DEFAULT_EXPORT,
 } from '../hooks/useTerminalXTerm';
-import { getWorkspaceCwd, resolveCdTarget, subscribeWorkspaceCwd, workspaceCwdLabel } from '../services/workspaceCwd';
+import {
+  getProjectFolderCwd,
+  resolveCdTarget,
+  subscribeProjectFolderCwd,
+  projectFolderCwdLabel,
+} from '../services/projectFolderCwd';
 
 /**
  * Native-mode interactive console (Track R, terminal portion).
@@ -24,9 +29,9 @@ import { getWorkspaceCwd, resolveCdTarget, subscribeWorkspaceCwd, workspaceCwdLa
  * One-shot command semantics: every line is an independent spawn (no PTY,
  * no interactive programs, no ctrl-C). `cd` is implemented console-side:
  * the console tracks a session directory (validated against the native fs
- * via a suppressed `pwd` spawn before committing, chrooted to the workspace
+ * via a suppressed `pwd` spawn before committing, chrooted to the project folder
  * root) and passes it with every spawn. Without a session `cd`, spawns use
- * the shared workspace cwd (services/workspaceCwd.ts; workspace root when
+ * the shared project folder cwd (services/projectFolderCwd.ts; project folder when
  * unset — exactly the pre-cwd behavior).
  */
 
@@ -35,7 +40,7 @@ type SpawnBridge = {
     command: string,
     opts?: {
       /** Working directory for this spawn (workspace-relative; omitted =
-       *  workspace root — exactly today's behavior). The native emulated
+       *  project folder — exactly today's behavior). The native emulated
        *  shell resolves the command against it; `pwd` prints it. */
       cwd?: string;
       onChunk?: (text: string) => void;
@@ -61,7 +66,7 @@ declare global {
 
 const WELCOME = ['\x1b[2mtype help for commands\x1b[0m'];
 
-/** Base prompt (workspace root): a subtle green `$ `. */
+/** Base prompt (project folder): a subtle green `$ `. */
 const PROMPT_ROOT = '\x1b[32m$\x1b[0m ';
 
 /**
@@ -80,20 +85,20 @@ export function NativeTerminalConsole(): React.ReactElement {
   const busyRef = useRef(false);
   const runLineRef = useRef<(line: string) => void>(() => {});
 
-  // Working directory shared with Files / Git / Agent (services/workspaceCwd).
+  // Working directory shared with Files / Git / Agent (services/projectFolderCwd).
   // Kept in a ref so the line-editor closure (created once on mount) always
   // renders the CURRENT prompt; re-renders on cwd change are unnecessary.
-  const cwdRef = useRef(getWorkspaceCwd());
-  const promptRef = useRef(makePrompt(workspaceCwdLabel(cwdRef.current)));
+  const cwdRef = useRef(getProjectFolderCwd());
+  const promptRef = useRef(makePrompt(projectFolderCwdLabel(cwdRef.current)));
   // Session directory set by `cd` (or null = follow the shared cwd). Lives
   // in a ref: the line-editor closure reads it at submit time, and unlike
   // the shared cwd it must NOT be reset by Files-panel cwd changes.
   const sessionCwdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = subscribeWorkspaceCwd((cwd) => {
+    const unsubscribe = subscribeProjectFolderCwd((cwd) => {
       cwdRef.current = cwd;
-      promptRef.current = makePrompt(workspaceCwdLabel(cwd));
+      promptRef.current = makePrompt(projectFolderCwdLabel(cwd));
     });
     return unsubscribe;
   }, []);
@@ -301,7 +306,7 @@ export function NativeTerminalConsole(): React.ReactElement {
         term.writeln('Pipes (|), sequences (;) and chains (&&) supported. All paths');
         term.writeln(
           cwd === ''
-            ? 'resolve from the workspace root. Ctrl-C cancels input.'
+            ? 'resolve from the project folder. Ctrl-C cancels input.'
             : `resolve from ${cwd}. Ctrl-C cancels input.`,
         );
         prompt();
@@ -315,7 +320,7 @@ export function NativeTerminalConsole(): React.ReactElement {
         return;
       }
 
-      // ── cd — session-scoped, chrooted to the workspace root ────────────
+      // ── cd — session-scoped, chrooted to the project folder ────────────
       // The native emulator is one-shot per line (no process to hold a
       // directory), so the console tracks the session dir here and passes
       // it with every spawn. Bare `cd` returns to following the shared
@@ -325,8 +330,8 @@ export function NativeTerminalConsole(): React.ReactElement {
         const arg = line.replace(/^cd\s*/, '').trim();
         if (arg === '') {
           sessionCwdRef.current = null; // follow the shared cwd again
-          cwdRef.current = getWorkspaceCwd();
-          promptRef.current = makePrompt(workspaceCwdLabel(cwdRef.current));
+          cwdRef.current = getProjectFolderCwd();
+          promptRef.current = makePrompt(projectFolderCwdLabel(cwdRef.current));
           prompt();
           return;
         }
@@ -356,7 +361,7 @@ export function NativeTerminalConsole(): React.ReactElement {
                 if (code === 0) {
                   sessionCwdRef.current = target;
                   cwdRef.current = target;
-                  promptRef.current = makePrompt(workspaceCwdLabel(target));
+                  promptRef.current = makePrompt(projectFolderCwdLabel(target));
                   term.writeln(`(session dir: ${target === '' ? '/' : `/${target}`})`);
                 } else {
                   term.writeln(`cd: no such directory: ${target === '' ? '/' : `/${target}`}`);
@@ -392,7 +397,7 @@ export function NativeTerminalConsole(): React.ReactElement {
         void bridge
           .terminalSpawn(line, {
             // Bridge contract: `cwd` is an OPTIONAL workspace-relative
-            // directory. Omitted (workspace root) → exactly today's
+            // directory. Omitted (project folder) → exactly today's
             // behavior; the native side treats a missing cwd as the root.
             ...(cwd === '' ? {} : { cwd }),
             onChunk: (text) => {

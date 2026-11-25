@@ -1,0 +1,225 @@
+package runner
+
+import (
+	"context"
+	"encoding/base64"
+	"fmt"
+	"net"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/credentials"
+)
+
+// daemonPort is the port the dev space image's daemon listens on.
+const daemonPort = 56000
+
+// readyTimeout bounds how long a fresh dev space has to answer /health.
+const readyTimeout = 3 * time.Minute
+
+// Dev space is a running dev space's daemon, reachable on loopback.
+type DevSpace struct {
+	ID   string
+	Port int
+	// Handle identifies it to its launcher (a container name, or a pid).
+	Handle string
+}
+
+// Launcher starts and stops dev spaces in one execution mode.
+type Launcher interface {
+	Start(ctx context.Context, task DevSpaceTask) (*DevSpace, error)
+	Stop(ctx context.Context, ws *DevSpace) error
+	Destroy(ctx context.Context, devSpaceID string, ws *DevSpace) error
+}
+
+var (
+	envNameRe    = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	devSpaceIDRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$`)
+)
+
+// reservedEnv is set by the runner and never by user env (GAP-2 filtering
+// mirrors the platform's deny-list).
+func reservedEnv(name string) bool {
+	if strings.HasPrefix(name, "SPROUT_") || strings.HasPrefix(name, "WORKSPACE_") {
+		return true
+	}
+	switch name {
+	case "REPO_URL", "PLATFORM_API_URL", "PATH", "HOME", "TMPDIR", "CODING_ENV_JWT_SECRET":
+		return true
+	}
+	return false
+}
+
+// devSpaceEnv is the environment a dev space daemon gets: its identity and
+// per-dev-space secret, the platform URL, git and LLM credentials, then the
+// user's own variables (never overriding the runner's).
+func devSpaceEnv(task DevSpaceTask) map[string]string {
+	env := map[string]string{
+		"SPROUT_MODE":  "daemon",
+		"WORKSPACE_ID": task.DevSpaceID,
+	}
+	if task.DevSpaceDir != "" {
+		// A local-directory dev space runs in place: the directory is
+		// the dev space root and there is no repo (the launchers skip
+		// the clone when workspace_dir is set; a task naming both is
+		// refused before it reaches a launcher). The daemon learns
+		// where its files live instead.
+		env["WORKSPACE_DIR"] = task.DevSpaceDir
+	} else {
+		env["REPO_URL"] = task.RepoURL
+		if host := repoHost(task.RepoURL); host != "" {
+			env["SPROUT_GIT_HOST"] = host
+		}
+	}
+	if task.TxnSecret != "" {
+		env["WORKSPACE_TOKEN"] = task.TxnSecret
+		env["SPROUT_AUTH_TOKEN"] = task.TxnSecret
+		env["SPROUT_WORKSPACE_TXN_SECRET"] = task.TxnSecret
+	}
+	if task.PlatformAPIURL != "" {
+		env["PLATFORM_API_URL"] = task.PlatformAPIURL
+	}
+	if task.GitToken != "" {
+		env["SPROUT_GIT_TOKEN"] = task.GitToken
+	}
+	if task.LLMKey != "" {
+		if IsGatewayProvider(task.LLMProvider) {
+			// The gateway key authenticates against the platform
+			// gateway (the provider file points there); it is not a
+			// public provider's key and must never reach one.
+			env[GatewayKeyEnvVar] = task.LLMKey
+			env["SPROUT_PROVIDER"] = GatewayProviderName
+		} else {
+			name := credentials.ProviderEnvVar(task.LLMProvider)
+			if name == "" {
+				name = "DEEPINFRA_API_KEY"
+			}
+			env[name] = task.LLMKey
+		}
+	}
+	// The task's model wins over the daemon's own default for the provider
+	// (SPROUT_MODEL outranks the config default in ResolveProviderModel).
+	// A model only makes sense for one provider, so when the task names a
+	// provider the runner knows it is pinned too; otherwise the daemon's
+	// auto-detected provider would get a model it may not serve. An
+	// unknown provider name is left out: the daemon refuses to start on a
+	// provider it cannot resolve.
+	if model := strings.TrimSpace(task.Model); model != "" {
+		env["SPROUT_MODEL"] = model
+		provider := strings.ToLower(strings.TrimSpace(task.LLMProvider))
+		if !IsGatewayProvider(provider) && credentials.ProviderEnvVar(provider) != "" {
+			env["SPROUT_PROVIDER"] = provider
+		}
+	}
+	for k, v := range task.UserEnv {
+		if !envNameRe.MatchString(k) || reservedEnv(k) {
+			continue
+		}
+		if _, taken := env[k]; !taken {
+			env[k] = v
+		}
+	}
+	return env
+}
+
+func repoHost(repoURL string) string {
+	u, err := url.Parse(repoURL)
+	if err != nil {
+		return ""
+	}
+	return u.Hostname()
+}
+
+// gitAuthEnv makes git authenticate to the repo's host as user with token
+// without the token appearing in any process's arguments (git reads
+// GIT_CONFIG_* from its environment). An empty user is guessed from the host.
+func gitAuthEnv(repoURL, user, token string) []string {
+	if token == "" {
+		return nil
+	}
+	if user == "" {
+		user = "oauth2"
+		if repoHost(repoURL) == "github.com" {
+			user = "x-access-token"
+		}
+	}
+	basic := base64.StdEncoding.EncodeToString([]byte(user + ":" + token))
+	return []string{
+		"GIT_CONFIG_COUNT=1",
+		"GIT_CONFIG_KEY_0=http.extraHeader",
+		"GIT_CONFIG_VALUE_0=Authorization: Basic " + basic,
+		"GIT_TERMINAL_PROMPT=0",
+	}
+}
+
+// devSpaceDir is the per-dev-space directory under the runner's state.
+func devSpaceDir(devSpaceID string) (string, error) {
+	if !devSpaceIDRe.MatchString(devSpaceID) {
+		return "", fmt.Errorf("invalid dev space id %q", devSpaceID)
+	}
+	base, err := DevSpacesDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, devSpaceID), nil
+}
+
+// freePort asks the OS for an unused loopback port.
+func freePort() (int, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = l.Close() }()
+	return l.Addr().(*net.TCPAddr).Port, nil
+}
+
+// waitReady polls the daemon's /health until it answers or ctx/timeout ends.
+func waitReady(ctx context.Context, port int) error {
+	ctx, cancel := context.WithTimeout(ctx, readyTimeout)
+	defer cancel()
+	client := &http.Client{Timeout: 3 * time.Second}
+	health := "http://127.0.0.1:" + strconv.Itoa(port) + "/health"
+	for {
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, health, nil)
+		if resp, err := client.Do(req); err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return nil
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("dev space daemon on port %d did not become ready: %w", port, ctx.Err())
+		case <-time.After(time.Second):
+		}
+	}
+}
+
+// writeEnvFile writes env as a KEY=VALUE file readable only by the owner, so
+// secrets reach `docker run` without appearing in process arguments.
+func writeEnvFile(dir string, env map[string]string) (string, error) {
+	f, err := os.CreateTemp(dir, ".env-*")
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = f.Close() }()
+	if err := f.Chmod(0o600); err != nil {
+		return "", err
+	}
+	for k, v := range env {
+		if strings.ContainsAny(v, "\r\n") {
+			return "", fmt.Errorf("env var %s contains a newline", k)
+		}
+		if _, err := fmt.Fprintf(f, "%s=%s\n", k, v); err != nil {
+			return "", err
+		}
+	}
+	return f.Name(), nil
+}

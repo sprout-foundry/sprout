@@ -1,6 +1,6 @@
-# The headless agent (`@sprout-foundry/workspace/agent`)
+# The headless agent (`@sprout-foundry/spaces/agent`)
 
-`@sprout-foundry/workspace/agent` runs Sprout's in-browser agent — the Go→WASM
+`@sprout-foundry/spaces/agent` runs Sprout's in-browser agent — the Go→WASM
 module the workspace runs when a host serves no daemon — as an engine for a
 host's own interface. It loads the module, selects a persona, registers the
 host's own tools, sends model calls to the host's chat endpoint, and streams
@@ -13,7 +13,7 @@ self-contained module (`dist/agent.js`); the WASM binary is fetched at runtime
 from the host's `wasmBase`.
 
 ```ts
-import { createAgent } from "@sprout-foundry/workspace/agent";
+import { createAgent } from "@sprout-foundry/spaces/agent";
 
 const agent = await createAgent({
   wasmBase: "/assets/sprout-wasm",   // where the host serves dist/wasm/
@@ -198,7 +198,7 @@ const agent = await createAgent({
 To give several agents the same persona, define it once on the runtime:
 
 ```ts
-import { definePersona } from '@sprout-foundry/workspace/agent';
+import { definePersona } from '@sprout-foundry/spaces/agent';
 
 const { id, warnings } = await definePersona(runtime, foundryPlannerDefinition);
 // then: createAgent({ ..., persona: id })
@@ -280,7 +280,7 @@ page that also mounts the workspace views shares the module with them.
 
 ## Serving the assets
 
-Serve the package's `dist/wasm/` (see [workspace-package.md](workspace-package.md#wasm-assets))
+Serve the package's `dist/wasm/` (see [spaces-package.md](spaces-package.md#wasm-assets))
 and pass its URL as `wasmBase`. The binary is large (tens of MB, much smaller
 compressed): serve it with `Content-Type: application/wasm` (streaming
 compilation) and long-lived caching, and call `loadSproutWasm({ wasmBase })`
@@ -288,7 +288,7 @@ early to fetch and compile it before the first message.
 
 ## Testing
 
-`npm test -w @sprout-foundry/workspace` runs the API's unit tests against a
+`npm test -w @sprout-foundry/spaces` runs the API's unit tests against a
 mocked module and, when a built binary exists (`make build-wasm`, or
 `SPROUT_WASM=<path>`), an integration test that drives the real module in
 Node against a stub model endpoint: a streamed reply, an `ask_user` round

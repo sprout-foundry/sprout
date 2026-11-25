@@ -33,9 +33,9 @@ func (ws *ReactWebServer) handleAPIGitPullRequest(w http.ResponseWriter, r *http
 		return
 	}
 
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 
-	result, err := gitops.CreatePullRequest(r.Context(), workspaceRoot, gitops.PullRequestRequest{
+	result, err := gitops.CreatePullRequest(r.Context(), projectFolder, gitops.PullRequestRequest{
 		Title: req.Title,
 		Body:  req.Body,
 		Base:  req.Base,

@@ -216,7 +216,7 @@ These fill in defaults for zero-valued fields. Called at config load time.
 |---|---|
 | `NotificationsConfig` | `MinSeconds=10` |
 | `EditApprovalConfig` | `Mode="off"` |
-| `PersistentContextConfig` | `ProactiveContextEnabled=true`, `MaxContextualResults=5`, `MinRelevanceScore=0.50`, `MaxContextChars=4000`, `WorkspaceScopedRetrieval=true`, `DriftDetectionEnabled=true`, `DriftThreshold=0.60`, `DriftCheckInterval=5` |
+| `PersistentContextConfig` | `ProactiveContextEnabled=true`, `MaxContextualResults=5`, `MinRelevanceScore=0.50`, `MaxContextChars=4000`, `ProjectFolderScopedRetrieval=true`, `DriftDetectionEnabled=true`, `DriftThreshold=0.60`, `DriftCheckInterval=5` |
 | `ComputerUseConfig` | `MaxActionsPerMinute=60`, `PanicKeyChord="ctrl+shift+escape"`, `DestructiveAppGate=true` |
 | `VisionConfig` | `ParallelWorkers=3`, `MaxParallelRequests=8`, `EnableBatchProcessing=true`, `MaxBatchSize=4` |
 | `ChangeTrackingConfig` | `Enabled=true`, `ShellWalkEnabled=true`, `MaxFiles=50000`, `MaxTotalBytes=32MiB`, `MaxDurationMs=500` |

@@ -73,15 +73,15 @@ describe('PlatformHome', () => {
   });
 
   it("offsets Home below the editor bar in the app's real nesting", () => {
-    // SP-160 §160a: the app renders its space through `SproutWorkspace`, so the
+    // SP-160 §160a: the app renders its space through `SproutSpaces`, so the
     // space's <main> is a DOM grandchild of `.app`
-    // (`.app > .sprout-workspace > main > .header-bar`). The offset query must
+    // (`.app > .sprout-spaces > main > .header-bar`). The offset query must
     // be a descendant query for that nesting, or `top` silently stays 0 and
     // Home hides under the editor bar.
     const app = document.createElement('div');
     app.className = 'app';
-    const workspaceRoot = document.createElement('div');
-    workspaceRoot.className = 'sprout-workspace';
+    const projectFolder = document.createElement('div');
+    projectFolder.className = 'sprout-spaces';
     const main = document.createElement('main');
     main.className = 'main-content';
     const header = document.createElement('div');
@@ -90,8 +90,8 @@ describe('PlatformHome', () => {
     // and lets the assertion distinguish "matched" from "not matched".
     Object.defineProperty(header, 'offsetHeight', { value: 35, configurable: true });
     main.appendChild(header);
-    workspaceRoot.appendChild(main);
-    app.appendChild(workspaceRoot);
+    projectFolder.appendChild(main);
+    app.appendChild(projectFolder);
     document.body.appendChild(app);
 
     try {

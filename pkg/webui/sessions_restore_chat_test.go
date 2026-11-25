@@ -55,7 +55,7 @@ func TestRestoreSessionScopesToRequestedChat(t *testing.T) {
 	}
 	savedID := agentA.GetSessionID()
 	agentA.AddMessage(api.Message{Role: "user", Content: "hello from the saved session"})
-	if err := agentA.SaveStateScoped(savedID, ws.workspaceRoot); err != nil {
+	if err := agentA.SaveStateScoped(savedID, ws.projectFolder); err != nil {
 		t.Fatalf("save state: %v", err)
 	}
 

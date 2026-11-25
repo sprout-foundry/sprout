@@ -13,7 +13,7 @@ import {
   switchChatSession,
   type ChatSessionsApi,
 } from '../services/chatSessions';
-import type { AppState, WorkspaceBusyInfo } from '../types/app';
+import type { AppState, ProjectFolderBusyInfo } from '../types/app';
 import { debugLog } from '../utils/log';
 import { toUserErrorMessage } from '../utils/errorMessage';
 import { notificationBus } from '../services/notificationBus';
@@ -92,8 +92,8 @@ export interface UseChatSessionManagerParams {
   activeChatIdRef: React.MutableRefObject<string | null>;
   queuedMessagesRef: React.MutableRefObject<QueuedMessage[]>;
   isProcessing: boolean;
-  /** The chat held back by workspace_busy, if any; its queued messages wait for the running chat. */
-  workspaceBusy?: WorkspaceBusyInfo | null;
+  /** The chat held back by project_folder_busy, if any; its queued messages wait for the running chat. */
+  projectFolderBusy?: ProjectFolderBusyInfo | null;
   /**
    * The chat transport. Omitted, the app's own `ApiService` singleton is
    * used; an embedding supplies one bound to its fetch so sends reach its
@@ -151,7 +151,7 @@ export function useChatSessionManager({
   activeChatIdRef,
   queuedMessagesRef,
   isProcessing,
-  workspaceBusy = null,
+  projectFolderBusy: projectFolderBusy = null,
   api,
   sessions,
 }: UseChatSessionManagerParams): UseChatSessionManagerReturn {
@@ -472,7 +472,7 @@ export function useChatSessionManager({
           branch,
           base_ref: baseRef || undefined,
           name: name || undefined,
-          auto_switch_workspace: autoSwitch,
+          auto_switch_project_folder: autoSwitch,
         });
         const newId = response.chat_session.id;
         const sessionsResp = await chatSessions.listChatSessions();
@@ -678,14 +678,14 @@ export function useChatSessionManager({
         setState((prev) => ({ inputValue: '' }));
         debugLog('[OK] Message sent successfully');
       } catch (error) {
-        // workspace_busy (SP-142 §3): another chat in this client context has
+        // project_folder_busy (SP-142 §3): another chat in this client context has
         // a query running — the server refuses to start a second concurrent
-        // runner on one workspace. Queue the message for this chat and hold
+        // runner on one project folder. Queue the message for this chat and hold
         // it until the running chat finishes (the drain effect waits while
-        // workspaceBusy names this chat). The optimistic bubble comes back
+        // projectFolderBusy names this chat). The optimistic bubble comes back
         // out: until it is sent it lives in the queue panel, not the
         // transcript.
-        if (error instanceof Error && (error as Error & { code?: string }).code === 'workspace_busy') {
+        if (error instanceof Error && (error as Error & { code?: string }).code === 'project_folder_busy') {
           const busy = error as Error & { code?: string; runningChatId?: string; runningChatName?: string };
           // Roll back the optimistic active-request bump — nothing is running
           // for THIS chat; the runner lives in the other chat.
@@ -699,7 +699,7 @@ export function useChatSessionManager({
             isProcessing: false,
             inputValue: '',
             messages: prev.messages.filter((m) => m.id !== userBubbleId),
-            workspaceBusy: {
+            projectFolderBusy: {
               chatId: targetChatId ?? '',
               runningChatId: busy.runningChatId ?? '',
               runningChatName: busy.runningChatName ?? 'another chat',
@@ -752,10 +752,10 @@ export function useChatSessionManager({
             return;
           }
         }
-        // workspace_stopping: the daemon is draining before the workspace
+        // dev_space_stopping: the daemon is draining before the project folder
         // stops. The server already reported it on the chat (a terminal error
         // event); only undo the optimistic running state here.
-        if (error instanceof Error && (error as Error & { code?: string }).code === 'workspace_stopping') {
+        if (error instanceof Error && (error as Error & { code?: string }).code === 'dev_space_stopping') {
           if (activeRequestsRef.current > 0) activeRequestsRef.current -= 1;
           setState(() => ({ isProcessing: activeRequestsRef.current > 0, lastError: error.message }));
           return;
@@ -967,7 +967,7 @@ export function useChatSessionManager({
     }
     const activeChat = activeChatIdRef.current;
     // Held back behind another chat's run: wait for it to finish.
-    if (workspaceBusy && workspaceBusy.chatId === (activeChat ?? '')) {
+    if (projectFolderBusy && projectFolderBusy.chatId === (activeChat ?? '')) {
       return;
     }
     const headIdx = queuedMessagesRef.current.findIndex(
@@ -998,12 +998,12 @@ export function useChatSessionManager({
     });
     // activeChatIdRef is a ref; isProcessing/queuedMessagesCount drive re-runs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isProcessing, handleSendMessage, queuedMessagesCount, activeChatIdRef.current, workspaceBusy]);
+  }, [isProcessing, handleSendMessage, queuedMessagesCount, activeChatIdRef.current, projectFolderBusy]);
 
-  // The running chat's completion normally clears workspaceBusy (event
+  // The running chat's completion normally clears projectFolderBusy (event
   // routing), but a missed event would hold the queue forever. While held,
   // poll the chat list and release once the running chat is idle.
-  const runningChatId = workspaceBusy?.runningChatId ?? '';
+  const runningChatId = projectFolderBusy?.runningChatId ?? '';
   useEffect(() => {
     if (!runningChatId) return;
     const timer = setInterval(() => {
@@ -1012,7 +1012,9 @@ export function useChatSessionManager({
         .then((resp) => {
           const running = (resp.chat_sessions ?? []).find((c) => c.id === runningChatId);
           if (running?.active_query) return;
-          setState((prev) => (prev.workspaceBusy?.runningChatId === runningChatId ? { workspaceBusy: null } : {}));
+          setState((prev) =>
+            prev.projectFolderBusy?.runningChatId === runningChatId ? { projectFolderBusy: null } : {},
+          );
         })
         .catch((err) => debugLog('[chat] busy re-check failed:', err));
     }, WORKSPACE_BUSY_RECHECK_MS);

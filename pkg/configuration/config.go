@@ -18,20 +18,20 @@ const (
 	ConfigDirName  = ".sprout"
 	ConfigFileName = "config.json"
 
-	// WorkspaceConfigFileName is the per-workspace config file. Deliberately
-	// different from ConfigFileName to avoid a collision when the workspace
+	// ProjectFolderConfigFileName is the per-project-folder config file. Deliberately
+	// different from ConfigFileName to avoid a collision when the project folder
 	// root is $HOME (both layers would otherwise share the same directory).
-	WorkspaceConfigFileName = "workspace.json"
+	ProjectFolderConfigFileName = "workspace.json"
 
 	// ConfigLocalFileName is the user-scope machine-local override file.
 	// Same schema as ConfigFileName, higher precedence, never committed.
 	// Lives in the config dir alongside config.json.
 	ConfigLocalFileName = "config.local.json"
 
-	// WorkspaceLocalFileName is the workspace-scope personal override file.
-	// Same schema as WorkspaceConfigFileName, higher precedence within the
-	// workspace layer, gitignored.
-	WorkspaceLocalFileName = "workspace.local.json"
+	// ProjectFolderLocalFileName is the project-folder-scope personal override file.
+	// Same schema as ProjectFolderConfigFileName, higher precedence within the
+	// project folder layer, gitignored.
+	ProjectFolderLocalFileName = "workspace.local.json"
 
 	APIKeysFileName = "api_keys.json"
 
@@ -157,6 +157,9 @@ type Config struct {
 
 	// ContextMode selects a named context-engine preset: "" (full default) | "full" | "low_context".
 	ContextMode ContextMode `json:"context_mode,omitempty"`
+	// MemoryPrompt: how memories enter the system prompt: "" or "index" (names; bodies via manage_memory), "full" (bodies), "off".
+	MemoryPrompt         string `json:"memory_prompt,omitempty"`
+	MemoryPromptMaxBytes int    `json:"memory_prompt_max_bytes,omitempty"` // 0: the 50 KB default
 
 	// RiskProfiles allows the user to override the baked-in rules for any named profile.
 	RiskProfiles map[string]AutoApproveRules `json:"risk_profiles,omitempty"`
@@ -191,8 +194,8 @@ type Config struct {
 	CommandHistoryByPath map[string][]string `json:"command_history_by_path,omitempty"`
 	HistoryIndexByPath   map[string]int      `json:"history_index_by_path,omitempty"`
 
-	// TrustedContentRoots records, per absolute workspace root, which paths the
-	// user classified as third-party content. Keyed by workspace root, then by
+	// TrustedContentRoots records, per absolute project folder, which paths the
+	// user classified as third-party content. Keyed by project folder, then by
 	// path relative to it ("." for the root itself). true = third-party.
 	TrustedContentRoots map[string]map[string]bool `json:"trusted_content_roots,omitempty"`
 
@@ -216,7 +219,7 @@ type Config struct {
 	// `/persona <id> disable`. The catalog entries themselves are never
 	// mutated; resolution checks this list and treats disabled IDs as absent.
 	DisabledPersonas []string `json:"disabled_personas,omitempty"`
-	// AcceptedPersonas records, per absolute workspace root, the content hash
+	// AcceptedPersonas records, per absolute project folder, the content hash
 	// of each project-scope persona file the person accepted (SP-175). A
 	// project persona is unusable until its current file hash matches its
 	// accepted hash; editing the file withdraws the acceptance.
@@ -302,7 +305,7 @@ type Config struct {
 	// Verification controls the turn-end verification run ("verified done"):
 	// the turn-end gate that runs the plan's acceptance checks and
 	// the repair loop. Off by default in the CLI; any config layer —
-	// global, project (workspace), or an embedding environment writing the
+	// global, project (project folder), or an embedding environment writing the
 	// same layers — enables it through the same "verification" section.
 	// Nil means off with the default repair-attempt limit.
 	Verification *VerificationConfig `json:"verification,omitempty"`
@@ -310,7 +313,7 @@ type Config struct {
 	// Quality controls the quality-after-edits step: the turn-end gate that
 	// runs the project's formatter and linter after a turn that changed
 	// application code and repairs the findings in the same turn. Off by
-	// default in the CLI; any config layer — global, project (workspace),
+	// default in the CLI; any config layer — global, project (project folder),
 	// or an embedding environment writing the same layers — enables it
 	// through the same "quality" section. Nil means off.
 	Quality *QualityConfig `json:"quality,omitempty"`
@@ -354,7 +357,7 @@ type Config struct {
 
 	// DisableLanguageGuard turns off the outbound language guard,
 	// which is on by default everywhere, including the CLI. Any
-	// config layer (global, workspace, session) may set this to true; the
+	// config layer (global, project folder, session) may set this to true; the
 	// layer merge tracks the key's presence, so an explicit false in a
 	// narrower layer re-enables the guard even over a broader layer's
 	// disable. Default: false (guard enabled). See LanguageGuardEnabled.

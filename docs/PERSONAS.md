@@ -358,7 +358,7 @@ A custom persona chooses what it can do *within what the person or host running 
 
 ### Surfaces
 
-- **Headless agent API** (`@sprout-foundry/workspace/agent`): `CreateAgentOptions.persona` is `string | PersonaDefinition`. An invalid definition makes `createAgent` reject with the validation errors. `definePersona(def)` registers a persona on the runtime for every agent it builds from then on.
+- **Headless agent API** (`@sprout-foundry/spaces/agent`): `CreateAgentOptions.persona` is `string | PersonaDefinition`. An invalid definition makes `createAgent` reject with the validation errors. `definePersona(def)` registers a persona on the runtime for every agent it builds from then on.
 - **CLI:** `/persona new <id> [--from <core-id>]`, `/persona list` (with source), `/persona show <id>` (effective prompt source and tool set), `/persona accept <id>`, and `sprout persona validate [path]`.
 - **Web UI:** the persona picker lists custom personas with their source. Creating and editing them in the Web UI is out of scope.
 - **Subagents:** a custom persona with `delegatable: true` can be spawned like any worker, governed by the existing `delegatable` / `can_spawn_non_delegatable` rules.

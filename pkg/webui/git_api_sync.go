@@ -11,7 +11,7 @@ import (
 )
 
 // handleAPISync serves the ETH-1 sync-on-resume reconciliation report for
-// the request's workspace: the pinned git.SyncReport JSON contract (same
+// the request's project folder: the pinned git.SyncReport JSON contract (same
 // object `sprout sync` prints) so the platform can probe a resumed
 // container over the daemon's HTTP API instead of shelling into it.
 //
@@ -37,7 +37,7 @@ import (
 //
 // Status codes: 200 for every reportable state — including not-a-repo and a
 // refused pull (reported as pull.result="error") — and 500 only for
-// catastrophic failure (unreadable workspace root, broken git).
+// catastrophic failure (unreadable project folder, broken git).
 func (ws *ReactWebServer) handleAPISync(w http.ResponseWriter, r *http.Request) {
 	// HEAD keeps proxies/health probes happy without a body copy.
 	if !requireMethods(w, r, http.MethodGet, http.MethodHead, http.MethodPost) {
@@ -64,7 +64,7 @@ func (ws *ReactWebServer) handleAPISync(w http.ResponseWriter, r *http.Request) 
 		syncCtx = context.WithoutCancel(r.Context())
 	}
 
-	report, err := gitops.RunSync(syncCtx, ws.getWorkspaceRootForRequest(r), attemptPull)
+	report, err := gitops.RunSync(syncCtx, ws.getProjectFolderForRequest(r), attemptPull)
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "sync_failed", err.Error())
 		return

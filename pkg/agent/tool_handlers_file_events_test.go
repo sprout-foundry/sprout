@@ -28,7 +28,7 @@ func newTestAgentWithEventBus(t *testing.T) (*Agent, *events.EventBus) {
 	}
 	agent.SetEventBus(bus)
 
-	// Enable unsafe mode so file operations outside the workspace root
+	// Enable unsafe mode so file operations outside the project folder
 	// don't trigger security approval prompts.
 	agent.SetUnsafeMode(true)
 
@@ -37,7 +37,7 @@ func newTestAgentWithEventBus(t *testing.T) (*Agent, *events.EventBus) {
 
 // expectFileChangedEvent waits for a file_changed event on the given channel
 // and verifies its type, file_path, and action fields.
-// It skips non-file_changed events (e.g., workspace_patch) that may arrive first.
+// It skips non-file_changed events (e.g., project_folder_patch) that may arrive first.
 func expectFileChangedEvent(t *testing.T, ch <-chan events.UIEvent, expectedPath, expectedAction string) map[string]interface{} {
 	t.Helper()
 
@@ -102,7 +102,7 @@ func TestEditFileEmitsFileChangedEvent(t *testing.T) {
 	ch := bus.Subscribe("edit_test")
 
 	tmpDir := t.TempDir()
-	agent.SetWorkspaceRoot(tmpDir)
+	agent.SetProjectFolder(tmpDir)
 	filePath := filepath.Join(tmpDir, "config.txt")
 
 	// Create initial file
@@ -319,7 +319,7 @@ func TestWriteFileNoEventBusDoesNotPanic(t *testing.T) {
 	agent.SetUnsafeMode(true)
 
 	tmpDir := t.TempDir()
-	agent.SetWorkspaceRoot(tmpDir)
+	agent.SetProjectFolder(tmpDir)
 	filePath := filepath.Join(tmpDir, "no-bus.txt")
 
 	assert.NotPanics(t, func() {
@@ -343,7 +343,7 @@ func TestEditFileNoEventBusDoesNotPanic(t *testing.T) {
 	agent.SetUnsafeMode(true)
 
 	tmpDir := t.TempDir()
-	agent.SetWorkspaceRoot(tmpDir)
+	agent.SetProjectFolder(tmpDir)
 	filePath := filepath.Join(tmpDir, "no-bus-edit.txt")
 
 	err := os.WriteFile(filePath, []byte("original content"), 0644)

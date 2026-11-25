@@ -109,10 +109,10 @@ vi.mock('../services/fileAccess', () => ({
   readFileWithConsent: vi.fn(),
 }));
 
-// EditorTabs fetches the workspace root (for Copy Absolute Path).
-const mockGetWorkspace = vi.fn().mockResolvedValue({ workspace_root: '/repo', daemon_root: '/repo' });
+// EditorTabs fetches the project folder (for Copy Absolute Path).
+const mockGetProjectFolder = vi.fn().mockResolvedValue({ project_folder: '/repo', daemon_root: '/repo' });
 vi.mock('../services/api/apiService', () => ({
-  ApiService: { getInstance: () => ({ getWorkspace: mockGetWorkspace }) },
+  ApiService: { getInstance: () => ({ getProjectFolder: mockGetProjectFolder }) },
 }));
 
 vi.mock('../services/notificationBus', () => ({
@@ -664,7 +664,7 @@ describe('EditorTabs file-path context menu items', () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
     setupFileTab();
-    // Let the workspace-root fetch resolve before clicking.
+    // Let the project-folder-root fetch resolve before clicking.
     await act(async () => {
       await Promise.resolve();
     });

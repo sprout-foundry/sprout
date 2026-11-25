@@ -156,7 +156,7 @@ func TestExecuteCommit_Attribution(t *testing.T) {
 		runGit("config", "commit.gpgsign", "false")
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a\n"), 0o644))
 		runGit("add", "a.txt")
-		a.SetWorkspaceRoot(dir)
+		a.SetProjectFolder(dir)
 		if on {
 			setCommitAttribution(t, a, func(cfg *configuration.Config) {
 				cfg.CommitAttribution = configuration.CommitAttributionTrailer

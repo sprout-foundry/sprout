@@ -1,0 +1,49 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addStreamChunks",
+      "params": {
+        "chunks": [
+          {
+            "reasoning": "Thinking..."
+          },
+          {
+            "content": "Answer."
+          }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "method": "agent.runStream",
+      "params": {
+        "query": "think"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 3,
+      "type": "noError"
+    },
+    {
+      "id": 3,
+      "result": {
+        "result": "Answer."
+      },
+      "type": "response"
+    }
+  ],
+  "description": "Output manager publishes reasoning events for reasoning content",
+  "name": "publish_reasoning"
+}

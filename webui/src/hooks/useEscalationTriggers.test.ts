@@ -81,7 +81,7 @@ describe('useEscalationTriggers — exit 127 (command unavailable)', () => {
       repoURL: 'https://github.com/acme/app',
     });
     expect(captured.blocking[0].message).toBe(
-      '“go build ./...” needs a real runtime. Run it in your cloud workspace (pay-per-run) or keep browsing.',
+      '“go build ./...” needs a real runtime. Run it in your cloud dev space (pay-per-run) or keep browsing.',
     );
   });
 

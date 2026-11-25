@@ -213,7 +213,7 @@ func LoadTranscriptSnapshot(path string) (*TranscriptSnapshot, error) {
 }
 
 // ListTranscriptSnapshots returns snapshot file paths for the given
-// session within the current workspace scope, sorted oldest-first.
+// session within the current project folder scope, sorted oldest-first.
 func ListTranscriptSnapshots(sessionID, workingDir string) ([]string, error) {
 	return changes.ListTranscriptSnapshots(sessionID, workingDir)
 }

@@ -1,0 +1,49 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addStreamChunks",
+      "params": {
+        "chunks": [
+          {
+            "content": "Buffered"
+          },
+          {
+            "content": " content"
+          }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "method": "agent.runStream",
+      "params": {
+        "query": "Buffer me"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 3,
+      "type": "noError"
+    },
+    {
+      "id": 3,
+      "result": {
+        "result": "Buffered content"
+      },
+      "type": "response"
+    }
+  ],
+  "description": "StreamingBuffer contains accumulated content during streaming",
+  "name": "stream_buffer"
+}

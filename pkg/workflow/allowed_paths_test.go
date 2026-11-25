@@ -505,7 +505,7 @@ func TestValidate_InitialAllowedPaths_ValidEntry(t *testing.T) {
 		"initial": {
 			"prompt": "do the thing",
 			"allowed_paths": [
-				{"path": "/tmp/work", "mode": "read_write", "reason": "Temp workspace"}
+				{"path": "/tmp/work", "mode": "read_write", "reason": "Temp project folder"}
 			]
 		}
 	}`

@@ -68,7 +68,7 @@ declare global {
   interface Window {
     /** Proxy base path for SSH proxy sessions (e.g. `/ssh/mac-mini%3A%3A%24HOME`). */
     SPROUT_PROXY_BASE?: string;
-    /** Initial workspace path set by the server after SSH connect. */
+    /** Initial project folder path set by the server after SSH connect. */
     SPROUT_INITIAL_WORKSPACE?: string;
   }
 }

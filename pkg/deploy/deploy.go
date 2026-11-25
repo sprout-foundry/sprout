@@ -10,7 +10,7 @@
 // without dragging in a network client. An adapter is a small package that
 // implements the interface; the fake (fake.go) is one such adapter, for tests.
 //
-// A build is described by DeployRequest. The build runs in the workspace
+// A build is described by DeployRequest. The build runs in the project folder
 // (from the starter manifest's build command) and the adapter uploads the
 // resulting output — it never rebuilds on the target. The request carries the
 // build output directory. The build-and-upload orchestration lives in

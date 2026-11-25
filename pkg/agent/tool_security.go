@@ -87,9 +87,9 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 	if !usedUnifiedGate {
 		var wsRoot string
 		if agent != nil {
-			wsRoot = agent.GetWorkspaceRoot()
+			wsRoot = agent.GetProjectFolder()
 		}
-		secResult := tools.ClassifyToolCallWithWorkspace(toolName, args, wsRoot)
+		secResult := tools.ClassifyToolCallWithProjectFolder(toolName, args, wsRoot)
 		if secResult.ShouldBlock || secResult.ShouldPrompt || secResult.IntentConfirmation {
 			// Workflow-declared auto-approval for run_automate.
 			workflowAutoApproved := false
@@ -245,7 +245,7 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 	if agent != nil {
 		env.EventBus = agent.GetEventBus()
 		// Use effectiveCwd so tools honor cd commands during a session.
-		env.WorkspaceRoot = agent.effectiveCwd()
+		env.ProjectFolder = agent.effectiveCwd()
 		// Route tool output through the agent's output system in verbose mode.
 		if cfg := agent.GetConfig(); cfg != nil && cfg.OutputVerbosity == configuration.OutputVerbosityVerbose {
 			env.OutputWriter = newOutputRouter(agent)
@@ -293,7 +293,7 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 		env.UnsafeShellMode = agent.GetUnsafeShellMode()
 		// Wire Gate 1's path-tier classifier into ToolEnv so handlers can consult it up-front.
 		env.FileAccessClassifier = agent
-		// Interactive off-workspace approval: handlers consult this for
+		// Interactive off-project-folder approval: handlers consult this for
 		// "prompt" verdicts instead of failing with the raw error.
 		env.FileAccessPrompter = agent
 		// Per-turn identical-call guard so a repeated read_file returns a

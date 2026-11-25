@@ -50,7 +50,7 @@ function Chat(props: ChatProps): JSX.Element {
     onInputChange = noop,
     isProcessing = false,
     lastError = null,
-    workspaceBusy = null,
+    projectFolderBusy: projectFolderBusy = null,
     onSendAnyway,
     onDismissBusy,
     toolExecutions = [],
@@ -68,7 +68,7 @@ function Chat(props: ChatProps): JSX.Element {
     queryCount,
     chatId,
     worktreePath,
-    workspaceRoot: _workspaceRoot,
+    projectFolder: _projectFolder,
     onWorktreeChange: _onWorktreeChange,
     providerAvailable,
     onRequestProviderSetup,
@@ -299,7 +299,7 @@ function Chat(props: ChatProps): JSX.Element {
           isProcessing={isProcessing}
           filteredToolExecutions={filteredToolExecutions}
           lastError={footerError}
-          workspaceBusy={workspaceBusy}
+          projectFolderBusy={projectFolderBusy}
           onSendAnyway={onSendAnyway}
           onDismissBusy={onDismissBusy}
           showExpiredSessionRecovery={showExpiredSessionRecovery}
@@ -310,7 +310,7 @@ function Chat(props: ChatProps): JSX.Element {
     ),
     [
       isProcessing,
-      workspaceBusy,
+      projectFolderBusy,
       onSendAnyway,
       onDismissBusy,
       onReviewChange,

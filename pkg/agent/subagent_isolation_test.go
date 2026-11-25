@@ -54,14 +54,14 @@ func isolatedSpec(t *testing.T, parent *Agent, dir string) *subagentLaunchSpec {
 	if err != nil {
 		t.Fatalf("prepareSubagentLaunch: %v", err)
 	}
-	spec.subagentWorkspaceRoot = dir
+	spec.subagentProjectFolder = dir
 	return spec
 }
 
 // waitSubagentWorktree polls for the isolated worktree's SEED to complete:
-// createIsolatedWorkspace creates the worktree (at HEAD) first and seeds it
-// afterwards — the seed's `git diff HEAD` runs in the PARENT workspace, so
-// anything that mutates the workspace between `worktree add` and the seed's
+// createIsolatedProjectFolder creates the worktree (at HEAD) first and seeds it
+// afterwards — the seed's `git diff HEAD` runs in the PARENT project folder, so
+// anything that mutates the project folder between `worktree add` and the seed's
 // baseline commit gets baked into the baseline (that raced the old fixed
 // sleep and turned the conflict test into a clean-apply). The deterministic
 // "seed done" signal is the baseline commit itself.
@@ -101,15 +101,15 @@ func worktreesLeft(t *testing.T, home string) []string {
 	return dirs
 }
 
-func TestCreateIsolatedWorkspace_SeedsUncommittedState(t *testing.T) {
+func TestCreateIsolatedProjectFolder_SeedsUncommittedState(t *testing.T) {
 	isolationTestHome(t)
 	dir := initReviewRepo(t)
 	writeFile(t, dir, "main.go", "package main\n\n// uncommitted edit\nfunc main() {}\n")
 	writeFile(t, dir, "new.go", "package main\n")
 
-	ws, err := createIsolatedWorkspace(context.Background(), dir, "t1")
+	ws, err := createIsolatedProjectFolder(context.Background(), dir, "t1")
 	if err != nil {
-		t.Fatalf("createIsolatedWorkspace: %v", err)
+		t.Fatalf("createIsolatedProjectFolder: %v", err)
 	}
 	defer ws.remove(context.Background())
 
@@ -124,7 +124,7 @@ func TestCreateIsolatedWorkspace_SeedsUncommittedState(t *testing.T) {
 		t.Errorf("fresh worktree should have no changes vs baseline: %v %q", err, patch)
 	}
 
-	if _, err := createIsolatedWorkspace(context.Background(), t.TempDir(), "t2"); err == nil {
+	if _, err := createIsolatedProjectFolder(context.Background(), t.TempDir(), "t2"); err == nil {
 		t.Error("non-git directory accepted")
 	}
 }
@@ -134,7 +134,7 @@ func TestRunIsolatedSubagent_AppliesChangesBack(t *testing.T) {
 	parent, _ := newReviewTestRunner(t)
 	dir := initReviewRepo(t)
 	writeFile(t, dir, "notes.txt", "keep me\n")
-	parent.workspaceRoot = dir
+	parent.projectFolder = dir
 	scriptWriter(parent, "main.go", "package main\n\nfunc main() { println(\"from subagent\") }\n", nil, nil)
 
 	result := runIsolatedSubagent(context.Background(), parent, isolatedSpec(t, parent, dir), "iso-1", true)
@@ -144,7 +144,7 @@ func TestRunIsolatedSubagent_AppliesChangesBack(t *testing.T) {
 	}
 	got, _ := os.ReadFile(filepath.Join(dir, "main.go"))
 	if !strings.Contains(string(got), "from subagent") {
-		t.Fatalf("change not applied to the workspace:\n%s\n%s", got, result.Output)
+		t.Fatalf("change not applied to the project folder:\n%s\n%s", got, result.Output)
 	}
 	if !strings.HasPrefix(result.Output, "[isolated run] Changes applied") {
 		t.Errorf("outcome not reported: %q", result.Output)
@@ -154,7 +154,7 @@ func TestRunIsolatedSubagent_AppliesChangesBack(t *testing.T) {
 	}
 	for _, c := range result.FileChanges {
 		if c.FilePath != filepath.Join(dir, "main.go") {
-			t.Errorf("tracked change not remapped to the workspace in its own path form: %s (want %s)", c.FilePath, filepath.Join(dir, "main.go"))
+			t.Errorf("tracked change not remapped to the project folder in its own path form: %s (want %s)", c.FilePath, filepath.Join(dir, "main.go"))
 		}
 	}
 	if left := worktreesLeft(t, home); len(left) != 0 {
@@ -162,11 +162,11 @@ func TestRunIsolatedSubagent_AppliesChangesBack(t *testing.T) {
 	}
 }
 
-func TestRunIsolatedSubagent_ConflictLeavesWorkspaceUntouched(t *testing.T) {
+func TestRunIsolatedSubagent_ConflictLeavesProjectFolderUntouched(t *testing.T) {
 	home := isolationTestHome(t)
 	parent, _ := newReviewTestRunner(t)
 	dir := initReviewRepo(t)
-	parent.workspaceRoot = dir
+	parent.projectFolder = dir
 	hold := make(chan struct{})
 	scriptWriter(parent, "main.go", "package main\n\nfunc main() { println(\"subagent\") }\n", nil, hold)
 
@@ -180,9 +180,9 @@ func TestRunIsolatedSubagent_ConflictLeavesWorkspaceUntouched(t *testing.T) {
 	// slower macOS runners: when the primary's write landed before the
 	// worktree was seeded, the seed carried the primary's version, the
 	// subagent patch applied cleanly on top of it, and the apply-back
-	// overwrote the workspace — the exact "conflict modified the workspace"
+	// overwrote the project folder — the exact "conflict modified the project folder"
 	// failure). The scripted factory blocks on `hold` until after the write,
-	// so existence of the worktree (seeded from the pre-write workspace) is
+	// so existence of the worktree (seeded from the pre-write project folder) is
 	// the correct sequencing point.
 	waitSubagentWorktree(t, home)
 	writeFile(t, dir, "main.go", "package main\n\nfunc main() { println(\"primary\") }\n")
@@ -194,7 +194,7 @@ func TestRunIsolatedSubagent_ConflictLeavesWorkspaceUntouched(t *testing.T) {
 	result := <-done
 	got, _ := os.ReadFile(filepath.Join(dir, "main.go"))
 	if !strings.Contains(string(got), "primary") || strings.Contains(string(got), "subagent") {
-		t.Fatalf("conflicting patch modified the workspace:\n%s\n--- result.Output:\n%s", got, result.Output)
+		t.Fatalf("conflicting patch modified the project folder:\n%s\n--- result.Output:\n%s", got, result.Output)
 	}
 	if !strings.Contains(result.Output, "no longer apply cleanly") || len(result.FileChanges) != 0 {
 		t.Errorf("conflict not reported: %q", result.Output)
@@ -218,7 +218,7 @@ func TestFinishIsolatedRun_UncleanRunsAreNotApplied(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			home := isolationTestHome(t)
 			dir := initReviewRepo(t)
-			ws, err := createIsolatedWorkspace(context.Background(), dir, "u")
+			ws, err := createIsolatedProjectFolder(context.Background(), dir, "u")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -247,7 +247,7 @@ func TestBackgroundWriter_RunsIsolated(t *testing.T) {
 	isolationTestHome(t)
 	a, _ := newBackgroundTestAgent(t, "", 0)
 	dir := initReviewRepo(t)
-	a.workspaceRoot = dir
+	a.projectFolder = dir
 	scriptWriter(a, "main.go", "package main\n\nfunc main() { println(\"background coder\") }\n", nil, nil)
 
 	bg, isolate, err := resolveSubagentBackground(a, "coder", map[string]any{"background": true})

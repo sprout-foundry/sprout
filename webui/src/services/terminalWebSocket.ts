@@ -20,7 +20,7 @@ const DOM_BRIDGE_SUPPRESSED_TYPES: ReadonlySet<string> = new Set(['output', 'err
  * The PTY WebSocket URL, most specific first: an explicit build-time
  * VITE_TERMINAL_WS_URL; then `/terminal` under the active backend's base (a
  * daemon backend's own base when the host named one, else the host transport's
- * `apiBaseURL`), so a host that embeds the workspace reaches the PTY on the
+ * `apiBaseURL`), so a host that embeds the project folder reaches the PTY on the
  * same backend its `/api/terminal/*` calls go to; then the page origin's
  * `/terminal`, through the SSH proxy base when the page is served behind the
  * local reverse proxy. An empty base is the same-origin sentinel and falls

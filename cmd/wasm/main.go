@@ -22,7 +22,7 @@ func main() {
 	// The shell's home holds its config; the project gets its own directory.
 	home := wasmshell.ShellEnv.Get("HOME")
 	os.MkdirAll(home, 0755)
-	_ = setWorkspaceRoot(workspaceRoot)
+	_ = setProjectFolder(projectFolder)
 
 	// Plug our IndexedDB store into the wasmshell package.
 	wasmshell.SetStoreWriter(store)
@@ -38,7 +38,7 @@ func main() {
 		"executeCommandAsync": js.FuncOf(executeCommandAsyncFunc),
 		"autoComplete":        js.FuncOf(autoCompleteFunc),
 		"getCwd":              js.FuncOf(getCwdFunc),
-		"getWorkspaceRoot":    js.FuncOf(getWorkspaceRootFunc),
+		"getWorkspaceRoot":    js.FuncOf(getProjectFolderFunc),
 		"changeDir":           js.FuncOf(changeDirFunc),
 		"writeFile":           js.FuncOf(writeFileFunc),
 		"writeFileBytes":      js.FuncOf(writeFileBytesFunc),
@@ -117,9 +117,9 @@ func initFunc(this js.Value, args []js.Value) interface{} {
 				os.MkdirAll(h, 0755)
 				wasmshell.ShellEnv.Set("HOME", h)
 			}
-			if ws := cfg.Get("workspace"); ws.Type() == js.TypeString {
-				if err := setWorkspaceRoot(ws.String()); err != nil {
-					return "init: workspace: " + err.Error()
+			if ws := cfg.Get("projectFolder"); ws.Type() == js.TypeString {
+				if err := setProjectFolder(ws.String()); err != nil {
+					return "init: project folder: " + err.Error()
 				}
 			}
 		}
@@ -178,13 +178,13 @@ func getCwdFunc(this js.Value, args []js.Value) interface{} {
 	return cwd
 }
 
-// getWorkspaceRootFunc returns the project directory the host's paths are
+// getProjectFolderFunc returns the project directory the host's paths are
 // relative to.
-func getWorkspaceRootFunc(this js.Value, args []js.Value) interface{} {
-	return workspaceRoot
+func getProjectFolderFunc(this js.Value, args []js.Value) interface{} {
+	return projectFolder
 }
 
-// changeDirFunc makes a directory the workspace: the host's paths, the
+// changeDirFunc makes a directory the project folder: the host's paths, the
 // agent and the shell all work from it.
 func changeDirFunc(this js.Value, args []js.Value) interface{} {
 	type result struct {
@@ -199,7 +199,7 @@ func changeDirFunc(this js.Value, args []js.Value) interface{} {
 	}
 
 	dir := args[0].String()
-	target := workspacePath(dir)
+	target := projectFolderPath(dir)
 	info, err := os.Stat(target)
 	if err != nil || !info.IsDir() {
 		r := result{Error: fmt.Sprintf("cd: %s: No such directory", dir)}
@@ -207,13 +207,13 @@ func changeDirFunc(this js.Value, args []js.Value) interface{} {
 		return string(data)
 	}
 
-	if err := setWorkspaceRoot(target); err != nil {
+	if err := setProjectFolder(target); err != nil {
 		r := result{Error: fmt.Sprintf("cd: %s: %s", dir, err.Error())}
 		data, _ := json.Marshal(r)
 		return string(data)
 	}
 
-	r := result{CWD: workspaceRoot}
+	r := result{CWD: projectFolder}
 	data, _ := json.Marshal(r)
 	return string(data)
 }
@@ -227,7 +227,7 @@ func writeFileFunc(this js.Value, args []js.Value) interface{} {
 	path := args[0].String()
 	content := args[1].String()
 
-	if err := wasmshell.SyncWriteFile(workspacePath(path), content); err != nil {
+	if err := wasmshell.SyncWriteFile(projectFolderPath(path), content); err != nil {
 		return err.Error()
 	}
 	return ""
@@ -243,7 +243,7 @@ func writeFileBytesFunc(this js.Value, args []js.Value) interface{} {
 	}
 	data := make([]byte, args[1].Get("length").Int())
 	js.CopyBytesToGo(data, args[1])
-	path := workspacePath(args[0].String())
+	path := projectFolderPath(args[0].String())
 	if dir := filepath.Dir(path); dir != "" && dir != "." && dir != "/" {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return err.Error()
@@ -269,7 +269,7 @@ func readFileFunc(this js.Value, args []js.Value) interface{} {
 	}
 
 	path := args[0].String()
-	content, err := wasmshell.ReadFileContent(workspacePath(path))
+	content, err := wasmshell.ReadFileContent(projectFolderPath(path))
 	if err != nil {
 		r := result{Error: err.Error()}
 		data, _ := json.Marshal(r)
@@ -288,7 +288,7 @@ func listDirFunc(this js.Value, args []js.Value) interface{} {
 		path = args[0].String()
 	}
 
-	jsonStr, err := wasmshell.ListDirEntryJSON(workspacePath(path))
+	jsonStr, err := wasmshell.ListDirEntryJSON(projectFolderPath(path))
 	if err != nil {
 		type result struct {
 			Error string `json:"error"`
@@ -301,14 +301,14 @@ func listDirFunc(this js.Value, args []js.Value) interface{} {
 	return jsonStr
 }
 
-// walkFilesFunc returns the workspace's whole quick-open file index as one
+// walkFilesFunc returns the project folder's whole quick-open file index as one
 // JSON document (same row shape as the daemon's /api/file-index). One
 // JS→WASM crossing replaces the palette's per-directory listDir crawl.
 func walkFilesFunc(this js.Value, args []js.Value) interface{} {
-	root := workspaceRoot
+	root := projectFolder
 	if len(args) > 0 {
 		if p := args[0].String(); p != "" && p != "/" {
-			root = workspacePath(p)
+			root = projectFolderPath(p)
 		}
 	}
 
@@ -332,7 +332,7 @@ func deleteFileFunc(this js.Value, args []js.Value) interface{} {
 	}
 
 	path := args[0].String()
-	if err := wasmshell.DeleteFilePath(workspacePath(path)); err != nil {
+	if err := wasmshell.DeleteFilePath(projectFolderPath(path)); err != nil {
 		return err.Error()
 	}
 	return ""

@@ -10,7 +10,7 @@ import (
 // handleAPIChatSessionMessages handles GET /api/chat-sessions/messages?chat_id=X
 //
 // Read-only fetch of a chat session's messages. Unlike /switch it does NOT
-// change the client's active chat, agent pointer, or workspace root — it
+// change the client's active chat, agent pointer, or project folder — it
 // exists so a background chat pane (a chat buffer open in a non-active
 // split pane) can refresh its transcript while events stream to it, without
 // disturbing the active chat anywhere else in the UI.

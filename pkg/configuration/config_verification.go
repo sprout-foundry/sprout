@@ -2,7 +2,7 @@ package configuration
 
 // VerificationConfig controls the verification run ("verified done").
 // The section is off by default in the CLI; a config layer —
-// global, project (workspace), or an embedding environment writing the
+// global, project (project folder), or an embedding environment writing the
 // same layers — opts in with `{"verification": {"enabled": true}}`.
 type VerificationConfig struct {
 	// Enabled gates the turn-end verification run. Off by

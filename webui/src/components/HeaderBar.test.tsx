@@ -5,7 +5,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 vi.mock('./MenuBar', () => ({ default: () => null }));
 vi.mock('./UserMenu', () => ({ UserMenu: () => null }));
 vi.mock('./UsageChip', () => ({ UsageChip: () => null }));
-vi.mock('./WorkspaceBar', () => ({ default: () => null }));
+vi.mock('./ProjectFolderBar', () => ({ default: () => null }));
 // CreditsChip reads the host; HeaderBar's own tests don't provide one.
 vi.mock('./CreditsChip', () => ({ CreditsChip: () => null }));
 let activeRepo: string | undefined;
@@ -15,7 +15,7 @@ import { HostProvider, headlessHost } from '../host';
 import type { SproutHost } from '../host';
 import { setActiveHost } from '../host/accessor';
 import { cloudHost } from '../host/platform';
-import { __resetFullWorkspaceForTests } from '../services/fullWorkspace';
+import { __resetDevSpacesForTests } from '../services/cloudDevSpace';
 import HeaderBar from './HeaderBar';
 
 // These cover the classic layout, still available as ?layout=classic.
@@ -34,7 +34,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   activeRepo = undefined;
-  __resetFullWorkspaceForTests();
+  __resetDevSpacesForTests();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -66,7 +66,7 @@ async function renderHeader(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString();
-      if (url.endsWith('/workspace/availability')) {
+      if (url.endsWith('/dev-space/availability')) {
         if (availability === 'unknown') {
           return new Response(null, { status: 503 });
         }
@@ -95,7 +95,7 @@ async function renderHeader(
 }
 
 describe('HeaderBar Start Building', () => {
-  it('is hidden when the deployment has no workspace compute', async () => {
+  it('is hidden when the deployment has no dev space compute', async () => {
     // A definitive available:false from the typed endpoint hides the button.
     await renderHeader(200, '', 'unavailable');
     expect(container.querySelector('.start-building-btn')).toBeNull();

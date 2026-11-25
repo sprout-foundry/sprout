@@ -1,12 +1,12 @@
 /**
- * The WASM asset seam for a host that mounts the workspace package.
+ * The WASM asset seam for a host that mounts the project folder package.
  *
  * The package ships its WASM assets content-hashed under `dist/wasm/` and
  * declares that directory as the `./wasm/` subpath export (SP-160 §160e). A
  * host serves those files at a URL it owns — its bundler copies `dist/wasm/`
  * to some path — so the loader must be told that base rather than guess it from
  * `window.location`. This context is that one seam: a host wraps its tree in
- * `WasmAssetsProvider` (or passes `wasmBase` to `SproutWorkspace` /
+ * `WasmAssetsProvider` (or passes `wasmBase` to `SproutSpaces` /
  * `SproutProviders`) and the WASM loader resolves the manifest and the assets
  * against it. The loader reads a module-level value as well as the context,
  * because a service (not a component) performs the load.
@@ -76,7 +76,7 @@ export interface WasmAssetsProviderProps {
  * Provide the WASM asset base to the subtree (and to the module-level
  * accessor the loader reads). A host serving `dist/wasm/` at `/assets/sprout-wasm`
  * renders `<WasmAssetsProvider wasmBase="/assets/sprout-wasm">` around its
- * workspace, or passes `wasmBase` to `SproutWorkspace`.
+ * project folder, or passes `wasmBase` to `SproutSpaces`.
  */
 export function WasmAssetsProvider({ wasmBase = null, children }: WasmAssetsProviderProps): JSX.Element {
   const normalized = normalizeWasmBase(wasmBase);

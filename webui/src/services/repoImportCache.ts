@@ -2,12 +2,12 @@
  * IndexedDB persistence for `?repo=` imports.
  *
  * The editor's file tree lives in the in-memory WASM VFS: on a page reload
- * the workspace is gone. This cache stores the imported file manifest so a
+ * the project folder is gone. This cache stores the imported file manifest so a
  * reload can re-seed the VFS without hitting the network clone again.
  *
  * Keyed by the `?repo=` URL (the value the bootstrap checks), entry holds
  * the canonical `owner/name` plus the file list. A `__last_repo__` pointer
- * remembers the most recent workspace for future "continue where you left
+ * remembers the most recent project folder for future "continue where you left
  * off" support.
  *
  * The module reads `globalThis.indexedDB` lazily so unit tests can stub it
@@ -21,7 +21,7 @@ export interface RepoImportCacheEntry {
   importedAt: string;
 }
 
-const DB_NAME = 'sprout-workspace';
+const DB_NAME = 'sprout-spaces';
 const DB_VERSION = 1;
 const STORE = 'repo-imports';
 const LAST_REPO_KEY = '__last_repo__';
@@ -112,7 +112,7 @@ export async function loadRepoImport(repoKey: string): Promise<RepoImportCacheEn
   }
 }
 
-/** Remember the most recently imported workspace (best-effort). */
+/** Remember the most recently imported project folder (best-effort). */
 export async function setLastRepo(repoKey: string): Promise<void> {
   if (!indexedDb()) return;
   try {
@@ -122,7 +122,7 @@ export async function setLastRepo(repoKey: string): Promise<void> {
   }
 }
 
-/** The most recently imported workspace key, or null. */
+/** The most recently imported project folder key, or null. */
 export async function getLastRepo(): Promise<string | null> {
   if (!indexedDb()) return null;
   try {

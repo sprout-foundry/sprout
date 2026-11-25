@@ -2,18 +2,18 @@
  * cloudTxn.ts — typed client for the ETH-2 transactional escalation surface.
  *
  * When the browser WASM shell cannot run a command (exit 127 — no compilers
- * there), the work can be executed inside the user's cloud workspace
+ * there), the work can be executed inside the user's cloud dev space
  * container as a three-phase transaction (see docs/txn-protocol.md):
  *
- *   POST /workspace/txn                      → resolve/create the workspace
- *   POST /workspace/txn/{ws}/txn             → open (201) / 409 busy
- *   POST /workspace/txn/{ws}/txn/{id}/push   → apply browser file deltas
- *   POST /workspace/txn/{ws}/txn/{id}/run    → execute the command
- *   POST /workspace/txn/{ws}/txn/{id}/pull   → container deltas back
- *   POST /workspace/txn/{ws}/txn/{id}/finish → close
+ *   POST /dev-space/txn                      → resolve/create the dev space
+ *   POST /dev-space/txn/{ws}/txn             → open (201) / 409 busy
+ *   POST /dev-space/txn/{ws}/txn/{id}/push   → apply browser file deltas
+ *   POST /dev-space/txn/{ws}/txn/{id}/run    → execute the command
+ *   POST /dev-space/txn/{ws}/txn/{id}/pull   → container deltas back
+ *   POST /dev-space/txn/{ws}/txn/{id}/finish → close
  *
- * The workspace may be Fly-hosted or hosted on the user's own runner
- * (SP-BUILDER-12); the platform routes per workspace backend, so the client
+ * The dev space may be Fly-hosted or hosted on the user's own runner
+ * (SP-BUILDER-12); the platform routes per dev space backend, so the client
  * never needs to know which.
  *
  * All calls use RELATIVE paths through clientFetch, so the CloudAdapter
@@ -105,13 +105,13 @@ export interface TxnFinishResult {
   stop_initiated?: boolean;
 }
 
-export interface TxnWorkspace {
-  workspace_id?: string;
+export interface TxnDevSpace {
+  dev_space_id?: string;
   repo_url?: string;
   status?: string;
   /** "fly" | "runner" | "firecracker" | "docker" (legacy). */
   backend?: string;
-  /** Set on runner-hosted rows; only GET /workspace/{id} returns it. */
+  /** Set on runner-hosted rows; only GET /dev-space/{id} returns it. */
   runner_id?: string;
   [key: string]: unknown;
 }
@@ -140,15 +140,15 @@ async function toTxnError(res: Response, action: string): Promise<Error> {
   }
 }
 
-// ── Workspace resolution ────────────────────────────────────────────────────
+// ── Dev space resolution ────────────────────────────────────────────────────
 
 /**
- * Where the workspace should live (SP-159 §159d): "auto" lets the platform
+ * Where the dev space should live (SP-159 §159d): "auto" lets the platform
  * pick (the user's runner when one is available, else the cloud hosts),
  * "fly" is Fly specifically, "runner" pins one of the user's runners by id.
- * "cloud" (create only) is the cloud-only create the full-workspace start
+ * "cloud" (create only) is the cloud-only create the full-dev-space start
  * uses: the platform's cloud hosts, never the caller's runner — see
- * fullWorkspace.ts, which posts it directly rather than through here.
+ * cloudDevSpace.ts, which posts it directly rather than through here.
  */
 export type TxnHostChoice = { host: 'auto' } | { host: 'fly' } | { host: 'runner'; runnerId: string };
 
@@ -180,21 +180,21 @@ async function getJSON<T>(url: string): Promise<T | null> {
 }
 
 /**
- * GET /workspace/txn/resolve — the caller's live workspace for the repo on
+ * GET /dev-space/txn/resolve — the caller's live dev space for the repo on
  * the chosen host (the platform filters by host and runner, newest first).
  */
-function resolveWorkspace(repoURL: string, choice: TxnHostChoice): Promise<TxnWorkspace | null> {
+function resolveDevSpace(repoURL: string, choice: TxnHostChoice): Promise<TxnDevSpace | null> {
   const params = new URLSearchParams({ repo_url: repoURL });
   if (choice.host !== 'auto') params.set('host', choice.host);
   if (choice.host === 'runner') params.set('runner_id', choice.runnerId);
-  return getJSON<TxnWorkspace>('/workspace/txn/resolve?' + params.toString());
+  return getJSON<TxnDevSpace>('/dev-space/txn/resolve?' + params.toString());
 }
 
-async function createWorkspace(repoURL: string, choice: TxnHostChoice): Promise<TxnWorkspace> {
+async function createDevSpace(repoURL: string, choice: TxnHostChoice): Promise<TxnDevSpace> {
   const body: Record<string, string> = { repo_url: repoURL, host: choice.host };
   if (choice.host === 'runner') body.runner_id = choice.runnerId;
   const createRes = await fetchWithTimeout(
-    '/workspace/txn',
+    '/dev-space/txn',
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -204,73 +204,73 @@ async function createWorkspace(repoURL: string, choice: TxnHostChoice): Promise<
     TXN_OPEN_TIMEOUT_MS,
   );
   if (!createRes.ok) {
-    const err = await toTxnError(createRes, 'Cloud workspace resolve');
+    const err = await toTxnError(createRes, 'Cloud dev space resolve');
     if (choice.host === 'runner' && createRes.status === 409 && err.message === 'runner_unavailable') {
       throw new RunnerUnavailableError(choice.runnerId);
     }
     throw err;
   }
-  const created = (await createRes.json()) as TxnWorkspace;
-  if (typeof created?.workspace_id !== 'string' || created.workspace_id === '') {
-    throw new TypeError('Cloud workspace resolve response is missing workspace_id');
+  const created = (await createRes.json()) as TxnDevSpace;
+  if (typeof created?.dev_space_id !== 'string' || created.dev_space_id === '') {
+    throw new TypeError('Cloud dev space resolve response is missing dev_space_id');
   }
   return created;
 }
 
 /**
- * Find the caller's workspace for `repoURL` on the chosen host, creating one
+ * Find the caller's dev space for `repoURL` on the chosen host, creating one
  * when none exists. With "auto" the platform picks the host (resolve any
  * backend, else create where it decides). With "fly" or a pinned runner the
- * chosen host wins even when the user also has a workspace for the repo
- * elsewhere. A pinned runner that cannot take the workspace rejects with
+ * chosen host wins even when the user also has a dev space for the repo
+ * elsewhere. A pinned runner that cannot take the dev space rejects with
  * RunnerUnavailableError.
  */
-export async function resolveTxnWorkspace(
+export async function resolveTxnDevSpace(
   repoURL: string,
   choice: TxnHostChoice = AUTO_CHOICE,
-): Promise<{ workspaceId: string; created: boolean }> {
+): Promise<{ devSpaceId: string; created: boolean }> {
   if (typeof repoURL !== 'string' || repoURL.trim() === '') {
     throw new TypeError('repoURL is required');
   }
 
   // A failed resolve is not fatal — fall through to create, which reports
   // its own (more specific) error. Create is idempotent for a runner, and
-  // resumes the existing Fly workspace for the cloud.
-  const existing = await resolveWorkspace(repoURL, choice);
-  if (typeof existing?.workspace_id === 'string' && existing.workspace_id !== '') {
-    noteWorkspaceResolved(existing.workspace_id);
-    return { workspaceId: existing.workspace_id, created: false };
+  // resumes the existing Fly dev space for the cloud.
+  const existing = await resolveDevSpace(repoURL, choice);
+  if (typeof existing?.dev_space_id === 'string' && existing.dev_space_id !== '') {
+    noteDevSpaceResolved(existing.dev_space_id);
+    return { devSpaceId: existing.dev_space_id, created: false };
   }
 
-  const created = await createWorkspace(repoURL, choice);
-  const workspaceId = created.workspace_id as string;
-  noteWorkspaceResolved(workspaceId);
-  return { workspaceId, created: true };
+  const created = await createDevSpace(repoURL, choice);
+  const devSpaceId = created.dev_space_id as string;
+  noteDevSpaceResolved(devSpaceId);
+  return { devSpaceId, created: true };
 }
 
 // ── Backend-aware txn addressing (SP-BUILDER-12) ────────────────────────────
 //
-// The txn lifecycle lives at /workspace/txn/{ws}/txn/... for every backend —
-// the platform dispatches per workspace (runner-hosted workspaces get the
+// The txn lifecycle lives at /dev-space/txn/{ws}/txn/... for every backend —
+// the platform dispatches per dev space (runner-hosted dev spaces get the
 // bearer-proxied path, Firecracker ones the fleet's, Fly keeps its billing
 // semantics). These helpers only exist so in-flight escalations that resolved
-// a workspace under the old /workspace/fly contract keep working: anything
-// without a recorded backend still addresses /workspace/fly.
+// a dev space under the old /dev-space/fly contract keep working: anything
+// without a recorded backend still addresses /dev-space/fly.
 
-const resolvedWorkspaces = new Set<string>();
+const resolvedDevSpaces = new Set<string>();
 
-function noteWorkspaceResolved(workspaceId: string): void {
-  resolvedWorkspaces.add(workspaceId);
+function noteDevSpaceResolved(devSpaceId: string): void {
+  resolvedDevSpaces.add(devSpaceId);
 }
 
-function txnBase(workspaceId: string): string {
-  return resolvedWorkspaces.has(workspaceId) ? 'txn' : 'fly';
+function txnBase(devSpaceId: string): string {
+  return resolvedDevSpaces.has(devSpaceId) ? 'txn' : 'fly';
 }
 
 // ── Txn lifecycle ───────────────────────────────────────────────────────────
 
-function txnURL(workspaceId: string, txnId: string, suffix = ''): string {
-  return `/workspace/${txnBase(workspaceId)}/${encodeURIComponent(workspaceId)}/txn/${encodeURIComponent(txnId)}${suffix}`;
+function txnURL(devSpaceId: string, txnId: string, suffix = ''): string {
+  return `/dev-space/${txnBase(devSpaceId)}/${encodeURIComponent(devSpaceId)}/txn/${encodeURIComponent(txnId)}${suffix}`;
 }
 
 async function postJSON<T>(url: string, action: string, body?: unknown, timeoutMs?: number): Promise<T> {
@@ -285,11 +285,11 @@ async function postJSON<T>(url: string, action: string, body?: unknown, timeoutM
   return (await res.json()) as T;
 }
 
-/** Open a transaction. 409 when one is already open for the workspace. */
-export async function createTxn(workspaceId: string): Promise<{ txn_id: string; status: string; expires_at?: string }> {
-  if (typeof workspaceId !== 'string' || workspaceId === '') throw new TypeError('workspaceId is required');
+/** Open a transaction. 409 when one is already open for the dev space. */
+export async function createTxn(devSpaceId: string): Promise<{ txn_id: string; status: string; expires_at?: string }> {
+  if (typeof devSpaceId !== 'string' || devSpaceId === '') throw new TypeError('devSpaceId is required');
   const res = await postJSON<{ txn_id?: string; status?: string; expires_at?: string }>(
-    `/workspace/${txnBase(workspaceId)}/${encodeURIComponent(workspaceId)}/txn`,
+    `/dev-space/${txnBase(devSpaceId)}/${encodeURIComponent(devSpaceId)}/txn`,
     'Cloud txn open',
     {},
     TXN_OPEN_TIMEOUT_MS,
@@ -300,25 +300,25 @@ export async function createTxn(workspaceId: string): Promise<{ txn_id: string; 
   return { txn_id: res.txn_id, status: res.status ?? 'push', expires_at: res.expires_at };
 }
 
-export function txnPush(workspaceId: string, txnId: string, manifest: TxnManifest): Promise<TxnPushResult> {
-  return postJSON<TxnPushResult>(txnURL(workspaceId, txnId, '/push'), 'Cloud txn push', manifest);
+export function txnPush(devSpaceId: string, txnId: string, manifest: TxnManifest): Promise<TxnPushResult> {
+  return postJSON<TxnPushResult>(txnURL(devSpaceId, txnId, '/push'), 'Cloud txn push', manifest);
 }
 
 export function txnRun(
-  workspaceId: string,
+  devSpaceId: string,
   txnId: string,
   command: string,
   timeoutSeconds = TXN_RUN_TIMEOUT_SECONDS,
 ): Promise<TxnRunResult> {
   if (typeof command !== 'string' || command.trim() === '') throw new TypeError('command is required');
-  return postJSON<TxnRunResult>(txnURL(workspaceId, txnId, '/run'), 'Cloud txn run', {
+  return postJSON<TxnRunResult>(txnURL(devSpaceId, txnId, '/run'), 'Cloud txn run', {
     command,
     timeout_seconds: timeoutSeconds,
   });
 }
 
-export async function txnPull(workspaceId: string, txnId: string): Promise<TxnManifest> {
-  const res = await clientFetch(txnURL(workspaceId, txnId, '/pull'), { method: 'POST', credentials: 'include' });
+export async function txnPull(devSpaceId: string, txnId: string): Promise<TxnManifest> {
+  const res = await clientFetch(txnURL(devSpaceId, txnId, '/pull'), { method: 'POST', credentials: 'include' });
   if (!res.ok) throw await toTxnError(res, 'Cloud txn pull');
   const manifest = (await res.json()) as TxnManifest;
   return {
@@ -330,8 +330,8 @@ export async function txnPull(workspaceId: string, txnId: string): Promise<TxnMa
   };
 }
 
-export async function txnStatus(workspaceId: string, txnId: string): Promise<TxnStatus> {
-  const res = await clientFetch(txnURL(workspaceId, txnId), { method: 'GET', credentials: 'include' });
+export async function txnStatus(devSpaceId: string, txnId: string): Promise<TxnStatus> {
+  const res = await clientFetch(txnURL(devSpaceId, txnId), { method: 'GET', credentials: 'include' });
   if (!res.ok) throw await toTxnError(res, 'Cloud txn status');
   const status = (await res.json()) as TxnStatus;
   if (typeof status?.txn_id !== 'string' || status.txn_id === '') {
@@ -340,6 +340,6 @@ export async function txnStatus(workspaceId: string, txnId: string): Promise<Txn
   return status;
 }
 
-export function txnFinish(workspaceId: string, txnId: string): Promise<TxnFinishResult> {
-  return postJSON<TxnFinishResult>(txnURL(workspaceId, txnId, '/finish'), 'Cloud txn finish', {});
+export function txnFinish(devSpaceId: string, txnId: string): Promise<TxnFinishResult> {
+  return postJSON<TxnFinishResult>(txnURL(devSpaceId, txnId, '/finish'), 'Cloud txn finish', {});
 }

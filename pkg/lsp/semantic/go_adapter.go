@@ -117,7 +117,7 @@ func runGoHover(input ToolInput) (ToolResult, error) {
 	posArg := fmt.Sprintf("%s:%d:%d", input.FilePath, pos.Line, pos.Column)
 
 	cmd := exec.Command(goplsPath, "hover", posArg)
-	cmd.Dir = input.WorkspaceRoot
+	cmd.Dir = input.ProjectFolder
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -138,7 +138,7 @@ func runGoHover(input ToolInput) (ToolResult, error) {
 }
 
 // runGoReferences finds all references to the symbol at the given position
-// across the entire workspace (not just the current file like runGoRename).
+// across the entire project folder (not just the current file like runGoRename).
 func runGoReferences(input ToolInput) (ToolResult, error) {
 	goplsPath, err := exec.LookPath("gopls")
 	if err != nil {
@@ -155,7 +155,7 @@ func runGoReferences(input ToolInput) (ToolResult, error) {
 	posArg := fmt.Sprintf("%s:%d:%d", input.FilePath, pos.Line, pos.Column)
 
 	cmd := exec.Command(goplsPath, "references", "-d", posArg)
-	cmd.Dir = input.WorkspaceRoot
+	cmd.Dir = input.ProjectFolder
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -206,9 +206,9 @@ func runGoReferences(input ToolInput) (ToolResult, error) {
 			log.Printf("[semantic] failed to read reference file %s: %v", refFile, err)
 		}
 
-		// Make the file path relative to workspace root
+		// Make the file path relative to project folder
 		displayPath := refFile
-		if rel, relErr := filepath.Rel(input.WorkspaceRoot, refFile); relErr == nil {
+		if rel, relErr := filepath.Rel(input.ProjectFolder, refFile); relErr == nil {
 			displayPath = filepath.ToSlash(rel)
 		}
 
@@ -222,7 +222,7 @@ func runGoReferences(input ToolInput) (ToolResult, error) {
 	}
 
 	// Sort: current file first, then alphabetical
-	curRel, _ := filepath.Rel(input.WorkspaceRoot, input.FilePath)
+	curRel, _ := filepath.Rel(input.ProjectFolder, input.FilePath)
 	curRel = filepath.ToSlash(curRel)
 	sort.Slice(locations, func(i, j int) bool {
 		if locations[i].FilePath == locations[j].FilePath {

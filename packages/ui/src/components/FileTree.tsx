@@ -69,7 +69,7 @@ export interface FileTreeProps {
   /** Callback after an item is deleted */
   onDeleteItem?: (path: string) => void;
   /** Workspace root path (for absolute path copying) */
-  workspaceRoot?: string;
+  projectFolder?: string;
   /** Optional pre-loaded file tree data. When provided, this takes priority over internal fetch for initial load.
    *  Consumers should memoize this prop (e.g., with useMemo) to avoid unnecessary re-renders. */
   files?: FileInfo[];
@@ -110,7 +110,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       onRefresh,
       onItemCreated,
       onDeleteItem,
-      workspaceRoot,
+      projectFolder,
       files: filesProp,
       onFetchFiles,
       onCreateFile,
@@ -280,16 +280,16 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
     // buffers (absolute — LSP document URIs need the real on-disk location),
     // the search panel and the tree itself (workspace-relative). The tree's
     // nodes are always workspace-relative, so an absolute path must lose its
-    // workspace-root prefix first. Splitting an absolute path unchanged
+    // project-folder-root prefix first. Splitting an absolute path unchanged
     // yields ancestors like "Users", "Users/dev" that match no node: nothing
     // expands and no row highlights.
     const toTreePath = useCallback(
       (filePath: string): string => {
         let relative = filePath.replace(/\\/g, '/');
 
-        // Strip the workspace root prefix when the path is absolute (or
+        // Strip the project folder prefix when the path is absolute (or
         // spelled with the root's own name, e.g. "proj/src/a.ts").
-        const roots = [workspaceRoot, rootPath]
+        const roots = [projectFolder, rootPath]
           .filter((r): r is string => typeof r === 'string' && r !== '' && r !== '.')
           .map((r) => r.replace(/\\/g, '/').replace(/\/+$/, ''));
         for (const root of roots) {
@@ -304,7 +304,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
         }
         return relative.replace(/^\/+/, '');
       },
-      [workspaceRoot, rootPath],
+      [projectFolder, rootPath],
     );
 
     const getAncestors = useCallback(
@@ -910,13 +910,13 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       (absolute = false) => {
         const paths = Array.from(multiSelect.selectedPaths);
         if (paths.length === 0) return;
-        const text = absolute && workspaceRoot
-          ? paths.map((p) => `${workspaceRoot.replace(/\/+$/, '')}/${p}`).join('\n')
+        const text = absolute && projectFolder
+          ? paths.map((p) => `${projectFolder.replace(/\/+$/, '')}/${p}`).join('\n')
           : paths.join('\n');
         copyToClipboard(text);
         setContextMenu(null);
       },
-      [multiSelect.selectedPaths, workspaceRoot],
+      [multiSelect.selectedPaths, projectFolder],
     );
 
     // ── Keyboard handler for file-list ────────────────────────────────
@@ -1611,7 +1611,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
               <ClipboardCopy size={14} />
               <span>Copy relative paths</span>
             </button>
-            {workspaceRoot && (
+            {projectFolder && (
               <button className="context-menu-item" onClick={() => handleCopyPaths(true)}>
                 <ClipboardCopy size={14} />
                 <span>Copy absolute paths</span>
@@ -1684,11 +1684,11 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
                 >
                   Copy relative path
                 </button>
-                {workspaceRoot && (
+                {projectFolder && (
                   <button
                     className="context-menu-item"
                     onClick={() => {
-                      copyToClipboard(`${workspaceRoot.replace(/\/+$/, '')}/${contextMenu.file.path}`);
+                      copyToClipboard(`${projectFolder.replace(/\/+$/, '')}/${contextMenu.file.path}`);
                       setContextMenu(null);
                     }}
                   >

@@ -27,7 +27,7 @@ type IndexResult struct {
 	SkippedDirs []string     `json:"skipped_dirs,omitempty"`
 }
 
-// IndexLimits bounds a workspace walk so a pathological tree cannot pin the
+// IndexLimits bounds a project folder walk so a pathological tree cannot pin the
 // server. Defaults match the frontend's previous crawl caps.
 type IndexLimits struct {
 	MaxFiles     int
@@ -47,11 +47,11 @@ func DefaultIndexLimits() IndexLimits {
 }
 
 // BuildFileIndex walks root once and returns every non-ignored file
-// (workspace-relative slash paths) up to the limits. Directories matched by
-// the workspace's ignore rules are pruned wholesale; directories in
+// (project-folder-relative slash paths) up to the limits. Directories matched by
+// the project folder's ignore rules are pruned wholesale; directories in
 // SkipDirNames are counted as skipped so the UI can explain a truncated
 // index. Index is relative-path based: files carry no absolute paths, so an
-// index built for one workspace can never leak rows into another.
+// index built for one project folder can never leak rows into another.
 // `.git` is always pruned.
 func BuildFileIndex(root string, limits IndexLimits) IndexResult {
 	if limits.MaxFiles <= 0 {
@@ -163,7 +163,7 @@ func DefaultSkipDirectories() map[string]bool {
 		".vs":           true,
 		// TCC-protected / never-a-project home folders (macOS, XDG, Windows
 		// profile, cloud-sync roots): listing these raises macOS privacy
-		// prompts when the workspace resolves to $HOME.
+		// prompts when the project folder resolves to $HOME.
 		"Library":      true,
 		"Applications": true,
 		"Documents":    true,

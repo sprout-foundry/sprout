@@ -805,10 +805,10 @@ func TestMergeMissingDefaultSkills(t *testing.T) {
 }
 
 // =============================================================================
-// GetWorkspaceConfigPath
+// GetProjectFolderConfigPath
 // =============================================================================
 
-func TestGetWorkspaceConfigPath(t *testing.T) {
+func TestGetProjectFolderConfigPath(t *testing.T) {
 	tests := []struct {
 		name     string
 		root     string
@@ -835,17 +835,17 @@ func TestGetWorkspaceConfigPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := GetWorkspaceConfigPath(tt.root)
+			result := GetProjectFolderConfigPath(tt.root)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
 
 // =============================================================================
-// IsWorkspaceConfigPresent
+// IsProjectFolderConfigPresent
 // =============================================================================
 
-func TestIsWorkspaceConfigPresent(t *testing.T) {
+func TestIsProjectFolderConfigPresent(t *testing.T) {
 	t.Run("returns true when config file exists", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		// Create the .sprout/config.json path
@@ -853,17 +853,17 @@ func TestIsWorkspaceConfigPresent(t *testing.T) {
 		require.NoError(t, os.MkdirAll(configDir, 0755))
 		require.NoError(t, os.WriteFile(filepath.Join(configDir, "config.json"), []byte("{}"), 0644))
 
-		assert.True(t, IsWorkspaceConfigPresent(tmpDir))
+		assert.True(t, IsProjectFolderConfigPresent(tmpDir))
 	})
 
 	t.Run("returns false when config file does not exist", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		assert.False(t, IsWorkspaceConfigPresent(tmpDir))
+		assert.False(t, IsProjectFolderConfigPresent(tmpDir))
 	})
 
 	t.Run("returns false when .sprout dir does not exist", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		assert.False(t, IsWorkspaceConfigPresent(tmpDir))
+		assert.False(t, IsProjectFolderConfigPresent(tmpDir))
 	})
 }
 

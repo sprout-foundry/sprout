@@ -1,0 +1,36 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addTool",
+      "params": {
+        "description": "Flaky tool",
+        "name": "flaky",
+        "parameters": {
+          "properties": {},
+          "type": "object"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "ok"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    }
+  ],
+  "description": "Placeholder: After timeout, circuit breaker enters half-open state, allows a probe call, then closes on success. Requires timing control and circuit breaker state assertions.",
+  "name": "circuit_breaker_half_open"
+}

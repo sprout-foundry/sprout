@@ -1,0 +1,142 @@
+package runner
+
+import (
+	"encoding/base64"
+	"strings"
+	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+)
+
+func TestDevSpaceEnvAppliesTheTaskModelForEveryProvider(t *testing.T) {
+	cases := []struct {
+		name         string
+		task         DevSpaceTask
+		wantModel    string
+		wantProvider string
+	}{
+		{"public provider", DevSpaceTask{LLMProvider: "openai", LLMKey: "sk", Model: " gpt-test "}, "gpt-test", "openai"},
+		{"gateway", DevSpaceTask{LLMProvider: "gateway", LLMKey: "gw", Model: "m1"}, "m1", GatewayProviderName},
+		{"model without key", DevSpaceTask{LLMProvider: "deepseek", Model: "deepseek-chat"}, "deepseek-chat", "deepseek"},
+		{"unknown provider is not pinned", DevSpaceTask{LLMProvider: "nope", LLMKey: "k", Model: "m2"}, "m2", ""},
+		{"no model leaves the daemon default", DevSpaceTask{LLMProvider: "openai", LLMKey: "sk"}, "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.task.DevSpaceID = "ws-1"
+			env := devSpaceEnv(tc.task)
+			if env["SPROUT_MODEL"] != tc.wantModel {
+				t.Errorf("SPROUT_MODEL = %q, want %q", env["SPROUT_MODEL"], tc.wantModel)
+			}
+			if env["SPROUT_PROVIDER"] != tc.wantProvider {
+				t.Errorf("SPROUT_PROVIDER = %q, want %q", env["SPROUT_PROVIDER"], tc.wantProvider)
+			}
+		})
+	}
+}
+
+// The daemon resolves its starting model with configuration.ResolveProviderModel;
+// the env the runner sets must win over the config's provider default there.
+func TestTaskModelTakesEffectInTheDaemonsResolution(t *testing.T) {
+	env := devSpaceEnv(DevSpaceTask{DevSpaceID: "ws-1", LLMProvider: "openai", LLMKey: "sk", Model: "task-model"})
+	t.Setenv("SPROUT_PROVIDER", env["SPROUT_PROVIDER"])
+	t.Setenv("SPROUT_MODEL", env["SPROUT_MODEL"])
+	provider, model, err := configuration.ResolveProviderModel(configuration.NewConfig(), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if provider != "openai" || model != "task-model" {
+		t.Errorf("resolved %s/%s, want openai/task-model", provider, model)
+	}
+}
+
+func TestDevSpaceEnvUserVarsNeverOverrideTheRunner(t *testing.T) {
+	env := devSpaceEnv(DevSpaceTask{
+		DevSpaceID: "ws-1", RepoURL: "https://github.com/o/r", TxnSecret: "s3cret",
+		GitToken: "gh-tok", LLMProvider: "openai", LLMKey: "sk-llm",
+		UserEnv: map[string]string{
+			"NPM_TOKEN":         "npm-1",
+			"SPROUT_AUTH_TOKEN": "spoofed",
+			"WORKSPACE_TOKEN":   "spoofed",
+			"REPO_URL":          "https://evil.example/r",
+			"PATH":              "/evil",
+			"BAD-NAME":          "x",
+			"OPENAI_API_KEY":    "user-wins-only-if-unset",
+		},
+	})
+	want := map[string]string{
+		"SPROUT_AUTH_TOKEN": "s3cret",
+		"WORKSPACE_TOKEN":   "s3cret",
+		"REPO_URL":          "https://github.com/o/r",
+		"SPROUT_GIT_TOKEN":  "gh-tok",
+		"SPROUT_GIT_HOST":   "github.com",
+		"OPENAI_API_KEY":    "sk-llm",
+		"NPM_TOKEN":         "npm-1",
+	}
+	for k, v := range want {
+		if env[k] != v {
+			t.Errorf("%s = %q, want %q", k, env[k], v)
+		}
+	}
+	for _, k := range []string{"PATH", "BAD-NAME"} {
+		if _, ok := env[k]; ok {
+			t.Errorf("%s must not be settable from user env", k)
+		}
+	}
+}
+
+func TestGitAuthEnvKeepsTheTokenOutOfArguments(t *testing.T) {
+	env := gitAuthEnv("https://github.com/o/r", "", "gh-tok")
+	joined := strings.Join(env, "\n")
+	if !strings.Contains(joined, "GIT_CONFIG_KEY_0=http.extraHeader") || strings.Contains(joined, "gh-tok") {
+		t.Errorf("token must be base64'd into a config env var, not passed raw: %v", env)
+	}
+	if gitAuthEnv("https://github.com/o/r", "", "") != nil {
+		t.Error("no token, no auth env")
+	}
+}
+
+func TestGitAuthEnvUser(t *testing.T) {
+	basic := func(user string) string {
+		return "GIT_CONFIG_VALUE_0=Authorization: Basic " + base64.StdEncoding.EncodeToString([]byte(user+":tok"))
+	}
+	cases := []struct{ url, user, want string }{
+		{"https://github.com/o/r", "", "x-access-token"},
+		{"https://gitlab.com/g/sub/r", "", "oauth2"},
+		{"https://bitbucket.org/w/r", "x-token-auth", "x-token-auth"},
+	}
+	for _, c := range cases {
+		env := gitAuthEnv(c.url, c.user, "tok")
+		if !strings.Contains(strings.Join(env, "\n"), basic(c.want)) {
+			t.Errorf("gitAuthEnv(%q, %q) = %v, want the %s Basic header", c.url, c.user, env, c.want)
+		}
+	}
+}
+
+func TestDevSpaceDirRejectsPathTricks(t *testing.T) {
+	t.Setenv("SPROUT_STATE_DIR", t.TempDir())
+	for _, bad := range []string{"", "..", "../x", "a/b", `a\b`, ".hidden", strings.Repeat("a", 200)} {
+		if _, err := devSpaceDir(bad); err == nil {
+			t.Errorf("projectFolderDir(%q) must be rejected", bad)
+		}
+	}
+	if _, err := devSpaceDir("6f1c2a3e-1b2c-4d5e-8f90-123456789abc"); err != nil {
+		t.Errorf("a UUID must be accepted: %v", err)
+	}
+}
+
+func TestOnlyHTTPSReposAreCloned(t *testing.T) {
+	for raw, want := range map[string]bool{
+		"https://github.com/o/r":     true,
+		"file:///Users/me/secrets":   false,
+		"ext::sh -c touch% /tmp/pwn": false,
+		"ssh://git@github.com/o/r":   false,
+		"http://github.com/o/r":      false,
+		"-uhttps://x":                false,
+		"":                           false,
+	} {
+		if got := cloneableRepoURL(raw); got != want {
+			t.Errorf("cloneableRepoURL(%q) = %v, want %v", raw, got, want)
+		}
+	}
+}

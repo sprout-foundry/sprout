@@ -53,8 +53,8 @@ func TestResolveToolRisk_SimpleReadCommand(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	args := map[string]interface{}{"command": "ls -la"}
 	assessment := agent.ResolveToolRisk("shell_command", args)
@@ -71,8 +71,8 @@ func TestResolveToolRisk_CriticalOperation(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	args := map[string]interface{}{"command": "rm -rf /"}
 	assessment := agent.ResolveToolRisk("shell_command", args)
@@ -119,8 +119,8 @@ func TestResolveToolRisk_GitHistoryRewritePromptable(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	agent.state.SetActivePersona(personas.IDOrchestrator)
 
@@ -152,8 +152,8 @@ func TestResolveToolRisk_GitHistoryRewriteAllowed(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
 		cfg.AllowGitHistoryRewrite = true
@@ -184,8 +184,8 @@ func TestResolveToolRisk_GitResetHardCommitish(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	args := map[string]interface{}{"command": "git reset --hard abc123"}
 	assessment := agent.ResolveToolRisk("shell_command", args)
@@ -210,8 +210,8 @@ func TestResolveToolRisk_GitWriteNotAllowed(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	// Set a persona that does NOT have CapabilityGitWrite
 	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
@@ -252,8 +252,8 @@ func TestResolveToolRisk_GitWriteAllowed(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
 		cfg.SubagentTypes["test_with_git_cap"] = configuration.SubagentType{
@@ -293,9 +293,9 @@ func TestResolveToolRisk_FileWriteSensitivePath(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
-	agent.SetShellCwd(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
+	agent.SetShellCwd(projectFolder)
 
 	args := map[string]interface{}{"path": "/etc/passwd"}
 	assessment := agent.ResolveToolRisk("write_file", args)
@@ -320,16 +320,16 @@ func TestResolveToolRisk_FileWriteExternalPath(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
-	agent.SetShellCwd(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
+	agent.SetShellCwd(projectFolder)
 
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Skipf("cannot determine home dir: %v", err)
 	}
 
-	// Use a path outside workspace but also outside home to avoid
+	// Use a path outside project folder but also outside home to avoid
 	// the sensitive-tier check (home + cwd-not-in-home → sensitive).
 	externalPath := filepath.Join("/tmp", "sprout-test-external")
 
@@ -337,13 +337,13 @@ func TestResolveToolRisk_FileWriteExternalPath(t *testing.T) {
 	assessment := agent.ResolveToolRisk("write_file", args)
 
 	// The path should be classified as external or sensitive depending on
-	// the cwd/home relationship. At minimum it should not be workspace tier.
-	tier := ClassifyPathAccess(externalPath, workspace, home, workspace)
-	if tier == PathTierWorkspace {
-		t.Errorf("path %q should not be workspace tier when workspace is %q", externalPath, workspace)
+	// the cwd/home relationship. At minimum it should not be project folder tier.
+	tier := ClassifyPathAccess(externalPath, projectFolder, home, projectFolder)
+	if tier == PathTierProjectFolder {
+		t.Errorf("path %q should not be project folder tier when project folder is %q", externalPath, projectFolder)
 	}
 
-	// When the path is external (not workspace, not sensitive), fs-tier should contribute Medium
+	// When the path is external (not project folder, not sensitive), fs-tier should contribute Medium
 	if tier == PathTierExternal {
 		if assessment.Level.Rank() < configuration.RiskLevelMedium.Rank() {
 			t.Errorf("Level = %q, want at least Medium for external path", assessment.Level)
@@ -355,21 +355,21 @@ func TestResolveToolRisk_FileWriteExternalPathSessionAllowed(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
-	agent.SetShellCwd(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
+	agent.SetShellCwd(projectFolder)
 
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Skipf("cannot determine home dir: %v", err)
 	}
 
-	// External path outside both workspace and home → External tier.
+	// External path outside both project folder and home → External tier.
 	externalPath := filepath.Join("/tmp", "sprout-test-external", "file.txt")
 	externalFolder := filepath.Dir(externalPath)
 
-	// Precondition: path is External tier (not Sensitive, not Workspace).
-	tier := ClassifyPathAccess(externalPath, workspace, home, workspace)
+	// Precondition: path is External tier (not Sensitive, not Project folder).
+	tier := ClassifyPathAccess(externalPath, projectFolder, home, projectFolder)
 	if tier != PathTierExternal {
 		t.Skipf("path %q classified as %s, need External for this test", externalPath, tier)
 	}
@@ -401,7 +401,7 @@ func TestResolveToolRisk_FileWriteExternalPathSessionAllowed(t *testing.T) {
 		}
 	}
 	// Level should be strictly lower than Medium IF fs-tier was the only
-	// contributor. (A workspace policy or classifier hit could independently
+	// contributor. (A project folder policy or classifier hit could independently
 	// raise it, but a plain external write_file has no other contributors.)
 	// Assert at minimum that fs-tier is absent (the precise behavior we fixed).
 }
@@ -410,9 +410,9 @@ func TestResolveToolRisk_FileWriteSensitivePathNotSessionAllowed(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
-	agent.SetShellCwd(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
+	agent.SetShellCwd(projectFolder)
 
 	// /etc/passwd is a Sensitive-tier path (system directory).
 	sensitivePath := "/etc/passwd"
@@ -446,25 +446,25 @@ func TestResolveToolRisk_FileWriteSensitivePathNotSessionAllowed(t *testing.T) {
 	}
 }
 
-func TestResolveToolRisk_FileWriteWorkspacePath(t *testing.T) {
+func TestResolveToolRisk_FileWriteProjectFolderPath(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
+	projectFolder := t.TempDir()
 	// On macOS, t.TempDir() returns /var/folders/... which is a symlink to
-	// /private/var/folders/...; resolve so SetWorkspaceRoot stores the same
+	// /private/var/folders/...; resolve so SetProjectFolder stores the same
 	// canonical prefix that ClassifyPathAccess will compare against.
-	if resolved, err := filepath.EvalSymlinks(workspace); err == nil {
-		workspace = resolved
+	if resolved, err := filepath.EvalSymlinks(projectFolder); err == nil {
+		projectFolder = resolved
 	}
-	agent.SetWorkspaceRoot(workspace)
-	agent.SetShellCwd(workspace)
+	agent.SetProjectFolder(projectFolder)
+	agent.SetShellCwd(projectFolder)
 
-	testFile := filepath.Join(workspace, "test.txt")
+	testFile := filepath.Join(projectFolder, "test.txt")
 	args := map[string]interface{}{"path": testFile}
 	assessment := agent.ResolveToolRisk("write_file", args)
 
-	// Workspace writes should NOT trigger fs-tier contributions
+	// Project folder writes should NOT trigger fs-tier contributions
 	found := false
 	for _, src := range assessment.Sources {
 		if src == RiskSourceFSTier {
@@ -473,20 +473,20 @@ func TestResolveToolRisk_FileWriteWorkspacePath(t *testing.T) {
 		}
 	}
 	if found {
-		t.Error("Sources should NOT contain fs-tier for a workspace-internal path")
+		t.Error("Sources should NOT contain fs-tier for a project-folder-internal path")
 	}
 }
 
 // ---------------------------------------------------------------------------
-// ResolveToolRisk — Workspace security policy
+// ResolveToolRisk — Project folder security policy
 // ---------------------------------------------------------------------------
 
 func TestResolveToolRisk_SecurityPolicyDeny(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	// Set up a security policy that denies a specific command using glob pattern.
 	// filepath.Match uses glob syntax (*, ?), not regex.
@@ -509,7 +509,7 @@ func TestResolveToolRisk_SecurityPolicyDeny(t *testing.T) {
 
 	found := false
 	for _, src := range assessment.Sources {
-		if src == RiskSourceWorkspacePolicy {
+		if src == RiskSourceProjectFolderPolicy {
 			found = true
 			break
 		}
@@ -519,10 +519,10 @@ func TestResolveToolRisk_SecurityPolicyDeny(t *testing.T) {
 	}
 
 	if assessment.Level != configuration.RiskLevelCritical {
-		t.Errorf("Level = %q, want Critical when workspace policy denies", assessment.Level)
+		t.Errorf("Level = %q, want Critical when project folder policy denies", assessment.Level)
 	}
 	if !assessment.IsHardBlock {
-		t.Error("IsHardBlock should be true when workspace policy denies")
+		t.Error("IsHardBlock should be true when project folder policy denies")
 	}
 }
 
@@ -537,8 +537,8 @@ func TestResolveToolRisk_SecurityPolicyPrompt(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	// Register a minimal persona with no risk rules so the cascade
 	// returns Low for unrecognized commands.
@@ -568,7 +568,7 @@ func TestResolveToolRisk_SecurityPolicyPrompt(t *testing.T) {
 
 	found := false
 	for _, src := range assessment.Sources {
-		if src == RiskSourceWorkspacePolicy {
+		if src == RiskSourceProjectFolderPolicy {
 			found = true
 			break
 		}
@@ -589,20 +589,20 @@ func TestResolveToolRisk_NonShellCommand(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
-	agent.SetShellCwd(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
+	agent.SetShellCwd(projectFolder)
 
 	// read_file should not trigger shell-specific gates (persona cascade,
-	// git gates, workspace policy) — only the classifier contributes.
-	testFile := filepath.Join(workspace, "readme.md")
+	// git gates, project folder policy) — only the classifier contributes.
+	testFile := filepath.Join(projectFolder, "readme.md")
 	args := map[string]interface{}{"path": testFile}
 	assessment := agent.ResolveToolRisk("read_file", args)
 
 	// Should not have persona cascade or shell-specific sources
 	for _, src := range assessment.Sources {
 		if src == RiskSourcePersonaCascade || src == RiskSourceGitHistoryRewrite ||
-			src == RiskSourceGitWrite || src == RiskSourceWorkspacePolicy {
+			src == RiskSourceGitWrite || src == RiskSourceProjectFolderPolicy {
 			t.Errorf("read_file should not have source %q", src)
 		}
 	}
@@ -629,8 +629,8 @@ func TestShadowMode_ParitySafeCommands(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	for _, cmd := range commands {
 		t.Run(cmd, func(t *testing.T) {
@@ -659,8 +659,8 @@ func TestShadowMode_ParityCriticalOperations(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	for _, cmd := range commands {
 		t.Run(cmd, func(t *testing.T) {
@@ -690,9 +690,9 @@ func TestResolveToolRisk_EditFileSensitivePath(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
-	agent.SetShellCwd(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
+	agent.SetShellCwd(projectFolder)
 
 	args := map[string]interface{}{"path": "/etc/shadow"}
 	assessment := agent.ResolveToolRisk("edit_file", args)
@@ -713,9 +713,9 @@ func TestResolveToolRisk_WriteStructuredFileSensitivePath(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
-	agent.SetShellCwd(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
+	agent.SetShellCwd(projectFolder)
 
 	args := map[string]interface{}{"path": "/etc/shadow"}
 	assessment := agent.ResolveToolRisk("write_structured_file", args)
@@ -736,9 +736,9 @@ func TestResolveToolRisk_PatchStructuredFileSensitivePath(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
-	agent.SetShellCwd(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
+	agent.SetShellCwd(projectFolder)
 
 	args := map[string]interface{}{"path": "/etc/shadow"}
 	assessment := agent.ResolveToolRisk("patch_structured_file", args)
@@ -763,8 +763,8 @@ func TestResolveToolRisk_GitBranchDelete(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	args := map[string]interface{}{"command": "git branch -D feature-branch"}
 	assessment := agent.ResolveToolRisk("shell_command", args)
@@ -785,8 +785,8 @@ func TestResolveToolRisk_GitTagDelete(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	args := map[string]interface{}{"command": "git tag -d v1.0"}
 	assessment := agent.ResolveToolRisk("shell_command", args)
@@ -813,8 +813,8 @@ func TestResolveToolRisk_GitRebaseAlwaysHardBlocks(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
 		cfg.AllowGitHistoryRewrite = true
@@ -854,8 +854,8 @@ func TestResolveToolRisk_GitRebaseAbortDoesNotHardBlock(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	agent.state.SetActivePersona(personas.IDOrchestrator)
 
@@ -885,8 +885,8 @@ func TestResolveToolRisk_GitRebaseAbortWithOtherFlagsHardBlocks(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	agent.state.SetActivePersona(personas.IDOrchestrator)
 
@@ -930,9 +930,9 @@ func TestResolveToolRisk_FileOperationPathTier_Sensitive(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
-	agent.SetShellCwd(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
+	agent.SetShellCwd(projectFolder)
 
 	sensitive := "/etc/passwd"
 	if runtime.GOOS == "windows" {
@@ -952,33 +952,33 @@ func TestResolveToolRisk_FileOperationPathTier_Sensitive(t *testing.T) {
 	}
 }
 
-func TestResolveToolRisk_FileOperationPathTier_Workspace(t *testing.T) {
-	// write_file to a workspace path should NOT contribute fs-tier risk,
+func TestResolveToolRisk_FileOperationPathTier_ProjectFolder(t *testing.T) {
+	// write_file to a project folder path should NOT contribute fs-tier risk,
 	// but PathTier and FileMode should still be populated.
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
+	projectFolder := t.TempDir()
 	// On macOS, t.TempDir() returns /var/folders/... which is a symlink.
-	if resolved, err := filepath.EvalSymlinks(workspace); err == nil {
-		workspace = resolved
+	if resolved, err := filepath.EvalSymlinks(projectFolder); err == nil {
+		projectFolder = resolved
 	}
-	agent.SetWorkspaceRoot(workspace)
-	agent.SetShellCwd(workspace)
+	agent.SetProjectFolder(projectFolder)
+	agent.SetShellCwd(projectFolder)
 
-	testFile := filepath.Join(workspace, "test.txt")
+	testFile := filepath.Join(projectFolder, "test.txt")
 	args := map[string]interface{}{"path": testFile}
 	assessment := agent.ResolveToolRisk("write_file", args)
 
-	if assessment.PathTier != PathTierWorkspace {
-		t.Errorf("PathTier = %v, want PathTierWorkspace", assessment.PathTier)
+	if assessment.PathTier != PathTierProjectFolder {
+		t.Errorf("PathTier = %v, want PathTierProjectFolder", assessment.PathTier)
 	}
 	if assessment.FileMode != "write" {
 		t.Errorf("FileMode = %q, want %q", assessment.FileMode, "write")
 	}
-	// Workspace writes should NOT contribute fs-tier risk
+	// Project folder writes should NOT contribute fs-tier risk
 	if containsSource(assessment.Sources, RiskSourceFSTier) {
-		t.Errorf("Sources should NOT include RiskSourceFSTier for workspace path, got %v", assessment.Sources)
+		t.Errorf("Sources should NOT include RiskSourceFSTier for project folder path, got %v", assessment.Sources)
 	}
 }
 
@@ -988,23 +988,23 @@ func TestResolveToolRisk_FileOperationPathTier_ReadMode(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
+	projectFolder := t.TempDir()
 	// On macOS, t.TempDir() returns /var/folders/... which is a symlink.
-	if resolved, err := filepath.EvalSymlinks(workspace); err == nil {
-		workspace = resolved
+	if resolved, err := filepath.EvalSymlinks(projectFolder); err == nil {
+		projectFolder = resolved
 	}
-	agent.SetWorkspaceRoot(workspace)
-	agent.SetShellCwd(workspace)
+	agent.SetProjectFolder(projectFolder)
+	agent.SetShellCwd(projectFolder)
 
-	testFile := filepath.Join(workspace, "test.txt")
+	testFile := filepath.Join(projectFolder, "test.txt")
 	args := map[string]interface{}{"path": testFile}
 	assessment := agent.ResolveToolRisk("read_file", args)
 
 	if assessment.FileMode != "read" {
 		t.Errorf("FileMode = %q, want %q", assessment.FileMode, "read")
 	}
-	if assessment.PathTier != PathTierWorkspace {
-		t.Errorf("PathTier = %v, want PathTierWorkspace", assessment.PathTier)
+	if assessment.PathTier != PathTierProjectFolder {
+		t.Errorf("PathTier = %v, want PathTierProjectFolder", assessment.PathTier)
 	}
 	// Read operations should NOT contribute fs-tier risk
 	if containsSource(assessment.Sources, RiskSourceFSTier) {
@@ -1018,8 +1018,8 @@ func TestResolveToolRisk_FileOperationPathTier_NonFileOperation(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
 
 	args := map[string]interface{}{"command": "ls -la"}
 	assessment := agent.ResolveToolRisk("shell_command", args)
@@ -1038,12 +1038,12 @@ func TestResolveToolRisk_FileOperationPathTier_External(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := t.TempDir()
-	agent.SetWorkspaceRoot(workspace)
-	agent.SetShellCwd(workspace)
+	projectFolder := t.TempDir()
+	agent.SetProjectFolder(projectFolder)
+	agent.SetShellCwd(projectFolder)
 
-	// Use a path outside workspace and home (and not a system dir).
-	// /tmp is external unless the workspace or home happens to be under /tmp.
+	// Use a path outside project folder and home (and not a system dir).
+	// /tmp is external unless the project folder or home happens to be under /tmp.
 	externalPath := filepath.Join("/tmp", "sprout-test-"+t.Name(), "file.txt")
 	args := map[string]interface{}{"path": externalPath}
 	assessment := agent.ResolveToolRisk("write_file", args)

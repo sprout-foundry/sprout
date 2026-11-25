@@ -36,7 +36,7 @@ function testHost(overrides: Record<string, boolean> = {}): SproutHost {
       ssh: true,
       git: false,
       chat: true,
-      workspaceSwitching: true,
+      projectFolderSwitching: true,
       folderPicker: true,
       export: false,
       instances: true,
@@ -64,7 +64,7 @@ describe('config/mode capability bindings read the active host', () => {
     expect(mode.supportsSSH).toBe(true);
     expect(mode.supportsGit).toBe(false);
     expect(mode.supportsChat).toBe(true);
-    expect(mode.supportsWorkspaceSwitching).toBe(true);
+    expect(mode.supportsProjectFolderSwitching).toBe(true);
     expect(mode.supportsFolderPicker).toBe(true);
     expect(mode.supportsExport).toBe(false);
     expect(mode.supportsInstances).toBe(true);
@@ -110,7 +110,7 @@ describe('config/mode capability bindings read the active host', () => {
       supportsSSH: true,
       supportsGit: true,
       supportsChat: true,
-      supportsWorkspaceSwitching: true,
+      supportsProjectFolderSwitching: true,
       supportsExport: true,
       supportsInstances: true,
       supportsLocalTerminal: true,
@@ -138,7 +138,7 @@ describe('config/mode capability bindings fall back with no active host', () => 
     expect(mode.supportsSSH).toBe(true);
     expect(mode.supportsGit).toBe(true);
     expect(mode.supportsChat).toBe(true);
-    expect(mode.supportsWorkspaceSwitching).toBe(true);
+    expect(mode.supportsProjectFolderSwitching).toBe(true);
     expect(mode.supportsFolderPicker).toBe(false);
     expect(mode.supportsExport).toBe(true);
     expect(mode.supportsInstances).toBe(false);
@@ -158,7 +158,7 @@ describe('config/mode capability bindings fall back with no active host', () => 
     // build's cloud values come from cloudHost (pinned by hosts.test.ts).
     expect(mode.supportsSSH).toBe(true);
     expect(mode.supportsInstances).toBe(false);
-    expect(mode.supportsWorkspaceSwitching).toBe(true);
+    expect(mode.supportsProjectFolderSwitching).toBe(true);
     expect(mode.supportsLocalTerminal).toBe(true);
     expect(mode.supportsAutomations).toBe(true);
     expect(mode.supportsAgentChanges).toBe(true);

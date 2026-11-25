@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
 import type { EditorBuffer } from '../types/editor';
 
-/** Shape of the openWorkspaceBuffer callback from EditorManagerContext */
-export type OpenWorkspaceBufferFn = (options: {
+/** Shape of the openProjectFolderBuffer callback from EditorManagerContext */
+export type OpenProjectFolderBufferFn = (options: {
   kind: 'chat' | 'diff' | 'review' | 'file' | 'compare';
   path: string;
   title: string;
@@ -19,7 +19,7 @@ export interface UseChatSessionSyncOptions {
   activeBufferId: string | null;
   buffers: Map<string, EditorBuffer>;
   onActiveChatChange?: (id: string) => void;
-  openWorkspaceBuffer: OpenWorkspaceBufferFn;
+  openProjectFolderBuffer: OpenProjectFolderBufferFn;
   updateBufferMetadata: (bufferId: string, updates: Record<string, unknown>) => void;
   updateBufferTitle: (bufferId: string, title: string) => void;
   setBufferPinned?: (bufferId: string, isPinned: boolean) => void;
@@ -32,7 +32,7 @@ export function useChatSessionSync({
   activeBufferId,
   buffers,
   onActiveChatChange,
-  openWorkspaceBuffer,
+  openProjectFolderBuffer,
   updateBufferMetadata,
   updateBufferTitle,
   setBufferPinned,
@@ -76,7 +76,7 @@ export function useChatSessionSync({
         updateBufferMetadata('buffer-chat', { chatId: session.id });
         updateBufferTitle('buffer-chat', session.name || 'Chat');
       } else {
-        openWorkspaceBuffer({
+        openProjectFolderBuffer({
           kind: 'chat',
           path: `__workspace/chat/${session.id}`,
           title: session.name || 'Chat',

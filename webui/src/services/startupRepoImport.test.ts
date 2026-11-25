@@ -1,6 +1,6 @@
 /**
- * startupRepoImport — the in-browser workspace's startup repo import, shared
- * by the bootstrap's adapter install and a mounted workspace's.
+ * startupRepoImport — the in-browser project folder's startup repo import, shared
+ * by the bootstrap's adapter install and a mounted project folder's.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';

@@ -43,7 +43,7 @@ interface BufferManagerContextValue {
    *  re-subscribing (used by the beforeunload unsaved-changes guard). */
   buffersRef: React.MutableRefObject<Map<string, EditorBuffer>>;
   openFile: (file: EditorFileEntry) => string;
-  openWorkspaceBuffer: (options: {
+  openProjectFolderBuffer: (options: {
     kind: 'chat' | 'diff' | 'review' | 'file' | 'compare' | 'preview';
     path: string;
     title: string;
@@ -168,7 +168,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
   buffersRef.current = buffers;
   // Buffers opened but not yet in committed state, by path. A render between
   // two opens can hand buffersRef the committed map without them; the path
-  // lookup in openWorkspaceBuffer checks here too so it never opens a second
+  // lookup in openProjectFolderBuffer checks here too so it never opens a second
   // tab for the same path.
   const pendingOpensRef = useRef(new Map<string, EditorBuffer>());
   for (const [path, pending] of pendingOpensRef.current) {
@@ -355,8 +355,8 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
     [activateBuffer, switchToBuffer, paneBridge, setFocusedBuffer],
   );
 
-  // Open workspace buffer
-  const openWorkspaceBuffer = useCallback(
+  // Open project folder buffer
+  const openProjectFolderBuffer = useCallback(
     (options: {
       kind: 'chat' | 'diff' | 'review' | 'file' | 'compare' | 'preview';
       path: string;
@@ -528,7 +528,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       const bufferTitle = options.title || `Compare: ${options.fileName}`;
       const bufferPath = `__workspace/compare/${options.fileName}-${Date.now()}`;
 
-      return openWorkspaceBuffer({
+      return openProjectFolderBuffer({
         kind: 'compare',
         path: bufferPath,
         title: bufferTitle,
@@ -542,7 +542,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
         },
       });
     },
-    [openWorkspaceBuffer],
+    [openProjectFolderBuffer],
   );
 
   // Update buffer operations
@@ -773,7 +773,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
         return;
       }
 
-      // Handle virtual workspace buffers (untitled files created via Ctrl+N)
+      // Handle virtual project folder buffers (untitled files created via Ctrl+N)
       if (buffer.file.path.startsWith('__workspace/')) {
         const filePath = await showThemedPrompt('Enter a file path for the new file:', {
           title: 'Save As',
@@ -787,13 +787,13 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
 
         const trimmedPath = filePath.trim();
 
-        // Resolve the typed path against the workspace root before writing.
+        // Resolve the typed path against the project folder before writing.
         // The prompt's value is what the user sees in the tree — a
         // workspace-relative path like `src/new.ts` — while the file API
         // resolves relative paths against the daemon's process cwd. Writing
-        // the raw value would land the file outside the workspace tree
+        // the raw value would land the file outside the project folder tree
         // (and, for a synthetic buffer path, create a literal
-        // `__workspace/` directory inside the workspace).
+        // `__workspace/` directory inside the project folder).
         const resolvedPath = resolveEditorFilePath(trimmedPath);
 
         // Announce the save BEFORE the write, exactly as the normal-save
@@ -1165,7 +1165,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
   });
 
   // Saves and restores open file tabs and the pane layout across reloads,
-  // and drops stale file tabs on a workspace switch. Unmounted by an earlier
+  // and drops stale file tabs on a project folder switch. Unmounted by an earlier
   // hook consolidation, which left every reload with no open files.
   const panesRef = useRef(paneBridge.panes);
   panesRef.current = paneBridge.panes;
@@ -1191,7 +1191,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       buffers,
       buffersRef,
       openFile,
-      openWorkspaceBuffer,
+      openProjectFolderBuffer,
       openCompareBuffer,
       closeBuffer,
       reorderBuffers,
@@ -1220,7 +1220,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       buffers,
       buffersRef,
       openFile,
-      openWorkspaceBuffer,
+      openProjectFolderBuffer,
       openCompareBuffer,
       closeBuffer,
       reorderBuffers,

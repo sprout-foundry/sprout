@@ -1,14 +1,14 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useFileTreeAutoRefresh } from './useFileTreeAutoRefresh';
-import { changesWorkspaceFiles } from './workspaceFileEvents';
+import { changesProjectFolderFiles } from './projectFolderFileEvents';
 
 const emit = (type: string, data: Record<string, unknown> = {}) =>
   window.dispatchEvent(new CustomEvent('sprout:wsevent', { detail: { type, data } }));
 
-describe('changesWorkspaceFiles', () => {
+describe('changesProjectFolderFiles', () => {
   it('accepts file writes and file-modifying tools, and ignores the rest', () => {
-    const e = (type: string, data: Record<string, unknown> = {}) => changesWorkspaceFiles({ type, data } as never);
+    const e = (type: string, data: Record<string, unknown> = {}) => changesProjectFolderFiles({ type, data } as never);
     expect(e('file_changed', { action: 'created' })).toBe(true);
     expect(e('file_changed', { action: 'git_stage' })).toBe(false);
     expect(e('tool_end', { tool_name: 'write_file' })).toBe(true);

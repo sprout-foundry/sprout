@@ -5,7 +5,7 @@
  * This hook extracts all file I/O concerns from EditorPane into a single
  * cohesive unit:
  *
- * - **loadFile**: Reads a file from disk (or handles in-memory workspace
+ * - **loadFile**: Reads a file from disk (or handles in-memory project folder
  *   buffers), updates the CodeMirror EditorView, restores cursor/scroll
  *   positions, fetches git diff, auto-detects indentation and line endings,
  *   and triggers diagnostic fetching.
@@ -101,7 +101,7 @@ export interface FileIOCompartments {
 
 /** Return type of the hook. */
 export interface UseEditorFileIOReturn {
-  /** Load a file from disk (or handle in-memory workspace buffer). */
+  /** Load a file from disk (or handle in-memory project folder buffer). */
   loadFile: (filePath: string) => Promise<void>;
   /** Ref mirror for loadFile (avoids stale closures). */
   loadFileRef: React.MutableRefObject<((filePath: string) => Promise<void>) | null>;
@@ -166,7 +166,7 @@ export function useEditorFileIO(
     setBufferOriginalContent,
     setBufferExternallyModified,
     clearBufferExternallyModified,
-    openWorkspaceBuffer,
+    openProjectFolderBuffer,
   } = useEditorManager();
 
   // API service singleton
@@ -259,7 +259,7 @@ export function useEditorFileIO(
       setError(null);
 
       try {
-        // Virtual workspace buffers have no on-disk file — handle in-memory only.
+        // Virtual project folder buffers have no on-disk file — handle in-memory only.
         if (filePath.startsWith('__workspace/')) {
           const currentBuffer = bufferRef.current;
           const content = currentBuffer?.content || '';
@@ -553,7 +553,7 @@ export function useEditorFileIO(
 
     // ── Skip if same buffer already loaded ───────────────────────────
     // This guard applies to ALL buffer types (file, chat, diff, review,
-    // workspace). Without it, non-file and workspace buffers would have
+    // project folder). Without it, non-file and project folder buffers would have
     // their editor content replaced on every keystroke because
     // updateBufferContent creates a new buffer object each time.
     if (currentBufferIdRef.current === buffer.id) {
@@ -602,7 +602,7 @@ export function useEditorFileIO(
       return;
     }
 
-    // Skip loading virtual workspace buffers — they have no on-disk file.
+    // Skip loading virtual project folder buffers — they have no on-disk file.
     if (buffer.file.path.startsWith('__workspace/')) {
       const nextContent = buffer.content || '';
       setLocalContent(nextContent);
@@ -932,7 +932,7 @@ export function useEditorFileIO(
               const diffText = generateUnifiedDiff(editorContent, diskContent, 'Editor', 'Disk');
               if (!diffText) return;
 
-              openWorkspaceBuffer({
+              openProjectFolderBuffer({
                 kind: 'diff',
                 path: `diff:${filePath}`,
                 title: `Diff: ${currentBuffer.file.name} (editor ↔ disk)`,
@@ -944,7 +944,7 @@ export function useEditorFileIO(
                   sourcePath: filePath,
                   diffType: 'external-change',
                   defaultView: 'text',
-                  // WorkspacePane's diff renderer reads metadata.diff as a
+                  // SpacesPane's diff renderer reads metadata.diff as a
                   // GitDiffResponse; without it the tab shows
                   // "(no diff available)".
                   diff: {
@@ -980,7 +980,7 @@ export function useEditorFileIO(
     applyExternalFileContent,
     clearBufferExternallyModified,
     setBufferExternallyModified,
-    openWorkspaceBuffer,
+    openProjectFolderBuffer,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {

@@ -22,12 +22,12 @@ func (h *searchHandler) Name() string { return "search" }
 func (h *searchHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "search",
-		Description: "Find code in the workspace with a regex search, one result per matching file. " +
+		Description: "Find code in the project folder with a regex search, one result per matching file. " +
 			"Use a regex for exact matches ('func NewServer', 'SPROUT_[A-Z_]+'). A plain-language query of three or more words is reduced to its distinctive word stems and matched as alternatives.",
 		Required: []string{"query"},
 		Parameters: []ParameterDef{
 			{Name: "query", Type: "string", Description: "A regex pattern, or a plain-language description whose distinctive words are matched.", Required: true},
-			{Name: "directory", Type: "string", Description: "Directory to search (default: workspace root)"},
+			{Name: "directory", Type: "string", Description: "Directory to search (default: project folder)"},
 			{Name: "file_glob", Type: "string", Description: "Restrict matching to files matching this glob (e.g. '*.go')"},
 			{Name: "case_sensitive", Type: "boolean", Description: "Case-sensitive matching (default: false)"},
 			{Name: "max_results", Type: "integer", Description: "Maximum files to return (default: 20)"},
@@ -54,16 +54,16 @@ func (h *searchHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 	}
 
 	// Capture whether the user explicitly named a directory before
-	// resolveSearchDirectory normalises it to the workspace root.
+	// resolveSearchDirectory normalises it to the project folder.
 	rawDir, _ := extractString(args, "directory")
 
-	directory, err := resolveSearchDirectory(rawDir, env.WorkspaceRoot)
+	directory, err := resolveSearchDirectory(rawDir, env.ProjectFolder)
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}
 
 	// Gate 1 precheck — only when the user explicitly named a non-default
-	// directory. An empty or "." directory resolves to the workspace root,
+	// directory. An empty or "." directory resolves to the project folder,
 	// which is already allowlisted; gating the default would prompt on every
 	// vanilla search.
 	if rawDir != "" && rawDir != "." {
@@ -73,11 +73,11 @@ func (h *searchHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 				fmt.Errorf("read blocked: %s is not accessible", directory)
 		}
 		if decision == "prompt" && env.FileAccessPrompter != nil {
-			if ctx2, approved := promptForOffWorkspacePath(ctx, env, "search", directory, resolvedPath, "read"); approved {
+			if ctx2, approved := promptForOffProjectFolderPath(ctx, env, "search", directory, resolvedPath, "read"); approved {
 				ctx = ctx2
 			} else {
-				return ToolResult{Output: fmt.Sprintf("read blocked: off-workspace access to %s was not approved", directory), IsError: true},
-					fmt.Errorf("read blocked: off-workspace access to %s was not approved", directory)
+				return ToolResult{Output: fmt.Sprintf("read blocked: off-project-folder access to %s was not approved", directory), IsError: true},
+					fmt.Errorf("read blocked: off-project-folder access to %s was not approved", directory)
 			}
 		}
 	}
@@ -97,7 +97,7 @@ func (h *searchHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 		MaxPerFile:    3,
 	})
 
-	results := groupSearchHits(res.Hits, env.WorkspaceRoot)
+	results := groupSearchHits(res.Hits, env.ProjectFolder)
 	if len(results) == 0 {
 		return ToolResult{Output: formatEmptySearch(query, directory, literalErr)}, nil
 	}
@@ -106,11 +106,11 @@ func (h *searchHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 
 // groupSearchHits collapses line hits into one candidate per file, keeping
 // walk order.
-func groupSearchHits(hits []literalHit, workspaceRoot string) []searchCandidate {
+func groupSearchHits(hits []literalHit, projectFolder string) []searchCandidate {
 	byPath := map[string]int{}
 	var out []searchCandidate
 	for _, h := range hits {
-		path := normalizeSearchPath(h.Path, workspaceRoot)
+		path := normalizeSearchPath(h.Path, projectFolder)
 		if i, ok := byPath[path]; ok {
 			out[i].extraMatches++
 			continue
@@ -176,15 +176,15 @@ var searchStopwords = map[string]bool{
 	"want": true, "will": true, "make": true, "made": true, "used": true,
 }
 
-func normalizeSearchPath(p, workspaceRoot string) string {
-	if workspaceRoot == "" {
+func normalizeSearchPath(p, projectFolder string) string {
+	if projectFolder == "" {
 		return filepath.ToSlash(p)
 	}
 	abs, err := filepath.Abs(p)
 	if err != nil {
 		return filepath.ToSlash(p)
 	}
-	absRoot, err := filepath.Abs(workspaceRoot)
+	absRoot, err := filepath.Abs(projectFolder)
 	if err != nil {
 		return filepath.ToSlash(p)
 	}

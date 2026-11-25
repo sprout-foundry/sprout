@@ -33,6 +33,9 @@ type ContextProfile struct {
 	// SystemPromptCore, from Config.SystemPromptCore, replaces the embedded
 	// core prompt the profile would load.
 	SystemPromptCore string `json:"-"`
+	// From Config.MemoryPrompt / MemoryPromptMaxBytes (see memory_prompt.go in pkg/agent). Unset normalizes to "index".
+	MemoryPrompt         string `json:"-"`
+	MemoryPromptMaxBytes int    `json:"-"`
 }
 
 // fullContextProfile is the baked full-context preset (all defaults).
@@ -82,8 +85,14 @@ var lowContextProfile = ContextProfile{
 		"mcp_tools",
 		"mcp_refresh",
 	},
-	SystemPromptPath:          "prompts/system_prompt.lite.md",
-	CompactionTriggerFraction: 0.85,
+	SystemPromptPath: "prompts/system_prompt.lite.md",
+	// The 0.85 proposal was overridden by the no-overflow clamp in
+	// computeCompactionTriggerFraction: an LCM trigger above
+	// 1 - EstimationErrorPercent lets the underestimating token estimate sit
+	// below the trigger while the true size is already over the window.
+	// 0.70 is the effective trigger for every profile (the profile no longer
+	// needs an explicit override).
+	CompactionTriggerFraction: 0.70,
 	RecentTurnsToPreserve:     2,
 	RepoMapDefaultDepth:       1,
 }
@@ -100,6 +109,8 @@ func ResolveContextProfile(cfg *Config, modelContextWindow int, onDevice bool) (
 	p, err := resolveContextPreset(cfg, modelContextWindow, onDevice)
 	if cfg != nil {
 		p.SystemPromptCore = strings.TrimSpace(cfg.SystemPromptCore)
+		p.MemoryPrompt = strings.TrimSpace(cfg.MemoryPrompt)
+		p.MemoryPromptMaxBytes = cfg.MemoryPromptMaxBytes
 	}
 	return p, err
 }

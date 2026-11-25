@@ -47,7 +47,7 @@ func TestResolveReadTrust_OneQuestionPerClone(t *testing.T) {
 	require.Contains(t, asker.lastQuestion(), "clones/acme`")
 }
 
-// A /task worktree is the workspace's own repository checked out again under
+// A /task worktree is the project folder's own repository checked out again under
 // .sprout/tasks. Its files are ours; nothing is asked.
 func TestResolveReadTrust_TaskWorktreeIsOurs(t *testing.T) {
 	env, root := trustTestEnv(t)
@@ -62,9 +62,9 @@ func TestResolveReadTrust_TaskWorktreeIsOurs(t *testing.T) {
 	require.Zero(t, asker.calls())
 }
 
-// The same repository checked out as a worktree outside the workspace is
+// The same repository checked out as a worktree outside the project folder is
 // still our code.
-func TestResolveReadTrust_OwnWorktreeOutsideWorkspaceIsOurs(t *testing.T) {
+func TestResolveReadTrust_OwnWorktreeOutsideProjectFolderIsOurs(t *testing.T) {
 	env, root := trustTestEnv(t)
 	asker := &recordingAskUser{answer: trustThirdPartyOption}
 	env.AskUser = asker
@@ -77,7 +77,7 @@ func TestResolveReadTrust_OwnWorktreeOutsideWorkspaceIsOurs(t *testing.T) {
 	require.Zero(t, asker.calls())
 }
 
-// A file outside the workspace and outside any repository — a temp file, a
+// A file outside the project folder and outside any repository — a temp file, a
 // cache, a config file — is framed without a question nobody can sensibly
 // answer.
 func TestResolveReadTrust_OutsideAnyRepoIsNotAsked(t *testing.T) {
@@ -90,7 +90,7 @@ func TestResolveReadTrust_OutsideAnyRepoIsNotAsked(t *testing.T) {
 	require.Zero(t, asker.calls())
 }
 
-// A clone outside the workspace is still the ambiguous case: asked once, about
+// A clone outside the project folder is still the ambiguous case: asked once, about
 // the clone.
 func TestResolveReadTrust_ForeignCloneOutsideIsAskedOnce(t *testing.T) {
 	env, _ := trustTestEnv(t)

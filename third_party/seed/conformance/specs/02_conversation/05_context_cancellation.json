@@ -1,0 +1,24 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "test"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    }
+  ],
+  "description": "Placeholder: stdin close → ErrInterrupted. Requires runner-level stdin close, not testable via JSON-RPC actions alone.",
+  "name": "context_cancellation"
+}

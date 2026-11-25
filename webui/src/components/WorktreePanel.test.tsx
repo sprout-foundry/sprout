@@ -72,7 +72,7 @@ describe('WorktreePanel list', () => {
 
 describe('WorktreePanel switching', () => {
   it('asks for confirmation before switching and switches only when confirmed', async () => {
-    checkoutWorktree.mockResolvedValue({ message: 'ok', path: CURRENT.path, workspace: CURRENT.path });
+    checkoutWorktree.mockResolvedValue({ message: 'ok', path: CURRENT.path, projectFolder: CURRENT.path });
     render(<WorktreePanel />);
     await waitFor(() => expect(screen.getAllByTestId('worktree-switch')).toHaveLength(2));
 

@@ -27,29 +27,29 @@ const apiService = ApiService.getInstance();
 
 const HotkeyContext = createContext<HotkeyContextValue | null>(null);
 
-type WorkspaceKeyListener = (event: KeyboardEvent) => void;
+type SpacesKeyListener = (event: KeyboardEvent) => void;
 
 /**
- * Key listeners for presses inside the workspace, fed by an embed's
+ * Key listeners for presses inside the project folder, fed by an embed's
  * HotkeyProvider scope. Null when the provider owns the whole document
  * (standalone) or there is no provider.
  */
-const WorkspaceKeyScopeContext = createContext<Set<WorkspaceKeyListener> | null>(null);
+const SpacesKeyScopeContext = createContext<Set<SpacesKeyListener> | null>(null);
 
 /**
- * Listen for keydowns that belong to the workspace. In the standalone app
+ * Listen for keydowns that belong to the project folder. In the standalone app
  * that is every keydown on the page (a window listener, as before); in an
- * embed it is only keys pressed inside the workspace's React tree, so a
+ * embed it is only keys pressed inside the project folder's React tree, so a
  * shortcut never fires while the user is typing in the host page. Outside
- * the app and any HotkeyProvider nothing is the workspace's, so it listens to
+ * the app and any HotkeyProvider nothing is the project folder's, so it listens to
  * nothing.
  */
-export function useWorkspaceKeyDown(listener: WorkspaceKeyListener): void {
-  const scope = useContext(WorkspaceKeyScopeContext);
+export function useSpacesKeyDown(listener: SpacesKeyListener): void {
+  const scope = useContext(SpacesKeyScopeContext);
   const listenerRef = useRef(listener);
   listenerRef.current = listener;
   useEffect(() => {
-    const forward: WorkspaceKeyListener = (event) => listenerRef.current(event);
+    const forward: SpacesKeyListener = (event) => listenerRef.current(event);
     if (scope) {
       scope.add(forward);
       return () => {
@@ -289,7 +289,7 @@ function HotkeyProviderRoot({ children }: HotkeyProviderProps): JSX.Element {
   // (which claims the page before rendering) owns the document: every bound
   // shortcut is handled from a window listener, as it always has been. In an
   // embed the host owns the page, so shortcuts are handled only for keys
-  // pressed inside the workspace's React tree (portals included), and a key
+  // pressed inside the project folder's React tree (portals included), and a key
   // is consumed only when something registered a handler for its command;
   // anything else reaches the host untouched.
   const [ownsDocument] = useState(isAppShell);
@@ -315,11 +315,11 @@ function HotkeyProviderRoot({ children }: HotkeyProviderProps): JSX.Element {
   }, [hotkeys, isLoaded, ownsDocument]);
 
   // Workspace-scoped keydown handler (embeds): React's synthetic keydown on the
-  // scope wrapper sees exactly the keys pressed inside the workspace tree.
-  const [scopedKeyListeners] = useState(() => new Set<WorkspaceKeyListener>());
+  // scope wrapper sees exactly the keys pressed inside the project folder tree.
+  const [scopedKeyListeners] = useState(() => new Set<SpacesKeyListener>());
   const handleScopedKeyDown = useCallback(
     (event: ReactKeyboardEvent) => {
-      // Workspace-level key listeners (useWorkspaceKeyDown) see every key
+      // Workspace-level key listeners (useSpacesKeyDown) see every key
       // pressed in the scope; one that handles a key prevents its default.
       for (const listener of scopedKeyListeners) listener(event.nativeEvent);
       if (event.nativeEvent.defaultPrevented) event.stopPropagation();
@@ -403,11 +403,11 @@ function HotkeyProviderRoot({ children }: HotkeyProviderProps): JSX.Element {
   }
   return (
     <HotkeyContext.Provider value={value}>
-      <WorkspaceKeyScopeContext.Provider value={scopedKeyListeners}>
+      <SpacesKeyScopeContext.Provider value={scopedKeyListeners}>
         <div className="sprout-hotkey-scope" style={{ display: 'contents' }} onKeyDown={handleScopedKeyDown}>
           {children}
         </div>
-      </WorkspaceKeyScopeContext.Provider>
+      </SpacesKeyScopeContext.Provider>
     </HotkeyContext.Provider>
   );
 }

@@ -19,23 +19,23 @@ import (
 const (
 	// mockupLookFileMax is the largest file read for a look.
 	mockupLookFileMax = 128 << 10
-	// mockupLookMaxPaths bounds a workspace walked without git.
+	// mockupLookMaxPaths bounds a project folder walked without git.
 	mockupLookMaxPaths = 20000
 )
 
-// workspaceFiles is a workspace's files, for reading its look.
-type workspaceFiles struct {
+// projectFolderFiles is a project folder's files, for reading its look.
+type projectFolderFiles struct {
 	root  string
 	paths []string
 }
 
-func newWorkspaceFiles(root string) *workspaceFiles {
-	return &workspaceFiles{root: root, paths: workspacePaths(root)}
+func newProjectFolderFiles(root string) *projectFolderFiles {
+	return &projectFolderFiles{root: root, paths: projectFolderPaths(root)}
 }
 
-func (w *workspaceFiles) Paths() []string { return w.paths }
+func (w *projectFolderFiles) Paths() []string { return w.paths }
 
-func (w *workspaceFiles) Read(p string) (string, bool) {
+func (w *projectFolderFiles) Read(p string) (string, bool) {
 	full := filepath.Join(w.root, filepath.FromSlash(p))
 	if rel, err := filepath.Rel(w.root, full); err != nil || strings.HasPrefix(rel, "..") {
 		return "", false
@@ -51,9 +51,9 @@ func (w *workspaceFiles) Read(p string) (string, bool) {
 	return string(data), true
 }
 
-// workspacePaths lists a workspace's files: git's tracked set when it is a
+// projectFolderPaths lists a project folder's files: git's tracked set when it is a
 // repository, else a bounded walk that skips dependency and build folders.
-func workspacePaths(root string) []string {
+func projectFolderPaths(root string) []string {
 	cmd := exec.Command("git", "-C", root, "ls-files", "-z")
 	if out, err := cmd.Output(); err == nil && len(out) > 0 {
 		var paths []string

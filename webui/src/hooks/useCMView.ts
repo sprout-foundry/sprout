@@ -47,20 +47,20 @@ export interface CMViewKeymaps {
   semanticKeymap: readonly KeyBinding[];
 }
 
-export interface OpenWorkspaceBufferRequest {
+export interface OpenProjectFolderBufferRequest {
   kind: 'file' | 'chat' | 'diff' | 'review' | 'compare';
   path: string;
   title: string;
   ext?: string;
 }
 
-export type OpenWorkspaceBufferFn = (req: OpenWorkspaceBufferRequest) => void;
+export type OpenProjectFolderBufferFn = (req: OpenProjectFolderBufferRequest) => void;
 
 export interface CMViewActions {
   /** Returns the current save function through one ref hop. */
   getSaveFn: () => () => void;
-  /** Returns the current openWorkspaceBuffer through one ref hop. */
-  getOpenWorkspaceBuffer: () => OpenWorkspaceBufferFn;
+  /** Returns the current openProjectFolderBuffer through one ref hop. */
+  getOpenProjectFolderBuffer: () => OpenProjectFolderBufferFn;
 }
 
 export interface UseCMViewOptions {
@@ -78,7 +78,7 @@ export interface UseCMViewOptions {
    *  is defined. Hook never mirrors it through React state. */
   handleSaveRef: React.MutableRefObject<() => Promise<void>>;
   /** Open-workspace-buffer handle. Single-hop. */
-  openWorkspaceBufferRef: React.MutableRefObject<OpenWorkspaceBufferFn>;
+  openProjectFolderBufferRef: React.MutableRefObject<OpenProjectFolderBufferFn>;
   /** Update listener. Note: this callback's identity may change on every
    *  render; the hook reads it via a ref-mirror internally, NOT through the
    *  effect dep array.
@@ -183,7 +183,7 @@ export function useCMView(opts: UseCMViewOptions): CMViewAPI {
     bufferRef,
     languageId,
     handleSaveRef,
-    openWorkspaceBufferRef,
+    openProjectFolderBufferRef,
     onUpdateRef,
     settingsRef,
     keymapsRef,
@@ -286,7 +286,7 @@ export function useCMView(opts: UseCMViewOptions): CMViewAPI {
       // The callback itself is stable in the extension set; each invocation
       // reads the current handle directly, without an actionsRef hop.
       getSaveFn: () => handleSaveRef.current,
-      getOpenWorkspaceBuffer: () => openWorkspaceBufferRef.current,
+      getOpenProjectFolderBuffer: () => openProjectFolderBufferRef.current,
     };
 
     const extensions = buildExtensions({

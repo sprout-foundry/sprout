@@ -1,0 +1,17 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    }
+  ],
+  "description": "NewAgent without provider returns ErrNoProvider",
+  "name": "agent_new_requires_provider"
+}

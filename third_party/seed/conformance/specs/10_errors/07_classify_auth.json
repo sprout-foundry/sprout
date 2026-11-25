@@ -1,0 +1,37 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addError",
+      "params": {
+        "errorType": "auth",
+        "message": "401 unauthorized"
+      }
+    },
+    {
+      "id": 3,
+      "method": "agent.run",
+      "params": {
+        "query": "classify auth"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "errorType": "auth",
+      "id": 3,
+      "type": "error"
+    }
+  ],
+  "description": "401 HTTP responses classified as AuthError",
+  "name": "classify_auth"
+}

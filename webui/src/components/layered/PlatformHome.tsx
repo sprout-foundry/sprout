@@ -63,7 +63,7 @@ export default function PlatformHome({ isMobile, onOpenMenu }: PlatformHomeProps
       return;
     }
     // Descendant, not direct-child: the space's <main> now sits inside the
-    // `SproutWorkspace` root (`.app > .sprout-workspace > main`), so
+    // `SproutSpaces` root (`.app > .sprout-spaces > main`), so
     // `.app > main .header-bar` would no longer match and `top` would drop to
     // 0, hiding Home under the editor bar. The only <main> in the app is the
     // space shell's (see components/layered/Layered.css for the CSS twin).

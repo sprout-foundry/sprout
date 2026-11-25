@@ -112,9 +112,9 @@ func (f *FileItem) Value() interface{} { return f.Filename }
 // 1) If there are staged changes, use them and generate a commit message
 // 2) If there are no staged changes, prompt user to select files, then generate the commit message
 func (cf *CommitFlow) Execute() error {
-	// Set git working directory from agent workspace root
+	// Set git working directory from agent project folder
 	if cf.agent != nil {
-		SetGitDir(cf.agent.GetWorkspaceRoot())
+		SetGitDir(cf.agent.GetProjectFolder())
 	} else {
 		SetGitDir("")
 	}
@@ -404,7 +404,7 @@ func (cf *CommitFlow) CommitStagedWithMessage() error {
 	if cf.agent == nil {
 		return errors.New("CommitStagedWithMessage requires an agent: nil agent would fall back to the process CWD")
 	}
-	SetGitDir(cf.agent.GetWorkspaceRoot())
+	SetGitDir(cf.agent.GetProjectFolder())
 
 	// Check for staged changes first
 	stagedOutput, err := gitCommand("diff", "--staged", "--name-only").CombinedOutput()
@@ -442,7 +442,7 @@ func (cf *CommitFlow) CommitStagedWithMessage() error {
 	}
 	// The commit.trailers defaults (config + the repo's AGENTS.md) join the
 	// commit on top of the attribution trailer.
-	if trailers := git.DefaultCommitTrailers(cf.agent.GetConfig(), cf.agent.GetWorkspaceRoot()); len(trailers) > 0 {
+	if trailers := git.DefaultCommitTrailers(cf.agent.GetConfig(), cf.agent.GetProjectFolder()); len(trailers) > 0 {
 		executor.AttributeMessage = func(message string, generated bool) string {
 			return git.AppendTrailers(attribute(message, generated), trailers...)
 		}

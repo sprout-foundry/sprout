@@ -245,3 +245,28 @@
   line-height: 1.4;
   color: var(--text-secondary, inherit);
 }
+
+/* Mode A's confirm step: the prompt is what will be sent, so it is a real
+ * editable field rather than a line of text the user cannot change. */
+.escalation-toast-confirm-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary, inherit);
+}
+
+.escalation-toast-confirm-prompt {
+  width: 100%;
+  resize: vertical;
+  font: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--text-primary, inherit);
+  background: var(--bg-primary, transparent);
+  border: 1px solid var(--border-default, transparent);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.escalation-toast-confirm-prompt:focus-visible {
+  outline: 2px solid var(--accent-primary, transparent);
+  outline-offset: 1px;
+}

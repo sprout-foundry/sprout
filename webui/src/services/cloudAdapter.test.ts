@@ -247,7 +247,7 @@ describe('CloudAdapter', () => {
     });
 
     it('should prefer a host-supplied repo over the ?repo= query parameter', () => {
-      // A host that mounts a workspace already knows the project, so its repo
+      // A host that mounts a project folder already knows the project, so its repo
       // comes from the config (the project's repoUrl), not the URL parameter.
       window.history.replaceState({}, '', '/?repo=https://github.com/from/query');
       const withRepo = new CloudAdapter({ ...mockConfig, repoUrl: 'https://github.com/acme/widgets' });
@@ -400,43 +400,43 @@ describe('CloudAdapter', () => {
     });
   });
 
-  const workspaceSyntheticResponse = {
+  const projectFolderSyntheticResponse = {
     message: 'ok',
-    workspace_root: '/workspace',
+    project_folder: '/workspace',
     daemon_root: '/workspace',
   };
 
   describe('fetch - workspace endpoint synthetic response', () => {
-    it('should return synthetic response for GET /api/workspace', async () => {
-      const response = await adapter.fetch('/api/workspace', {
+    it('should return synthetic response for GET /api/project-folder', async () => {
+      const response = await adapter.fetch('/api/project-folder', {
         method: 'GET',
       });
 
       expect(response.ok).toBe(true);
       const data = await response.json();
-      expect(data).toEqual(workspaceSyntheticResponse);
+      expect(data).toEqual(projectFolderSyntheticResponse);
 
       // Should NOT call the actual fetch
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('should return synthetic response for POST /api/workspace', async () => {
-      const response = await adapter.fetch('/api/workspace', {
+    it('should return synthetic response for POST /api/project-folder', async () => {
+      const response = await adapter.fetch('/api/project-folder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspace_root: '/new/path' }),
+        body: JSON.stringify({ project_folder: '/new/path' }),
       });
 
       expect(response.ok).toBe(true);
       const data = await response.json();
-      expect(data).toEqual(workspaceSyntheticResponse);
+      expect(data).toEqual(projectFolderSyntheticResponse);
 
       // Should NOT call the actual fetch
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('should set correct Content-Type header for workspace synthetic response', async () => {
-      const response = await adapter.fetch('/api/workspace', {
+      const response = await adapter.fetch('/api/project-folder', {
         method: 'GET',
       });
 
@@ -444,23 +444,23 @@ describe('CloudAdapter', () => {
     });
 
     it('should return synthetic workspace response when URL object is used', async () => {
-      const response = await adapter.fetch(new URL('/api/workspace', 'https://api.sprout.dev'));
+      const response = await adapter.fetch(new URL('/api/project-folder', 'https://api.sprout.dev'));
 
       expect(response.ok).toBe(true);
       const data = await response.json();
-      expect(data).toEqual(workspaceSyntheticResponse);
+      expect(data).toEqual(projectFolderSyntheticResponse);
 
       // Should NOT call the actual fetch
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('should return synthetic workspace response when Request object is used', async () => {
-      const request = new Request('/api/workspace', { method: 'GET' });
+      const request = new Request('/api/project-folder', { method: 'GET' });
       const response = await adapter.fetch(request);
 
       expect(response.ok).toBe(true);
       const data = await response.json();
-      expect(data).toEqual(workspaceSyntheticResponse);
+      expect(data).toEqual(projectFolderSyntheticResponse);
 
       // Should NOT call the actual fetch
       expect(mockFetch).not.toHaveBeenCalled();
@@ -570,8 +570,8 @@ describe('CloudAdapter', () => {
       expect(response.ok).toBe(true);
     });
 
-    it('should handle GET /api/workspace/browse locally via WASM shell (NOT proxied)', async () => {
-      const response = await adapter.fetch('/api/workspace/browse?path=/home/user', { method: 'GET' });
+    it('should handle GET /api/project-folder/browse locally via WASM shell (NOT proxied)', async () => {
+      const response = await adapter.fetch('/api/project-folder/browse?path=/home/user', { method: 'GET' });
 
       // MUST NOT proxy to backend
       expect(mockFetch).not.toHaveBeenCalled();
@@ -1248,9 +1248,9 @@ describe('CloudAdapter', () => {
       expect(model).toBe('');
     });
 
-    // DELETED: "should preserve workspace_root and system_prompt if present"
-    // — workspace_root and system_prompt were fields on the Foundry-format body
-    // produced by translation. The WASM shell reads workspace_root from its
+    // DELETED: "should preserve project_folder and system_prompt if present"
+    // — project_folder and system_prompt were fields on the Foundry-format body
+    // produced by translation. The WASM shell reads project_folder from its
     // virtual filesystem root and system_prompt from .config/sprout/. There is
     // no HTTP-level forwarding — those are WASM-side concerns, not adapter
     // concerns.

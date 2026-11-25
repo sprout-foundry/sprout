@@ -70,10 +70,10 @@ func (p *LSPProcess) NewSession() (*Session, error) {
 }
 
 // StartLSPProcess starts a language server process with the given binary and args.
-// The process is started in the given workspace directory.
-func StartLSPProcess(ctx context.Context, workspacePath, binary string, args []string) (*LSPProcess, error) {
+// The process is started in the given project folder.
+func StartLSPProcess(ctx context.Context, projectFolderPath, binary string, args []string) (*LSPProcess, error) {
 	cmd := exec.CommandContext(ctx, binary, args...)
-	cmd.Dir = workspacePath
+	cmd.Dir = projectFolderPath
 
 	// Set up stdin/stdout pipes
 	stdinPipe, err := cmd.StdinPipe()

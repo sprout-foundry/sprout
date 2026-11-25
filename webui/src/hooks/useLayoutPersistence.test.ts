@@ -62,20 +62,20 @@ describe('useLayoutPersistence — workspace-changed buffer survival', () => {
     return { setBuffers, getLatest: () => latest };
   }
 
-  function fireWorkspaceChanged() {
-    workspaceHandler?.(
+  function fireProjectFolderChanged() {
+    projectFolderHandler?.(
       new CustomEvent('sprout:workspace-changed', {
-        detail: { workspaceRoot: '/other' },
+        detail: { projectFolder: '/other' },
       }),
     );
   }
 
-  let workspaceHandler: EventListener | null = null;
+  let projectFolderHandler: EventListener | null = null;
 
   beforeEach(() => {
-    workspaceHandler = null;
+    projectFolderHandler = null;
     vi.spyOn(window, 'addEventListener').mockImplementation((type, fn) => {
-      if (type === 'sprout:workspace-changed') workspaceHandler = fn as EventListener;
+      if (type === 'sprout:workspace-changed') projectFolderHandler = fn as EventListener;
     });
     vi.spyOn(window, 'removeEventListener').mockImplementation(() => {});
     vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
@@ -102,7 +102,7 @@ describe('useLayoutPersistence — workspace-changed buffer survival', () => {
       ]),
     );
 
-    fireWorkspaceChanged();
+    fireProjectFolderChanged();
 
     expect(setBuffers).toHaveBeenCalled();
     const updater = setBuffers.mock.calls.at(-1)[0];
@@ -120,7 +120,7 @@ describe('useLayoutPersistence — workspace-changed buffer survival', () => {
     const clean = mkBuffer({ id: 'b-clean', isModified: false });
     const { setBuffers } = mount(new Map([['b-clean', clean]]));
 
-    fireWorkspaceChanged();
+    fireProjectFolderChanged();
 
     const updater = setBuffers.mock.calls.at(-1)[0];
     const result = updater(new Map([['b-clean', clean]]));
@@ -131,7 +131,7 @@ describe('useLayoutPersistence — workspace-changed buffer survival', () => {
     const unsaved = mkBuffer({ id: 'b-unsaved', isModified: true, isPinned: false, isClosable: true });
     const { setBuffers } = mount(new Map([['b-unsaved', unsaved]]));
 
-    fireWorkspaceChanged();
+    fireProjectFolderChanged();
 
     const updater = setBuffers.mock.calls.at(-1)[0];
     const result = updater(new Map([['b-unsaved', unsaved]]));

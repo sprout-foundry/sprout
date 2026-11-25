@@ -49,7 +49,7 @@ import {
   type CMViewAPI,
   type CMViewKeymaps,
   type CMViewSettings,
-  type OpenWorkspaceBufferFn,
+  type OpenProjectFolderBufferFn,
 } from '../hooks/useCMView';
 
 const NARROW_EDITOR_WIDTH = 560;
@@ -86,7 +86,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     updateBufferScroll,
     setBufferModified,
     splitPane,
-    openWorkspaceBuffer,
+    openProjectFolderBuffer,
     setBufferLanguageOverride,
     isLinkedScrollEnabled,
     toggleLinkedScroll,
@@ -201,20 +201,20 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   // mirror, no actionsRef indirection.
   handleSaveRef.current = handleSave;
 
-  // openWorkspaceBuffer from EditorManagerContext is itself a stable callback
+  // openProjectFolderBuffer from EditorManagerContext is itself a stable callback
   // across renders, but we still wire it through a ref because the CM
-  // extensions builder reads `openWorkspaceBufferRef.current.getOpenWorkspaceBuffer()`
+  // extensions builder reads `openProjectFolderBufferRef.current.getOpenProjectFolderBuffer()`
   // inside handlers that fire after mount (e.g., when LSP client opens a
   // file from `textDocument/definition`). Without a render-time `.current`
   // assignment, a stale value from the first render would persist. The
-  // legacy code used `useRef(openWorkspaceBuffer)` which silently *never*
+  // legacy code used `useRef(openProjectFolderBuffer)` which silently *never*
   // updated; that's the bug we're fixing here.
-  const openWorkspaceBufferRef = useRef<OpenWorkspaceBufferFn>(openWorkspaceBuffer);
-  openWorkspaceBufferRef.current = openWorkspaceBuffer;
+  const openProjectFolderBufferRef = useRef<OpenProjectFolderBufferFn>(openProjectFolderBuffer);
+  openProjectFolderBufferRef.current = openProjectFolderBuffer;
 
   const { semanticHandlerRefs, buildKeymaps } = useEditorKeymaps(hotkeys, viewRef, bufferRef);
 
-  const semantic = useEditorSemantic(viewRef, bufferRef, localContent, isSemanticLanguage, openWorkspaceBuffer);
+  const semantic = useEditorSemantic(viewRef, bufferRef, localContent, isSemanticLanguage, openProjectFolderBuffer);
 
   useEffect(() => {
     semanticHandlerRefs.handleGoToDefinition.current = semantic.handleGoToDefinition;
@@ -309,7 +309,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         const fileName = fp.split('/').pop() || fp;
         const dotIndex = fileName.lastIndexOf('.');
         const ext = dotIndex >= 0 ? fileName.slice(dotIndex) : undefined;
-        openWorkspaceBufferRef.current({ kind: 'file', path: fp, title: fileName, ext });
+        openProjectFolderBufferRef.current({ kind: 'file', path: fp, title: fileName, ext });
         return null;
       };
       setGlobalDisplayFileCallback(cb);
@@ -361,7 +361,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     bufferRef,
     languageId: resolvedLanguage.languageId,
     handleSaveRef,
-    openWorkspaceBufferRef,
+    openProjectFolderBufferRef,
     onUpdateRef,
     settingsRef,
     keymapsRef,
@@ -446,7 +446,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     fileType.isSvgFile,
     fileType.isHtmlFile,
     splitPane,
-    openWorkspaceBuffer,
+    openProjectFolderBuffer,
     paneId,
   );
 
@@ -582,7 +582,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         saving={saving}
         breadcrumbProps={{
           filePath: buffer.file.path,
-          workspaceRoot: contextMenu.workspaceRoot,
+          projectFolder: contextMenu.projectFolder,
           // Phones have no tab strip to name the file or mark it unsaved.
           showFileName: isMobileViewport,
           modified: isMobileViewport && buffer.isModified,
@@ -648,7 +648,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 }
 
 /**
- * Memoized on `paneId`: the pane is reached through WorkspacePane, whose props
+ * Memoized on `paneId`: the pane is reached through SpacesPane, whose props
  * include the chat's view props — those change on every stream flush, so an
  * open file was re-rendering ~20x/s while an agent answered. Its actual inputs
  * are the pane id and its contexts, so the memo is exact.

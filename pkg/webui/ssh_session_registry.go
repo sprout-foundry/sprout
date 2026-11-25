@@ -26,7 +26,7 @@ func sshSessionRegistryPath() string {
 	return filepath.Join(getSproutStateDir(), "ssh_sessions.json")
 }
 
-func readPersistedSSHSession(sessionKey string) (*persistedSSHWorkspaceSession, error) {
+func readPersistedSSHSession(sessionKey string) (*persistedSSHProjectFolderSession, error) {
 	registry, err := readPersistedSSHSessionRegistry()
 	if err != nil {
 		return nil, fmt.Errorf("read session registry: %w", err)
@@ -39,29 +39,29 @@ func readPersistedSSHSession(sessionKey string) (*persistedSSHWorkspaceSession, 
 	return &copy, nil
 }
 
-func readPersistedSSHSessionRegistry() (map[string]persistedSSHWorkspaceSession, error) {
+func readPersistedSSHSessionRegistry() (map[string]persistedSSHProjectFolderSession, error) {
 	data, err := os.ReadFile(sshSessionRegistryPath())
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return map[string]persistedSSHWorkspaceSession{}, nil
+			return map[string]persistedSSHProjectFolderSession{}, nil
 		}
 		return nil, fmt.Errorf("read SSH session registry file: %w", err)
 	}
 	if len(data) == 0 {
-		return map[string]persistedSSHWorkspaceSession{}, nil
+		return map[string]persistedSSHProjectFolderSession{}, nil
 	}
 
-	var registry map[string]persistedSSHWorkspaceSession
+	var registry map[string]persistedSSHProjectFolderSession
 	if err := json.Unmarshal(data, &registry); err != nil {
 		return nil, fmt.Errorf("parse SSH session registry: %w", err)
 	}
 	if registry == nil {
-		registry = map[string]persistedSSHWorkspaceSession{}
+		registry = map[string]persistedSSHProjectFolderSession{}
 	}
 	return registry, nil
 }
 
-func writePersistedSSHSessionRegistry(registry map[string]persistedSSHWorkspaceSession) error {
+func writePersistedSSHSessionRegistry(registry map[string]persistedSSHProjectFolderSession) error {
 	if err := os.MkdirAll(getSproutStateDir(), 0755); err != nil {
 		return fmt.Errorf("create session registry directory: %w", err)
 	}
@@ -76,7 +76,7 @@ func writePersistedSSHSessionRegistry(registry map[string]persistedSSHWorkspaceS
 	return os.Rename(tmpPath, sshSessionRegistryPath())
 }
 
-func persistSSHSession(session *sshWorkspaceSession) error {
+func persistSSHSession(session *sshProjectFolderSession) error {
 	if session == nil {
 		return nil
 	}
@@ -84,13 +84,13 @@ func persistSSHSession(session *sshWorkspaceSession) error {
 	if err != nil {
 		return fmt.Errorf("read session registry for persist: %w", err)
 	}
-	registry[session.Key] = persistedSSHWorkspaceSession{
-		Key:                 session.Key,
-		HostAlias:           session.HostAlias,
-		RemoteWorkspacePath: session.RemoteWorkspacePath,
-		RemotePort:          session.RemotePort,
-		RemotePID:           session.RemotePID,
-		StartedAt:           session.StartedAt,
+	registry[session.Key] = persistedSSHProjectFolderSession{
+		Key:                     session.Key,
+		HostAlias:               session.HostAlias,
+		RemoteProjectFolderPath: session.RemoteProjectFolderPath,
+		RemotePort:              session.RemotePort,
+		RemotePID:               session.RemotePID,
+		StartedAt:               session.StartedAt,
 	}
 	return writePersistedSSHSessionRegistry(registry)
 }
@@ -139,17 +139,17 @@ func (ws *ReactWebServer) restorePersistedSSHSession(sessionKey string) (*sshLau
 		return nil, fmt.Errorf("health check for restored session: %w", err)
 	}
 
-	session := &sshWorkspaceSession{
-		Key:                 persisted.Key,
-		HostAlias:           persisted.HostAlias,
-		RemoteWorkspacePath: persisted.RemoteWorkspacePath,
-		LocalPort:           localPort,
-		RemotePort:          DaemonPort,
-		RemotePID:           persisted.RemotePID,
-		URL:                 fmt.Sprintf("http://127.0.0.1:%d", localPort),
-		TunnelCmd:           tunnelCmd,
-		StartedAt:           persisted.StartedAt,
-		ReusedDaemon:        true,
+	session := &sshProjectFolderSession{
+		Key:                     persisted.Key,
+		HostAlias:               persisted.HostAlias,
+		RemoteProjectFolderPath: persisted.RemoteProjectFolderPath,
+		LocalPort:               localPort,
+		RemotePort:              DaemonPort,
+		RemotePID:               persisted.RemotePID,
+		URL:                     fmt.Sprintf("http://127.0.0.1:%d", localPort),
+		TunnelCmd:               tunnelCmd,
+		StartedAt:               persisted.StartedAt,
+		ReusedDaemon:            true,
 	}
 
 	ws.sshSessionsMu.Lock()
@@ -178,13 +178,13 @@ func (ws *ReactWebServer) listSSHSessions() ([]sshSessionEntryDTO, error) {
 	sessions := make([]sshSessionEntryDTO, 0, len(registry))
 	for key, persisted := range registry {
 		entry := sshSessionEntryDTO{
-			Key:                 key,
-			HostAlias:           persisted.HostAlias,
-			RemoteWorkspacePath: persisted.RemoteWorkspacePath,
-			RemotePort:          persisted.RemotePort,
-			RemotePID:           persisted.RemotePID,
-			StartedAt:           persisted.StartedAt,
-			Active:              false,
+			Key:                     key,
+			HostAlias:               persisted.HostAlias,
+			RemoteProjectFolderPath: persisted.RemoteProjectFolderPath,
+			RemotePort:              persisted.RemotePort,
+			RemotePID:               persisted.RemotePID,
+			StartedAt:               persisted.StartedAt,
+			Active:                  false,
 		}
 		if active := ws.sshSessions[key]; active != nil {
 			entry.Active = true
@@ -248,7 +248,7 @@ func (ws *ReactWebServer) publishSSHTunnelStatus(sessionKey, status, message str
 	})
 }
 
-func (ws *ReactWebServer) watchSSHSession(key string, session *sshWorkspaceSession, cmd *exec.Cmd) {
+func (ws *ReactWebServer) watchSSHSession(key string, session *sshProjectFolderSession, cmd *exec.Cmd) {
 	if cmd == nil {
 		return
 	}

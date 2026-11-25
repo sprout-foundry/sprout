@@ -67,9 +67,9 @@ func TestShellConfig_LoadWithShellSection(t *testing.T) {
 		t.Errorf("expected dangerous pattern[0] reason 'Production-destructive', got %q", cfg.Shell.UserDangerousPatterns[0].Reason)
 	}
 
-	// Check workspace overlay
-	if cfg.Shell.WorkspaceOverlay.Mode != "tighten_only" {
-		t.Errorf("expected workspace overlay mode 'tighten_only', got %q", cfg.Shell.WorkspaceOverlay.Mode)
+	// Check project folder overlay
+	if cfg.Shell.ProjectFolderOverlay.Mode != "tighten_only" {
+		t.Errorf("expected project folder overlay mode 'tighten_only', got %q", cfg.Shell.ProjectFolderOverlay.Mode)
 	}
 }
 
@@ -102,8 +102,8 @@ func TestShellConfig_LoadWithoutShellSection(t *testing.T) {
 	if cfg.Shell.UserDangerousPatterns != nil {
 		t.Errorf("expected nil dangerous patterns, got %v", cfg.Shell.UserDangerousPatterns)
 	}
-	if cfg.Shell.WorkspaceOverlay.Mode != "" {
-		t.Errorf("expected empty workspace overlay mode, got %q", cfg.Shell.WorkspaceOverlay.Mode)
+	if cfg.Shell.ProjectFolderOverlay.Mode != "" {
+		t.Errorf("expected empty project folder overlay mode, got %q", cfg.Shell.ProjectFolderOverlay.Mode)
 	}
 }
 
@@ -123,7 +123,7 @@ func TestShellConfig_Validate(t *testing.T) {
 				UserDangerousPatterns: []ShellPattern{
 					{Match: "rm -rf", Kind: "prefix"},
 				},
-				WorkspaceOverlay: WorkspaceOverlayConfig{Mode: "tighten_only"},
+				ProjectFolderOverlay: ProjectFolderOverlayConfig{Mode: "tighten_only"},
 			},
 			wantErr: false,
 		},
@@ -133,7 +133,7 @@ func TestShellConfig_Validate(t *testing.T) {
 				UserSafePatterns: []ShellPattern{
 					{Match: "^my-tool", Kind: "regex"},
 				},
-				WorkspaceOverlay: WorkspaceOverlayConfig{Mode: "trusted"},
+				ProjectFolderOverlay: ProjectFolderOverlayConfig{Mode: "trusted"},
 			},
 			wantErr: false,
 		},
@@ -149,7 +149,7 @@ func TestShellConfig_Validate(t *testing.T) {
 		{
 			name: "empty mode normalizes to tighten_only",
 			shell: ShellConfig{
-				WorkspaceOverlay: WorkspaceOverlayConfig{Mode: ""},
+				ProjectFolderOverlay: ProjectFolderOverlayConfig{Mode: ""},
 			},
 			wantErr: false,
 		},
@@ -210,13 +210,13 @@ func TestShellConfig_Validate_NormalizesKind(t *testing.T) {
 
 func TestShellConfig_Validate_NormalizesMode(t *testing.T) {
 	sc := ShellConfig{
-		WorkspaceOverlay: WorkspaceOverlayConfig{Mode: ""},
+		ProjectFolderOverlay: ProjectFolderOverlayConfig{Mode: ""},
 	}
 	if err := sc.Validate(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if sc.WorkspaceOverlay.Mode != "tighten_only" {
-		t.Errorf("expected empty mode to normalize to 'tighten_only', got %q", sc.WorkspaceOverlay.Mode)
+	if sc.ProjectFolderOverlay.Mode != "tighten_only" {
+		t.Errorf("expected empty mode to normalize to 'tighten_only', got %q", sc.ProjectFolderOverlay.Mode)
 	}
 }
 
@@ -229,7 +229,7 @@ func TestShellConfig_JSONRoundTrip(t *testing.T) {
 		UserDangerousPatterns: []ShellPattern{
 			{Match: "terraform destroy", Kind: "prefix", Reason: "Production-destructive"},
 		},
-		WorkspaceOverlay: WorkspaceOverlayConfig{Mode: "trusted"},
+		ProjectFolderOverlay: ProjectFolderOverlayConfig{Mode: "trusted"},
 	}
 
 	data, err := json.Marshal(original)
@@ -254,8 +254,8 @@ func TestShellConfig_JSONRoundTrip(t *testing.T) {
 	if decoded.UserDangerousPatterns[0].Reason != "Production-destructive" {
 		t.Errorf("dangerous pattern reason mismatch: got %q", decoded.UserDangerousPatterns[0].Reason)
 	}
-	if decoded.WorkspaceOverlay.Mode != "trusted" {
-		t.Errorf("workspace overlay mode mismatch: got %q", decoded.WorkspaceOverlay.Mode)
+	if decoded.ProjectFolderOverlay.Mode != "trusted" {
+		t.Errorf("project folder overlay mode mismatch: got %q", decoded.ProjectFolderOverlay.Mode)
 	}
 }
 
@@ -265,7 +265,7 @@ func TestShellConfig_Merge(t *testing.T) {
 			UserSafePatterns: []ShellPattern{
 				{Match: "base-safe", Kind: "prefix"},
 			},
-			WorkspaceOverlay: WorkspaceOverlayConfig{Mode: "tighten_only"},
+			ProjectFolderOverlay: ProjectFolderOverlayConfig{Mode: "tighten_only"},
 		},
 	}
 
@@ -277,7 +277,7 @@ func TestShellConfig_Merge(t *testing.T) {
 			UserDangerousPatterns: []ShellPattern{
 				{Match: "override-dangerous", Kind: "prefix"},
 			},
-			WorkspaceOverlay: WorkspaceOverlayConfig{Mode: "trusted"},
+			ProjectFolderOverlay: ProjectFolderOverlayConfig{Mode: "trusted"},
 		},
 	}
 
@@ -299,9 +299,9 @@ func TestShellConfig_Merge(t *testing.T) {
 		t.Errorf("expected merged dangerous pattern 'override-dangerous', got %q", result.Shell.UserDangerousPatterns[0].Match)
 	}
 
-	// Workspace overlay mode should be overridden
-	if result.Shell.WorkspaceOverlay.Mode != "trusted" {
-		t.Errorf("expected merged workspace overlay mode 'trusted', got %q", result.Shell.WorkspaceOverlay.Mode)
+	// Project folder overlay mode should be overridden
+	if result.Shell.ProjectFolderOverlay.Mode != "trusted" {
+		t.Errorf("expected merged project folder overlay mode 'trusted', got %q", result.Shell.ProjectFolderOverlay.Mode)
 	}
 }
 

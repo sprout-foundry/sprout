@@ -6,7 +6,7 @@ import { isLayeredLayout } from '../config/layout';
 import './EditorWithOutline.css';
 
 interface EditorWithOutlineProps {
-  /** The editor-workspace content (children) */
+  /** The editor-spaces content (children) */
   children: React.ReactNode;
   /** The file content to extract symbols from */
   content: string;
@@ -21,7 +21,7 @@ interface EditorWithOutlineProps {
 }
 
 /**
- * EditorWithOutline wraps the editor workspace with a collapsible/resizable outline panel.
+ * EditorWithOutline wraps the editor project folder with a collapsible/resizable outline panel.
  * The outline panel shows a document outline (functions, classes, etc.) and enables
  * navigation to symbols in the code.
  */
@@ -85,7 +85,7 @@ function EditorWithOutline({
 
   return (
     <div className="editor-with-outline">
-      <div className="editor-workspace-wrapper">{children}</div>
+      <div className="editor-spaces-wrapper">{children}</div>
 
       {isFileOpen && (
         <>

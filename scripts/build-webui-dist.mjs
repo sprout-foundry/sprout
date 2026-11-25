@@ -684,7 +684,7 @@ export function buildCapabilityManifest(opts) {
   // pickWorkspace/createWorkspace ops ship with the fs exclusion). Any
   // other combination emits no `capabilities` key at all.
   const capabilities = opts.nativeFs
-    ? { supportsWorkspaceSwitching: true, supportsFolderPicker: true }
+    ? { supportsProjectFolderSwitching: true, supportsFolderPicker: true }
     : undefined;
 
   return {
@@ -1498,7 +1498,7 @@ function main(opts) {
     // createWorkspace on the bridge files channel).
     if (opts.nativeFs) {
       console.log(
-        "    ↳ declares supportsWorkspaceSwitching + supportsFolderPicker (studio workspace gate)",
+        "    ↳ declares supportsProjectFolderSwitching + supportsFolderPicker (studio workspace gate)",
       );
     }
   }

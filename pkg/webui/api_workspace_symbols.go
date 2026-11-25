@@ -23,20 +23,20 @@ func (ws *ReactWebServer) handleAPIWorkspaceSymbols(w http.ResponseWriter, r *ht
 		return
 	}
 
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	if workspaceRoot == "" {
-		writeJSONErr(w, http.StatusBadRequest, "workspace_not_found", "Workspace not found")
+	projectFolder := ws.getProjectFolderForRequest(r)
+	if projectFolder == "" {
+		writeJSONErr(w, http.StatusBadRequest, "project_folder_not_found", "Project folder not found")
 		return
 	}
 
 	// Try loading cached symbols first
-	idx, err := index.LoadSymbols(workspaceRoot)
+	idx, err := index.LoadSymbols(projectFolder)
 	if err != nil {
 		ws.log().Debug("failed to load symbol index", slog.Any("err", err))
 	}
 	// If cache doesn't exist or has no files, build fresh
 	if idx == nil || len(idx.Files) == 0 {
-		idx, err = index.BuildSymbols(workspaceRoot)
+		idx, err = index.BuildSymbols(projectFolder)
 		if err != nil {
 			writeJSONErr(w, http.StatusInternalServerError, "symbol_index_build_failed", fmt.Sprintf("Failed to build symbol index: %v", err))
 			return

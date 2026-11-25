@@ -1,0 +1,73 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addTool",
+      "params": {
+        "description": "Calculate",
+        "name": "calculator",
+        "parameters": {
+          "properties": {
+            "expression": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addMalformedResponse",
+      "params": {
+        "content": "Let me calculate:\ncall:calculator{expression: \"3*3\"}"
+      }
+    },
+    {
+      "id": 4,
+      "method": "mock.addToolResult",
+      "params": {
+        "content": "9",
+        "toolCallId": "call_auto_1"
+      }
+    },
+    {
+      "id": 5,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "The result is 9."
+      }
+    },
+    {
+      "id": 6,
+      "method": "agent.run",
+      "params": {
+        "query": "What's 3*3?"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 6,
+      "type": "noError"
+    },
+    {
+      "id": 6,
+      "result": {
+        "result": "The result is 9."
+      },
+      "type": "response"
+    }
+  ],
+  "description": "Fallback parser extracts named tool call blocks from content",
+  "name": "named_blocks"
+}

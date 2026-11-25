@@ -23,6 +23,11 @@ type Field struct {
 	// Mine marks text the person set: a later draw keeps it while its key is
 	// on the page.
 	Mine bool `json:"mine,omitempty"`
+	// List, Item and Col place a field in a list of repeated items
+	// (lists.go): the list's id, the item and the column it is in.
+	List string `json:"list,omitempty"`
+	Item int    `json:"item,omitempty"`
+	Col  int    `json:"col,omitempty"`
 
 	pos int
 }
@@ -31,6 +36,11 @@ type Field struct {
 type Content struct {
 	Version int     `json:"version"`
 	Fields  []Field `json:"fields"`
+	// Lists are the page's lists of repeated items (lists.go).
+	Lists []List `json:"lists,omitempty"`
+	// Pictures are the page's picture slots and the person's picture in
+	// each (pictures.go).
+	Pictures []Picture `json:"pictures,omitempty"`
 }
 
 // ContentVersion is the content file's format.
@@ -72,13 +82,22 @@ type frame struct {
 	direct strings.Builder
 	full   strings.Builder
 	kids   []*frame
+	// children are its child elements; fieldsAt and fieldsEnd bound the
+	// fields recorded inside it (lists.go reads both).
+	children            []*frame
+	fieldsAt, fieldsEnd int
+	// heading is the heading above the element where it opens: a list's name.
+	heading string
 }
 
 // Keyed gives every element with text of its own a key and returns the page
 // with its keys and the page's content. Keys already on the page are kept;
 // saved's fields marked as the person's replace the page's text for their
-// keys. The page is otherwise left as written.
+// keys. A picture spot a redraw renamed gets its old key back, so the
+// person's picture stays in it (keepPictureKeys). The page is otherwise left
+// as written.
 func Keyed(doc string, saved *Content) (string, Content) {
+	doc = keepPictureKeys(doc, saved)
 	mine := map[string]Field{}
 	if saved != nil {
 		for _, f := range saved.Fields {
@@ -108,6 +127,9 @@ func Keyed(doc string, saved *Content) (string, Content) {
 	var pieces []string
 	var stack []*frame
 	var fields []Field
+	var lists []List
+	var pictures []Picture
+	listIDs := existingListIDs(doc)
 	heading := ""
 	skipping := func() bool {
 		for _, f := range stack {
@@ -141,6 +163,9 @@ func Keyed(doc string, saved *Content) (string, Content) {
 		setAttr(&f.token, keyAttr, key)
 		pieces[f.tagPiece] = renderTag(f.token, false)
 		label := f.label
+		if label == "" && !interactiveTag(f.tag, attr(f.token, "class")) {
+			label = textLabel(text, attr(f.token, "class"))
+		}
 		if label == "" {
 			label = elementLabel(f.tag, attr(f.token, "class"))
 		}
@@ -210,8 +235,17 @@ func Keyed(doc string, saved *Content) (string, Content) {
 			if attr(tok, "data-screen") != "" {
 				heading = ""
 			}
+			if !skipping() {
+				if pic, ok := pictureSlot(&tok, section(), saved); ok {
+					pictures = append(pictures, pic)
+					raw = renderTag(tok, false)
+				}
+			}
 			f := &frame{tag: tag, tagPiece: len(pieces), token: tok, key: attr(tok, keyAttr), label: attr(tok, labelAttr),
-				screen: attr(tok, "data-screen"), skip: skippedElements[tag] || tag == "textarea"}
+				screen: attr(tok, "data-screen"), skip: skippedElements[tag] || tag == "textarea", fieldsAt: len(fields), heading: heading}
+			if len(stack) > 0 {
+				stack[len(stack)-1].children = append(stack[len(stack)-1].children, f)
+			}
 			stack = append(stack, f)
 			pieces = append(pieces, raw)
 		case nethtml.EndTagToken:
@@ -227,6 +261,13 @@ func Keyed(doc string, saved *Content) (string, Content) {
 				f := stack[j]
 				f.endPiece = len(pieces) - 1
 				closeFrame(f, j)
+				f.fieldsEnd = len(fields)
+				if !skipping() {
+					if l, ok := markList(f, fields, f.heading, inNavigation(stack[:j]), listIDs); ok {
+						lists = append(lists, l)
+						pieces[f.tagPiece] = renderTag(f.token, false)
+					}
+				}
 				stack = stack[:j]
 			}
 		case nethtml.TextToken:
@@ -243,7 +284,8 @@ func Keyed(doc string, saved *Content) (string, Content) {
 			pieces = append(pieces, raw)
 		}
 	}
-	return strings.Join(pieces, ""), Content{Version: ContentVersion, Fields: orderByPage(fields)}
+	renameRepeatedLists(lists, fields)
+	return strings.Join(pieces, ""), Content{Version: ContentVersion, Fields: orderByPage(fields), Lists: lists, Pictures: pictures}
 }
 
 // replaceText puts text in place of an element's words: its own text and its
@@ -278,7 +320,7 @@ func orderByPage(fields []Field) []Field {
 // ApplyContent sets fields' text on a page as the person's, and returns the
 // page and its content. Keys not on the page are ignored.
 func ApplyContent(doc string, current Content, changes map[string]string) (string, Content) {
-	saved := Content{Version: ContentVersion}
+	saved := Content{Version: ContentVersion, Pictures: current.Pictures}
 	for _, f := range current.Fields {
 		if text, ok := changes[f.Key]; ok {
 			f.Text, f.Mine = text, true
@@ -366,43 +408,6 @@ func renderTag(t nethtml.Token, selfClosing bool) string {
 	return b.String()
 }
 
-func elementLabel(tag, class string) string {
-	switch tag {
-	case "title":
-		return "Page title"
-	case "h1":
-		return "Main heading"
-	case "h2", "h3", "h4", "h5", "h6":
-		return "Heading"
-	case "button":
-		return "Button"
-	case "a":
-		if strings.Contains(" "+class+" ", " btn") {
-			return "Button"
-		}
-		return "Link"
-	case "label":
-		return "Field label"
-	case "li":
-		return "List item"
-	case "th", "td":
-		return "Table cell"
-	case "option":
-		return "Choice"
-	case "blockquote", "q":
-		return "Quote"
-	}
-	return "Text"
-}
-
-func placeholderLabel(t nethtml.Token) string {
-	if l := attr(t, labelAttr); l != "" {
-		return l
-	}
-	return "Placeholder"
-}
-
-// humanize turns a screen id ("host-view") into words ("Host view").
 func humanize(id string) string {
 	s := strings.TrimSpace(strings.NewReplacer("-", " ", "_", " ").Replace(id))
 	if s == "" {

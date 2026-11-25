@@ -1,0 +1,26 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {
+        "compactionTriggerFraction": 0.01
+      }
+    },
+    {
+      "id": 2,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "ok"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    }
+  ],
+  "description": "Placeholder: compaction event published when message compaction runs. Requires enough messages to trigger compaction.",
+  "name": "compaction_event"
+}

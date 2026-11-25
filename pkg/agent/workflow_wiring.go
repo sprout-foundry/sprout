@@ -93,10 +93,10 @@ func RunWorkflowLoopInProcess(ctx context.Context, parentAgent *Agent, configPat
 	// Build system prompt.
 	systemPrompt := appendSubagentPreamble("You are a helpful coding assistant executing a TODO-based workflow.")
 
-	// Determine effective workspace root.
-	effectiveWorkspaceRoot := parentAgent.workspaceRoot
-	if effectiveWorkspaceRoot == "" {
-		effectiveWorkspaceRoot, _ = os.Getwd()
+	// Determine effective project folder.
+	effectiveProjectFolder := parentAgent.projectFolder
+	if effectiveProjectFolder == "" {
+		effectiveProjectFolder, _ = os.Getwd()
 	}
 
 	// Create interrupt context derived from the caller's context so
@@ -133,7 +133,7 @@ func RunWorkflowLoopInProcess(ctx context.Context, parentAgent *Agent, configPat
 		interruptCtx:        interruptCtx,
 		interruptCancel:     interruptCancel,
 		parentInterruptCtx:  ctx,
-		workspaceRoot:       effectiveWorkspaceRoot,
+		projectFolder:       effectiveProjectFolder,
 		state:               stateMgr,
 		output:              outputMgr,
 		security:            securityMgr,

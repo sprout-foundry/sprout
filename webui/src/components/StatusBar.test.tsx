@@ -101,11 +101,11 @@ function queryByText(parent: HTMLElement, text: string) {
 
 // StatusBar reads its capability flags through the host. The default host is
 // the LOCAL shape: git support on (the assertions below expect a git branch
-// surface), workspace-switching on, and a local terminal — so the workspace
-// indicator derives from workspacePath (not the repo slug) and a missing
+// surface), project-folder-switching on, and a local terminal — so the project folder
+// indicator derives from projectFolderPath (not the repo slug) and a missing
 // branch reads as "No Git" from the git bar, matching the local build. Flip
 // tests override the host to exercise the hosted branches.
-const localStatusBarHost = makeTestHost({ git: true, workspaceSwitching: true, localTerminal: true });
+const localStatusBarHost = makeTestHost({ git: true, projectFolderSwitching: true, localTerminal: true });
 
 function renderStatusBar(node: ReactNode, host: SproutHost = localStatusBarHost) {
   root.render(<HostProvider host={host}>{node}</HostProvider>);
@@ -387,75 +387,78 @@ describe('StatusBar', () => {
 
   // ---- 18. Workspace indicator ----
   describe('Workspace indicator', () => {
-    test('renders workspace indicator when workspacePath is provided', async () => {
+    test('renders workspace indicator when projectFolderPath is provided', async () => {
       await act(async () => {
-        renderStatusBar(<StatusBar workspacePath="/home/user/myproject" />);
+        renderStatusBar(<StatusBar projectFolderPath="/home/user/myproject" />);
       });
 
-      const indicator = container.querySelector('.statusbar-item-workspace');
+      const indicator = container.querySelector('.statusbar-item-project-folder');
       expect(indicator).toBeTruthy();
       expect(indicator?.textContent).toContain('myproject');
     });
 
-    test('does not render workspace indicator without workspacePath', async () => {
+    test('does not render workspace indicator without projectFolderPath', async () => {
       await act(async () => {
         renderStatusBar(<StatusBar />);
       });
 
-      expect(container.querySelector('.statusbar-item-workspace')).toBeNull();
+      expect(container.querySelector('.statusbar-item-project-folder')).toBeNull();
 
       await act(async () => {
-        renderStatusBar(<StatusBar workspacePath="" />);
+        renderStatusBar(<StatusBar projectFolderPath="" />);
       });
 
-      expect(container.querySelector('.statusbar-item-workspace')).toBeNull();
+      expect(container.querySelector('.statusbar-item-project-folder')).toBeNull();
     });
 
     test('extracts basename from path with trailing slash', async () => {
       await act(async () => {
-        renderStatusBar(<StatusBar workspacePath="/home/user/myproject/" />);
+        renderStatusBar(<StatusBar projectFolderPath="/home/user/myproject/" />);
       });
 
-      const indicator = container.querySelector('.statusbar-item-workspace');
+      const indicator = container.querySelector('.statusbar-item-project-folder');
       expect(indicator).toBeTruthy();
       expect(indicator?.textContent).toContain('myproject');
     });
 
-    // Host capability flips the workspace indicator's data source. A
-    // workspace-switching shell derives the name from workspacePath (the local
-    // build's behavior); a hosted shell with no workspace switching derives it
+    // Host capability flips the project folder indicator's data source. A
+    // project-folder-switching shell derives the name from projectFolderPath (the local
+    // build's behavior); a hosted shell with no project folder switching derives it
     // from the active repository URL. Without a repo URL and without a
-    // workspacePath, the hosted shell hides the indicator entirely.
+    // projectFolderPath, the hosted shell hides the indicator entirely.
     test('hosted shell with no workspace switching and no repo: indicator hidden', async () => {
       await act(async () => {
-        renderStatusBar(<StatusBar />, makeTestHost({ git: true, workspaceSwitching: false, localTerminal: false }));
-      });
-      expect(container.querySelector('.statusbar-item-workspace')).toBeNull();
-    });
-
-    test('workspace-switching shell: indicator derives from workspacePath', async () => {
-      await act(async () => {
         renderStatusBar(
-          <StatusBar workspacePath="/home/user/myproject" />,
-          makeTestHost({ git: true, workspaceSwitching: true, localTerminal: true }),
+          <StatusBar />,
+          makeTestHost({ git: true, projectFolderSwitching: false, localTerminal: false }),
         );
       });
-      const indicator = container.querySelector('.statusbar-item-workspace');
-      expect(indicator).toBeTruthy();
-      expect(indicator?.textContent).toContain('myproject');
-      expect(indicator?.getAttribute('aria-label')).toContain('Workspace:');
+      expect(container.querySelector('.statusbar-item-project-folder')).toBeNull();
     });
 
-    // An embedding host's workspace root is a container path such as
+    test('project-folder-switching shell: indicator derives from projectFolderPath', async () => {
+      await act(async () => {
+        renderStatusBar(
+          <StatusBar projectFolderPath="/home/user/myproject" />,
+          makeTestHost({ git: true, projectFolderSwitching: true, localTerminal: true }),
+        );
+      });
+      const indicator = container.querySelector('.statusbar-item-project-folder');
+      expect(indicator).toBeTruthy();
+      expect(indicator?.textContent).toContain('myproject');
+      expect(indicator?.getAttribute('aria-label')).toContain('Project folder:');
+    });
+
+    // An embedding host's project folder is a container path such as
     // `/workspace`; the project name it passes labels the indicator instead.
     test('a host project name labels the indicator instead of the root basename', async () => {
       await act(async () => {
         renderStatusBar(
-          <StatusBar workspacePath="/workspace" projectName="acme-api" />,
-          makeTestHost({ git: true, workspaceSwitching: true, localTerminal: false }),
+          <StatusBar projectFolderPath="/workspace" projectName="acme-api" />,
+          makeTestHost({ git: true, projectFolderSwitching: true, localTerminal: false }),
         );
       });
-      const indicator = container.querySelector('.statusbar-item-workspace');
+      const indicator = container.querySelector('.statusbar-item-project-folder');
       expect(indicator?.textContent).toContain('acme-api');
       expect(indicator?.textContent).not.toContain('workspace');
       expect(indicator?.getAttribute('aria-label')).toBe('Project: acme-api');
@@ -465,28 +468,28 @@ describe('StatusBar', () => {
       await act(async () => {
         renderStatusBar(
           <StatusBar projectName="acme-api" />,
-          makeTestHost({ git: true, workspaceSwitching: false, localTerminal: false }),
+          makeTestHost({ git: true, projectFolderSwitching: false, localTerminal: false }),
         );
       });
-      expect(container.querySelector('.statusbar-item-workspace')?.textContent).toContain('acme-api');
+      expect(container.querySelector('.statusbar-item-project-folder')?.textContent).toContain('acme-api');
     });
 
     test('does not render for root path', async () => {
       await act(async () => {
-        renderStatusBar(<StatusBar workspacePath="/" />);
+        renderStatusBar(<StatusBar projectFolderPath="/" />);
       });
 
-      expect(container.querySelector('.statusbar-item-workspace')).toBeNull();
+      expect(container.querySelector('.statusbar-item-project-folder')).toBeNull();
     });
 
-    test('calls onWorkspaceClick when clicked', async () => {
+    test('calls onProjectFolderClick when clicked', async () => {
       const handleClick = vi.fn();
 
       await act(async () => {
-        renderStatusBar(<StatusBar workspacePath="/some/path" onWorkspaceClick={handleClick} />);
+        renderStatusBar(<StatusBar projectFolderPath="/some/path" onProjectFolderClick={handleClick} />);
       });
 
-      const indicator = container.querySelector('.statusbar-item-workspace');
+      const indicator = container.querySelector('.statusbar-item-project-folder');
       expect(indicator).toBeTruthy();
 
       await act(async () => {
@@ -498,10 +501,10 @@ describe('StatusBar', () => {
 
     test('has proper accessibility attributes', async () => {
       await act(async () => {
-        renderStatusBar(<StatusBar workspacePath="/home/user/myproject" />);
+        renderStatusBar(<StatusBar projectFolderPath="/home/user/myproject" />);
       });
 
-      const indicator = container.querySelector('.statusbar-item-workspace');
+      const indicator = container.querySelector('.statusbar-item-project-folder');
       expect(indicator).toBeTruthy();
       expect(indicator?.getAttribute('role')).toBe('button');
       expect(indicator?.getAttribute('title')).toContain('/home/user/myproject');
@@ -533,7 +536,7 @@ describe('StatusBar', () => {
     test('renders a visible Report a bug button and dispatches the host intent', async () => {
       const opened: Array<{ type: string }> = [];
       const host = {
-        ...makeTestHost({ git: true, workspaceSwitching: true, localTerminal: true }),
+        ...makeTestHost({ git: true, projectFolderSwitching: true, localTerminal: true }),
         navigation: { open: (intent: { type: string }) => opened.push(intent) },
       };
       await act(async () => {

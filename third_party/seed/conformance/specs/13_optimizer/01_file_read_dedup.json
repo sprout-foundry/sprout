@@ -1,0 +1,94 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {
+        "optimizer": {
+          "toolCategories": {
+            "read_file": "file_read"
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "method": "mock.addTool",
+      "params": {
+        "description": "Read a file",
+        "name": "read_file",
+        "parameters": {
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addToolCallResponse",
+      "params": {
+        "calls": [
+          {
+            "arguments": {
+              "path": "/tmp/a.txt"
+            },
+            "id": "call_1",
+            "name": "read_file"
+          },
+          {
+            "arguments": {
+              "path": "/tmp/a.txt"
+            },
+            "id": "call_2",
+            "name": "read_file"
+          }
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "method": "mock.addToolResult",
+      "params": {
+        "content": "file content",
+        "toolCallId": "call_1"
+      }
+    },
+    {
+      "id": 5,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "Done."
+      }
+    },
+    {
+      "id": 6,
+      "method": "agent.run",
+      "params": {
+        "query": "Read the file"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 6,
+      "type": "noError"
+    },
+    {
+      "id": 6,
+      "result": {
+        "result": "Done."
+      },
+      "type": "response"
+    }
+  ],
+  "description": "Conversation optimizer deduplicates identical file read calls within a turn",
+  "name": "file_read_dedup"
+}

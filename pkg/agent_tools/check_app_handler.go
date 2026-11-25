@@ -61,9 +61,9 @@ func (h *checkAppHandler) Validate(args map[string]any) error {
 }
 
 func (h *checkAppHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	root := strings.TrimSpace(env.WorkspaceRoot)
+	root := strings.TrimSpace(env.ProjectFolder)
 	if root == "" {
-		msg := "check_app: no workspace root, so there is no project to check"
+		msg := "check_app: no project folder, so there is no project to check"
 		return ToolResult{Output: msg, IsError: true}, agenterrors.NewPermanentError(msg, nil)
 	}
 	budget := appcheck.DefaultBudget
@@ -85,9 +85,11 @@ func (h *checkAppHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	return ToolResult{Output: out}, nil
 }
 
-// sharedRodBrowser is the browser the check drives: the same Rod renderer
-// browse_url uses (pkg/webcontent), so the app has one browser stack. A
-// missing Chromium surfaces as "could not run" in the report, not an error.
+// sharedRodBrowser is the browser the check drives. It is the same Rod stack
+// browse_url uses (pkg/webcontent), so the app has one browser implementation;
+// the check renders through a renderer of its own that keeps its loopback
+// server off any configured proxy. A missing Chromium surfaces as "could not
+// run" in the report, not an error.
 func sharedRodBrowser() appcheck.RodBrowser {
 	return appcheck.NewWebcontentBrowser()
 }

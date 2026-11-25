@@ -11,28 +11,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestWorkspacePatchEvent_NoConflictInfo verifies that calling
-// WorkspacePatchEvent with only the required 4 arguments does NOT include
+// TestProjectFolderPatchEvent_NoConflictInfo verifies that calling
+// ProjectFolderPatchEvent with only the required 4 arguments does NOT include
 // conflict or theirs_path keys in the returned map.
-func TestWorkspacePatchEvent_NoConflictInfo(t *testing.T) {
-	data := WorkspacePatchEvent("/path/to/file.txt", "content", "write", 42)
+func TestProjectFolderPatchEvent_NoConflictInfo(t *testing.T) {
+	data := ProjectFolderPatchEvent("/path/to/file.txt", "content", "write", 42)
 
 	assert.Equal(t, "/path/to/file.txt", data["file_path"])
 	assert.Equal(t, len("content"), data["size"], "size reflects the dropped content length")
 	assert.Equal(t, "write", data["action"])
 	assert.Equal(t, int64(42), data["seq"])
-	assert.NotContains(t, data, "content", "content must not be shipped in workspace_patch events")
+	assert.NotContains(t, data, "content", "content must not be shipped in project_folder_patch events")
 
 	// Must NOT contain conflict or theirs_path keys
 	assert.NotContains(t, data, "conflict", "no conflict key when called without conflict info")
 	assert.NotContains(t, data, "theirs_path", "no theirs_path key when called without conflict info")
 }
 
-// TestWorkspacePatchEvent_ConflictFalse verifies that when a
+// TestProjectFolderPatchEvent_ConflictFalse verifies that when a
 // PatchConflictInfo with Conflict=false is provided, the returned map
 // does NOT include conflict or theirs_path keys.
-func TestWorkspacePatchEvent_ConflictFalse(t *testing.T) {
-	data := WorkspacePatchEvent(
+func TestProjectFolderPatchEvent_ConflictFalse(t *testing.T) {
+	data := ProjectFolderPatchEvent(
 		"/path/to/file.txt", "content", "edit", 10,
 		PatchConflictInfo{Conflict: false, TheirsPath: ""},
 	)
@@ -48,13 +48,13 @@ func TestWorkspacePatchEvent_ConflictFalse(t *testing.T) {
 	assert.NotContains(t, data, "theirs_path", "no theirs_path key when Conflict is false")
 }
 
-// TestWorkspacePatchEvent_ConflictTrue verifies that when a
+// TestProjectFolderPatchEvent_ConflictTrue verifies that when a
 // PatchConflictInfo with Conflict=true and a TheirsPath is provided,
 // the returned map includes conflict=true and theirs_path set to the
 // provided theirs path.
-func TestWorkspacePatchEvent_ConflictTrue(t *testing.T) {
+func TestProjectFolderPatchEvent_ConflictTrue(t *testing.T) {
 	theirsPath := "/path/to/file.txt.theirs"
-	data := WorkspacePatchEvent(
+	data := ProjectFolderPatchEvent(
 		"/path/to/file.txt", "content", "write", 55,
 		PatchConflictInfo{Conflict: true, TheirsPath: theirsPath},
 	)
@@ -72,11 +72,11 @@ func TestWorkspacePatchEvent_ConflictTrue(t *testing.T) {
 	assert.Equal(t, theirsPath, data["theirs_path"], "theirs_path must match the provided value")
 }
 
-// TestWorkspacePatchEvent_BackwardCompatibilityWithFourArgs verifies
-// that calling WorkspacePatchEvent with just 4 arguments (the original
+// TestProjectFolderPatchEvent_BackwardCompatibilityWithFourArgs verifies
+// that calling ProjectFolderPatchEvent with just 4 arguments (the original
 // signature) still works correctly — no panic, no missing required keys.
-func TestWorkspacePatchEvent_BackwardCompatibilityWithFourArgs(t *testing.T) {
-	data := WorkspacePatchEvent("foo.txt", "bar", "edit", 1)
+func TestProjectFolderPatchEvent_BackwardCompatibilityWithFourArgs(t *testing.T) {
+	data := ProjectFolderPatchEvent("foo.txt", "bar", "edit", 1)
 
 	require.Contains(t, data, "file_path")
 	require.Contains(t, data, "size")

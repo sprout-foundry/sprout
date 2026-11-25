@@ -16,9 +16,9 @@ import (
 )
 
 // newWorktreeTestServer builds a server whose daemon root is a temp dir
-// containing a real git repo (the workspace). Mirrors the production
+// containing a real git repo (the project folder). Mirrors the production
 // topology: daemon root ⊃ repo, worktrees conventionally sit BESIDE the
-// repo ("../feature-x" from the workspace root).
+// repo ("../feature-x" from the project folder).
 func newWorktreeTestServer(t *testing.T) (ws *ReactWebServer, daemonRoot, repoDir string) {
 	t.Helper()
 	daemonRoot = t.TempDir()
@@ -46,18 +46,18 @@ func newWorktreeTestServer(t *testing.T) (ws *ReactWebServer, daemonRoot, repoDi
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.workspaceRoot = repoDir
+	ws.projectFolder = repoDir
 	return ws, daemonRoot, repoDir
 }
 
-// TestGitWorktreeCreate_RelativePathAnchoredAtWorkspace pins the fix for
+// TestGitWorktreeCreate_RelativePathAnchoredAtProjectFolder pins the fix for
 // the "worktree creation not working" report: relative paths typed in the
-// WebUI ("../feature-x", documented as workspace-root-relative) were
+// WebUI ("../feature-x", documented as project-folder-root-relative) were
 // resolved against the daemon's PROCESS working directory. A daemon
 // started in $HOME resolved "../feature-x" outside the daemon root and
 // the request died with path_outside_workspace — or worse, created the
 // worktree in the wrong place ("x" landed in $HOME, not beside the repo).
-func TestGitWorktreeCreate_RelativePathAnchoredAtWorkspace(t *testing.T) {
+func TestGitWorktreeCreate_RelativePathAnchoredAtProjectFolder(t *testing.T) {
 	ws, daemonRoot, repoDir := newWorktreeTestServer(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/git/worktree/create",
@@ -98,8 +98,8 @@ func TestGitWorktreeCreate_RelativePathAnchoredAtWorkspace(t *testing.T) {
 		strings.NewReader(`{"path":"../feature-x"}`))
 	req2.Header.Set(webClientIDHeader, "wt-test")
 	rec2 := httptest.NewRecorder()
-	// Set the client workspace so resolution anchors at the repo (the
-	// request goes through getWorkspaceRootForRequest).
+	// Set the client project folder so resolution anchors at the repo (the
+	// request goes through getProjectFolderForRequest).
 	ws2, _, _ := ws, daemonRoot, repoDir
 	_ = ws2
 	ws.handleAPIGitWorktreeRemove(rec2, req2)
@@ -111,9 +111,9 @@ func TestGitWorktreeCreate_RelativePathAnchoredAtWorkspace(t *testing.T) {
 	}
 }
 
-// TestGitWorktreeCreate_SimpleRelativeInsideWorkspace: a bare name ("wt-x")
-// must resolve INSIDE the workspace, not the daemon CWD.
-func TestGitWorktreeCreate_SimpleRelativeInsideWorkspace(t *testing.T) {
+// TestGitWorktreeCreate_SimpleRelativeInsideProjectFolder: a bare name ("wt-x")
+// must resolve INSIDE the project folder, not the daemon CWD.
+func TestGitWorktreeCreate_SimpleRelativeInsideProjectFolder(t *testing.T) {
 	ws, daemonRoot, repoDir := newWorktreeTestServer(t)
 	_ = daemonRoot
 
@@ -135,12 +135,12 @@ func TestGitWorktreeCreate_SimpleRelativeInsideWorkspace(t *testing.T) {
 		want = wantResolved
 	}
 	if resp.Path != want {
-		t.Fatalf("worktree path = %q, want %q (workspace-anchored, not daemon CWD)", resp.Path, want)
+		t.Fatalf("worktree path = %q, want %q (project-folder-anchored, not daemon CWD)", resp.Path, want)
 	}
 }
 
 // TestGitWorktreeCreate_RejectsEscapeBeyondSibling: "../../escape" resolves
-// above the workspace parent — outside every allowed boundary.
+// above the project folder parent — outside every allowed boundary.
 func TestGitWorktreeCreate_RejectsEscapeBeyondSibling(t *testing.T) {
 	ws, _, _ := newWorktreeTestServer(t)
 
@@ -153,7 +153,7 @@ func TestGitWorktreeCreate_RejectsEscapeBeyondSibling(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "path_outside_workspace") {
+	if !strings.Contains(rec.Body.String(), "path_outside_project_folder") {
 		t.Fatalf("expected path_outside_workspace code, got %s", rec.Body.String())
 	}
 }

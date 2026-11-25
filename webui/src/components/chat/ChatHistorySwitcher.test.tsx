@@ -219,7 +219,7 @@ describe('ChatHistorySwitcher', () => {
       await waitFor(
         () => {
           const notice = document.querySelector('[data-testid="chs-export-notice"]') as HTMLElement | null;
-          expect(notice?.textContent).toBe('No saved conversations in this workspace yet.');
+          expect(notice?.textContent).toBe('No saved conversations in this project folder yet.');
         },
         { timeout: 3000 },
       );
@@ -248,7 +248,9 @@ describe('ChatHistorySwitcher', () => {
       await waitFor(
         () => {
           const notice = document.querySelector('[data-testid="chs-export-notice"]') as HTMLElement | null;
-          expect(notice?.textContent).toBe('All saved conversations in this workspace are empty — nothing to export.');
+          expect(notice?.textContent).toBe(
+            'All saved conversations in this project folder are empty — nothing to export.',
+          );
         },
         { timeout: 3000 },
       );

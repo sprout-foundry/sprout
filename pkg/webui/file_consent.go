@@ -11,7 +11,7 @@ import (
 )
 
 func (ws *ReactWebServer) handleAPIFileConsent(w http.ResponseWriter, r *http.Request) {
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 	fileConsents := ws.getFileConsentManagerForRequest(r)
 	if !requireMethod(w, r, http.MethodPost) {
 		return
@@ -33,13 +33,13 @@ func (ws *ReactWebServer) handleAPIFileConsent(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	canonicalPath, err := canonicalizePath(req.Path, workspaceRoot, operation == "write")
+	canonicalPath, err := canonicalizePath(req.Path, projectFolder, operation == "write")
 	if err != nil {
 		writeJSONErr(w, http.StatusBadRequest, "invalid_file_path", fmt.Sprintf("Invalid file path: %v", err))
 		return
 	}
 
-	if isWithinWorkspace(canonicalPath, workspaceRoot) || isAppConfigPath(canonicalPath) {
+	if isWithinProjectFolder(canonicalPath, projectFolder) || isAppConfigPath(canonicalPath) {
 		writeJSONErr(w, http.StatusBadRequest, "path_does_not_require_external_consent", "Path does not require external consent")
 		return
 	}

@@ -68,7 +68,7 @@ func (t *TurnReadTracker) GetLastReadTime(path string) time.Time {
 // ------------------------------------------------------------------------
 
 // StalenessChecker checks whether a file write is stale based on the
-// agent's read tracking and the workspace sync state.
+// agent's read tracking and the project folder sync state.
 type StalenessChecker struct {
 	syncState       *SyncState
 	tracker         *TurnReadTracker

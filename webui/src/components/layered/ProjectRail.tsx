@@ -2,7 +2,7 @@
  * Layer 1 of the layered layout: where you are across projects. Home sits
  * above the project list; Activity and the account sit at the bottom. In
  * the hosted editor "projects" are repositories; on a local daemon they are
- * the running workspaces.
+ * the running project folders.
  */
 
 import { Bell, FolderGit2, Home, PanelLeftOpen, Plus, Settings } from 'lucide-react';

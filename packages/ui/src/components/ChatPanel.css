@@ -2272,8 +2272,8 @@
   outline-offset: 2px;
 }
 
-/* SP-142 §3: workspace-busy notice — another chat holds the workspace gate. */
-.workspace-busy-indicator {
+/* SP-142 §3: project-folder-busy notice — another chat holds the workspace gate. */
+.project-folder-busy-indicator {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2285,18 +2285,18 @@
   font-size: 12px;
 }
 
-.workspace-busy-icon {
+.project-folder-busy-icon {
   display: inline-flex;
   align-items: center;
   color: var(--accent-warning, #e5c07b);
 }
 
-.workspace-busy-text {
+.project-folder-busy-text {
   flex: 1;
   min-width: 0;
 }
 
-.workspace-busy-send-anyway {
+.project-folder-busy-send-anyway {
   border: 1px solid var(--border-subtle, #3e4451);
   border-radius: 6px;
   background: transparent;
@@ -2306,12 +2306,12 @@
   cursor: pointer;
 }
 
-.workspace-busy-send-anyway:hover {
+.project-folder-busy-send-anyway:hover {
   border-color: var(--accent-primary, #61afef);
   color: var(--accent-primary, #61afef);
 }
 
-.workspace-busy-dismiss {
+.project-folder-busy-dismiss {
   border: none;
   background: transparent;
   color: var(--text-muted, #5c6370);

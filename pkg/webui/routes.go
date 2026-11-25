@@ -106,5 +106,5 @@ func (ws *ReactWebServer) registerTerminalRoutes(mux *http.ServeMux, ctx context
 	ws.lspManager = lspproxy.NewManager(ctx)
 	// /api/lsp/ws is a WebSocket bridge, not a JSON operation, so it stays a
 	// plain handler.
-	mux.HandleFunc("/api/lsp/ws", lspproxy.BridgeHandler(ws.lspManager, ws.upgrader, ws.workspaceRoot))
+	mux.HandleFunc("/api/lsp/ws", lspproxy.BridgeHandler(ws.lspManager, ws.upgrader, ws.projectFolder))
 }

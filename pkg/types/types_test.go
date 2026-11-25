@@ -1275,7 +1275,7 @@ func TestEditPlan_JSON_EmptyChanges(t *testing.T) {
 
 func TestAgentContext_JSON_Roundtrip(t *testing.T) {
 	ctx := AgentContext{
-		WorkspaceRoot: "/workspace/project",
+		ProjectFolder: "/workspace/project",
 		CurrentFiles:  []string{"main.go", "config.yaml"},
 		GitStatus:     "modified: 3 files",
 		Metadata: map[string]string{
@@ -1292,7 +1292,7 @@ func TestAgentContext_JSON_Roundtrip(t *testing.T) {
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
-	if decoded.WorkspaceRoot != ctx.WorkspaceRoot || decoded.GitStatus != ctx.GitStatus {
+	if decoded.ProjectFolder != ctx.ProjectFolder || decoded.GitStatus != ctx.GitStatus {
 		t.Errorf("got %+v, want %+v", decoded, ctx)
 	}
 	if len(decoded.CurrentFiles) != len(ctx.CurrentFiles) {
@@ -1316,14 +1316,14 @@ func TestAgentContext_JSON_EmptyFields(t *testing.T) {
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
-	if decoded.WorkspaceRoot != "" || decoded.GitStatus != "" {
+	if decoded.ProjectFolder != "" || decoded.GitStatus != "" {
 		t.Errorf("expected empty, got %+v", decoded)
 	}
 }
 
 func TestAgentContext_JSON_OmitOptionalFields(t *testing.T) {
 	ctx := AgentContext{
-		WorkspaceRoot: "/workspace",
+		ProjectFolder: "/workspace",
 		CurrentFiles:  []string{"file.go"},
 	}
 	data, err := json.Marshal(ctx)
@@ -1344,7 +1344,7 @@ func TestAgentContext_JSON_OmitOptionalFields(t *testing.T) {
 
 func TestAgentContext_JSON_NilMetadata(t *testing.T) {
 	ctx := AgentContext{
-		WorkspaceRoot: "/workspace",
+		ProjectFolder: "/workspace",
 		CurrentFiles:  []string{"file.go"},
 		Metadata:      nil,
 	}

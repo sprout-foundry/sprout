@@ -33,7 +33,7 @@ import { WasmAssetsProvider } from '../contexts/WasmAssetsContext';
  * and defaulted here otherwise:
  *
  * - `eventsProvider` — the events transport. A host that runs its own
- *   transport (or shares one across several mounted workspaces) passes it in;
+ *   transport (or shares one across several mounted project folders) passes it in;
  *   omitted, the wrapper owns a single default transport for its own tree,
  *   created once and never replaced, so the provider identity stays stable
  *   across re-renders.

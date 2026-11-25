@@ -38,26 +38,26 @@ func PrecheckFileAccess(ctx context.Context, classifier FileAccessClassifier, to
 
 	mode := accessModeForTool(toolName)
 
-	// Resolve against the workspace root carried on ctx — the same
+	// Resolve against the project folder carried on ctx — the same
 	// basis the actual read/write below uses (SafeResolvePathWithBypass).
 	// The context-free SafeResolvePath resolves against the process CWD,
-	// which can differ from the agent's workspace root; that mismatch
-	// produced false "prompt" verdicts for paths inside the workspace
+	// which can differ from the agent's project folder; that mismatch
+	// produced false "prompt" verdicts for paths inside the project folder
 	// (e.g. a read_file of a relative path from a daemon whose CWD is
 	// elsewhere).
 	resolved, resolveErr := filesystem.SafeResolvePathWithBypass(ctx, filePath)
 
 	if resolveErr != nil {
-		// Path is outside workspace (or does not exist) — classify it to
+		// Path is outside project folder (or does not exist) — classify it to
 		// determine whether to prompt or deny.
 		//
 		// The classifier performs prefix containment checks against the
-		// workspace root and session allowlist, both absolute paths. A
+		// project folder and session allowlist, both absolute paths. A
 		// bare relative filePath can never satisfy them, which turns
 		// every non-existent relative path into a spurious "prompt".
 		// Resolve the candidate absolutely (without symlink evaluation,
 		// since the target does not exist) so containment checks work
-		// for paths inside the workspace even when they do not yet
+		// for paths inside the project folder even when they do not yet
 		// exist; the final read/write still fails with the raw
 		// filesystem error if the path is absent.
 		classifyTarget, _ := filesystem.SafeResolveAbs(ctx, filePath)
@@ -68,7 +68,7 @@ func PrecheckFileAccess(ctx context.Context, classifier FileAccessClassifier, to
 
 		// SP-127 Phase 2.7: discriminated audit event for session-allowlist hits.
 		// Even when the path can't be canonically resolved (e.g. dangling symlink
-		// outside workspace), if it's session-allowlisted and the verdict is allow,
+		// outside project folder), if it's session-allowlisted and the verdict is allow,
 		// emit the discriminated event so the WebUI can count it.
 		if verdict == "allow" && classifier.IsFolderSessionAllowed(filePath) {
 			emitAllowedPathHit(ctx, toolName, filePath, mode)
@@ -92,12 +92,12 @@ func PrecheckFileAccess(ctx context.Context, classifier FileAccessClassifier, to
 	return resolved, verdict
 }
 
-// promptForOffWorkspacePath runs the interactive approval flow for a
+// promptForOffProjectFolderPath runs the interactive approval flow for a
 // "prompt" verdict. Returns the bypass-carrying context and true when
 // the user approved. Returns (ctx, false) when no prompter is wired or
-// the user denied, leaving the caller to surface the raw off-workspace
+// the user denied, leaving the caller to surface the raw off-project-folder
 // error (SP-127 M4 behavior).
-func promptForOffWorkspacePath(ctx context.Context, env ToolEnv, toolName, filePath, resolvedPath, mode string) (context.Context, bool) {
+func promptForOffProjectFolderPath(ctx context.Context, env ToolEnv, toolName, filePath, resolvedPath, mode string) (context.Context, bool) {
 	if env.FileAccessPrompter == nil {
 		return ctx, false
 	}
@@ -148,10 +148,10 @@ func isHTTPURL(path string) bool {
 }
 
 // trackingPath resolves a tool's path argument the way the write itself
-// resolves it — against the workspace root on ctx, not the process CWD — so
+// resolves it — against the project folder on ctx, not the process CWD — so
 // change tracking reads the true pre-edit content and records the file that
 // was actually modified. The two differ whenever the process runs outside the
-// workspace (daemon/WebUI): reading the raw relative path then missed the
+// project folder (daemon/WebUI): reading the raw relative path then missed the
 // file, which left edit_file changes untracked and recorded overwrites of
 // existing files as creates (so a revert deleted them). Symlinks are not
 // evaluated, matching the paths the tracker records elsewhere.

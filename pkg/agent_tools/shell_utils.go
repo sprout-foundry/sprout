@@ -171,7 +171,7 @@ func hasRedirectionTraversalToSystemDir(cmd string) bool {
 func getShellCommandReasoning(cmd string, risk SecurityRisk) string {
 	switch risk {
 	case SecuritySafe:
-		return "Read-only or safe workspace operation"
+		return "Read-only or safe project folder operation"
 	case SecurityCaution:
 		if containsPrivilegedPackageInstall(cmd) {
 			return "Privileged package installation requested — review before continuing."

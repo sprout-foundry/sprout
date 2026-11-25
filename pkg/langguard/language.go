@@ -8,7 +8,7 @@
 // The detector is github.com/abadojack/whatlanggo (v1.0.1): a pure-Go,
 // stdlib-only trigram-frequency library (no cgo, no network, no model
 // download), so it runs in the CLI process, in the sprout process of a
-// hosted workspace, and compiled into the WASM browser build — the same
+// hosted project folder, and compiled into the WASM browser build — the same
 // three places the pass requires, and it stays callable from other Go
 // programs embedding sprout.
 //

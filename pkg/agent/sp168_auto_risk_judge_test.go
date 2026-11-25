@@ -35,7 +35,7 @@ func newJudgeTestAgent(t *testing.T, responderOn bool) *Agent {
 	t.Helper()
 	agent := newIsolatedTestAgent(t)
 	t.Cleanup(func() { agent.Shutdown() })
-	agent.SetWorkspaceRoot(t.TempDir())
+	agent.SetProjectFolder(t.TempDir())
 	agent.state.SetActivePersona(personas.IDOrchestrator)
 
 	agent.SetHasActiveWebUIClients(func() bool { return responderOn })

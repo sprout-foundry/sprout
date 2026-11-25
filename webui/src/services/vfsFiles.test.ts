@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   getVfsManifestSnapshot,
   listVfsFileEntries,
-  resolveWorkspacePath,
+  resolveProjectFolderPath,
   trackFileWrite,
   untrackFileWrite,
 } from './vfsFiles';
 import type { WasmDirEntry, WasmShell } from './wasmShell';
 
-/** A minimal WasmShell: listDir + a workspace root. */
+/** A minimal WasmShell: listDir + a project folder. */
 function fakeShell(tree: Record<string, WasmDirEntry[] | { error: string }> = {}): WasmShell {
   const listDir = (path: string): { entries: WasmDirEntry[]; error?: string } => {
     const entry = tree[path];
@@ -52,7 +52,7 @@ describe('listVfsFileEntries', () => {
       ],
       '/workspace/.git': [{ name: 'config', type: 'file', size: 100, mode: 0o644 }],
     });
-    // The walk starts at the workspace root; .git is skipped inside it. The
+    // The walk starts at the project folder; .git is skipped inside it. The
     // runtime dirs (siblings of the root) are never walked, so only the
     // project's own files remain.
     expect(listVfsFileEntries(shell)).toEqual([{ path: 'app.ts', size: 1, mode: 0o644 }]);
@@ -93,34 +93,34 @@ describe('listVfsFileEntries', () => {
   });
 });
 
-describe('resolveWorkspacePath', () => {
+describe('resolveProjectFolderPath', () => {
   it.each(['', '.', './', '/workspace', '/workspace/', 'workspace', 'workspace/', ' . '])(
     'reads %j as the workspace root',
     (raw) => {
-      expect(resolveWorkspacePath(raw, '/workspace')).toBe('/workspace');
+      expect(resolveProjectFolderPath(raw, '/workspace')).toBe('/workspace');
     },
   );
 
   it('resolves relative paths against the workspace root, not /', () => {
-    expect(resolveWorkspacePath('src/a.ts', '/workspace')).toBe('/workspace/src/a.ts');
-    expect(resolveWorkspacePath('./src//a.ts', '/workspace')).toBe('/workspace/src/a.ts');
-    expect(resolveWorkspacePath('workspace/src/a.ts', '/workspace')).toBe('/workspace/src/a.ts');
+    expect(resolveProjectFolderPath('src/a.ts', '/workspace')).toBe('/workspace/src/a.ts');
+    expect(resolveProjectFolderPath('./src//a.ts', '/workspace')).toBe('/workspace/src/a.ts');
+    expect(resolveProjectFolderPath('workspace/src/a.ts', '/workspace')).toBe('/workspace/src/a.ts');
   });
 
   it('keeps absolute paths and clamps .. at /', () => {
-    expect(resolveWorkspacePath('/home/user/.config', '/workspace')).toBe('/home/user/.config');
-    expect(resolveWorkspacePath('../../etc', '/workspace')).toBe('/etc');
-    expect(resolveWorkspacePath('src\\a.ts\0', '/workspace')).toBe('/workspace/src/a.ts');
+    expect(resolveProjectFolderPath('/home/user/.config', '/workspace')).toBe('/home/user/.config');
+    expect(resolveProjectFolderPath('../../etc', '/workspace')).toBe('/etc');
+    expect(resolveProjectFolderPath('src\\a.ts\0', '/workspace')).toBe('/workspace/src/a.ts');
   });
 
   it('prefers an entry the workspace holds under the root name', () => {
     const hasEntry = (p: string) => p === '/workspace/workspace';
-    expect(resolveWorkspacePath('workspace', '/workspace', hasEntry)).toBe('/workspace/workspace');
-    expect(resolveWorkspacePath('workspace/a.json', '/workspace', hasEntry)).toBe('/workspace/workspace/a.json');
+    expect(resolveProjectFolderPath('workspace', '/workspace', hasEntry)).toBe('/workspace/workspace');
+    expect(resolveProjectFolderPath('workspace/a.json', '/workspace', hasEntry)).toBe('/workspace/workspace/a.json');
   });
 
   it('resolves against / for binaries without a workspace directory', () => {
-    expect(resolveWorkspacePath('.', '/')).toBe('/');
-    expect(resolveWorkspacePath('src/a.ts', '/')).toBe('/src/a.ts');
+    expect(resolveProjectFolderPath('.', '/')).toBe('/');
+    expect(resolveProjectFolderPath('src/a.ts', '/')).toBe('/src/a.ts');
   });
 });

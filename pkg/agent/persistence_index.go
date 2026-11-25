@@ -61,7 +61,7 @@ type ConversationState struct {
 	QueryDisplays map[string]string `json:"query_displays,omitempty"`
 
 	// ConfigOverrides stores session-scoped configuration overrides.
-	// Applied on top of global and workspace config when the session is restored.
+	// Applied on top of global and project folder config when the session is restored.
 	// Only non-empty values are considered overrides.
 	ConfigOverrides map[string]interface{} `json:"config_overrides,omitempty"`
 
@@ -227,7 +227,7 @@ func (s *ConversationState) DisplayMessages() []api.Message {
 		if msg.Role != "user" {
 			continue
 		}
-		content := StripUserMessageTimestamp(msg.Content)
+		content := StripUserMessageEnvelope(msg.Content)
 		if display, ok := s.QueryDisplays[content]; ok {
 			content = display
 		}

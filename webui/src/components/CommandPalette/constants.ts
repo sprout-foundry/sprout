@@ -70,7 +70,7 @@ export function visibleCommands(): CommandDef[] {
     getActiveHost()?.capabilities.localTerminal ?? capability('supportsLocalTerminal', true, false);
   return COMMAND_DEFINITIONS.filter((cmd) => {
     // The standalone app opens its preview panel from the Code header toggle;
-    // the command is for a composed workspace, whose palette lists it only
+    // the command is for a composed project folder, whose palette lists it only
     // while a preview panel has registered to handle it.
     if (cmd.id === 'toggle_preview' && isAppShell()) return false;
     if (!supportsLocalTerminal && (cmd.id === 'split_terminal_vertical' || cmd.id === 'split_terminal_horizontal')) {
@@ -97,7 +97,7 @@ export const SKIP_DIRECTORIES = new Set([
   // TCC-protected / never-a-project home folders (macOS, XDG, Windows
   // profile, cloud-sync roots). Listing any of these raises a macOS
   // privacy prompt, so they must never enter the crawl queue even when
-  // the user consented to a home workspace.
+  // the user consented to a home project folder.
   'Library',
   'Applications',
   'Documents',

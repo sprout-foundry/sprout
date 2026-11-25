@@ -22,6 +22,7 @@ func (a *Agent) ClearActivePersona() {
 	if strings.TrimSpace(a.baseSystemPrompt) != "" {
 		a.systemPrompt = a.baseSystemPrompt
 	}
+	a.personaReplacedPrompt = false
 }
 
 func (a *Agent) ApplyPersona(personaID string) error {
@@ -78,10 +79,12 @@ func (a *Agent) ApplyPersona(personaID string) error {
 
 	if promptText := strings.TrimSpace(persona.SystemPromptText); promptText != "" {
 		a.SetSystemPrompt(promptText)
+		a.personaReplacedPrompt = true
 	} else if promptPath := strings.TrimSpace(persona.SystemPrompt); promptPath != "" {
 		if err := a.SetSystemPromptFromFile(promptPath); err != nil {
 			return agenterrors.NewConfig(fmt.Sprintf("failed loading persona system prompt %q", promptPath), err)
 		}
+		a.personaReplacedPrompt = true
 	}
 
 	if appendText := strings.TrimSpace(persona.SystemPromptAppend); appendText != "" {

@@ -49,7 +49,7 @@ export const syntheticEndpoints: CloudEndpoint[] = [
     methods: ['POST'],
     category: 'synthetic',
     syntheticResponse: { error: 'SSH not available in cloud mode' },
-    description: 'Open SSH workspace (not available in cloud mode)',
+    description: 'Open an SSH project folder (not available in cloud mode)',
   },
   {
     path: '/api/instances/ssh-sessions',
@@ -101,16 +101,16 @@ export const syntheticEndpoints: CloudEndpoint[] = [
     description: 'App config (empty in cloud mode)',
   },
   {
-    path: '/api/workspace',
+    path: '/api/project-folder',
     methods: ['GET', 'POST'],
     category: 'synthetic',
-    // NOTE: This response intentionally omits is_project, needs_workspace_selection,
-    // suggested_projects, and recent_workspaces. The consuming code (workspaceApi.ts
-    // toWorkspaceResponse) defaults these to false/[] via nullish coalescing.
-    // In cloud mode, workspace selection is not needed — the WASM shell owns the
-    // virtual filesystem root, so needs_workspace_selection is effectively false.
-    syntheticResponse: { message: 'ok', workspace_root: '/workspace', daemon_root: '/workspace' },
-    description: 'Workspace info (cloud mode: WASM shell owns workspace, virtual FS root)',
+    // NOTE: This response intentionally omits is_project, needs_project_folder_selection,
+    // suggested_projects, and recent_project_folders. The consuming code (projectFolderApi.ts
+    // toProjectFolderResponse) defaults these to false/[] via nullish coalescing.
+    // In cloud mode, project folder selection is not needed — the WASM shell owns the
+    // virtual filesystem root, so needs_project_folder_selection is effectively false.
+    syntheticResponse: { message: 'ok', project_folder: '/workspace', daemon_root: '/workspace' },
+    description: 'Project folder info (cloud mode: the WASM shell owns the project folder, virtual FS root)',
   },
 
   // ── Endpoints not available in browser mode ─────────────────────

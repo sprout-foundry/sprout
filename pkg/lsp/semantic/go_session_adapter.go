@@ -24,12 +24,12 @@ type goSessionAdapter struct {
 	socketPath string
 }
 
-// NewGoSessionPool creates a reusable per-workspace adapter pool for Go.
+// NewGoSessionPool creates a reusable per-project-folder adapter pool for Go.
 // Diagnostics remain local and stateless, while definitions are routed through
 // a persistent gopls server for faster repeated lookups.
 func NewGoSessionPool(idleTTL time.Duration) *SessionPool {
-	return NewSessionPool(func(workspaceRoot string) (SessionAdapter, error) {
-		_ = workspaceRoot
+	return NewSessionPool(func(projectFolder string) (SessionAdapter, error) {
+		_ = projectFolder
 		return &goSessionAdapter{}, nil
 	}, idleTTL)
 }
@@ -46,7 +46,7 @@ func (a *goSessionAdapter) Run(input ToolInput) (ToolResult, error) {
 	case "diagnostics":
 		return runGoDiagnostics(input)
 	case "definition":
-		if err := a.ensureServerLocked(input.WorkspaceRoot); err != nil {
+		if err := a.ensureServerLocked(input.ProjectFolder); err != nil {
 			if errors.Is(err, errGoplsNotAvailable) {
 				return ToolResult{
 					Capabilities: Capabilities{Diagnostics: true, Definition: false, Hover: true, Rename: true, References: true, CodeActions: true, InlayHints: false},
@@ -72,7 +72,7 @@ func (a *goSessionAdapter) Run(input ToolInput) (ToolResult, error) {
 	case "code_actions":
 		return runGoCodeActions(input)
 	case "inlay_hints":
-		if err := a.ensureServerLocked(input.WorkspaceRoot); err != nil {
+		if err := a.ensureServerLocked(input.ProjectFolder); err != nil {
 			if errors.Is(err, errGoplsNotAvailable) {
 				return ToolResult{
 					Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, References: true, CodeActions: true, InlayHints: false},
@@ -115,7 +115,7 @@ func (a *goSessionAdapter) Close() error {
 	return nil
 }
 
-func (a *goSessionAdapter) ensureServerLocked(workspaceRoot string) error {
+func (a *goSessionAdapter) ensureServerLocked(projectFolder string) error {
 	if a.serverCmd != nil && a.serverCmd.Process != nil && a.serverCmd.ProcessState == nil {
 		return nil
 	}
@@ -136,7 +136,7 @@ func (a *goSessionAdapter) ensureServerLocked(workspaceRoot string) error {
 	remoteAddr := "unix;" + socketPath
 
 	cmd := exec.Command(a.goplsPath, "serve", "-listen="+remoteAddr)
-	cmd.Dir = workspaceRoot
+	cmd.Dir = projectFolder
 	a.serverErr.Reset()
 	cmd.Stderr = &a.serverErr
 

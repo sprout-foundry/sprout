@@ -38,7 +38,7 @@ export interface UseHotkeyCommandHandlerOptions {
  * Each command has exactly one handler in the app. The app-level commands
  * (palette, sidebar, terminal toggle, view switches, new/close editor) belong
  * to useAppContentHotkeys, and the pane commands (focus_split_*,
- * split_editor_*) to EditorWorkspace, which owns the split layout; this hook
+ * split_editor_*) to EditorSpaces, which owns the split layout; this hook
  * leaves those alone so nothing runs twice.
  */
 export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions): void {
@@ -200,8 +200,8 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
           break;
         }
         case 'editor_copy_absolute_path': {
-          // The backend stores absolute paths in file.path when the workspace
-          // root is known; for relative paths we need the workspace root.
+          // The backend stores absolute paths in file.path when the project folder
+          // root is known; for relative paths we need the project folder.
           // Use the same path either way — consumers can canonicalize.
           const buf = activeBufferId ? buffersRef.current.get(activeBufferId) : null;
           const path = buf?.file?.path;

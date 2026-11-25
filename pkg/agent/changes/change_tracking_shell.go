@@ -22,7 +22,7 @@ const (
 	shellSnapshotMaxFileBytes = 1 * 1024 * 1024
 
 	// shellSnapshotMaxTotalBytes caps cumulative bytes across all
-	// files in one snapshot. Prevents pathological workspaces (e.g.,
+	// files in one snapshot. Prevents pathological project folders (e.g.,
 	// a directory full of small JSON dumps) from ballooning memory
 	// per shell invocation. 32 MiB is plenty of headroom for normal
 	// work; over the cap, additional files are recorded as path-only.
@@ -35,7 +35,7 @@ const (
 	shellSnapshotBinarySniffBytes = 8 * 1024
 )
 
-// PrimeShellTracking captures the workspace's current state as the
+// PrimeShellTracking captures the project folder's current state as the
 // baseline against which future shell_command invocations are diffed.
 // Idempotent: a second call against the already-primed tracker is a
 // no-op. Safe to call multiple times — only the first does work.
@@ -59,7 +59,7 @@ func (ct *ChangeTracker) PrimeShellTracking(workDir string) {
 		return
 	}
 	// Seed the auto-skip set from the persisted cross-session learning
-	// for this workspace BEFORE walking — that way the first walk
+	// for this project folder BEFORE walking — that way the first walk
 	// already avoids known-fat dirs and pays the budget on fresh
 	// content only.
 	if absRoot, err := filepath.Abs(workDir); err == nil {
@@ -73,7 +73,7 @@ func (ct *ChangeTracker) PrimeShellTracking(workDir string) {
 			}
 		}
 	}
-	snap, _, _ := ct.walkWorkspace(workDir, nil, false)
+	snap, _, _ := ct.walkProjectFolder(workDir, nil, false)
 	if snap == nil {
 		snap = map[string]*shellSnapshotEntry{}
 	}
@@ -83,7 +83,7 @@ func (ct *ChangeTracker) PrimeShellTracking(workDir string) {
 	}
 }
 
-// RebaseShellTracking re-captures the workspace as the shell-diff baseline
+// RebaseShellTracking re-captures the project folder as the shell-diff baseline
 // (priming it if needed). Called at the start of each primary-agent turn so
 // the user's own edits between turns — files they create, change, or delete
 // in their editor — become part of the baseline instead of being reported as
@@ -102,7 +102,7 @@ func (ct *ChangeTracker) RebaseShellTracking(workDir string) {
 	}
 	ct.shellCacheMu.Lock()
 	defer ct.shellCacheMu.Unlock()
-	snap, _, _ := ct.walkWorkspace(workDir, nil, false)
+	snap, _, _ := ct.walkProjectFolder(workDir, nil, false)
 	if snap == nil {
 		return
 	}
@@ -112,7 +112,7 @@ func (ct *ChangeTracker) RebaseShellTracking(workDir string) {
 	}
 }
 
-// TrackShellTurn diffs the workspace against the primed baseline,
+// TrackShellTurn diffs the project folder against the primed baseline,
 // records mutations, and rebases the baseline to the new state.
 // Auto-primes if the cache hasn't been primed yet (no changes recorded first time).
 // `destructive` enables the safer mode that bypasses autoSkipDirs.
@@ -154,14 +154,14 @@ func (ct *ChangeTracker) trackShellTurn(workDir, toolCall, command string, destr
 	//    Keying the cache to the shell cwd instead made every post-cd
 	//    shell command discard the baseline and pay a full cold re-walk
 	//    (with the triggering command's diff silently dropped).
-	//  - workDir OUTSIDE the cached root (workspace switch): re-prime.
+	//  - workDir OUTSIDE the cached root (project folder switch): re-prime.
 	//    The old tree's cache is meaningless for the new one.
 	if ct.shellCache != nil && ct.shellCacheRoot != absWorkDir {
 		if rel, relErr := filepath.Rel(ct.shellCacheRoot, absWorkDir); relErr == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			absWorkDir = ct.shellCacheRoot
 			workDir = ct.shellCacheRoot
 		} else {
-			snap, _, _ := ct.walkWorkspace(workDir, nil, false)
+			snap, _, _ := ct.walkProjectFolder(workDir, nil, false)
 			if snap == nil {
 				snap = map[string]*shellSnapshotEntry{}
 			}
@@ -172,7 +172,7 @@ func (ct *ChangeTracker) trackShellTurn(workDir, toolCall, command string, destr
 	}
 
 	if ct.shellCache == nil {
-		snap, _, _ := ct.walkWorkspace(workDir, nil, false)
+		snap, _, _ := ct.walkProjectFolder(workDir, nil, false)
 		if snap == nil {
 			snap = map[string]*shellSnapshotEntry{}
 		}
@@ -185,7 +185,7 @@ func (ct *ChangeTracker) trackShellTurn(workDir, toolCall, command string, destr
 	// silently revert files to a state the agent never wrote. Re-prime
 	// the cache instead of diffing against a stale pre-stash baseline.
 	if destructive && isGitStashOperation(command) {
-		snap, _, _ := ct.walkWorkspace(workDir, nil, true)
+		snap, _, _ := ct.walkProjectFolder(workDir, nil, true)
 		if snap == nil {
 			snap = map[string]*shellSnapshotEntry{}
 		}
@@ -195,7 +195,7 @@ func (ct *ChangeTracker) trackShellTurn(workDir, toolCall, command string, destr
 		return
 	}
 
-	newSnap, pending, truncated := ct.walkWorkspace(workDir, ct.shellCache, destructive)
+	newSnap, pending, truncated := ct.walkProjectFolder(workDir, ct.shellCache, destructive)
 	if newSnap == nil {
 		return
 	}
@@ -296,7 +296,7 @@ func (ct *ChangeTracker) SyncShellCacheForPath(path string) {
 // aligning the working tree to committed content. These aren't
 // agent-authored edits; recording them would persist stale bytes.
 // Batched via git.CommittedFilePaths for O(1) per-delta lookup.
-// Non-repo workspaces skip filtering; path-only entries are kept.
+// Non-repo project folders skip filtering; path-only entries are kept.
 func (ct *ChangeTracker) filterGitSourcedDeltas(pending []pendingShellChange, workDir string, destructive bool) []pendingShellChange {
 	if len(pending) == 0 {
 		return pending

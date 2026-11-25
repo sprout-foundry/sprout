@@ -64,7 +64,7 @@ vi.mock('@codemirror/view', async () => {
 import { debugLog } from '../utils/log';
 import { EditorView } from '@codemirror/view';
 import { useEditorCursor } from './useEditorCursor';
-import { useCMView, type CMViewAPI, type CMViewSettings, type OpenWorkspaceBufferFn } from './useCMView';
+import { useCMView, type CMViewAPI, type CMViewSettings, type OpenProjectFolderBufferFn } from './useCMView';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -914,7 +914,7 @@ const baseSettingsForIntegration: CMViewSettings = {
 
 function renderCursorIntegrationHarness(opts: {
   onSave: () => Promise<void>;
-  onOpenWorkspaceBuffer: OpenWorkspaceBufferFn;
+  onOpenProjectFolderBuffer: OpenProjectFolderBufferFn;
 }) {
   // The container is supplied by the shared beforeEach/afterEach block.
   const editorRef: React.MutableRefObject<HTMLDivElement | null> = { current: container };
@@ -926,8 +926,8 @@ function renderCursorIntegrationHarness(opts: {
     },
   };
   const handleSaveRef: React.MutableRefObject<() => Promise<void>> = { current: opts.onSave };
-  const openWorkspaceBufferRef: React.MutableRefObject<OpenWorkspaceBufferFn> = {
-    current: opts.onOpenWorkspaceBuffer,
+  const openProjectFolderBufferRef: React.MutableRefObject<OpenProjectFolderBufferFn> = {
+    current: opts.onOpenProjectFolderBuffer,
   };
   const onUpdateRef: React.MutableRefObject<(u: any) => void> = { current: () => {} };
   const settingsRef: React.MutableRefObject<CMViewSettings | null> = {
@@ -960,15 +960,15 @@ function renderCursorIntegrationHarness(opts: {
 
   function Harness({
     settingsToggle,
-    openWorkspaceBuffer,
+    openProjectFolderBuffer,
   }: {
     settingsToggle: number;
-    openWorkspaceBuffer: OpenWorkspaceBufferFn;
+    openProjectFolderBuffer: OpenProjectFolderBufferFn;
   }) {
     // The bug being guarded against: the parent's settings-callback identity
     // changes on every render. EditorPane mirrors this through a ref so the
     // CodeMirror mount never sees the unstable identity. We do the same here.
-    openWorkspaceBufferRef.current = openWorkspaceBuffer;
+    openProjectFolderBufferRef.current = openProjectFolderBuffer;
     settingsRef.current = { ...baseSettingsForIntegration, editorFontSize: 13 + settingsToggle };
 
     const cmViewApi = useCMView({
@@ -978,7 +978,7 @@ function renderCursorIntegrationHarness(opts: {
       bufferRef,
       languageId: 'typescript',
       handleSaveRef,
-      openWorkspaceBufferRef,
+      openProjectFolderBufferRef,
       onUpdateRef,
       settingsRef,
       keymapsRef,
@@ -1002,7 +1002,7 @@ function renderCursorIntegrationHarness(opts: {
     root.render(
       createElement(Harness, {
         settingsToggle: 0,
-        openWorkspaceBuffer: opts.onOpenWorkspaceBuffer,
+        openProjectFolderBuffer: opts.onOpenProjectFolderBuffer,
       }),
     );
   });
@@ -1011,16 +1011,16 @@ function renderCursorIntegrationHarness(opts: {
     editorRef,
     bufferRef,
     handleSaveRef,
-    openWorkspaceBufferRef,
+    openProjectFolderBufferRef,
     settingsRef,
     cmViewApiRef,
     updateBufferCursor,
     cursorHookReturn: () => cursorHookReturn,
     buildExtensions,
     compartments,
-    reRender: (settingsToggle: number, openWorkspaceBuffer: OpenWorkspaceBufferFn) => {
+    reRender: (settingsToggle: number, openProjectFolderBuffer: OpenProjectFolderBufferFn) => {
       act(() => {
-        root.render(createElement(Harness, { settingsToggle, openWorkspaceBuffer }));
+        root.render(createElement(Harness, { settingsToggle, openProjectFolderBuffer }));
       });
     },
   };
@@ -1028,9 +1028,9 @@ function renderCursorIntegrationHarness(opts: {
 
 describe('useEditorCursor — EditorView identity across settings-callback re-renders', () => {
   it('settings-callback re-renders preserve the EditorView instance and cursor', () => {
-    const openWorkspaceBufferV1 = vi.fn();
-    const openWorkspaceBufferV2 = vi.fn();
-    const openWorkspaceBufferV3 = vi.fn();
+    const openProjectFolderBufferV1 = vi.fn();
+    const openProjectFolderBufferV2 = vi.fn();
+    const openProjectFolderBufferV3 = vi.fn();
     const onSave = vi.fn(async () => undefined);
 
     editorViewConstructorSpy.mockClear();
@@ -1038,7 +1038,7 @@ describe('useEditorCursor — EditorView identity across settings-callback re-re
 
     const harness = renderCursorIntegrationHarness({
       onSave,
-      onOpenWorkspaceBuffer: openWorkspaceBufferV1,
+      onOpenProjectFolderBuffer: openProjectFolderBufferV1,
     });
 
     const api = harness.cmViewApiRef.current!;
@@ -1055,10 +1055,10 @@ describe('useEditorCursor — EditorView identity across settings-callback re-re
     expect(viewAtMount!.state.selection.main.head).toBe(6);
 
     // Simulate a "settings toggle" re-render where the parent passes a fresh
-    // arrow function for openWorkspaceBuffer. The pre-fix code used
-    // `useRef(openWorkspaceBuffer)` which captured v1 forever; the fix
+    // arrow function for openProjectFolderBuffer. The pre-fix code used
+    // `useRef(openProjectFolderBuffer)` which captured v1 forever; the fix
     // reassigns .current every render.
-    harness.reRender(1, openWorkspaceBufferV2);
+    harness.reRender(1, openProjectFolderBufferV2);
     expect(harness.cmViewApiRef.current!.view).toBe(viewAtMount);
     expect(editorViewConstructorSpy).toHaveBeenCalledTimes(1);
     expect(editorViewDestroySpy).not.toHaveBeenCalled();
@@ -1067,7 +1067,7 @@ describe('useEditorCursor — EditorView identity across settings-callback re-re
 
     // Second re-render: another fresh identity. The hook must keep observing
     // the original view and not tear it down.
-    harness.reRender(2, openWorkspaceBufferV3);
+    harness.reRender(2, openProjectFolderBufferV3);
     expect(harness.cmViewApiRef.current!.view).toBe(viewAtMount);
     expect(editorViewConstructorSpy).toHaveBeenCalledTimes(1);
     expect(editorViewDestroySpy).not.toHaveBeenCalled();

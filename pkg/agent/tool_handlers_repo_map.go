@@ -35,9 +35,9 @@ func handleRepoMap(ctx context.Context, a *Agent, args map[string]interface{}) (
 		query = v
 	}
 
-	// Resolve relative paths against the agent's workspace root.
+	// Resolve relative paths against the agent's project folder.
 	if !filepath.IsAbs(rootDir) {
-		if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
+		if wd := filesystem.ProjectFolderFromContext(ctx); wd != "" {
 			rootDir = filepath.Join(wd, rootDir)
 		}
 	}
@@ -48,21 +48,21 @@ func handleRepoMap(ctx context.Context, a *Agent, args map[string]interface{}) (
 		return "", agenterrors.NewTool("repo_map", "resolve directory", err)
 	}
 
-	// Verify that the resolved directory is within the workspace root.
-	workspaceRoot := filesystem.WorkspaceRootFromContext(ctx)
-	if workspaceRoot == "" {
-		workspaceRoot, err = os.Getwd()
+	// Verify that the resolved directory is within the project folder.
+	projectFolder := filesystem.ProjectFolderFromContext(ctx)
+	if projectFolder == "" {
+		projectFolder, err = os.Getwd()
 		if err != nil {
 			return "", agenterrors.NewTool("repo_map", "get working directory", err)
 		}
 	}
-	absWorkspace, err := filepath.Abs(workspaceRoot)
+	absProjectFolder, err := filepath.Abs(projectFolder)
 	if err != nil {
-		return "", agenterrors.NewTool("repo_map", "resolve workspace root", err)
+		return "", agenterrors.NewTool("repo_map", "resolve project folder", err)
 	}
 	// Allow exact match or a proper subdirectory (with separator).
-	if absRoot != absWorkspace && !strings.HasPrefix(absRoot, absWorkspace+string(filepath.Separator)) {
-		return "", agenterrors.NewValidation(fmt.Sprintf("directory %q is outside workspace root", rootDir), nil)
+	if absRoot != absProjectFolder && !strings.HasPrefix(absRoot, absProjectFolder+string(filepath.Separator)) {
+		return "", agenterrors.NewValidation(fmt.Sprintf("directory %q is outside project folder", rootDir), nil)
 	}
 
 	a.Logger().Debug("Generating repo map for directory: %s\n", rootDir)

@@ -278,12 +278,12 @@ function Chat({
   onToolDetailToggle,
   onStopProcessing,
   onRetractSteer,
-  // Worktree support — chatId, workspaceRoot, onWorktreeChange available for future worktree switching
+  // Worktree support — chatId, projectFolder, onWorktreeChange available for future worktree switching
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   chatId: _chatId,
   worktreePath,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  workspaceRoot: _workspaceRoot,
+  projectFolder: _projectFolder,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onWorktreeChange: _onWorktreeChange,
   // Provider availability

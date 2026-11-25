@@ -203,7 +203,7 @@ func TestReviewChanges_BackgroundAndBlocking(t *testing.T) {
 	a, _ := newBackgroundTestAgent(t, reviewerReply, 0)
 	dir := initReviewRepo(t)
 	writeFile(t, dir, "main.go", "package main\n\nfunc main() { println(1) }\n")
-	a.workspaceRoot = dir
+	a.projectFolder = dir
 
 	out, err := handleReviewChanges(context.Background(), a, map[string]any{})
 	if err != nil {

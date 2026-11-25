@@ -12,7 +12,7 @@ export interface UseChatSessionsSyncParams {
   setBufferClosable: (id: string, isClosable: boolean) => void;
   /** Close a buffer (the editor manager's path, so close events fire). */
   closeBuffer?: (id: string) => void;
-  openWorkspaceBuffer: (options: {
+  openProjectFolderBuffer: (options: {
     kind: 'chat' | 'diff' | 'review' | 'file' | 'compare';
     path: string;
     title: string;
@@ -28,7 +28,7 @@ export interface UseChatSessionsSyncParams {
 }
 
 /**
- * Mirrors chat sessions into workspace chat tabs.
+ * Mirrors chat sessions into project folder chat tabs.
  *
  * Chat tabs are never pinned: a pinned tab collapses to an icon and carries
  * the selected-tab accent, so pinning the active chat made several chats look
@@ -56,7 +56,7 @@ export const useChatSessionsSync = ({
   setBufferPinned,
   setBufferClosable,
   closeBuffer,
-  openWorkspaceBuffer,
+  openProjectFolderBuffer,
 }: UseChatSessionsSyncParams): void => {
   const closedChatIdsRef = useRef<Set<string>>(new Set());
   const prevActiveChatIdRef = useRef<string | null | undefined>(activeChatId);
@@ -100,11 +100,11 @@ export const useChatSessionsSync = ({
       if (closedChatIdsRef.current.has(session.id)) return;
 
       // Every chat gets its own path-keyed tab; the active chat's opens
-      // focused, the rest in the background. openWorkspaceBuffer dedupes by
+      // focused, the rest in the background. openProjectFolderBuffer dedupes by
       // path, so a tab another handler (New chat) opened moments ago is
       // reused rather than doubled.
       const isActive = session.id === activeChatId;
-      openWorkspaceBuffer({
+      openProjectFolderBuffer({
         kind: 'chat',
         path: `__workspace/chat/${session.id}`,
         title: session.name || 'Chat',
@@ -127,7 +127,7 @@ export const useChatSessionsSync = ({
     if (standIn && !standIn.metadata?.chatId && activeHasSession && closeRef.current) {
       if (standIn.isActive) {
         const activeSession = chatSessions.find((session) => session.id === activeChatId);
-        openWorkspaceBuffer({
+        openProjectFolderBuffer({
           kind: 'chat',
           path: `__workspace/chat/${activeChatId}`,
           title: activeSession?.name || 'Chat',

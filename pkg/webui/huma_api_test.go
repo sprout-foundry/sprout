@@ -105,7 +105,7 @@ func TestHumaConfig_Success(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode config response: %v", err)
 	}
-	for _, k := range []string{"port", "daemon_root", "workspace_root", "agent", "features"} {
+	for _, k := range []string{"port", "daemon_root", "project_folder", "agent", "features"} {
 		if _, ok := resp[k]; !ok {
 			t.Errorf("expected %q in /api/config response", k)
 		}

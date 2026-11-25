@@ -100,7 +100,7 @@ func loadOAuthToken(server, field string) string {
 
 // deleteOAuthState wipes every stored field for the server.
 func deleteOAuthState(server string) {
-	for _, field := range []string{"access_token", "refresh_token", "client_id", "client_secret", "expires_at", "auth_servers"} {
+	for _, field := range []string{"access_token", "refresh_token", "client_id", "client_secret", "expires_at", "auth_servers", "resource"} {
 		_ = credentials.DeleteFromActiveBackend(oauthStoreKey(server, field))
 	}
 }
@@ -261,6 +261,9 @@ func StartOAuthLogin(ctx context.Context, serverName string, config *MCPServerCo
 	if err := storeOAuthToken(serverName, "auth_servers", authServer); err != nil {
 		return "", err
 	}
+	if err := storeOAuthToken(serverName, "resource", resourceURL); err != nil {
+		return "", err
+	}
 
 	return fmt.Sprintf("OAuth login for %s complete (authorization server %s, client %s). Use mcp_refresh refresh to reconnect the server with the new token.", serverName, authServer, clientID), nil
 }
@@ -286,8 +289,10 @@ func OAuthLogout(serverName string) {
 }
 
 // EnsureFreshAccessToken returns a valid access token for the server,
-// refreshing it when expired. Errors when no login exists.
-func EnsureFreshAccessToken(ctx context.Context, serverName string) (string, error) {
+// refreshing it when expired. serverURL is the server's configured MCP URL,
+// used to derive the RFC 8707 resource when the login predates storing one.
+// Errors when no login exists.
+func EnsureFreshAccessToken(ctx context.Context, serverName, serverURL string) (string, error) {
 	token := loadOAuthToken(serverName, "access_token")
 	if token == "" {
 		return "", fmt.Errorf("server %s has no OAuth login — run mcp_refresh login first", serverName)
@@ -306,6 +311,13 @@ func EnsureFreshAccessToken(ctx context.Context, serverName string) (string, err
 	if authServer == "" {
 		return "", fmt.Errorf("OAuth state for %s is missing its authorization server — run mcp_refresh login again", serverName)
 	}
+	// Logins made before the resource was persisted derive it from the
+	// configured URL, so a login against a resource-binding AS keeps
+	// refreshing instead of failing invalid_grant until a re-login.
+	resource := loadOAuthToken(serverName, "resource")
+	if resource == "" && serverURL != "" {
+		resource = normalizeMCPResourceURL(serverURL)
+	}
 	asMeta, err := fetchAuthorizationServerMetadata(ctx, authServer)
 	if err != nil {
 		return "", fmt.Errorf("authorization server metadata for refresh: %w", err)
@@ -318,6 +330,12 @@ func EnsureFreshAccessToken(ctx context.Context, serverName string) (string, err
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {refresh},
 		"client_id":     {clientID},
+	}
+	// RFC 8707 §2.1: the refresh request repeats the resource so the AS can
+	// check the grant's audience. Omitted for servers that don't use
+	// resource indicators.
+	if resource != "" {
+		form.Set("resource", resource)
 	}
 	if clientSecret != "" {
 		form.Set("client_secret", clientSecret)
@@ -599,7 +617,9 @@ func finishOAuthSession(state, code, errMsg string) {
 }
 
 // exchangeCodeForTokens swaps the authorization code for tokens at the
-// token endpoint.
+// token endpoint. RFC 8707 §2.1: the token request repeats the resource
+// parameter; ASs that bind tokens to a resource validate that both legs of
+// the flow name the same one.
 func exchangeCodeForTokens(ctx context.Context, tokenEndpoint, clientID, clientSecret string, sess *oauthState) (*oauthTokens, error) {
 	form := url.Values{
 		"grant_type":    {"authorization_code"},
@@ -607,6 +627,9 @@ func exchangeCodeForTokens(ctx context.Context, tokenEndpoint, clientID, clientS
 		"redirect_uri":  {oauthRedirectURI()},
 		"client_id":     {clientID},
 		"code_verifier": {sess.verifier},
+	}
+	if sess.resource != "" {
+		form.Set("resource", sess.resource)
 	}
 	if clientSecret != "" {
 		form.Set("client_secret", clientSecret)

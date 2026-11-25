@@ -89,8 +89,8 @@ type DaemonSpec struct {
 	LogPath string
 
 	// Dir is the working directory of the spawned daemon. The daemon's
-	// default workspace derives from its cwd, so inheriting whatever
-	// directory the triggering command ran in would make the workspace of
+	// default project folder derives from its cwd, so inheriting whatever
+	// directory the triggering command ran in would make the project folder of
 	// every respawned daemon depend on where `sprout` happened to be
 	// invoked. Empty inherits the caller's cwd.
 	Dir string
@@ -110,7 +110,7 @@ func DefaultDaemonSpec() DaemonSpec {
 		dataDir = filepath.Join(os.TempDir(), "sprout")
 	}
 
-	// A stable directory: the user's home, which the web UI's home-workspace
+	// A stable directory: the user's home, which the web UI's home-project-folder
 	// gate turns into an explicit project selection.
 	dir, err := os.UserHomeDir()
 	if err != nil {

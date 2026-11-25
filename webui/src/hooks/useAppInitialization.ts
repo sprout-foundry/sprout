@@ -21,13 +21,13 @@ import { polledStatsPatch } from '../utils/polledStats';
 import type { SessionEntry } from '../services/api/types';
 import { getAdapter } from '../services/apiAdapter';
 import { listChatSessions } from '../services/chatSessions';
-import { getTabWorkspacePath } from '../services/clientSession';
+import { getTabProjectFolderPath } from '../services/clientSession';
 import type { CloudAdapter } from '../services/cloudAdapter';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import { NATIVE_GIT_ENABLED } from '../services/nativeGitStubs/nativeGitFlag';
 import { registerServiceWorker } from '../services/serviceWorkerRegistration';
-import { refreshWorkspace } from '../services/workspaceStore';
-import { installWorkspaceReconnectSync, reconcileTabWorkspace } from '../services/workspaceSync';
+import { refreshProjectFolder } from '../services/projectFolderStore';
+import { installProjectFolderReconnectSync, reconcileTabProjectFolder } from '../services/projectFolderSync';
 import type { AppState } from '../types/app';
 import type { WsEvent } from '@sprout/events';
 import type { SproutEvent } from '../types/events';
@@ -65,7 +65,7 @@ export interface UseAppInitializationOptions {
   /**
    * Whether this hook registers the event/reconnect callbacks with the
    * transport. Defaults to true (the app's historical behavior). When the
-   * chat unit owns the subscription (`WorkspaceChatProvider`), the app passes
+   * chat unit owns the subscription (`SpacesChatProvider`), the app passes
    * false so events are not delivered twice; the hook still connects.
    */
   manageEventSubscription?: boolean;
@@ -82,7 +82,7 @@ export function useAppInitialization({
   handleReconnect,
   manageEventSubscription = true,
 }: UseAppInitializationOptions): void {
-  const { workspaceSwitching: supportsWorkspaceSwitching } = useHostCapabilities();
+  const { projectFolderSwitching: supportsProjectFolderSwitching } = useHostCapabilities();
   // host.8: the hosted build's agent runs in the browser (WASM shell + browser
   // git) and its transport authenticates against a platform (authMode
   // 'bearer'). This single flag replaces every former isCloud read in this
@@ -131,9 +131,12 @@ export function useAppInitialization({
 
       // Initialize WebSocket connection
       eventsProvider.connect();
-      // Re-check the workspace after every reconnect: the server may have
+      // Re-check the project folder after every reconnect: the server may have
       // restarted or evicted this tab's context while the stream was down.
-      const uninstallWorkspaceSync = installWorkspaceReconnectSync(eventsProvider, supportsWorkspaceSwitching);
+      const uninstallProjectFolderSync = installProjectFolderReconnectSync(
+        eventsProvider,
+        supportsProjectFolderSwitching,
+      );
       if (manageEventSubscription) {
         eventsProvider.onEvent(handleEvent);
         eventsProvider.onReconnect(handleReconnect);
@@ -340,29 +343,29 @@ export function useAppInitialization({
         debugLog('[startup] repo was already imported before mount');
       }
 
-      // Restore workspace and session startup state
+      // Restore project folder and session startup state
       const restoreStartupState = async () => {
         try {
           // A server at its default root has lost (or never had) this tab's
-          // choice: reconcile re-selects the remembered workspace silently
-          // and notifies the workspace store, so no surface keeps the
+          // choice: reconcile re-selects the remembered project folder silently
+          // and notifies the project folder store, so no surface keeps the
           // default root it may have fetched first.
-          const workspace = await refreshWorkspace({ force: true });
-          const outcome = await reconcileTabWorkspace(workspace, supportsWorkspaceSwitching);
-          const workspaceRoot = String(workspace?.workspace_root || '').trim();
-          const daemonRoot = String(workspace?.daemon_root || '').trim();
+          const folderInfo = await refreshProjectFolder({ force: true });
+          const outcome = await reconcileTabProjectFolder(folderInfo, supportsProjectFolderSwitching);
+          const projectFolder = String(folderInfo?.project_folder || '').trim();
+          const daemonRoot = String(folderInfo?.daemon_root || '').trim();
           // Only prompt when there is genuinely no prior choice. A remembered
           // path equal to the daemon root is the user's deliberate choice
           // (e.g. home dir) — don't interrupt them with the picker. In cloud
-          // mode, workspace switching is disabled.
+          // mode, project folder switching is disabled.
           if (
             outcome === 'unresolved' &&
-            workspaceRoot &&
-            workspaceRoot === daemonRoot &&
-            !getTabWorkspacePath().trim() &&
-            supportsWorkspaceSwitching
+            projectFolder &&
+            projectFolder === daemonRoot &&
+            !getTabProjectFolderPath().trim() &&
+            supportsProjectFolderSwitching
           ) {
-            window.dispatchEvent(new CustomEvent('sprout:open-workspace-switcher'));
+            window.dispatchEvent(new CustomEvent('sprout:open-project-folder-switcher'));
           }
         } catch (error) {
           debugLog('[startup] workspace check failed:', error);
@@ -542,7 +545,7 @@ export function useAppInitialization({
         }
         window.removeEventListener('resize', checkBreakpoints);
         clearInterval(statsInterval);
-        uninstallWorkspaceSync();
+        uninstallProjectFolderSync();
       };
     } // end startDataLoading
 

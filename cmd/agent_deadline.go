@@ -17,7 +17,7 @@ import (
 const deadlineWarnBefore = 3 * time.Minute
 
 // handoffNotePath is where a run that reaches its deadline leaves its note
-// for the next run, relative to the workspace.
+// for the next run, relative to the project folder.
 const handoffNotePath = ".sprout/handoff.md"
 
 // maxHandoffNoteBytes bounds the note carried in the run's result.
@@ -72,7 +72,7 @@ func startTaskRun(a steerer, stopBackground func(), now time.Time) func() {
 // before the run's deadline, when the host that started it set one
 // (SPROUT_TASK_DEADLINE, Unix seconds). A run with no deadline, or one too
 // close to warn usefully, gets no warning. A handoff note left in the
-// workspace by an earlier run is removed, so only this run's note counts.
+// project folder by an earlier run is removed, so only this run's note counts.
 // stopBackground, when set, stops the run's background sessions once the
 // agent is warned. The returned function cancels the warning.
 func startDeadlineWarning(a steerer, now time.Time, stopBackground func()) func() {

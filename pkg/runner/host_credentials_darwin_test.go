@@ -12,7 +12,7 @@ import (
 )
 
 // A runner whose config root moved still hides its credential files from
-// native workspaces: the deny list follows the root this process uses.
+// native dev spaces: the deny list follows the root this process uses.
 func TestHostCredentialDirsFollowAMovedConfigRoot(t *testing.T) {
 	if c := sandbox.Detect(); !c.Available {
 		t.Skipf("seatbelt unavailable: %s", c.Detail)
@@ -41,6 +41,6 @@ func TestHostCredentialDirsFollowAMovedConfigRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	if out, err := cmd.CombinedOutput(); err == nil {
-		t.Fatalf("a native workspace read the runner's credential file: %q", out)
+		t.Fatalf("a native project folder read the runner's credential file: %q", out)
 	}
 }

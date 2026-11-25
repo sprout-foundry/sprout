@@ -1,13 +1,13 @@
 import type { SproutHost } from '../host/types';
 
 /**
- * The host theme's token overrides, scoped to the workspace root.
+ * The host theme's token overrides, scoped to the project folder.
  *
  * A host themes Sprout through `host.theme.tokens` (SP-160 §160d), whose names
- * are the `@sprout-foundry/design` token names. A host page and the workspace
+ * are the `@sprout-foundry/design` token names. A host page and the project folder
  * it mounts share one document, so the overrides must not leak onto the host's
- * own DOM: they are written as inline custom properties on the workspace root
- * element (`.sprout-workspace`, the element `SproutWorkspace` renders), not on
+ * own DOM: they are written as inline custom properties on the project folder
+ * element (`.sprout-spaces`, the element `SproutSpaces` renders), not on
  * `document.documentElement`. The local app's own theme (its mode/pack and the
  * pack's variables) still lands on `documentElement` — only the host's
  * overrides are confined.

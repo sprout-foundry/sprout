@@ -9,16 +9,16 @@ import (
 
 // legacyRelocations maps files stored before the project had its own
 // directory — when the repository, the shell's home and its scratch space all
-// shared "/" — to their place under the workspace. It only applies on the
-// first start after the move, while nothing is stored in the workspace yet,
+// shared "/" — to their place under the project folder. It only applies on the
+// first start after the move, while nothing is stored in the project folder yet,
 // and leaves the shell's home and scratch files where they are.
-func legacyRelocations(files []IDBFile, workspace, home string) map[string]string {
+func legacyRelocations(files []IDBFile, projectFolder, home string) map[string]string {
 	within := func(p, dir string) bool {
 		dir = strings.TrimSuffix(dir, "/")
 		return dir != "" && (p == dir || strings.HasPrefix(p, dir+"/"))
 	}
 	for _, f := range files {
-		if within(f.Path, workspace) {
+		if within(f.Path, projectFolder) {
 			return nil
 		}
 	}
@@ -28,7 +28,7 @@ func legacyRelocations(files []IDBFile, workspace, home string) map[string]strin
 		if !strings.HasPrefix(p, "/") || within(p, home) || within(p, "/tmp") {
 			continue
 		}
-		moves[f.Path] = path.Join(workspace, p)
+		moves[f.Path] = path.Join(projectFolder, p)
 	}
 	return moves
 }

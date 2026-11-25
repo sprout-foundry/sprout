@@ -58,7 +58,7 @@ func TestLoadStoreFromDir_EncryptedWithDirKey(t *testing.T) {
 	wsDir := filepath.Join(home, "ws", ".sprout")
 	globalDir := filepath.Join(home, "global")
 
-	// Write the store under the workspace scope (creates ws key.age + store).
+	// Write the store under the project folder scope (creates ws key.age + store).
 	isolateToDir(t, wsDir)
 	require.NoError(t, SetToActiveBackend("mcp/foundry/header/Authorization", "Bearer ws-token"))
 
@@ -66,7 +66,7 @@ func TestLoadStoreFromDir_EncryptedWithDirKey(t *testing.T) {
 	isolateToDir(t, globalDir)
 	ambient, _, err := GetFromActiveBackend("mcp/foundry/header/Authorization")
 	require.NoError(t, err)
-	assert.Empty(t, ambient, "the ambient scope must not see the workspace store")
+	assert.Empty(t, ambient, "the ambient scope must not see the project folder store")
 
 	store, err := LoadStoreFromDir(wsDir)
 	require.NoError(t, err)
@@ -74,7 +74,7 @@ func TestLoadStoreFromDir_EncryptedWithDirKey(t *testing.T) {
 		"the store must decrypt with the directory's own key")
 }
 
-// A workspace store written under one HOME is unreadable (not empty, not
+// A project folder store written under one HOME is unreadable (not empty, not
 // leaked) when the key age is absent from that directory: the error is
 // surfaced so a caller can distinguish "no value" from "unreadable store".
 func TestLoadStoreFromDir_WrongKeyErrors(t *testing.T) {

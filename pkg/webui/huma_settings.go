@@ -31,7 +31,7 @@ func registerSettingsHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodGet,
 		Path:        "/api/settings",
 		Summary:     "Read the effective settings.",
-		Description: "Returns the effective (merged) configuration for the client, or a specific layer with `layer=global|workspace|session|provenance`.",
+		Description: "Returns the effective (merged) configuration for the client, or a specific layer with `layer=global|project folder|session|provenance`.",
 		Tags:        []string{"settings"},
 	}, ws.settingsSettingsHumaHandler)
 

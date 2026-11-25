@@ -87,3 +87,11 @@ hanging — reduce the model size (e.g. 4B → 0.8B).
 | Runtime download fails | Check network access to github.com, then retry setup |
 | Generation slow / swap-heavy | Use a smaller model (e.g. 4B → 0.8B) |
 | Memory-limit error | Close other apps; use a smaller model |
+
+## Prompt Size With Local Models
+
+Every request re-sends the system prompt, so its fixed part sets how fast a local server answers each step. The system prompt holds no per-directory content: the project context file, the working directory and the memory block go in the conversation's first user message (a `<workspace-context>` block after the turn timestamp), so the system prompt and the tools are the same for every conversation and a server with prefix caching can start each one from a single cached image. The memory block is often the largest share of the first user message: with `memory_prompt` unset (the default), it carries one line per memory — its name and first line — instead of every body. `"memory_prompt": "full"` rides every memory body (up to 50 KB, about 12 500 tokens, by default); `"off"` leaves memories out of the prompt. See [CONFIGURATION.md](CONFIGURATION.md#memory_prompt-and-memory_prompt_max_bytes).
+
+A provider's `"parameters": {"max_tokens": 16384}` also replaces the 64 000-token completion cap on servers that reserve memory for a request's output budget.
+
+Trimming the tool list with `tool_calls` shortens the prompt too, but measure task success before relying on it: the system prompt still describes the tools it removes, and a model told about tools it cannot call may loop.

@@ -268,7 +268,7 @@ func TestEditFileHandler_Execute_PathTraversal(t *testing.T) {
 	h := &editFileHandler{}
 	ctx := newTestCtx(dir)
 
-	// Try to edit outside workspace. The handler may or may not
+	// Try to edit outside project folder. The handler may or may not
 	// allow this depending on path resolution. Accept either outcome.
 	path := filepath.Join(dir, "..", "outside.txt")
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))

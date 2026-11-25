@@ -182,6 +182,18 @@ Opt in to automatic activation of the `coordinator` persona when sprout starts i
 
 PDF analysis settings for OCR processing. When enabled, uses the specified provider and model for PDF text extraction.
 
+#### `memory_prompt` and `memory_prompt_max_bytes`
+
+How memories (`<config dir>/memories/*.md`) enter the conversation's first user message. Every request replays that message as prefix, so with a large memory store this is the biggest share of a request's fixed tokens.
+
+- `"index"` (default, or unset): one line per memory, its name and first line of text. The model reads the bodies it needs with `manage_memory` (`read`, `search`).
+- `"full"`: every memory body, alphabetically, up to `memory_prompt_max_bytes` (default 50 000 bytes, about 12 500 tokens).
+- `"off"`: no memories in the prompt; `manage_memory` still lists, searches and reads them.
+
+```json
+{ "memory_prompt": "full" }
+```
+
 #### `risk_profile` and `risk_profiles`
 
 Selects the shell-command risk cascade preset and (optionally) customizes its rules. See [`docs/SECURITY.md#risk-profiles`](SECURITY.md#risk-profiles) for the full table of profiles, behavior, and override format.

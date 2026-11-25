@@ -70,7 +70,7 @@ func (a *Agent) runTurnEndQuality(qc *queryRunContext, finalResult string) (stri
 	// means for the turn, mirroring the verification hook's snapshot.
 	runner := verify.NewQualityRunner()
 	runner.ConfigCommands = verify.QualityConfigurationCommands(cfg)
-	snap := runner.Snapshot(a.GetWorkspaceRoot())
+	snap := runner.Snapshot(a.GetProjectFolder())
 
 	// The repair bounds are the configuration's repair limits — the same
 	// limits the verification loop uses, so there is one repair-budget
@@ -87,7 +87,7 @@ func (a *Agent) runTurnEndQuality(qc *queryRunContext, finalResult string) (stri
 		if qc.runCtx.Err() != nil {
 			return finalResult, fmt.Errorf("%w: %w", core.ErrInterrupted, qc.runCtx.Err())
 		}
-		res, err := runner.RunQualitySnapshot(qc.runCtx, a.GetWorkspaceRoot(), snap)
+		res, err := runner.RunQualitySnapshot(qc.runCtx, a.GetProjectFolder(), snap)
 		if err != nil {
 			a.Logger().Debug("turn-end quality setup error: %v\n", err)
 			return finalResult, nil

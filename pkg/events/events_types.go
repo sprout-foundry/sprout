@@ -48,7 +48,7 @@ const (
 	EventTypeDelegatedTaskOutcome    = "delegated_task_outcome"
 	EventTypeTodoUpdate              = "todo_update"
 	EventTypeFileChanged             = "file_changed"
-	EventTypeWorkspacePatch          = "workspace_patch"
+	EventTypeProjectFolderPatch      = "project_folder_patch"
 	EventTypeFileContentChanged      = "file_content_changed"
 	EventTypeStreamChunk             = "stream_chunk"
 	EventTypeMetricsUpdate           = "metrics_update"
@@ -89,12 +89,12 @@ const (
 	// pointing at Settings → Credentials, distinct from generic warning
 	// messages that get inlined into the active assistant bubble.
 	EventTypeProviderNoCredential = "provider_no_credential"
-	EventTypeWorkspaceChanged     = "workspace_changed"
+	EventTypeProjectFolderChanged = "project_folder_changed"
 	EventTypeSessionTerminated    = "session_terminated"
-	// EventTypeWorkspaceStopping warns connected clients that the workspace
+	// EventTypeDevSpaceStopping warns connected clients that the dev space
 	// is about to stop (idle timeout, runtime cap, drain). Payload:
 	// {reason, at, deadline_seconds}.
-	EventTypeWorkspaceStopping = "workspace_stopping"
+	EventTypeDevSpaceStopping = "dev_space_stopping"
 	// EventTypeSessionChanged signals that a chat session's metadata
 	// (name, pin state, active state) changed and tabs viewing that chat
 	// should reconcile. SP-034-3e.
@@ -146,27 +146,27 @@ const (
 	EventTypeAutomateBudgetUpdate   = "automate.budget_update"
 	EventTypeAutomateOutputChunk    = "automate.output_chunk"
 	EventTypeAutomateSessionEnded   = "automate.session_ended"
-	// EventTypeSSHTunnelStatus signals that an SSH workspace tunnel has
+	// EventTypeSSHTunnelStatus signals that an SSH project folder tunnel has
 	// changed state — disconnected, reconnecting, or reconnected. Clients
 	// use this to show a banner or retry failed requests instead of
 	// surfacing raw 502 errors during the reconnect window.
 	EventTypeSSHTunnelStatus = "ssh_tunnel_status"
-	// EventTypeWorkspaceConflict (SP-046-3) is published when a container
+	// EventTypeProjectFolderConflict (SP-046-3) is published when a container
 	// patch conflicts with unsynced browser edits. The container writes its
 	// version as <path>.theirs instead of overwriting. The payload carries
 	// path, theirs_path, hash_container, hash_browser, and modified_at.
-	EventTypeWorkspaceConflict = "workspace.conflict_detected"
-	// EventTypeWorkspaceHeartbeatLost (SP-046-4) is published when a session's
+	EventTypeProjectFolderConflict = "workspace.conflict_detected"
+	// EventTypeProjectFolderHeartbeatLost (SP-046-4) is published when a session's
 	// heartbeat has been missed for >60s, indicating the browser tab may have
 	// been closed or the connection lost. The container will terminate the
 	// running job after this event. The payload carries session_id and
 	// last_heartbeat (time.RFC3339).
-	EventTypeWorkspaceHeartbeatLost = "workspace.heartbeat_lost"
-	// EventTypeWorkspaceSessionMoved (SP-046-5) is published when a user
+	EventTypeProjectFolderHeartbeatLost = "workspace.heartbeat_lost"
+	// EventTypeProjectFolderSessionMoved (SP-046-5) is published when a user
 	// takes over a session on a new device, causing the previous device's
 	// WebSocket to be closed. The payload carries session_id and new_device_id.
 	// The displaced browser surfaces "This session moved to another device."
-	EventTypeWorkspaceSessionMoved = "workspace.session_moved"
+	EventTypeProjectFolderSessionMoved = "workspace.session_moved"
 	// EventTypeRateLimited is published when a tool or API call hits a
 	// rate-limit response from the provider. The payload is a
 	// *RateLimitedEvent. WebUI consumes this to show "rate-limited,
@@ -205,7 +205,7 @@ const (
 	EventTypeAgentTurnStalled = "agent_turn_stalled"
 	// EventTypePreviewPortRegistered is
 	// published by the register_preview_port tool after it successfully
-	// registers a preview port with the platform. In hosted workspaces the
+	// registers a preview port with the platform. In hosted project folders the
 	// agent runs in-process inside the webui server, so the webui server
 	// subscribes to this on the shared event bus and records the returned
 	// preview URL as the active hosted preview — the preview pane embeds
@@ -317,7 +317,7 @@ type eventDelivery struct {
 	publishWG     *sync.WaitGroup
 }
 
-// PatchConflictInfo holds optional conflict metadata for a workspace_patch event.
+// PatchConflictInfo holds optional conflict metadata for a project_folder_patch event.
 type PatchConflictInfo struct {
 	Conflict   bool
 	TheirsPath string

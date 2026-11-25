@@ -26,7 +26,7 @@ vi.mock('../services/notificationBus', () => ({ notificationBus: { notify: vi.fn
 
 function busyError() {
   return Object.assign(new Error('busy'), {
-    code: 'workspace_busy',
+    code: 'project_folder_busy',
     runningChatId: 'chat-a',
     runningChatName: 'Chat A',
   });
@@ -38,7 +38,7 @@ function setup() {
     isProcessing: false,
     inputValue: '',
     perChatCache: {},
-    workspaceBusy: null,
+    projectFolderBusy: null,
   } as unknown as AppState;
   const queuedMessagesRef = { current: [] as QueuedMessage[] };
   const utils = renderHook(() => {
@@ -52,21 +52,21 @@ function setup() {
       activeChatIdRef: { current: 'chat-b' },
       queuedMessagesRef,
       isProcessing: state.isProcessing,
-      workspaceBusy: state.workspaceBusy,
+      projectFolderBusy: state.projectFolderBusy,
     });
   });
   return {
     ...utils,
     queuedMessagesRef,
     getState: () => state,
-    setBusy: (v: AppState['workspaceBusy']) => {
-      state = { ...state, workspaceBusy: v };
+    setBusy: (v: AppState['projectFolderBusy']) => {
+      state = { ...state, projectFolderBusy: v };
       utils.rerender();
     },
   };
 }
 
-describe('send held back by another chat (workspace_busy)', () => {
+describe('send held back by another chat (project_folder_busy)', () => {
   it('queues the message for its chat and holds it until the running chat finishes', async () => {
     apiDouble.sendQuery.mockRejectedValueOnce(busyError()).mockResolvedValue(undefined);
     const h = setup();
@@ -76,7 +76,7 @@ describe('send held back by another chat (workspace_busy)', () => {
     });
     h.rerender();
 
-    expect(h.getState().workspaceBusy).toMatchObject({ chatId: 'chat-b', runningChatId: 'chat-a' });
+    expect(h.getState().projectFolderBusy).toMatchObject({ chatId: 'chat-b', runningChatId: 'chat-a' });
     expect(h.getState().messages).toEqual([]);
     expect(h.queuedMessagesRef.current).toEqual([{ message: 'what codeword?', chatId: 'chat-b' }]);
     expect(apiDouble.sendQuery).toHaveBeenCalledTimes(1);

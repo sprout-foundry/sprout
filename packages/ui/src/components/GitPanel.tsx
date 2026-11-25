@@ -45,7 +45,7 @@ export interface GitSidebarPanelProps {
   isReviewLoading: boolean;
   actionError: string | null;
   actionWarning: string | null;
-  workspaceRoot?: string;
+  projectFolder?: string;
   onCommitMessageChange: (value: string) => void;
   onGenerateCommitMessage: () => void;
   onCommit: () => void;
@@ -82,7 +82,7 @@ function GitSidebarPanel({
   isReviewLoading,
   actionError,
   actionWarning,
-  workspaceRoot,
+  projectFolder,
   onCommitMessageChange,
   onGenerateCommitMessage,
   onCommit,
@@ -562,11 +562,11 @@ function GitSidebarPanel({
               >
                 Copy relative path
               </button>
-              {workspaceRoot && (
+              {projectFolder && (
                 <button
                   className="context-menu-item"
                   onClick={() => {
-                    copyToClipboard(`${workspaceRoot.replace(/\/+$/, '')}/${contextMenu.file.path}`);
+                    copyToClipboard(`${projectFolder.replace(/\/+$/, '')}/${contextMenu.file.path}`);
                     setContextMenu(null);
                   }}
                 >

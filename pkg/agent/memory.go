@@ -191,55 +191,19 @@ func ListMemories() ([]MemoryInfo, error) {
 	return memories, nil
 }
 
-// maxMemoryPromptBytes is the maximum number of bytes of memories included in the system prompt.
-// ~50 KB keeps memory useful while preventing individual oversized files from consuming the
-// entire context window before any conversation messages are added (~12 500 tokens at 4 chars/tok).
+// maxMemoryPromptBytes is the outer cap on memory bytes in the first user message (~12 500 tokens).
 const maxMemoryPromptBytes = 50_000
 
-// LoadMemoriesForPrompt loads all memories and formats them for inclusion in the system prompt
-// Returns empty string if no memories exist
+// maxMemoryEntryBytes is the per-memory cap: the largest rendered entry the block carries.
+// It is a fixed constant derived from maxMemoryPromptBytes (one fifth of the default total,
+// so a few full bodies fit under the outer guard) — not a share of the caller's maxBytes.
+// The outer guard (memory_prompt_max_bytes, or maxBytes when set) remains the backstop.
+// The per-memory value is fixed, so which entries are rendered never depends on how big
+// a neighbour's entry happens to be.
+const maxMemoryEntryBytes = maxMemoryPromptBytes / 5
+
+// LoadMemoriesForPrompt formats every memory body for the first user message (memory_prompt "full").
+// Returns empty string if no memories exist.
 func LoadMemoriesForPrompt() string {
-	memories, err := LoadAllMemories()
-	if err != nil || len(memories) == 0 {
-		return ""
-	}
-
-	var sb strings.Builder
-
-	sb.WriteString("\n\n---\n\n")
-	sb.WriteString("## Memories\n\n")
-	sb.WriteString("The following memories capture user preferences and learned patterns from previous sessions. Use them to guide your behavior.\n\n")
-
-	bytesWritten := 0
-	for i, memory := range memories {
-		header := fmt.Sprintf("### %s\n", memory.Name)
-
-		// Process content: skip leading H1 title if present
-		content := memory.Content
-		lines := strings.Split(content, "\n")
-
-		startIdx := 0
-		if len(lines) > 0 {
-			firstLine := strings.TrimSpace(lines[0])
-			if strings.HasPrefix(firstLine, "# ") {
-				startIdx = 1
-			}
-		}
-
-		body := ""
-		if startIdx < len(lines) {
-			body = strings.Join(lines[startIdx:], "\n")
-		}
-
-		entry := header + body + "\n\n"
-		if bytesWritten+len(entry) > maxMemoryPromptBytes {
-			sb.WriteString(fmt.Sprintf("*[%d additional memory file(s) omitted — total size exceeded %d bytes]*\n\n",
-				len(memories)-i, maxMemoryPromptBytes))
-			break
-		}
-		sb.WriteString(entry)
-		bytesWritten += len(entry)
-	}
-
-	return sb.String()
+	return LoadMemoriesForPromptMode(MemoryPromptFull, 0)
 }

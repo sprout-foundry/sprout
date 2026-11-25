@@ -255,10 +255,10 @@ describe('SECTION_GROUPS rendering', () => {
     expect(agentBadge?.textContent?.trim()).toBe('session');
     expect(agentBadge?.classList.contains('scope-session')).toBe(true);
 
-    // Workspace → workspace
-    const workspaceBadge = sections[1].querySelector('.settings-scope-badge');
-    expect(workspaceBadge?.textContent?.trim()).toBe('workspace');
-    expect(workspaceBadge?.classList.contains('scope-workspace')).toBe(true);
+    // Workspace → project folder
+    const projectFolderBadge = sections[1].querySelector('.settings-scope-badge');
+    expect(projectFolderBadge?.textContent?.trim()).toBe('project folder');
+    expect(projectFolderBadge?.classList.contains('scope-project-folder')).toBe(true);
 
     // Environment → global
     const envBadge = sections[2].querySelector('.settings-scope-badge');
@@ -307,24 +307,24 @@ describe('section collapse and expand', () => {
     renderPanel();
 
     // Workspace section is collapsed by default
-    const workspaceSection = container.querySelectorAll('.settings-section')[1];
-    expect(workspaceSection.classList.contains('expanded')).toBe(false);
+    const spacesSection = container.querySelectorAll('.settings-section')[1];
+    expect(spacesSection.classList.contains('expanded')).toBe(false);
 
     // Click the Workspace header to expand
-    const workspaceHeader = findSectionHeaderByLabel('Workspace');
+    const spacesHeader = findSectionHeaderByLabel('Workspace');
     act(() => {
-      workspaceHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      spacesHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(workspaceSection.classList.contains('expanded')).toBe(true);
+    expect(spacesSection.classList.contains('expanded')).toBe(true);
   });
 
   it('hides section body when collapsed', () => {
     renderPanel();
 
     // Workspace is collapsed by default
-    const workspaceSection = container.querySelectorAll('.settings-section')[1];
-    const body = workspaceSection.querySelector('.settings-section-body');
+    const spacesSection = container.querySelectorAll('.settings-section')[1];
+    const body = spacesSection.querySelector('.settings-section-body');
     expect(body).toBeNull();
   });
 
@@ -360,21 +360,21 @@ describe('localStorage persistence', () => {
     expect(parsed.expanded).toContain('agent');
 
     // Click to expand Workspace
-    const workspaceHeader = findSectionHeaderByLabel('Workspace');
+    const spacesHeader = findSectionHeaderByLabel('Workspace');
     act(() => {
-      workspaceHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      spacesHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     const updated = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
-    expect(updated.expanded).toContain('workspace');
+    expect(updated.expanded).toContain('project_folder');
   });
 
   it('restores expanded sections from localStorage on mount', () => {
-    // Pre-populate localStorage with workspace expanded
+    // Pre-populate localStorage with project folder expanded
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
-        expanded: ['workspace'],
+        expanded: ['project_folder'],
         activeSubsection: 'workspace-mcp',
       }),
     );
@@ -382,8 +382,8 @@ describe('localStorage persistence', () => {
     renderPanel();
 
     // Workspace section should be expanded
-    const workspaceSection = container.querySelectorAll('.settings-section')[1];
-    expect(workspaceSection.classList.contains('expanded')).toBe(true);
+    const spacesSection = container.querySelectorAll('.settings-section')[1];
+    expect(spacesSection.classList.contains('expanded')).toBe(true);
 
     // Agent should NOT be expanded (overridden by localStorage)
     const agentSection = container.querySelectorAll('.settings-section')[0];
@@ -395,9 +395,9 @@ describe('localStorage persistence', () => {
 
     // Click the "MCP Servers" subsection tab inside the Workspace section
     // First expand Workspace
-    const workspaceHeader = findSectionHeaderByLabel('Workspace');
+    const spacesHeader = findSectionHeaderByLabel('Workspace');
     act(() => {
-      workspaceHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      spacesHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     // Now click the MCP Servers tab
@@ -424,14 +424,14 @@ describe('aria-expanded accessibility', () => {
     expect(agentHeader?.getAttribute('aria-expanded')).toBe('true');
 
     // Workspace is collapsed by default
-    const workspaceHeader = findSectionHeaderByLabel('Workspace');
-    expect(workspaceHeader?.getAttribute('aria-expanded')).toBe('false');
+    const spacesHeader = findSectionHeaderByLabel('Workspace');
+    expect(spacesHeader?.getAttribute('aria-expanded')).toBe('false');
 
     // Click Workspace to expand it
     act(() => {
-      workspaceHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      spacesHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(workspaceHeader?.getAttribute('aria-expanded')).toBe('true');
+    expect(spacesHeader?.getAttribute('aria-expanded')).toBe('true');
 
     // Click Agent to collapse it
     act(() => {
@@ -515,7 +515,7 @@ describe('host capabilities gate the MCP and local-model subsections', () => {
   const expandAllSectionsOnOpen = () =>
     localStorage.setItem(
       'sprout.settingsPanel.state.v1',
-      JSON.stringify({ expanded: ['agent', 'workspace', 'environment', 'editor', 'experimental'] }),
+      JSON.stringify({ expanded: ['agent', 'project_folder', 'environment', 'editor', 'experimental'] }),
     );
 
   it('hides both when the host declares neither, even with a local terminal', () => {

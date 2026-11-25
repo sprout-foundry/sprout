@@ -76,7 +76,7 @@ func probeAgent(t *testing.T, dir string, responses ...*ScriptedResponse) (*Agen
 	}
 	t.Cleanup(ag.Shutdown)
 	ag.SetMaxIterations(20)
-	ag.SetWorkspaceRoot(dir)
+	ag.SetProjectFolder(dir)
 	return ag, client
 }
 
@@ -453,7 +453,7 @@ func probeAgentCfg(t *testing.T, dir string, mutate func(*configuration.Config),
 }
 
 // Known limitation, kept as a probe: shell-mutation tracking diffs bounded
-// workspace walks (max_files / max_duration_ms), so when a walk is cut short
+// project folder walks (max_files / max_duration_ms), so when a walk is cut short
 // a file created outside the walked portion is not recorded (and not
 // reverted). Fixing it needs change detection that isn't bounded by the walk
 // (e.g. git status for tracked repos).

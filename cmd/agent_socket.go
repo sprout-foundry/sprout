@@ -42,7 +42,7 @@ func AgentSocketPath() string {
 // one-shot queries and tool calls from many different callers, in many
 // different project directories, over its lifetime — Query/StreamQuery/
 // ExecuteTool must not let one call's state (conversation history,
-// workspace root) leak into another's.
+// project folder) leak into another's.
 //
 // So Query/StreamQuery/ExecuteTool build a fresh, throwaway *agent.Agent
 // per call rather than reusing a shared one: agent construction resolves
@@ -98,7 +98,7 @@ func (s *SharedAgentService) beginQuery() bool {
 // Agent.Shutdown is what stops MCP child processes, cancels
 // lifetime/interrupt contexts, waits background goroutines, and closes the
 // async output channel. Without it each one-shot query leaks a refcount and
-// the workspace's HNSW store can never close again.
+// the project folder's HNSW store can never close again.
 func (s *SharedAgentService) releaseAgent(a *agent.Agent) {
 	if a == nil {
 		// Agent never created — release the slot beginQuery reserved.
@@ -260,23 +260,23 @@ func newEphemeralDaemonAgent(workDir string, opts daemon.QueryOptions) (*agent.A
 	}
 	workDir = absWorkDir
 
-	// Layer the caller's workspace config (.sprout under workDir) over the
-	// global config, mirroring createChatAgent's auto-detected-workspace
-	// path: workspace-defined custom risk profiles and provider settings
+	// Layer the caller's project folder config (.sprout under workDir) over the
+	// global config, mirroring createChatAgent's auto-detected-project-folder
+	// path: project-folder-defined custom risk profiles and provider settings
 	// must resolve the same over the daemon as they do in-process.
 	// envutil.ConfigDir honors SPROUT_CONFIG — the daemon process's config
 	// root, not whatever directory the calling CLI happened to run from.
 	selector := daemonModelSelector(opts.Provider, opts.Model)
 	var callAgent *agent.Agent
 	if globalDir, gerr := envutil.ConfigDir(); gerr == nil {
-		callAgent, err = agent.NewAgentWithLayersInWorkspace(globalDir, workDir, workDir, selector)
+		callAgent, err = agent.NewAgentWithLayersInProjectFolder(globalDir, workDir, workDir, selector)
 	} else {
 		callAgent, err = agent.NewAgentWithModel(selector)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("daemon: create per-query agent: %w", err)
 	}
-	callAgent.SetWorkspaceRoot(workDir)
+	callAgent.SetProjectFolder(workDir)
 	// From here on the caller releases the slot (nil) on error, not the
 	// agent — an agent abandoned mid-construction still holds MCP lifetime
 	// contexts, so shut it down before returning each error.

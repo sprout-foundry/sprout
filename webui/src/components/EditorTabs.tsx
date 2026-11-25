@@ -22,7 +22,7 @@ import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useTabDragReorder } from '../hooks/useTabDragReorder';
 import { readFileWithConsent } from '../services/fileAccess';
 import { notificationBus } from '../services/notificationBus';
-import { useWorkspaceRoot } from '../services/workspaceStore';
+import { useProjectFolder } from '../services/projectFolderStore';
 import { type EditorBuffer } from '../types/editor';
 import { isSharedMode } from '../utils/sharedMode';
 import { catchIfAsync, getBufferIcon, getChatId, getFileIcon, getFileIconColor } from './editorTabIcons';
@@ -86,7 +86,7 @@ function EditorTabs({
     reorderBuffers,
     moveBufferToPane,
     toggleBufferPin,
-    openWorkspaceBuffer,
+    openProjectFolderBuffer,
     reloadBufferFromDisk,
   } = useEditorManager();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; bufferId: string } | null>(null);
@@ -110,7 +110,7 @@ function EditorTabs({
   // Workspace root backs Copy Absolute Path on the tab menu. Until it is
   // known the item falls back to the stored path (the editor context menu
   // behaves the same way).
-  const workspaceRoot = useWorkspaceRoot();
+  const projectFolder = useProjectFolder();
 
   const handleCopyRelativePath = useCallback((buffer: EditorBuffer) => {
     const path = buffer.file?.path;
@@ -124,13 +124,13 @@ function EditorTabs({
     (buffer: EditorBuffer) => {
       const path = buffer.file?.path;
       if (!path) return;
-      const root = workspaceRoot.replace(/\/+$/, '');
+      const root = projectFolder.replace(/\/+$/, '');
       const absolute = path.startsWith('/') || !root ? path : `${root}/${path}`;
       void navigator.clipboard?.writeText(absolute).catch(() => {
         notificationBus.notify('error', 'Editor', 'Failed to copy path', 3000);
       });
     },
-    [workspaceRoot],
+    [projectFolder],
   );
 
   const handleRevealInFileTree = useCallback((buffer: EditorBuffer) => {
@@ -329,7 +329,7 @@ function EditorTabs({
     // Shared-mode servers reject creates outright — don't show a placeholder
     // that's about to vanish.
     if (isSharedMode()) return;
-    const placeholderId = openWorkspaceBuffer({
+    const placeholderId = openProjectFolderBuffer({
       kind: 'chat',
       path: `__workspace/chat/creating-${Date.now()}`,
       title: 'Creating…',
@@ -343,7 +343,7 @@ function EditorTabs({
     // would race the session-list sync, which matches buffers by chatId —
     // losing that race produced two tabs for one chat.
     const swapInReal = (newId: string) => {
-      openWorkspaceBuffer({
+      openProjectFolderBuffer({
         kind: 'chat',
         path: `__workspace/chat/${newId}`,
         title: 'New Chat',
@@ -375,7 +375,7 @@ function EditorTabs({
       console.warn('[EditorTabs] Failed to create chat:', err);
       void closeBuffer(placeholderId);
     }
-  }, [onCreateChat, openWorkspaceBuffer, closeBuffer, onActiveChatChange]);
+  }, [onCreateChat, openProjectFolderBuffer, closeBuffer, onActiveChatChange]);
 
   const handleNewWorktreeChat = useCallback(() => {
     if (onCreateChatInWorktree) {

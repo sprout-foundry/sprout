@@ -1,12 +1,12 @@
 /**
- * One filesystem view for the in-browser workspace: a repo imported the way
+ * One filesystem view for the in-browser project folder: a repo imported the way
  * the startup import does it (CloudAdapter.restoreRepo) is what the file API
- * lists and reads, at every spelling of the workspace root, and the editor,
+ * lists and reads, at every spelling of the project folder, and the editor,
  * the file tree and the agent's shell all see each other's writes.
  *
  * The shell is an in-memory model of the WASM bridge: paths from the host
- * resolve the way cmd/wasm's workspacePath resolves them (absolute paths
- * stand, anything else is relative to the workspace root), and the few shell
+ * resolve the way cmd/wasm's projectFolderPath resolves them (absolute paths
+ * stand, anything else is relative to the project folder), and the few shell
  * commands the file routes run (mkdir -p, rm -rf, mv) plus the agent-side
  * ones these tests use (cat, echo >) operate on the same store.
  */
@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CloudAdapter } from './cloudAdapter';
 import { getVfsManifestSnapshot, untrackFileWrite } from './vfsFiles';
 import type { WasmDirEntry, WasmShell } from './wasmShell';
-import { createRestFs } from './workspaceFs/restFs';
+import { createRestFs } from './projectFolderFs/restFs';
 
 const ROOT = '/workspace';
 
@@ -29,7 +29,7 @@ function collapse(p: string): string {
   return `/${out.join('/')}`;
 }
 
-/** cmd/wasm workspacePath: absolute paths stand, the rest is relative to the root. */
+/** cmd/wasm projectFolderPath: absolute paths stand, the rest is relative to the root. */
 function bridgePath(p: string): string {
   return p.startsWith('/') ? collapse(p) : collapse(`${ROOT}/${p}`);
 }
@@ -181,7 +181,7 @@ const REPO_FILES = [
   { path: 'src/lib/util.ts', content: 'export const noop = () => {};\n' },
 ];
 
-/** Every way a caller names the workspace root. */
+/** Every way a caller names the project folder. */
 const ROOT_SPELLINGS = ['', '.', './', '/workspace', '/workspace/', 'workspace', 'workspace/'];
 
 let memory: ReturnType<typeof createMemoryShell>;
@@ -227,7 +227,7 @@ beforeEach(() => {
       });
     }
     // The platform's pre-WASM safety net answers the file routes with an
-    // empty listing; reaching it here means a request left the workspace.
+    // empty listing; reaching it here means a request left the project folder.
     return new Response(JSON.stringify({ message: 'success', files: [] }), { status: 200 });
   });
   vi.stubGlobal('fetch', fetchSpy);
@@ -251,8 +251,8 @@ describe.each([
   });
 
   it('reports the workspace root the file routes serve', async () => {
-    const res = await adapter.fetch('/api/workspace');
-    expect(await res.json()).toMatchObject({ workspace_root: ROOT, daemon_root: ROOT });
+    const res = await adapter.fetch('/api/project-folder');
+    expect(await res.json()).toMatchObject({ project_folder: ROOT, daemon_root: ROOT });
   });
 
   it.each([null, ...ROOT_SPELLINGS])('lists the imported files at the root spelled %j', async (spelling) => {
@@ -309,7 +309,7 @@ describe.each([
     expect(memory.shell.readFile('README.md').error).toBeTruthy();
   });
 
-  it('serves the workspaceFs seam (workspace-relative paths) from the same files', async () => {
+  it('serves the projectFolderFs seam (workspace-relative paths) from the same files', async () => {
     const fs = createRestFs(adapter.fetch.bind(adapter));
     expect(await fs.read('src/main.ts')).toMatchObject({ ok: true, content: 'export const answer = 42;\n' });
     expect(await fs.write('repos/octocat/other/index.ts', 'x\n')).toEqual({ ok: true });

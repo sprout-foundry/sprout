@@ -1,6 +1,6 @@
 // @ts-nocheck
-// The tab's remembered workspace path keys the saved layout. The mount-time
-// workspace fetch can return the server's interim default root (the home
+// The tab's remembered project folder path keys the saved layout. The mount-time
+// project folder fetch can return the server's interim default root (the home
 // directory) while startup restores the tab's project, so it must not
 // overwrite the remembered path; and the server returning to the root the
 // tab already shows must not clear its buffers or layout.
@@ -8,15 +8,15 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const session = vi.hoisted(() => ({ path: '/home/u/proj', persist: vi.fn() }));
-const api = vi.hoisted(() => ({ getWorkspace: vi.fn() }));
+const api = vi.hoisted(() => ({ getProjectFolder: vi.fn() }));
 
 vi.mock('../services/api', () => ({
-  ApiService: { getInstance: () => ({ getWorkspace: api.getWorkspace }) },
+  ApiService: { getInstance: () => ({ getProjectFolder: api.getProjectFolder }) },
 }));
 vi.mock('../services/clientSession', async (importOriginal) => ({
   ...(await importOriginal()),
-  getTabWorkspacePath: () => session.path,
-  persistTabWorkspacePath: (path: string) => {
+  getTabProjectFolderPath: () => session.path,
+  persistTabProjectFolderPath: (path: string) => {
     session.persist(path);
     session.path = path;
   },
@@ -67,9 +67,9 @@ function mount() {
   return { buffersRef };
 }
 
-function workspaceChanged(root: string) {
+function projectFolderChanged(root: string) {
   act(() => {
-    window.dispatchEvent(new CustomEvent('sprout:workspace-changed', { detail: { workspaceRoot: root } }));
+    window.dispatchEvent(new CustomEvent('sprout:workspace-changed', { detail: { projectFolder: root } }));
   });
 }
 
@@ -77,8 +77,8 @@ describe('useLayoutPersistence — remembered workspace path', () => {
   beforeEach(() => {
     session.path = '/home/u/proj';
     session.persist.mockReset();
-    api.getWorkspace.mockReset();
-    api.getWorkspace.mockResolvedValue({ workspace_root: '/home/u', daemon_root: '/home/u' });
+    api.getProjectFolder.mockReset();
+    api.getProjectFolder.mockResolvedValue({ project_folder: '/home/u', daemon_root: '/home/u' });
   });
 
   afterEach(() => {
@@ -87,7 +87,7 @@ describe('useLayoutPersistence — remembered workspace path', () => {
 
   it('does not persist the mount-time workspace root', async () => {
     mount();
-    await vi.waitFor(() => expect(api.getWorkspace).toHaveBeenCalled());
+    await vi.waitFor(() => expect(api.getProjectFolder).toHaveBeenCalled());
     await act(async () => {});
     expect(session.persist).not.toHaveBeenCalled();
     expect(session.path).toBe('/home/u/proj');
@@ -95,14 +95,14 @@ describe('useLayoutPersistence — remembered workspace path', () => {
 
   it('keeps buffers when the server returns to the root the tab already shows', () => {
     const { buffersRef } = mount();
-    workspaceChanged('/home/u/proj');
+    projectFolderChanged('/home/u/proj');
     expect(buffersRef.current.has('b1')).toBe(true);
     expect(session.persist).not.toHaveBeenCalled();
   });
 
   it('persists a different root and clears its stale buffers', () => {
     const { buffersRef } = mount();
-    workspaceChanged('/home/u/other');
+    projectFolderChanged('/home/u/other');
     expect(session.persist).toHaveBeenCalledWith('/home/u/other');
     expect(buffersRef.current.has('b1')).toBe(false);
   });

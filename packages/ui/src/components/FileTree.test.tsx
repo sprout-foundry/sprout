@@ -155,8 +155,8 @@ describe('FileTree', () => {
     const labels = menuItems.map((el) => el.textContent ?? '');
     expect(labels.some((t) => t.includes('ignored files'))).toBe(true);
     expect(labels.some((t) => t === 'Refresh')).toBe(true);
-    // The "Add workspace from repo…" clone item moved to the Files workspace
-    // row (WorkspaceCwdBar) — it must NOT appear in the tree's overflow menu.
+    // The "Add project folder from repo…" clone item moved to the Files project folder
+    // row (ProjectFolderCwdBar) — it must NOT appear in the tree's overflow menu.
     expect(labels.some((t) => t.includes('Add workspace from repo'))).toBe(false);
   });
 
@@ -446,7 +446,7 @@ describe('FileTree', () => {
         ref,
         onFileSelect: vi.fn(),
         onFetchFiles: slowFetch,
-        workspaceRoot: '/Users/dev/proj',
+        projectFolder: '/Users/dev/proj',
       }));
     });
 
@@ -795,7 +795,7 @@ describe('FileTree', () => {
         ref,
         onFileSelect: vi.fn(),
         files: makeFiles(),
-        workspaceRoot: '/home/user/project',
+        projectFolder: '/home/user/project',
       }));
     });
     const readmeItem = container.querySelector('[data-ext=".md"]')!;

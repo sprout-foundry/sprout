@@ -355,7 +355,7 @@ func (a *Agent) finalizeConversationPostHooks(result string, processedQuery stri
 	// The stored conversation carries the timestamp envelope from
 	// injection-time stamping; downstream consumers (turn checkpoint
 	// summaries, embedding signatures, transcript events) want clean text.
-	cleanQuery := StripUserMessageTimestamp(processedQuery)
+	cleanQuery := StripUserMessageEnvelope(processedQuery)
 
 	// Maybe checkpoint completed turn
 	a.maybeCheckpointCompletedTurn(cleanQuery, preSeedMsgCount, len(a.state.GetMessages()))

@@ -17,7 +17,7 @@ import (
 func replaceRequest(t *testing.T, content string, req ReplaceRequest) (int, ReplaceResponse, string) {
 	t.Helper()
 	ws, _ := newTestWebServer(t)
-	root := ws.getWorkspaceRootForRequest(clientRequest())
+	root := ws.getProjectFolderForRequest(clientRequest())
 	path := filepath.Join(root, "src", "a.txt")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
@@ -118,7 +118,7 @@ func TestSearchReplace_ResponseShapeAndPreview(t *testing.T) {
 	}
 }
 
-func TestSearchReplace_RefusesPathOutsideWorkspace(t *testing.T) {
+func TestSearchReplace_RefusesPathOutsideProjectFolder(t *testing.T) {
 	outside := filepath.Join(t.TempDir(), "outside.txt")
 	if err := os.WriteFile(outside, []byte("needle"), 0o644); err != nil {
 		t.Fatal(err)

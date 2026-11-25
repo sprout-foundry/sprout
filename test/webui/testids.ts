@@ -95,8 +95,8 @@ const TESTIDS = {
   "terminal-toggle": "terminal-toggle",
   "terminal-collapse": "terminal-collapse",
   "terminal-tab-bar": "terminal-tab-bar",
-  "workspace-terminal": "workspace-terminal", // the arranged terminal view (SproutWorkspace `terminal` kind)
-  "workspace-terminal-unavailable": "workspace-terminal-unavailable",
+  "spaces-terminal": "spaces-terminal", // the arranged terminal view (SproutSpaces `terminal` kind)
+  "spaces-terminal-unavailable": "spaces-terminal-unavailable",
 
   // Onboarding
   "onboarding-overlay": "onboarding-overlay",
@@ -126,7 +126,7 @@ const TESTIDS = {
 
   // Status bar
   "status-bar": "status-bar",
-  "status-bar-workspace": "status-bar-workspace",
+  "status-bar-project-folder": "status-bar-project-folder",
   "status-bar-notification": "status-bar-notification",
 
   // Settings
@@ -200,21 +200,21 @@ const TESTIDS = {
   "export-download": "export-download",
 
   // Workspace browser / gate
-  "workspace-browser": "workspace-browser",
-  "workspace-browser-list": "workspace-browser-list",
-  "workspace-browser-entry": "workspace-browser-entry",
-  "workspace-browser-confirm": "workspace-browser-confirm",
-  "workspace-gate-modal": "workspace-gate-modal",
-  "workspace-gate-error": "workspace-gate-error",
-  "workspace-gate-home-btn": "workspace-gate-home-btn",
-  // Studio workspace-gate variant (native folder picker / new-project)
-  "workspace-gate-pick-btn": "workspace-gate-pick-btn",
-  "workspace-gate-new-btn": "workspace-gate-new-btn",
-  "workspace-gate-create-input": "workspace-gate-create-input",
-  "workspace-gate-create-cancel": "workspace-gate-create-cancel",
-  "workspace-gate-create-submit": "workspace-gate-create-submit",
+  "project-folder-browser": "project-folder-browser",
+  "project-folder-browser-list": "project-folder-browser-list",
+  "project-folder-browser-entry": "project-folder-browser-entry",
+  "project-folder-browser-confirm": "project-folder-browser-confirm",
+  "project-folder-gate-modal": "project-folder-gate-modal",
+  "project-folder-gate-error": "project-folder-gate-error",
+  "project-folder-gate-home-btn": "project-folder-gate-home-btn",
+  // Studio project-folder-gate variant (native folder picker / new-project)
+  "project-folder-gate-pick-btn": "project-folder-gate-pick-btn",
+  "project-folder-gate-new-btn": "project-folder-gate-new-btn",
+  "project-folder-gate-create-input": "project-folder-gate-create-input",
+  "project-folder-gate-create-cancel": "project-folder-gate-create-cancel",
+  "project-folder-gate-create-submit": "project-folder-gate-create-submit",
   // Starter chooser in the studio new-project create form.
-  "workspace-gate-starter-select": "workspace-gate-starter-select",
+  "project-folder-gate-starter-select": "project-folder-gate-starter-select",
 
   // Command output
   "command-output-panel": "command-output-panel",
@@ -297,9 +297,9 @@ const TESTIDS = {
   "status-bar-cost": "status-bar-cost",
   "markdown-preview": "markdown-preview",
   "binary-viewer": "binary-viewer",
-  "workspace-picker": "workspace-picker",
-  "workspace-picker-option": "workspace-picker-option",
-  "workspace-picker-error": "workspace-picker-error",
+  "project-folder-picker": "project-folder-picker",
+  "project-folder-picker-option": "project-folder-picker-option",
+  "project-folder-picker-error": "project-folder-picker-error",
   "theme-toggle": "theme-toggle",
   "ui-scale-select": "ui-scale-select",
   "disconnected-overlay": "disconnected-overlay",
@@ -320,12 +320,18 @@ const TESTIDS = {
   "shell-approval-submit": "shell-approval-submit",
 
   // Escalation toast (browser-limitation → Mode A cloud task / Mode B workspace)
+  // Mode A's CTA opens a confirm step (EscalationListener): the prompt is
+  // editable there, and only "Start task" creates the task.
+  "escalation-cloud-task-confirm": "escalation-cloud-task-confirm",
+  "escalation-cloud-task-prompt": "escalation-cloud-task-prompt",
+  "escalation-cloud-task-start": "escalation-cloud-task-start",
+  "escalation-cloud-task-back": "escalation-cloud-task-back",
   "escalation-toast-cloud-task": "escalation-toast-cloud-task",
   "escalation-toast-cloud-task-status": "escalation-toast-cloud-task-status",
   "escalation-toast-cloud-task-link": "escalation-toast-cloud-task-link",
   "escalation-toast-cloud-task-error": "escalation-toast-cloud-task-error",
-  "escalation-toast-start-workspace": "escalation-toast-start-workspace",
-  "escalation-toast-workspace-error": "escalation-toast-workspace-error",
+  "escalation-toast-start-dev-space": "escalation-toast-start-dev-space",
+  "escalation-toast-dev-space-error": "escalation-toast-dev-space-error",
 
   // Escalation toast, ETH-2 txn action (run in the cloud container)
   "escalation-toast-txn": "escalation-toast-txn",
@@ -354,13 +360,13 @@ const TESTIDS = {
   "run-host-bare-metal-warning": "run-host-bare-metal-warning",
   "run-host-notice": "run-host-notice",
 
-  // Session working directory (services/workspaceCwd.ts) — Files panel
-  // repo/cwd selector row (WorkspaceCwdBar). The chip was removed: the
+  // Session working directory (services/projectFolderCwd.ts) — Files panel
+  // repo/cwd selector row (ProjectFolderCwdBar). The chip was removed: the
   // select is the single surface showing the cwd (no duplication).
-  "workspace-cwd-bar": "workspace-cwd-bar",
+  "project-folder-cwd-bar": "project-folder-cwd-bar",
   "editor-model-section": "editor-model-section",
-  "workspace-cwd-select": "workspace-cwd-select",
-  "workspace-add-repo-btn": "workspace-add-repo-btn",
+  "project-folder-cwd-select": "project-folder-cwd-select",
+  "project-folder-add-repo-btn": "project-folder-add-repo-btn",
 
   // P4.2 mobile peer-buffer keep-alive topology (phone form factor):
   // chat and editor are PEER surfaces — both mounted, visibility
@@ -376,9 +382,9 @@ const TESTIDS = {
   "mockup-panel-frame": "mockup-panel-frame",
   "mockup-panel-empty": "mockup-panel-empty",
 
-  "workspace-busy-notice": "workspace-busy-notice",
-  "workspace-busy-send-anyway": "workspace-busy-send-anyway",
-  "workspace-busy-dismiss": "workspace-busy-dismiss",
+  "project-folder-busy-notice": "project-folder-busy-notice",
+  "project-folder-busy-send-anyway": "project-folder-busy-send-anyway",
+  "project-folder-busy-dismiss": "project-folder-busy-dismiss",
 
   // Preview (the preview pane's dev-server lifecycle surface,
   // packages/ui/src/components/PreviewPane.tsx)
@@ -456,18 +462,18 @@ const TESTIDS = {
   "host-example-usage": "host-example-usage", // the usage view
   "host-notification-count": "host-notification-count", // the notification badge
 
-  // Workspace views (views/SproutWorkspace.tsx)
-  "sprout-workspace": "sprout-workspace", // the workspace view root
-  "workspace-editor": "workspace-editor", // the assembled editor view (views/WorkspaceEditorView.tsx)
-  "workspace-git": "workspace-git", // the source control view root (views/WorkspaceGitView.tsx)
-  "workspace-git-empty": "workspace-git-empty", // the source control view's no-repository / no-git state
-  "workspace-git-diff": "workspace-git-diff", // the source control view's inline diff
-  "workspace-git-diff-open": "workspace-git-diff-open", // opens the diffed file in the editor
-  "workspace-search": "workspace-search", // the search view root (views/WorkspaceSearchView.tsx)
-  "workspace-space-shell": "workspace-space-shell", // the composed space shell root (views/SproutWorkspaceSpaceShell.tsx)
-  "workspace-sidebar": "workspace-sidebar", // the composed shell's project sidebar (views/WorkspaceSidebar.tsx)
-  "workspace-sidebar-rail": "workspace-sidebar-rail", // the collapsed sidebar's rail
-  "workspace-docked-terminal": "workspace-docked-terminal", // the composed shell's docked terminal (views/WorkspaceDockedTerminal.tsx)
+  // Workspace views (views/SproutSpaces.tsx)
+  "sprout-spaces": "sprout-spaces", // the workspace view root
+  "spaces-editor": "spaces-editor", // the assembled editor view (views/SpacesEditorView.tsx)
+  "spaces-git": "spaces-git", // the source control view root (views/SpacesGitView.tsx)
+  "spaces-git-empty": "spaces-git-empty", // the source control view's no-repository / no-git state
+  "spaces-git-diff": "spaces-git-diff", // the source control view's inline diff
+  "spaces-git-diff-open": "spaces-git-diff-open", // opens the diffed file in the editor
+  "spaces-search": "spaces-search", // the search view root (views/SpacesSearchView.tsx)
+  "spaces-space-shell": "spaces-space-shell", // the composed space shell root (views/SproutSpacesSpaceShell.tsx)
+  "spaces-sidebar": "spaces-sidebar", // the composed shell's project sidebar (views/SpacesSidebar.tsx)
+  "spaces-sidebar-rail": "spaces-sidebar-rail", // the collapsed sidebar's rail
+  "spaces-docked-terminal": "spaces-docked-terminal", // the composed shell's docked terminal (views/SpacesDockedTerminal.tsx)
   "user-menu-report-bug": "user-menu-report-bug", // UserMenu "Report a bug" action
 } as const;
 

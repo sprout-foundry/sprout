@@ -2,7 +2,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { useMockupPresence } from './useMockupPresence';
 
-// The hook reads the mockup path and re-probes on workspace file events.
+// The hook reads the mockup path and re-probes on project folder file events.
 // These tests pin the re-probe triggers: a draw lands mid-session with no
 // focus change and no reload, so the event path is the one that matters.
 

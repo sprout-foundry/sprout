@@ -150,10 +150,10 @@ func (h *planAddScopeHandler) Validate(args map[string]any) error {
 }
 
 func (h *planAddScopeHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	root := env.WorkspaceRoot
+	root := env.ProjectFolder
 	if root == "" {
 		return ToolResult{
-			Output:  "plan_add_scope: no workspace root available — cannot write .sprout/plan.json",
+			Output:  "plan_add_scope: no project folder available — cannot write .sprout/plan.json",
 			IsError: true,
 		}, nil
 	}

@@ -12,11 +12,11 @@ import type { SproutInstance } from '../../services/api';
 import { useActiveRepoURL } from '../../services/activeRepo';
 import { closeHome, openHome, searchForRepo, useHomeView } from '../../services/homeView';
 import { useRecentRepos } from '../../services/recentRepos';
-import { parseRepoRef } from '../../services/workspaceFs/workspaceGit';
+import { parseRepoRef } from '../../services/projectFolderFs/projectFolderGit';
 import { showThemedAlert, showThemedPrompt } from '../ThemedDialog';
 import type { ViewType } from '../../types/app';
 import { repoSlug as repoSlugFromURL } from '../../host/repoName';
-import type { WorkspaceMode, WorkspaceModeId } from '../../workspaces/registry';
+import type { Space, SpaceId } from '../../spaces/registry';
 import ProjectNav, { NAV_ICONS, type ProjectNavConversations, type ProjectNavTarget } from './ProjectNav';
 import HomeNav from './HomeNav';
 import NewProjectDialog from './NewProjectDialog';
@@ -42,13 +42,13 @@ export interface LayeredSidebarProps {
   conversations?: ProjectNavConversations;
   currentView?: ViewType;
   onViewChange?: (view: ViewType) => void;
-  modes: WorkspaceMode[];
-  activeModeId: WorkspaceModeId;
-  onSelectMode?: (id: WorkspaceModeId) => void;
+  modes: Space[];
+  activeModeId: SpaceId;
+  onSelectMode?: (id: SpaceId) => void;
   modeSection?: string;
   onModeSectionChange?: (id: string) => void;
   onSectionChange?: (section: SectionTab) => void;
-  workspaceRoot?: string;
+  projectFolder?: string;
   instances: SproutInstance[];
   onInstanceChange?: (pid: number) => void;
   /** Replaces the plain project title with a control that switches projects. */
@@ -98,7 +98,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
   } = useHostCapabilities();
   const host = useHost();
   // In the hosted build "projects" are repositories and the rail's account
-  // menu is the host's; the local daemon uses running workspaces instead.
+  // menu is the host's; the local daemon uses running project folders instead.
   const hosted = supportsInstances;
   const [open, setOpen] = useState<ProjectNavTarget | null>(null);
   const [creating, setCreating] = useState(false);
@@ -125,7 +125,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
     if (homeShown !== null && homeShown !== lastHomeShown.current) onCloseDrawer?.();
     lastHomeShown.current = homeShown;
   }, [homeShown, onCloseDrawer]);
-  const title = hosted ? (repoSlug ?? copy('workspace.none')) : basename(props.workspaceRoot);
+  const title = hosted ? (repoSlug ?? copy('workspace.none')) : basename(props.projectFolder);
 
   const conversationInMain = !!props.conversations?.inMain;
 

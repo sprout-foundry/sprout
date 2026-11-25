@@ -43,7 +43,7 @@ func TestHandleAPIGitDiffForModifiedFile(t *testing.T) {
 	repo := createTempGitRepo(t)
 	writeFile(t, filepath.Join(repo, "notes.txt"), "line one\nline two\n")
 
-	server := &ReactWebServer{workspaceRoot: repo}
+	server := &ReactWebServer{projectFolder: repo}
 	req := httptest.NewRequest(http.MethodGet, "/api/git/diff?path=notes.txt", nil)
 	w := httptest.NewRecorder()
 
@@ -90,7 +90,7 @@ func TestHandleAPIGitDiffForUntrackedFile(t *testing.T) {
 	repo := createTempGitRepo(t)
 	writeFile(t, filepath.Join(repo, "new_file.txt"), "brand new content\n")
 
-	server := &ReactWebServer{workspaceRoot: repo}
+	server := &ReactWebServer{projectFolder: repo}
 	req := httptest.NewRequest(http.MethodGet, "/api/git/diff?path=new_file.txt", nil)
 	w := httptest.NewRecorder()
 

@@ -1,0 +1,74 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {
+        "retryConfig": {
+          "initialDelay": 100,
+          "maxAttempts": 2
+        }
+      }
+    },
+    {
+      "id": 2,
+      "method": "mock.addError",
+      "params": {
+        "errorType": "transient",
+        "message": "500"
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "first success"
+      }
+    },
+    {
+      "id": 4,
+      "method": "agent.run",
+      "params": {
+        "query": "q1"
+      }
+    },
+    {
+      "id": 5,
+      "method": "mock.addError",
+      "params": {
+        "errorType": "transient",
+        "message": "500"
+      }
+    },
+    {
+      "id": 6,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "second success"
+      }
+    },
+    {
+      "id": 7,
+      "method": "agent.run",
+      "params": {
+        "query": "q2"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 4,
+      "type": "noError"
+    },
+    {
+      "id": 7,
+      "type": "noError"
+    }
+  ],
+  "description": "Placeholder: After error resolution, next retry cycle starts fresh from initialDelay. Tested across multiple queries.",
+  "name": "backoff_reset"
+}

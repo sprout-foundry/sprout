@@ -21,7 +21,7 @@ const BACKGROUND_REFRESH_DEBOUNCE_MS = 600;
  * moment the user switched away. This hook watches for pending events on
  * chats with populated caches, debounces, and fetches the authoritative
  * transcript via the read-only /api/chat-sessions/messages endpoint (which,
- * unlike /switch, does not move the server-side active chat or workspace).
+ * unlike /switch, does not move the server-side active chat or project folder).
  *
  * The active chat is skipped: it streams through the normal event path, and
  * a background fetch here would fight the streaming reducer.

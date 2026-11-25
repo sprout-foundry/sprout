@@ -15,10 +15,10 @@ import (
 )
 
 // TestGatewayWiringEndToEnd proves the client half of the gateway seam
-// (issue #115): a workspace started with llm_provider=gateway lists THE
+// (issue #115): a dev space started with llm_provider=gateway lists THE
 // GATEWAY'S models through its model-picker API, because the runner wrote
-// the gateway provider file into the workspace's scoped config dir and put
-// the workspace-scoped key in its environment. It needs a built sprout
+// the gateway provider file into the dev space's scoped config dir and put
+// the dev-space-scoped key in its environment. It needs a built sprout
 // binary (SPROUT_RUNNER_E2E_BIN) and a fake gateway:
 //
 //	SPROUT_RUNNER_E2E_BIN=/path/to/sprout go test -run TestGatewayWiring ./pkg/runner/
@@ -47,8 +47,8 @@ func TestGatewayWiringEndToEnd(t *testing.T) {
 	t.Cleanup(gateway.Close)
 
 	l := &HostLauncher{SproutBin: bin}
-	task := WorkspaceTask{
-		WorkspaceID:    "e2e-gw",
+	task := DevSpaceTask{
+		DevSpaceID:     "e2e-gw",
 		Action:         "start",
 		TxnSecret:      "e2e-secret",
 		LLMProvider:    "gateway",
@@ -60,7 +60,7 @@ func TestGatewayWiringEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	t.Cleanup(func() { _ = l.Destroy(ctx, task.WorkspaceID, ws) })
+	t.Cleanup(func() { _ = l.Destroy(ctx, task.DevSpaceID, ws) })
 
 	// The daemon lists the gateway's models under the gateway provider —
 	// the model picker reads exactly this.
@@ -90,18 +90,18 @@ func TestGatewayWiringEndToEnd(t *testing.T) {
 		}
 	}
 
-	// The daemon authenticated to the gateway with the workspace-scoped
+	// The daemon authenticated to the gateway with the dev-space-scoped
 	// key from the start task (never the runner's own credentials).
 	select {
 	case key := <-gotKey:
 		if key != "gw-ws-key-123" {
-			t.Errorf("the daemon must present the workspace gateway key; got %q", key)
+			t.Errorf("the daemon must present the project folder gateway key; got %q", key)
 		}
 	default:
 		t.Error("the daemon never called the gateway's /v1/models")
 	}
 
-	// The provider file lives in the workspace's scoped config dir and
+	// The provider file lives in the dev space's scoped config dir and
 	// dies with it. The path is the runner's own state dir under
 	// t.TempDir() (set via SPROUT_STATE_DIR above) — a test fixture, not
 	// attacker-influenced input.
@@ -109,8 +109,8 @@ func TestGatewayWiringEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	provPath := filepath.Join(stateDir, "runner", "workspaces", task.WorkspaceID, "config", "providers", "gateway.json")
+	provPath := filepath.Join(stateDir, "runner", "workspaces", task.DevSpaceID, "config", "providers", "gateway.json")
 	if _, err := os.Stat(provPath); err != nil { //nolint:gosec // G703: test-only stat of the runner's own t.TempDir state dir
-		t.Errorf("gateway provider file must be in the workspace's scoped config dir: %v", err)
+		t.Errorf("gateway provider file must be in the project folder's scoped config dir: %v", err)
 	}
 }

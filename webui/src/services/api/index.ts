@@ -29,7 +29,7 @@ export type {
   SSHOpenErrorPayload,
   SSHLaunchStatus,
   ShellInfo,
-  WorkspaceResponse,
+  ProjectFolderResponse,
   SproutSettings,
   HotkeyEntry,
   HotkeyConfig,
@@ -38,7 +38,7 @@ export type {
   SessionSearchResponse,
 } from './types';
 
-export { SSHWorkspaceOpenError } from './types';
+export { SSHProjectFolderOpenError } from './types';
 
 // ApiService — singleton facade
 export { ApiService } from './apiService';
@@ -50,7 +50,7 @@ export * as chatApi from './chatApi';
 export * as terminalApi from './terminalApi';
 export * as settingsApi from './settingsApi';
 export * as credentialsApi from './credentialsApi';
-export * as workspaceApi from './workspaceApi';
+export * as projectFolderApi from './projectFolderApi';
 export * as sshApi from './sshApi';
 export * as searchApi from './searchApi';
 export * as editorApi from './editorApi';

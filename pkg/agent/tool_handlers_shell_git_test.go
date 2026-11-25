@@ -40,10 +40,10 @@ import (
 // highRiskApprovedForCommand. In non-interactive test mode this auto-approves,
 // so the command proceeds past the gate. The OLD "blocked by default"
 // hard-block message must never appear.
-// sandboxGitWorkspace makes a temp workspace safe for tests that execute
+// sandboxGitProjectFolder makes a temp project folder safe for tests that execute
 // real git history-rewrite commands. See testutil.GitSandbox for the
 // rationale: initialized-empty repo + GIT_CEILING_DIRECTORIES ceiling.
-func sandboxGitWorkspace(t *testing.T) string {
+func sandboxGitProjectFolder(t *testing.T) string {
 	t.Helper()
 	return testutil.GitSandbox(t)
 }
@@ -53,9 +53,9 @@ func TestHandleShellCommand_Legacy_GitHistoryRewriteNotHardBlocked(t *testing.T)
 		agent := newTestAgent(t)
 		defer agent.Shutdown()
 
-		workspace := sandboxGitWorkspace(t)
-		agent.SetWorkspaceRoot(workspace)
-		agent.SetShellCwd(workspace)
+		projectFolder := sandboxGitProjectFolder(t)
+		agent.SetProjectFolder(projectFolder)
+		agent.SetShellCwd(projectFolder)
 
 		// Enable the AllowGitHistoryRewrite flag so the history-rewrite
 		// gate is skipped entirely.
@@ -73,7 +73,7 @@ func TestHandleShellCommand_Legacy_GitHistoryRewriteNotHardBlocked(t *testing.T)
 		_, err := handleShellCommand(context.Background(), agent, args)
 
 		// The command reached execution and will fail because there is no
-		// real git repo in the temp workspace. An exec error is acceptable;
+		// real git repo in the temp project folder. An exec error is acceptable;
 		// a security error containing the old hard-block language is not.
 		if err != nil {
 			msg := err.Error()
@@ -90,9 +90,9 @@ func TestHandleShellCommand_Legacy_GitHistoryRewriteNotHardBlocked(t *testing.T)
 		agent := newTestAgent(t)
 		defer agent.Shutdown()
 
-		workspace := sandboxGitWorkspace(t)
-		agent.SetWorkspaceRoot(workspace)
-		agent.SetShellCwd(workspace)
+		projectFolder := sandboxGitProjectFolder(t)
+		agent.SetProjectFolder(projectFolder)
+		agent.SetShellCwd(projectFolder)
 
 		// AllowGitHistoryRewrite defaults to false — no config change needed.
 		// The test agent is non-interactive (SkipPrompt=true), so
@@ -127,9 +127,9 @@ func TestHandleShellCommand_Legacy_GitResetHardNotHardBlocked(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	workspace := sandboxGitWorkspace(t)
-	agent.SetWorkspaceRoot(workspace)
-	agent.SetShellCwd(workspace)
+	projectFolder := sandboxGitProjectFolder(t)
+	agent.SetProjectFolder(projectFolder)
+	agent.SetShellCwd(projectFolder)
 
 	// AllowGitHistoryRewrite defaults to false. The default test agent has
 	// no active persona, so EvaluateOperationRisk returns Low (gate 1

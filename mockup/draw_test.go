@@ -158,7 +158,7 @@ func TestDraw_FreshAndAvoid(t *testing.T) {
 		t.Fatalf("mode = %s, asked %d", res.Mode, len(*asked))
 	}
 	ask := (*asked)[0]
-	for _, want := range []string{"a different look", "a kit other than soft, craft", "terracotta", "a first-screen composition other than art"} {
+	for _, want := range []string{"a different look", "a kit other than soft, craft", "a palette family other than", "a first-screen composition other than art"} {
 		if !strings.Contains(ask, want) {
 			t.Errorf("the request does not say %q:\n%s", want, ask)
 		}
@@ -169,7 +169,78 @@ func TestDraw_FreshAndAvoid(t *testing.T) {
 }
 
 func TestSteerRequestIsEmptyWithNothingToAvoid(t *testing.T) {
-	if s := steerRequest(nil, false, ""); s != "" {
+	if s := steerRequest(nil, false, "", nil); s != "" {
 		t.Errorf("steer = %q", s)
+	}
+}
+
+func TestNudgeCompositions_NeverTheArtPanel(t *testing.T) {
+	comps := nudgeCompositions()
+	if len(comps) == 0 {
+		t.Fatal("no compositions to nudge toward")
+	}
+	for _, c := range comps {
+		if c == "art" {
+			t.Fatal("the art panel is a nudge")
+		}
+	}
+}
+
+// A whole redraw with Keep uses exactly that kit, palette, composition and
+// font, whatever the model chose, and ignores Avoid.
+func TestDraw_KeepOnWholeRedraw(t *testing.T) {
+	kept := kit.Choice{Kit: "soft", Palette: "sage-linen", Composition: "band", Font: "fraunces"}
+	other := strings.Replace(page, `data-kit="soft" data-palette="sage"`, `data-kit="retro" data-palette="ocean" data-composition="band"`, 1)
+	stream, asked := replies(t, other)
+	res, err := Draw(context.Background(), stream, Request{
+		Plan:  []byte(`{"name":"Crumb"}`),
+		Keep:  &kept,
+		Avoid: []kit.Choice{{Kit: "craft", Palette: "terracotta", Composition: "art", Font: "fraunces"}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(*asked) != 1 || !strings.Contains((*asked)[0], "Keep the current design") || strings.Contains((*asked)[0], "recent first looks") {
+		t.Fatalf("the ask = %v", *asked)
+	}
+	if c := kit.ChoiceOf(res.HTML); c.Kit != "soft" || c.Palette != "sage-linen" || c.Composition != "band" || c.Font != "fraunces" {
+		t.Fatalf("choice = %+v", c)
+	}
+}
+
+// A whole redraw of a saved update keeps the saved design: Saved without
+// Fresh keeps ChoiceOf(Saved), and the current look is not steered away from.
+func TestDraw_SavedKeepsItsChoice(t *testing.T) {
+	fresh := strings.Replace(page, `data-kit="soft" data-palette="sage"`, `data-kit="retro" data-palette="ocean" data-composition="band" data-font="fraunces"`, 1)
+	stream, asked := replies(t, "<<<FIND\n<h2>Nope</h2>\n===\nx\n>>>", fresh)
+	res, err := Draw(context.Background(), stream, Request{Saved: kit.Assemble(page), Change: "rename it"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Mode != "whole" {
+		t.Fatalf("mode = %s", res.Mode)
+	}
+	saved := kit.ChoiceOf(kit.Assemble(page))
+	if c := kit.ChoiceOf(res.HTML); c.Kit != saved.Kit || c.Palette != saved.Palette || c.Composition != saved.Composition || c.Font != saved.Font {
+		t.Fatalf("choice = %+v, want %+v", c, saved)
+	}
+	if len(*asked) != 2 || !strings.Contains((*asked)[1], "data-kit=\"soft\"") {
+		t.Fatalf("the whole redraw was asked to keep the saved design: %v", *asked)
+	}
+}
+
+// Fresh (a different look on purpose) picks anew even with Saved set.
+func TestDraw_FreshPicksAnew(t *testing.T) {
+	other := strings.Replace(page, `data-kit="soft" data-palette="sage"`, `data-kit="retro" data-palette="ocean" data-composition="band" data-font="fraunces"`, 1)
+	stream, _ := replies(t, other)
+	res, err := Draw(context.Background(), stream, Request{Saved: kit.Assemble(page), Fresh: true}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Mode != "whole" {
+		t.Fatalf("mode = %s", res.Mode)
+	}
+	if c := kit.ChoiceOf(res.HTML); c.Kit == kit.ChoiceOf(kit.Assemble(page)).Kit {
+		t.Fatalf("Fresh kept the old design: %+v", c)
 	}
 }

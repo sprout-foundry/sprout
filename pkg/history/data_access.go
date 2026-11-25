@@ -81,13 +81,13 @@ type ChangeLog struct {
 // InitializeHistoryPaths configures the history storage paths based on configuration
 // This should be called at application startup to ensure correct path resolution.
 //
-// SP-133: changes/ and revisions/ are now workspace-local only (under
-// <workspace>/.sprout/). The global "HistoryScope" branch is removed —
-// it created a dual-role directory when the workspace was $HOME, causing
+// SP-133: changes/ and revisions/ are now project-folder-local only (under
+// <project folder>/.sprout/). The global "HistoryScope" branch is removed —
+// it created a dual-role directory when the project folder was $HOME, causing
 // the user-level state dir to accumulate per-repo snapshots.
 func InitializeHistoryPaths(config *configuration.Config) {
 	// History is always project-scoped: .sprout/changes and .sprout/revisions
-	// under the workspace root. No global branch.
+	// under the project folder. No global branch.
 	if config != nil && config.HistoryScope == "global" {
 		log.Printf("[history] warning: history_scope=\"global\" is no longer supported (SP-133); using project-scoped history")
 	}

@@ -131,8 +131,8 @@ describe('example host imports only the public entry points (SP-160 Acceptance c
 
   describe('scanner catches seeded violations (positive control)', () => {
     it('flags a private import reaching into a web UI module', () => {
-      expect(findInternalImports(`import { useWorkspaceMode } from '../../../workspaces/useWorkspaceMode';`)).toEqual([
-        '../../../workspaces/useWorkspaceMode',
+      expect(findInternalImports(`import { useSpace } from '../../../spaces/useSpace';`)).toEqual([
+        '../../../spaces/useSpace',
       ]);
       expect(findInternalImports(`import { ChatView } from '../../../components/ChatView';`)).toEqual([
         '../../../components/ChatView',
@@ -149,8 +149,8 @@ describe('example host imports only the public entry points (SP-160 Acceptance c
     });
 
     it('flags a dynamic import of an internal', () => {
-      expect(findInternalImports(`const mod = await import('../../../workspaces/registry');`)).toEqual([
-        '../../../workspaces/registry',
+      expect(findInternalImports(`const mod = await import('../../../spaces/registry');`)).toEqual([
+        '../../../spaces/registry',
       ]);
       expect(findInternalImports(`import('@/services/api').then(() => {});`)).toEqual(['@/services/api']);
     });

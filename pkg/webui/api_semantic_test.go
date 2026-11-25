@@ -45,18 +45,18 @@ func TestHandleAPISemanticIncludesDurationAndNormalizesTrigger(t *testing.T) {
 	registry.RegisterSingleton(adapter, "typescript")
 	semanticAdapterRegistry = registry
 
-	workspaceRoot := t.TempDir()
+	projectFolder := t.TempDir()
 	// Resolve symlinks so that canonicalizePath comparisons are consistent
 	// (macOS /var → /private/var).
-	if evaled, err := filepath.EvalSymlinks(workspaceRoot); err == nil {
-		workspaceRoot = evaled
+	if evaled, err := filepath.EvalSymlinks(projectFolder); err == nil {
+		projectFolder = evaled
 	}
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws.workspaceRoot = workspaceRoot
-	ws.daemonRoot = workspaceRoot
+	ws.projectFolder = projectFolder
+	ws.daemonRoot = projectFolder
 	ws.fileConsents = newFileConsentManager()
 
 	body, err := json.Marshal(map[string]any{
@@ -87,12 +87,12 @@ func TestHandleAPISemanticIncludesDurationAndNormalizesTrigger(t *testing.T) {
 		t.Fatalf("expected normalized trigger 'save', got %q", adapter.lastInput.Trigger)
 	}
 	// canonicalizePath resolves symlinks, so compare against the evaled root.
-	expectedPath := filepath.Join(workspaceRoot, "src/example.ts")
+	expectedPath := filepath.Join(projectFolder, "src/example.ts")
 	if evaled, err := filepath.EvalSymlinks(expectedPath); err == nil {
 		expectedPath = evaled
 	}
 	if adapter.lastInput.FilePath != expectedPath {
-		t.Fatalf("expected canonical file path inside workspace, got %q", adapter.lastInput.FilePath)
+		t.Fatalf("expected canonical file path inside project folder, got %q", adapter.lastInput.FilePath)
 	}
 	if resp.DurationMs <= 0 {
 		t.Fatalf("expected duration_ms > 0, got %d", resp.DurationMs)

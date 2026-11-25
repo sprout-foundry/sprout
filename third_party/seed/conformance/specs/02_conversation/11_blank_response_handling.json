@@ -1,0 +1,54 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": ""
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "Here is the actual response."
+      }
+    },
+    {
+      "id": 4,
+      "method": "agent.run",
+      "params": {
+        "query": "Hi"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 4,
+      "type": "noError"
+    },
+    {
+      "id": 4,
+      "result": {
+        "result": ""
+      },
+      "type": "response"
+    },
+    {
+      "equals": 1,
+      "path": "callCount",
+      "type": "mock"
+    }
+  ],
+  "description": "First call returns empty/blank content → agent returns empty string (no retry in current implementation)",
+  "name": "blank_response_handling"
+}

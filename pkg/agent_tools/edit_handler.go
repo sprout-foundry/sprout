@@ -117,7 +117,7 @@ func (h *editFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	}
 	// "prompt" → interactive approval; on deny fall through to the raw error.
 	if decision == "prompt" {
-		if ctx2, approved := promptForOffWorkspacePath(ctx, env, "edit_file", path, resolvedEdit, "write"); approved {
+		if ctx2, approved := promptForOffProjectFolderPath(ctx, env, "edit_file", path, resolvedEdit, "write"); approved {
 			ctx = ctx2
 		}
 	}

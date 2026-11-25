@@ -84,13 +84,13 @@ export interface ChatSessionsApi {
     branch: string;
     base_ref?: string;
     name?: string;
-    auto_switch_workspace?: boolean;
+    auto_switch_project_folder?: boolean;
   }) => Promise<{
     message: string;
     chat_session: ChatSessionSwitchResponse['chat_session'];
     worktree_path: string;
     branch: string;
-    workspace_root: string;
+    project_folder: string;
   }>;
 }
 
@@ -284,7 +284,9 @@ export async function removeWorktree(path: string): Promise<{ message: string; p
   return res.json();
 }
 
-export async function checkoutWorktree(path: string): Promise<{ message: string; path: string; workspace: string }> {
+export async function checkoutWorktree(
+  path: string,
+): Promise<{ message: string; path: string; projectFolder: string }> {
   const res = await clientFetch('/api/git/worktree/checkout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -299,7 +301,7 @@ export async function createChatSessionInWorktree(
     branch: string;
     base_ref?: string;
     name?: string;
-    auto_switch_workspace?: boolean;
+    auto_switch_project_folder?: boolean;
   },
   fetchFn: typeof fetch = clientFetch,
 ): Promise<{
@@ -307,7 +309,7 @@ export async function createChatSessionInWorktree(
   chat_session: ChatSessionSwitchResponse['chat_session'];
   worktree_path: string;
   branch: string;
-  workspace_root: string;
+  project_folder: string;
 }> {
   const res = await fetchFn('/api/chat-sessions/create-in-worktree', {
     method: 'POST',

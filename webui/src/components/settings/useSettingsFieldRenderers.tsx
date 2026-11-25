@@ -10,7 +10,7 @@ interface FieldRenderersParams {
   updateSetting: (keyOrPath: string, value: unknown) => Promise<void>;
   savingKey: string | null;
   provenanceSources: Record<string, string>;
-  configViewLayer: 'session' | 'workspace' | 'global';
+  configViewLayer: 'session' | 'project_folder' | 'global';
 }
 
 export interface FieldRenderers {
@@ -67,7 +67,7 @@ export function useSettingsFieldRenderers(params: FieldRenderersParams): FieldRe
     if (!source || configViewLayer !== 'session') return null;
     const colors: Record<string, string> = {
       session: 'var(--accent-primary, #4a9eff)',
-      workspace: 'var(--accent-warning, #f0ad4e)',
+      projectFolder: 'var(--accent-warning, #f0ad4e)',
       global: 'var(--text-tertiary, #888)',
     };
     return (

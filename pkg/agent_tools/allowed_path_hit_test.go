@@ -86,17 +86,17 @@ func TestPrecheckFileAccess_EmitsAllowedPathHitAudit(t *testing.T) {
 	}
 }
 
-// TestPrecheckFileAccess_NoAllowedPathHitAudit_WhenWorkspacePath verifies
-// that a workspace path (not session-allowlisted) does NOT emit
+// TestPrecheckFileAccess_NoAllowedPathHitAudit_WhenProjectFolderPath verifies
+// that a project folder path (not session-allowlisted) does NOT emit
 // AllowedPathHit — it only gets the base "allowed" entry from the classifier.
-func TestPrecheckFileAccess_NoAllowedPathHitAudit_WhenWorkspacePath(t *testing.T) {
+func TestPrecheckFileAccess_NoAllowedPathHitAudit_WhenProjectFolderPath(t *testing.T) {
 	t.Parallel()
 
 	capturing := &capturingLogger{}
 	ctx := filesystem.WithAuditLogger(context.Background(), capturing)
 
 	// stubClassifier returns "allow" but path is NOT session-allowed
-	// (e.g. workspace root or /tmp — the boring case).
+	// (e.g. project folder or /tmp — the boring case).
 	classifier := stubClassifier{
 		decision:         "allow",
 		isSessionAllowed: false,
@@ -109,7 +109,7 @@ func TestPrecheckFileAccess_NoAllowedPathHitAudit_WhenWorkspacePath(t *testing.T
 
 	for _, entry := range capturing.entries {
 		if entry["action"] == string(AuditActionAllowedPathHit) {
-			t.Errorf("workspace path should not emit AllowedPathHit; got entry: %+v", entry)
+			t.Errorf("project folder path should not emit AllowedPathHit; got entry: %+v", entry)
 		}
 	}
 }

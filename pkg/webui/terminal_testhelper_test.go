@@ -10,9 +10,9 @@ import "testing"
 // multiplied into hundreds of stranded login shells and machine-freezing
 // memory pressure (three OOM incidents, 2026-09). New tests must use this
 // constructor, not bare NewTerminalManager.
-func newTestTerminalManager(t *testing.T, workspaceRoot string) *TerminalManager {
+func newTestTerminalManager(t *testing.T, projectFolder string) *TerminalManager {
 	t.Helper()
-	tm := NewTerminalManager(workspaceRoot)
+	tm := NewTerminalManager(projectFolder)
 	t.Cleanup(func() {
 		_ = tm.CloseAllSessions()
 	})

@@ -4,14 +4,14 @@
  * out, in priority order:
  *
  *   Txn  — "Run in cloud container" / "Run on <runner>" (ETH-2, primary):
- *          open a transaction on the user's workspace on the chosen host (one
+ *          open a transaction on the user's dev space on the chosen host (one
  *          of their runners, or the cloud), push the browser's dirty files,
  *          run the exact command that returned 127 there, pull the resulting
  *          deltas back into the browser VFS, finish. The user never leaves
  *          the IDE; cloud runs pay only for the machine time used.
  *   Mode A — "Run as cloud task": submit the work to the platform task queue
  *          (POST /api/tasks) and poll it to completion inline.
- *   Mode B — "Start Full Workspace": provision a full cloud workspace and
+ *   Mode B — "Start a Dev Space": provision a cloud dev space and
  *          navigate to it (the original escalation path).
  *
  * Listens for sprout:escalation-trigger events with severity='blocking'.
@@ -32,7 +32,7 @@ import {
   type TxnProgress,
 } from '../services/cloudTxnEscalate';
 import { CLOUD_HOST, hostDisplayName, rememberHost, type EscalationHost } from '../services/escalationHost';
-import { startFullWorkspace, useFullWorkspacesAvailable } from '../services/fullWorkspace';
+import { startDevSpace, useDevSpacesAvailable } from '../services/cloudDevSpace';
 import { onPlatformLinkClick, openPlatformPage } from '../services/homeView';
 import { RunHostPicker } from './RunHostPicker';
 import './EscalationToast.css';
@@ -70,7 +70,7 @@ export function deriveEscalationPrompt(trigger: EscalationTriggerEvent): string 
 /** Plain-language context for each escalation trigger, for the platform agent. */
 const ESCALATION_REASON_CONTEXT: Record<string, string> = {
   git_push_failed: 'Pushing from the browser failed; commit and push the current changes.',
-  vfs_quota_exceeded: 'The browser workspace ran out of storage.',
+  vfs_quota_exceeded: 'The browser ran out of storage for this project.',
   command_timeout: 'A command timed out in the browser shell.',
   command_unavailable_in_browser: "The browser shell couldn't run a command this work needs.",
   build_command_detected: 'The next step needs a full build environment.',
@@ -90,15 +90,21 @@ export function EscalationListener() {
   const [cloudTask, setCloudTask] = useState<CloudTaskProgress | null>(null);
   const [txn, setTxn] = useState<(TxnProgress & { host: EscalationHost; offerCloud?: boolean }) | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [startingWorkspace, setStartingWorkspace] = useState(false);
-  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [startingDevSpace, setStartingDevSpace] = useState(false);
+  const [devSpaceError, setDevSpaceError] = useState<string | null>(null);
   // The confirmation step: opened by the txn CTA, closed by confirming or
   // cancelling. The command reaches a remote machine only from there.
   const [confirmTxn, setConfirmTxn] = useState(false);
+  // Mode A's own confirmation step, opened by the cloud-task CTA. Until it is
+  // confirmed nothing is submitted to the platform.
+  const [confirmCloudTask, setConfirmCloudTask] = useState(false);
+  // The prompt the user will submit, seeded from the trigger when the step
+  // opens and then owned by the textarea.
+  const [cloudTaskPrompt, setCloudTaskPrompt] = useState('');
   // What the push phase would carry, counted when the step opens (null =
   // still counting / not countable).
   const [pendingPushCount, setPendingPushCount] = useState<number | null>(null);
-  const workspacesAvailable = useFullWorkspacesAvailable();
+  const devSpacesAvailable = useDevSpacesAvailable();
   const mountedRef = useRef(true);
   // Bumped whenever the toast is dismissed or a new trigger replaces the
   // current one. Async txn/cloud-task callbacks capture the value at start
@@ -127,8 +133,10 @@ export function EscalationListener() {
         setCloudTask(null);
         setTxn(null);
         setSubmitting(false);
-        setWorkspaceError(null);
+        setDevSpaceError(null);
         setConfirmTxn(false);
+        setConfirmCloudTask(false);
+        setCloudTaskPrompt('');
         setPendingPushCount(null);
         setEscalation({ trigger: detail, visible: true });
       }
@@ -146,14 +154,16 @@ export function EscalationListener() {
     setCloudTask(null);
     setTxn(null);
     setSubmitting(false);
-    setWorkspaceError(null);
+    setDevSpaceError(null);
     setConfirmTxn(false);
+    setConfirmCloudTask(false);
+    setCloudTaskPrompt('');
     setPendingPushCount(null);
   }, []);
 
   /**
    * ETH-2: run the triggering command transactionally in the user's
-   * workspace on `host` — open → push browser deltas → run → pull deltas
+   * dev space on `host` — open → push browser deltas → run → pull deltas
    * back into the VFS → finish. `finish` is ALWAYS called (success, failure
    * or timeout) so the pay-per-run machine is never left running: the
    * finally block is the guarantee, the in-flow call just avoids an extra
@@ -257,21 +267,34 @@ export function EscalationListener() {
   const handleRunInCloudInstead = useCallback(() => startTxn(CLOUD_HOST), [startTxn]);
 
   /**
-   * Mode A: submit the escalation as a platform task, then poll it inline.
-   * Status is rendered from the submit response first (usually 'pending') so
-   * the user sees progress before the first poll tick.
+   * Mode A, step 1: the cloud-task CTA opens a confirmation step holding the
+   * derived prompt, rather than submitting. The task runs on the repository as
+   * last pushed — without the browser's edits — and spends platform credits,
+   * so the user gets to read and edit the prompt before anything is sent.
    */
   const handleRunCloudTask = useCallback(() => {
     const trigger = escalation?.trigger;
-    const repoURL = trigger?.repoURL;
-    if (!repoURL || submitting || cloudTask) return;
+    // confirmTxn too: its step owns the toast while open, so the CTA (hidden
+    // by showCloudTaskButton then) must not arm Mode A behind it either.
+    if (!trigger?.repoURL || submitting || cloudTask || confirmTxn) return;
+    setCloudTaskPrompt(deriveEscalationPrompt(trigger));
+    setConfirmCloudTask(true);
+  }, [escalation, submitting, cloudTask, confirmTxn]);
 
+  /** Mode A, step 2: submit exactly what the prompt box holds, then poll. */
+  const handleConfirmCloudTask = useCallback(() => {
+    const trigger = escalation?.trigger;
+    const repoURL = trigger?.repoURL;
+    const prompt = cloudTaskPrompt.trim();
+    if (!repoURL || !prompt || submitting || cloudTask) return;
+
+    setConfirmCloudTask(false);
     setSubmitting(true);
     const epoch = epochRef.current;
     const live = () => mountedRef.current && epochRef.current === epoch;
     submitCloudTask({
       repo_url: repoURL,
-      prompt: deriveEscalationPrompt(trigger),
+      prompt,
     })
       .then(({ task }: { task: CloudTask }) => {
         if (!live()) return;
@@ -301,38 +324,41 @@ export function EscalationListener() {
       .finally(() => {
         if (live()) setSubmitting(false);
       });
-  }, [escalation, submitting, cloudTask]);
+  }, [escalation, cloudTaskPrompt, submitting, cloudTask]);
 
-  const handleStartWorkspace = useCallback(() => {
+  /** Mode A: leave the confirmation step without submitting anything. */
+  const handleBackFromCloudTask = useCallback(() => setConfirmCloudTask(false), []);
+
+  const handleStartDevSpace = useCallback(() => {
     const repoURL = escalation?.trigger?.repoURL;
     if (!repoURL) {
       // No repo context: the host's account/dashboard page is where a
-      // workspace gets picked. The host owns the path (and its outward URL).
+      // dev space gets picked. The host owns the path (and its outward URL).
       const dashboard = navigation.intentPath?.({ type: 'account' }) ?? null;
       if (dashboard && !openPlatformPage(dashboard)) {
         window.location.href = navigation.platformPagePath?.(dashboard) ?? dashboard;
       }
       return;
     }
-    setWorkspaceError(null);
-    setStartingWorkspace(true);
-    startFullWorkspace(repoURL)
+    setDevSpaceError(null);
+    setStartingDevSpace(true);
+    startDevSpace(repoURL)
       .then((result) => {
         if (!mountedRef.current) return;
         if (result.kind === 'unavailable') {
-          setWorkspaceError("This deployment doesn't offer full workspaces.");
+          setDevSpaceError("This deployment doesn't offer dev spaces.");
         } else if (result.kind === 'error') {
-          setWorkspaceError(`Couldn't start the workspace: ${result.message}`);
+          setDevSpaceError(`Couldn't start the dev space: ${result.message}`);
         } else if (result.kind === 'status') {
-          setWorkspaceError(`Workspace is ${result.status}; try again shortly.`);
+          setDevSpaceError(`The dev space is ${result.status}; try again shortly.`);
         }
       })
       .catch((err: unknown) => {
         if (!mountedRef.current) return;
-        setWorkspaceError(`Couldn't start the workspace: ${err instanceof Error ? err.message : String(err)}`);
+        setDevSpaceError(`Couldn't start the dev space: ${err instanceof Error ? err.message : String(err)}`);
       })
       .finally(() => {
-        if (mountedRef.current) setStartingWorkspace(false);
+        if (mountedRef.current) setStartingDevSpace(false);
       });
   }, [escalation, navigation]);
 
@@ -349,7 +375,10 @@ export function EscalationListener() {
   const txnOnRunner = hostChoice.host.kind === 'runner';
   // Shown only when there is repo context (same gate the Mode B path uses for
   // a meaningful task) and no txn/cloud task is already in flight.
-  const showCloudTaskButton = Boolean(repoURL) && !cloudTask && !txn;
+  const showCloudTaskButton = Boolean(repoURL) && !cloudTask && !txn && !confirmCloudTask;
+  // The Mode A confirmation step: repo context, nothing in flight, and the
+  // txn confirmation not already holding the toast.
+  const showCloudTaskConfirm = Boolean(repoURL) && confirmCloudTask && !cloudTask && !txn && !showTxnConfirm;
   // The task page's route for the deep link, resolved host-side: a cloud
   // host maps it to its platform route; the local host maps it to its own
   // hash route. When the host has no page for it the link is not rendered —
@@ -466,9 +495,60 @@ export function EscalationListener() {
               </div>
             ) : null}
 
-            {workspaceError ? (
-              <p className="escalation-toast-task-error" data-testid="escalation-toast-workspace-error">
-                {workspaceError}
+            {/* Mode A's confirm step: the CTA opens this instead of
+                submitting, so the prompt — editable — and the fact that the
+                task runs from the pushed repository are read before the task
+                is created. */}
+            {showCloudTaskConfirm ? (
+              <div
+                className="escalation-toast-confirm"
+                data-testid="escalation-cloud-task-confirm"
+                role="group"
+                aria-label="Confirm running a cloud task"
+              >
+                <p className="escalation-toast-confirm-lead">
+                  Run an agent on <strong>{repoURL}</strong> as your cloud task?
+                </p>
+                <label className="escalation-toast-confirm-label" htmlFor="escalation-cloud-task-prompt">
+                  Prompt
+                </label>
+                <textarea
+                  id="escalation-cloud-task-prompt"
+                  className="escalation-toast-confirm-prompt"
+                  data-testid="escalation-cloud-task-prompt"
+                  value={cloudTaskPrompt}
+                  onChange={(e) => setCloudTaskPrompt(e.target.value)}
+                  rows={3}
+                  disabled={submitting}
+                />
+                <p className="escalation-toast-confirm-detail">
+                  Runs on the repository as last pushed — browser edits aren&apos;t included. Uses platform credits.
+                </p>
+                <div className="escalation-toast-actions">
+                  <button
+                    className="escalation-toast-action"
+                    onClick={handleConfirmCloudTask}
+                    disabled={submitting || cloudTaskPrompt.trim() === ''}
+                    data-testid="escalation-cloud-task-start"
+                  >
+                    {submitting ? <Loader2 size={14} className="spinner" aria-hidden="true" /> : <Cloud size={14} />}
+                    Start task
+                  </button>
+                  <button
+                    className="escalation-toast-action escalation-toast-action-secondary"
+                    onClick={handleBackFromCloudTask}
+                    disabled={submitting}
+                    data-testid="escalation-cloud-task-back"
+                  >
+                    Back
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {devSpaceError ? (
+              <p className="escalation-toast-task-error" data-testid="escalation-toast-dev-space-error">
+                {devSpaceError}
               </p>
             ) : null}
 
@@ -532,7 +612,7 @@ export function EscalationListener() {
               </div>
             ) : null}
 
-            {showTxnConfirm ? null : (
+            {showTxnConfirm || showCloudTaskConfirm ? null : (
               <div className="escalation-toast-actions">
                 {showTxnButton ? (
                   <button
@@ -563,19 +643,19 @@ export function EscalationListener() {
                     Run as cloud task
                   </button>
                 ) : null}
-                {workspacesAvailable ? (
+                {devSpacesAvailable ? (
                   <button
                     className="escalation-toast-action"
-                    onClick={handleStartWorkspace}
-                    disabled={startingWorkspace}
-                    data-testid="escalation-toast-start-workspace"
+                    onClick={handleStartDevSpace}
+                    disabled={startingDevSpace}
+                    data-testid="escalation-toast-start-dev-space"
                   >
-                    {startingWorkspace ? (
+                    {startingDevSpace ? (
                       <Loader2 size={14} className="spinner" aria-hidden="true" />
                     ) : (
                       <Rocket size={14} />
                     )}
-                    Start Full Workspace
+                    Start a Dev Space
                   </button>
                 ) : null}
               </div>

@@ -223,7 +223,7 @@ func Build(inputs []EntryInput, order Order) []Entry {
 // revision as a change set (with the given scope IDs, keyed by revision ID),
 // appends the given deploys and every stored checkpoint, and returns the
 // timeline in the requested order. It reads the process-wide checkpoint
-// store; use BuildTimelineInWorkspace to read a specific workspace's
+// store; use BuildTimelineInProjectFolder to read a specific project folder's
 // checkpoints (the store the automatic capture seams write to).
 //
 // scopeIDsByRevision is optional: a nil map (or a missing revision) yields
@@ -235,21 +235,21 @@ func Build(inputs []EntryInput, order Order) []Entry {
 // (itself a recorded checkpoint) appears on the timeline without extra
 // wiring.
 func BuildTimeline(deployments []deploy.Deployment, scopeIDsByRevision map[string][]string, order Order) ([]Entry, error) {
-	return BuildTimelineInWorkspace("", deployments, scopeIDsByRevision, order)
+	return BuildTimelineInProjectFolder("", deployments, scopeIDsByRevision, order)
 }
 
-// BuildTimelineInWorkspace is BuildTimeline scoped to a workspace's
-// checkpoint store: it reads <workspace>/.sprout/checkpoints/ (the same
-// store CreateCheckpointInWorkspace writes), so the checkpoints the
-// verification and deploy seams capture for a workspace appear on that
-// workspace's timeline. An empty workspace reads the process-wide store.
-func BuildTimelineInWorkspace(workspace string, deployments []deploy.Deployment, scopeIDsByRevision map[string][]string, order Order) ([]Entry, error) {
+// BuildTimelineInProjectFolder is BuildTimeline scoped to a project folder's
+// checkpoint store: it reads <project folder>/.sprout/checkpoints/ (the same
+// store CreateCheckpointInProjectFolder writes), so the checkpoints the
+// verification and deploy seams capture for a project folder appear on that
+// project folder's timeline. An empty project folder reads the process-wide store.
+func BuildTimelineInProjectFolder(projectFolder string, deployments []deploy.Deployment, scopeIDsByRevision map[string][]string, order Order) ([]Entry, error) {
 	groups, err := history.GetRevisionGroups()
 	if err != nil {
 		return nil, fmt.Errorf("reading revision groups: %w", err)
 	}
 
-	checkpoints, err := history.ListCheckpointsInWorkspace(workspace, false)
+	checkpoints, err := history.ListCheckpointsInProjectFolder(projectFolder, false)
 	if err != nil {
 		return nil, fmt.Errorf("reading checkpoints: %w", err)
 	}

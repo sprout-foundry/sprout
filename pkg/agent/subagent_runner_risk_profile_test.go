@@ -25,7 +25,7 @@ func TestSubagentRunner_InheritsRiskProfileOverrideFromParent(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	runner := NewSubagentRunner(parent, shared)
 
@@ -57,7 +57,7 @@ func TestSubagentRunner_InheritsSessionFolderAllowlist(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	runner := NewSubagentRunner(parent, shared)
 
@@ -101,7 +101,7 @@ func TestSubagentRunner_NoRiskProfileOverrideWhenParentHasNone(t *testing.T) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	}
 	runner := NewSubagentRunner(parent, shared)
 

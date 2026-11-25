@@ -44,7 +44,7 @@ const MINIMAL_PROPS = {
   isReviewLoading: false,
   actionError: null,
   actionWarning: null,
-  workspaceRoot: undefined as string | undefined,
+  projectFolder: undefined as string | undefined,
   onCommitMessageChange: vi.fn(),
   onGenerateCommitMessage: vi.fn(),
   onCommit: vi.fn(),
@@ -167,8 +167,8 @@ describe('GitSidebarPanel context menu – menu items', () => {
     expect(texts).not.toContain('Open in editor');
   });
 
-  it('shows "Copy absolute path" when workspaceRoot is provided', async () => {
-    await renderGitPanel({ workspaceRoot: '/home/user/project' });
+  it('shows "Copy absolute path" when projectFolder is provided', async () => {
+    await renderGitPanel({ projectFolder: '/home/user/project' });
 
     fireContextMenuOnGitFile('src/utils.ts');
     await flushPromises();
@@ -177,8 +177,8 @@ describe('GitSidebarPanel context menu – menu items', () => {
     expect(texts).toContain('Copy absolute path');
   });
 
-  it('does NOT show "Copy absolute path" when workspaceRoot is not provided', async () => {
-    await renderGitPanel({ workspaceRoot: undefined });
+  it('does NOT show "Copy absolute path" when projectFolder is not provided', async () => {
+    await renderGitPanel({ projectFolder: undefined });
 
     fireContextMenuOnGitFile('src/utils.ts');
     await flushPromises();
@@ -228,8 +228,8 @@ describe('GitSidebarPanel context menu – clipboard & editor actions', () => {
     expect(mockClipboardWriteText).toHaveBeenCalledWith('config.json');
   });
 
-  it('"Copy absolute path" calls clipboard with workspaceRoot/file.path', async () => {
-    await renderGitPanel({ workspaceRoot: '/home/user/project' });
+  it('"Copy absolute path" calls clipboard with projectFolder/file.path', async () => {
+    await renderGitPanel({ projectFolder: '/home/user/project' });
 
     fireContextMenuOnGitFile('src/app.tsx');
     await flushPromises();
@@ -333,7 +333,7 @@ describe('GitSidebarPanel context menu – clipboard & editor actions', () => {
   });
 
   it('"Copy relative path" and "Copy absolute path" do NOT appear for deleted files', async () => {
-    await renderGitPanel({ workspaceRoot: '/home/user/project' });
+    await renderGitPanel({ projectFolder: '/home/user/project' });
 
     fireContextMenuOnGitFile('old.txt');
     await flushPromises();

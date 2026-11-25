@@ -15,7 +15,7 @@
  * returned state (they are never aborted); a pending action owns the
  * transition so a stale in-flight poll cannot clobber it.
  *
- * `reloadKey` bumps (debounced) when workspace files change, so the pane can
+ * `reloadKey` bumps (debounced) when project folder files change, so the pane can
  * re-mount its iframe and reload the embedded app.
  */
 
@@ -24,7 +24,7 @@ import { useSproutFetch } from '../contexts/SproutAdapterContext';
 import { getPreviewStatus, restartPreview, startPreview, stopPreview } from '../services/api/previewApi';
 import type { PreviewState } from '../services/api/types/preview';
 import type { SproutEvent } from '../types/events';
-import { changesWorkspaceFiles } from './workspaceFileEvents';
+import { changesProjectFolderFiles } from './projectFolderFileEvents';
 
 /** Poll cadence while the app is starting (readiness settles in the background). */
 const STARTING_POLL_MS = 1000;
@@ -145,7 +145,7 @@ export function usePreviewStatus(enabled: boolean): UsePreviewStatusReturn {
     };
   }, [enabled, state.status, pollOnce]);
 
-  // Bump the reload token when workspace files change (the agent's file tools,
+  // Bump the reload token when project folder files change (the agent's file tools,
   // shell commands, saves), debounced so a burst reloads once. The pane
   // re-mounts its iframe on a new key. Tracked only while active (a closed
   // panel has no iframe to reload).
@@ -153,7 +153,7 @@ export function usePreviewStatus(enabled: boolean): UsePreviewStatusReturn {
     if (!enabled) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const onEvent = (e: Event) => {
-      if (!changesWorkspaceFiles((e as CustomEvent<SproutEvent>).detail)) return;
+      if (!changesProjectFolderFiles((e as CustomEvent<SproutEvent>).detail)) return;
       if (timer !== null) clearTimeout(timer);
       timer = setTimeout(() => {
         timer = null;

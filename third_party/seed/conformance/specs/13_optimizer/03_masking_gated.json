@@ -1,0 +1,47 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {
+        "compactionTriggerFraction": 0.01,
+        "optimizer": {
+          "toolCategories": {
+            "read_file": "file_read"
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "method": "mock.addTool",
+      "params": {
+        "description": "Read a file",
+        "name": "read_file",
+        "parameters": {
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "ok"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    }
+  ],
+  "description": "Placeholder: Tool result masking only applied when optimizer is enabled and compaction has been triggered. Requires multi-turn conversation setup.",
+  "name": "masking_gated"
+}

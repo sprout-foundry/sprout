@@ -37,21 +37,21 @@ import (
 // and the Huma operations in huma_routes.go; the AST walk reads both so a new
 // Huma route cannot ship undocumented.
 const (
-	contractRoutesGo           = "pkg/webui/routes.go"
-	contractHumaRoutesGo       = "pkg/webui/huma_routes.go"
-	contractHumaFilesGo        = "pkg/webui/huma_files.go"
-	contractHumaGitGo          = "pkg/webui/huma_git.go"
-	contractHumaSettingsGo     = "pkg/webui/huma_settings.go"
-	contractHumaSettingsMiscGo = "pkg/webui/huma_settings_misc.go"
-	contractHumaWorkspaceGo    = "pkg/webui/huma_workspace.go"
-	contractHumaTerminalGo     = "pkg/webui/huma_terminal.go"
-	contractHumaSyncTxnGo      = "pkg/webui/huma_sync_txn.go"
-	contractHumaCommandGo      = "pkg/webui/huma_command.go"
-	contractHumaProxyGo        = "pkg/webui/huma_proxy.go"
-	contractHumaMiscGo         = "pkg/webui/huma_misc.go"
-	contractHumaDesignStarters = "pkg/webui/huma_design_starters.go"
-	contractOpenAPIYAML        = "docs/api/openapi.yaml"
-	contractAllowlist          = "docs/api/undocumented.txt"
+	contractRoutesGo            = "pkg/webui/routes.go"
+	contractHumaRoutesGo        = "pkg/webui/huma_routes.go"
+	contractHumaFilesGo         = "pkg/webui/huma_files.go"
+	contractHumaGitGo           = "pkg/webui/huma_git.go"
+	contractHumaSettingsGo      = "pkg/webui/huma_settings.go"
+	contractHumaSettingsMiscGo  = "pkg/webui/huma_settings_misc.go"
+	contractHumaProjectFolderGo = "pkg/webui/huma_project_folder.go"
+	contractHumaTerminalGo      = "pkg/webui/huma_terminal.go"
+	contractHumaSyncTxnGo       = "pkg/webui/huma_sync_txn.go"
+	contractHumaCommandGo       = "pkg/webui/huma_command.go"
+	contractHumaProxyGo         = "pkg/webui/huma_proxy.go"
+	contractHumaMiscGo          = "pkg/webui/huma_misc.go"
+	contractHumaDesignStarters  = "pkg/webui/huma_design_starters.go"
+	contractOpenAPIYAML         = "docs/api/openapi.yaml"
+	contractAllowlist           = "docs/api/undocumented.txt"
 )
 
 // contractRouteFiles returns the repo-root-joined paths of every file that
@@ -66,7 +66,7 @@ func contractRouteFiles(root string) []string {
 		filepath.Join(root, contractHumaGitGo),
 		filepath.Join(root, contractHumaSettingsGo),
 		filepath.Join(root, contractHumaSettingsMiscGo),
-		filepath.Join(root, contractHumaWorkspaceGo),
+		filepath.Join(root, contractHumaProjectFolderGo),
 		filepath.Join(root, contractHumaTerminalGo),
 		filepath.Join(root, contractHumaSyncTxnGo),
 		filepath.Join(root, contractHumaCommandGo),

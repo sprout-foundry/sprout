@@ -1,0 +1,223 @@
+/**
+ * Workspace domain API — adapter-aware project folder operations.
+ */
+
+import type { ProjectFolderResponse } from './types';
+
+/** Raw JSON shape for a suggested project entry from the backend. */
+interface RawProjectEntry {
+  path?: unknown;
+  name?: unknown;
+  markers?: unknown;
+}
+
+/** Raw JSON shape for a recent project folder entry from the backend. */
+interface RawProjectFolderEntry {
+  path?: unknown;
+  name?: unknown;
+  last_used?: unknown;
+  markers?: unknown;
+  session_count?: unknown;
+}
+
+function toProjectFolderResponse(data: Record<string, unknown>): ProjectFolderResponse {
+  const parseBool = (v: unknown): boolean => v === true || v === 'true';
+  const parseStrArray = (v: unknown): string[] => {
+    if (Array.isArray(v)) return v.filter((x) => typeof x === 'string');
+    return [];
+  };
+
+  const suggested_projects = ((): Array<{ path: string; name: string; markers: string[] }> => {
+    if (!Array.isArray(data.suggested_projects)) return [];
+    return data.suggested_projects
+      .filter((p): p is RawProjectEntry => typeof p === 'object' && p != null && 'path' in p)
+      .map((p) => ({
+        path: String(p.path ?? ''),
+        name: String(p.name ?? ''),
+        markers: parseStrArray(p.markers),
+      }));
+  })();
+
+  const recent_project_folders = ((): Array<{
+    path: string;
+    name: string;
+    last_used: string;
+    markers: string[];
+    session_count: number;
+  }> => {
+    if (!Array.isArray(data.recent_project_folders)) return [];
+    return data.recent_project_folders
+      .filter((w): w is RawProjectFolderEntry => typeof w === 'object' && w != null && 'path' in w)
+      .map((w) => ({
+        path: String(w.path ?? ''),
+        name: String(w.name ?? ''),
+        last_used: String(w.last_used ?? ''),
+        markers: parseStrArray(w.markers),
+        session_count: Number(w.session_count ?? 0),
+      }));
+  })();
+
+  return {
+    daemon_root: String(data.daemon_root ?? ''),
+    project_folder: String(data.project_folder ?? ''),
+    is_project: parseBool(data.is_project),
+    project_markers: parseStrArray(data.project_markers),
+    needs_project_folder_selection: parseBool(data.needs_project_folder_selection),
+    // SP-130: home-directory gate fields
+    project_folder_is_home: parseBool(data.project_folder_is_home),
+    home_dir: String(data.home_dir ?? ''),
+    suggested_projects,
+    recent_project_folders,
+    ...(data.ssh_context != null && typeof data.ssh_context === 'object'
+      ? { ssh_context: data.ssh_context as ProjectFolderResponse['ssh_context'] }
+      : {}),
+  };
+}
+
+export async function getProjectFolder(fetchFn: typeof fetch): Promise<ProjectFolderResponse> {
+  const response = await fetchFn('/api/project-folder');
+  const text = await response.text();
+
+  const parseProjectFolderPayload = (t: string): Record<string, unknown> => {
+    const trimmed = t.trim();
+    if (!trimmed) return {};
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      // best-effort: non-JSON body surfaces as its raw text.
+      return { message: trimmed };
+    }
+  };
+
+  const isHTMLResponseBody = (t: string): boolean => {
+    const trimmed = t.trim().toLowerCase();
+    return (
+      trimmed.startsWith('<!doctype html') ||
+      trimmed.startsWith('<html') ||
+      trimmed.startsWith('<head') ||
+      trimmed.startsWith('<body')
+    );
+  };
+
+  const data = parseProjectFolderPayload(text);
+
+  if (!response.ok) {
+    const errMsg = String(data.error ?? data.message ?? 'Failed to fetch the project folder');
+    throw new Error(errMsg);
+  }
+
+  if (isHTMLResponseBody(text)) {
+    throw new Error('Project folder API returned an HTML response');
+  }
+
+  if (data && typeof data === 'object' && 'project_folder' in data && 'daemon_root' in data) {
+    return toProjectFolderResponse(data);
+  }
+
+  throw new Error('Project folder API returned a malformed response');
+}
+
+export async function setProjectFolder(
+  fetchFn: typeof fetch,
+  path: string,
+  consentHome?: boolean,
+): Promise<ProjectFolderResponse & { message: string }> {
+  const response = await fetchFn('/api/project-folder', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, consent_home: consentHome ?? false }),
+  });
+
+  const text = await response.text();
+  const data = (() => {
+    const trimmed = text.trim();
+    if (!trimmed) return {};
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      // best-effort: non-JSON body surfaces as its raw text.
+      return { message: trimmed };
+    }
+  })();
+
+  if (!response.ok) {
+    const err = new Error(String(data.error ?? data.message ?? 'Failed to update the project folder'));
+    // Attach a structured code so callers can distinguish the home-consent
+    // flow (backend rejects with code: "home_project_folder_requires_consent")
+    // from a generic failure. SP-130.
+    if (data.code) (err as Error & { code?: string }).code = String(data.code);
+    throw err;
+  }
+
+  const isHTML =
+    text.trim().toLowerCase().startsWith('<!doctype html') || text.trim().toLowerCase().startsWith('<html');
+  if (isHTML) {
+    throw new Error('Project folder API returned an HTML response');
+  }
+
+  if (data && typeof data === 'object' && 'project_folder' in data && 'daemon_root' in data) {
+    return { ...toProjectFolderResponse(data), message: String(data.message ?? '') };
+  }
+
+  // Remote/proxy setups may respond with non-JSON success body
+  const projectFolder = await getProjectFolder(fetchFn);
+  return { ...projectFolder, message: String(data.message ?? 'Project folder updated') };
+}
+
+/** A directory entry returned by the project folder browser. */
+export interface BrowseEntry {
+  name: string;
+  path: string;
+}
+
+export interface BrowseResult {
+  /** The canonical directory that was listed. */
+  path: string;
+  /** Daemon root — the browse boundary; nothing above it is reachable. */
+  daemonRoot: string;
+  /** Sub-directories only; files are not selectable as a project folder. */
+  directories: BrowseEntry[];
+}
+
+/**
+ * List the sub-directories of `path` (defaults to the daemon root).
+ *
+ * Used by the project folder gate's inline browser. Only directories are returned —
+ * a project folder is always a directory, and listing files would just add
+ * noise to the picker.
+ */
+export async function browseDirectory(fetchFn: typeof fetch, path?: string): Promise<BrowseResult> {
+  const query = path ? `?path=${encodeURIComponent(path)}` : '';
+  const response = await fetchFn(`/api/project-folder/browse${query}`);
+  const text = await response.text();
+
+  const data = (() => {
+    const trimmed = text.trim();
+    if (!trimmed) return {} as Record<string, unknown>;
+    try {
+      return JSON.parse(trimmed) as Record<string, unknown>;
+    } catch {
+      // best-effort: non-JSON body surfaces as its raw text.
+      return { message: trimmed } as Record<string, unknown>;
+    }
+  })();
+
+  if (!response.ok) {
+    throw new Error(String(data.error ?? data.message ?? 'Failed to browse directory'));
+  }
+
+  const directories: BrowseEntry[] = Array.isArray(data.files)
+    ? data.files
+        .filter((f): f is { name: unknown; path: unknown; type: unknown } => typeof f === 'object' && f != null)
+        .filter((f) => f.type === 'directory')
+        .map((f) => ({ name: String(f.name ?? ''), path: String(f.path ?? '') }))
+        .filter((f) => f.name !== '' && !f.name.startsWith('.'))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    : [];
+
+  return {
+    path: String(data.path ?? ''),
+    daemonRoot: String(data.daemon_root ?? ''),
+    directories,
+  };
+}

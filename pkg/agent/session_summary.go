@@ -264,7 +264,7 @@ func buildTopicSummaryPrompt(messages []api.Message) (string, string) {
 	for _, msg := range messages {
 		switch msg.Role {
 		case "user":
-			content := strings.TrimSpace(StripUserMessageTimestamp(msg.Content))
+			content := strings.TrimSpace(StripUserMessageEnvelope(msg.Content))
 			if content == "" {
 				continue
 			}
@@ -391,12 +391,12 @@ func (a *Agent) generateTopicSummary(ctx context.Context) string {
 		// The template path: the plan goal is only consulted when the
 		// model is not, so the no-summarizer default costs no avoidable
 		// work and a model failure degrades straight to the template.
-		signals := topicSignalsFromConversation(messages, actions, loadPlanGoal(a.currentWorkspaceRoot()))
+		signals := topicSignalsFromConversation(messages, actions, loadPlanGoal(a.currentProjectFolder()))
 		return signals.template()
 	}
 	if summary := writeTopicSummary(ctx, client, messages); summary != "" {
 		return summary
 	}
-	signals := topicSignalsFromConversation(messages, actions, loadPlanGoal(a.currentWorkspaceRoot()))
+	signals := topicSignalsFromConversation(messages, actions, loadPlanGoal(a.currentProjectFolder()))
 	return signals.template()
 }

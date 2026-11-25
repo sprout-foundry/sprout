@@ -5,7 +5,7 @@ import React from 'react';
 import * as JSXRuntime from 'react/jsx-runtime';
 import * as ReactDOMClient from 'react-dom/client';
 import './index.css';
-import './workspaces/ship-mode'; // Registers the Ship mode through the public mode API
+import './spaces/ship-mode'; // Registers the Ship mode through the public mode API
 import App from './App';
 import { checkContractCompat, ContractRefusal } from './config/contractCompat';
 import { applyShellAttribute, isStudioShellSync, resolveShellIdentity } from './config/shell';
@@ -30,10 +30,10 @@ import { claimAppShell } from './services/commandHandlers';
 (window as unknown as Record<string, unknown>).__sproutReactJsxRuntime = JSXRuntime;
 
 // The identity oracle must resolve BEFORE any component reads the client
-// id (workspace restore, WS URLs, terminal sessions). Popups cloned from
+// id (project folder restore, WS URLs, terminal sessions). Popups cloned from
 // window.open() inherit the opener's sessionStorage + window.name; the
 // oracle detects a live owner and mints a fresh id so two windows on
-// different workspaces get isolated server contexts. Wrapped in an async
+// different project folders get isolated server contexts. Wrapped in an async
 // IIFE — the esbuild target (safari14) rejects top-level await.
 //
 // Shell identity starts SYNCHRONOUSLY (bridge presence → data-shell on

@@ -75,7 +75,7 @@ func (b changeContextBudget) linesPerReviewer() int {
 	return max(150, min(1200, b.diff/80))
 }
 
-// repoConventionFiles are checked in order at the workspace root; the first
+// repoConventionFiles are checked in order at the project folder; the first
 // one found is inlined into every subagent's system prompt so it does not
 // spend a turn reading it (or skip it and miss the repo's rules).
 var repoConventionFiles = []string{"AGENTS.md", "CLAUDE.md"}
@@ -190,21 +190,21 @@ func (t reviewTarget) description() string {
 	}
 }
 
-// buildReviewerChangeContext snapshots the uncommitted change in workspaceRoot
+// buildReviewerChangeContext snapshots the uncommitted change in projectFolder
 // as a prompt section. A reviewer otherwise spends its first turns running
 // git diff and reading files; each turn is a full LLM round trip. Returns ""
 // when the directory is not a git work tree or has no uncommitted changes.
-func buildReviewerChangeContext(ctx context.Context, workspaceRoot string, budget changeContextBudget) string {
-	return buildChangeContext(ctx, workspaceRoot, workingTreeTarget, nil, budget)
+func buildReviewerChangeContext(ctx context.Context, projectFolder string, budget changeContextBudget) string {
+	return buildChangeContext(ctx, projectFolder, workingTreeTarget, nil, budget)
 }
 
-// subagentConventionsSection formats the workspace's conventions file for a
+// subagentConventionsSection formats the project folder's conventions file for a
 // subagent system prompt, or returns "" when there is none.
-func subagentConventionsSection(workspaceRoot string) string {
-	if strings.TrimSpace(workspaceRoot) == "" {
+func subagentConventionsSection(projectFolder string) string {
+	if strings.TrimSpace(projectFolder) == "" {
 		return ""
 	}
-	conventions, name := readRepoConventions(workspaceRoot)
+	conventions, name := readRepoConventions(projectFolder)
 	if conventions == "" {
 		return ""
 	}
@@ -239,10 +239,10 @@ func listUntracked(ctx context.Context, repoRoot string, paths []string) []strin
 }
 
 // buildChangeContext formats target's change in the repo containing
-// workspaceRoot — limited to paths when non-empty — with the diff, code
+// projectFolder — limited to paths when non-empty — with the diff, code
 // around each hunk, and new-file content, within the excerpt budget.
-func buildChangeContext(ctx context.Context, workspaceRoot string, target reviewTarget, paths []string, budget changeContextBudget) string {
-	repoRoot := reviewRepoRoot(ctx, workspaceRoot)
+func buildChangeContext(ctx context.Context, projectFolder string, target reviewTarget, paths []string, budget changeContextBudget) string {
+	repoRoot := reviewRepoRoot(ctx, projectFolder)
 	if repoRoot == "" {
 		return ""
 	}
@@ -401,9 +401,9 @@ func isTestPath(rel string) bool {
 		strings.HasPrefix(base, "test_") || strings.Contains(filepath.ToSlash(rel), "/__tests__/")
 }
 
-func readRepoConventions(workspaceRoot string) (string, string) {
+func readRepoConventions(projectFolder string) (string, string) {
 	for _, name := range repoConventionFiles {
-		content, err := os.ReadFile(filepath.Join(workspaceRoot, name))
+		content, err := os.ReadFile(filepath.Join(projectFolder, name))
 		if err != nil {
 			continue
 		}
@@ -422,7 +422,7 @@ func runReviewGit(ctx context.Context, dir string, args ...string) (string, erro
 	}
 	cmdCtx, cancel := context.WithTimeout(ctx, reviewContextGitCommandBudget)
 	defer cancel()
-	cmd := exec.CommandContext(cmdCtx, "git", append([]string{"-C", dir, "--no-pager", "-c", "color.ui=false"}, args...)...) //nolint:gosec // G204: fixed git subcommands; dir is the resolved workspace root
+	cmd := exec.CommandContext(cmdCtx, "git", append([]string{"-C", dir, "--no-pager", "-c", "color.ui=false"}, args...)...) //nolint:gosec // G204: fixed git subcommands; dir is the resolved project folder
 	cmd.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0")
 	out, err := cmd.Output()
 	return string(out), err

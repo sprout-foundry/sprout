@@ -1,0 +1,56 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addStreamChunks",
+      "params": {
+        "chunks": [
+          {
+            "reasoning": "Let me think"
+          },
+          {
+            "reasoning": "... more thoughts"
+          },
+          {
+            "content": "Answer"
+          }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "method": "agent.runStream",
+      "params": {
+        "query": "Think about it"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 3,
+      "type": "noError"
+    },
+    {
+      "id": 3,
+      "result": {
+        "result": "Answer"
+      },
+      "type": "response"
+    },
+    {
+      "eventType": "stream_chunk",
+      "type": "event"
+    }
+  ],
+  "description": "Streaming delivers reasoning chunks via stream_chunk events",
+  "name": "stream_reasoning"
+}

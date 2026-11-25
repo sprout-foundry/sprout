@@ -88,7 +88,7 @@ type AgentWorkflowConfig struct {
 	Stall *AgentWorkflowStallConfig `json:"stall,omitempty"`
 
 	// AllowedPaths declares the external directories the workflow needs
-	// to read or write outside the workspace. Each entry is validated by
+	// to read or write outside the project folder. Each entry is validated by
 	// AllowedPath.Validate and pre-seeded into the running agent's
 	// session allowlist (with mode) at run start so the workflow
 	// doesn't re-prompt for every external access. See
@@ -355,7 +355,7 @@ type AgentWorkflowStallConfig struct {
 }
 
 // AllowedPath is a single directory the workflow needs access to outside
-// the workspace. Declared at the workflow level so the user can review
+// the project folder. Declared at the workflow level so the user can review
 // every external path in one place at launch time, and the runtime can
 // pre-seed the session allowlist so no per-tool approval dialogs fire
 // mid-run.

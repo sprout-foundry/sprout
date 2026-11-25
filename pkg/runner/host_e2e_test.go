@@ -16,7 +16,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/runner/sandbox"
 )
 
-// TestHostLauncherEndToEnd runs a real workspace daemon on this machine and
+// TestHostLauncherEndToEnd runs a real dev space daemon on this machine and
 // drives the txn protocol through the host server, the way the platform
 // does. It needs a built sprout binary:
 //
@@ -54,13 +54,13 @@ func runHostE2E(t *testing.T, bin string, sandboxed bool) {
 	}
 
 	l := &HostLauncher{Sandboxed: sandboxed, SproutBin: bin}
-	task := WorkspaceTask{WorkspaceID: "e2e-ws", Action: "start", RepoURL: "file://" + origin, TxnSecret: "e2e-secret"}
+	task := DevSpaceTask{DevSpaceID: "e2e-ws", Action: "start", RepoURL: "file://" + origin, TxnSecret: "e2e-secret"}
 	ctx := context.Background()
 	ws, err := l.Start(ctx, task)
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	t.Cleanup(func() { _ = l.Destroy(ctx, task.WorkspaceID, ws) })
+	t.Cleanup(func() { _ = l.Destroy(ctx, task.DevSpaceID, ws) })
 
 	host := NewHostServer()
 	host.Bind(ws.ID, ws.Port, task.TxnSecret)
@@ -89,7 +89,7 @@ func runHostE2E(t *testing.T, bin string, sandboxed bool) {
 		t.Fatalf("txn run: %d %v", code, body)
 	}
 	if out, _ := body["stdout"].(string); !strings.Contains(out, filepath.Join("e2e-ws", "repo")) {
-		t.Errorf("command must run in the workspace clone; stdout %q", out)
+		t.Errorf("command must run in the project folder clone; stdout %q", out)
 	}
 	if code, _ := run("wrong", "true"); code != http.StatusForbidden {
 		t.Errorf("wrong bearer through the host server: %d", code)
@@ -113,12 +113,12 @@ func runHostE2E(t *testing.T, bin string, sandboxed bool) {
 		_, body := run("e2e-secret", "touch "+outside+"; echo exit=$?")
 		if _, err := os.Stat(outside); err == nil {
 			_ = os.Remove(outside)
-			t.Errorf("native mode let a command write outside the workspace: %v", body)
+			t.Errorf("native mode let a command write outside the project folder: %v", body)
 		}
 	}
 }
 
-// TestHostLauncherLocalDirectoryEndToEnd runs a workspace daemon against a
+// TestHostLauncherLocalDirectoryEndToEnd runs a dev space daemon against a
 // plain (non-git) local directory and proves the txn protocol works in place,
 // the way a bare-metal runner serves the user's real checkout. Same gates as
 // the clone-based test above.
@@ -147,18 +147,18 @@ func runLocalDirE2E(t *testing.T, bin string, sandboxed bool) {
 	if err := os.MkdirAll(local, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(local, "hello.txt"), []byte("local workspace\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(local, "hello.txt"), []byte("local project folder\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
 	l := &HostLauncher{SproutBin: bin, Sandboxed: sandboxed}
-	task := WorkspaceTask{WorkspaceID: "e2e-local", Action: "start", WorkspaceDir: local, TxnSecret: "e2e-secret"}
+	task := DevSpaceTask{DevSpaceID: "e2e-local", Action: "start", DevSpaceDir: local, TxnSecret: "e2e-secret"}
 	ctx := context.Background()
 	ws, err := l.Start(ctx, task)
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	t.Cleanup(func() { _ = l.Destroy(ctx, task.WorkspaceID, ws) })
+	t.Cleanup(func() { _ = l.Destroy(ctx, task.DevSpaceID, ws) })
 
 	host := NewHostServer()
 	host.Bind(ws.ID, ws.Port, task.TxnSecret)
@@ -179,7 +179,7 @@ func runLocalDirE2E(t *testing.T, bin string, sandboxed bool) {
 		t.Fatalf("txn run in a local directory: %d %v", resp.StatusCode, body)
 	}
 	out, _ := body["stdout"].(string)
-	if !strings.Contains(out, "myproject") || !strings.Contains(out, "local workspace") {
+	if !strings.Contains(out, "myproject") || !strings.Contains(out, "local project folder") {
 		t.Errorf("command must run in the user's directory; stdout %q", out)
 	}
 	if _, err := os.Stat(filepath.Join(local, "made.txt")); err != nil {
@@ -204,7 +204,7 @@ func runLocalDirE2E(t *testing.T, bin string, sandboxed bool) {
 		}
 		if escape() {
 			_ = os.Remove(outside)
-			t.Error("native mode let a command write outside the local workspace and its metadata dir")
+			t.Error("native mode let a command write outside the local project folder and its metadata dir")
 		}
 	}
 }

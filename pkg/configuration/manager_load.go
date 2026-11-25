@@ -31,32 +31,32 @@ func (m *Manager) GetConfigDir() string {
 }
 
 // LoadConfigWithLayers loads configuration from three layers:
-// globalPath -> workspacePath -> sessionPath (each overrides previous)
+// globalPath -> projectFolderPath -> sessionPath (each overrides previous)
 // Each layer is optional; missing layers are skipped.
 // globalDir is the directory for global providers (used when globalPath is empty but custom providers need loading).
 //
 // Local override files (config.local.json / workspace.local.json) are
 // automatically loaded as a higher-precedence sibling within their
 // scope: global config.json is overridden by global config.local.json,
-// workspace workspace.json by workspace.local.json. The session layer
+// project folder workspace.json by workspace.local.json. The session layer
 // (highest) remains unchanged.
-func LoadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir string) (*Config, error) {
-	// The project persona scope is <workspace>/.sprout/personas. Callers that
-	// know the workspace directory pass it explicitly (loadConfigWithLayers);
-	// this entry point infers it from the workspace config file, which is only
-	// correct when workspacePath really is <workspace>/.sprout/<file>.
-	workspaceDir := ""
-	if workspacePath != "" {
-		workspaceDir = filepath.Dir(workspacePath)
+func LoadConfigWithLayers(globalPath, projectFolderPath, sessionPath, globalDir string) (*Config, error) {
+	// The project persona scope is <project folder>/.sprout/personas. Callers that
+	// know the project folder pass it explicitly (loadConfigWithLayers);
+	// this entry point infers it from the project folder config file, which is only
+	// correct when projectFolderPath really is <project folder>/.sprout/<file>.
+	projectFolderDir := ""
+	if projectFolderPath != "" {
+		projectFolderDir = filepath.Dir(projectFolderPath)
 	}
-	return loadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir, workspaceDir)
+	return loadConfigWithLayers(globalPath, projectFolderPath, sessionPath, globalDir, projectFolderDir)
 }
 
-// loadConfigWithLayers is LoadConfigWithLayers with the workspace config
-// directory named explicitly. A caller that stages a workspace layer in a
-// temporary file (workspace pruning, the conflict-merge reload) passes "" so
+// loadConfigWithLayers is LoadConfigWithLayers with the project folder config
+// directory named explicitly. A caller that stages a project folder layer in a
+// temporary file (project folder pruning, the conflict-merge reload) passes "" so
 // no project persona I/O happens at all.
-func loadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir, workspaceDir string) (*Config, error) {
+func loadConfigWithLayers(globalPath, projectFolderPath, sessionPath, globalDir, projectFolderDir string) (*Config, error) {
 	var result *Config
 
 	// 1. Load global config (base)
@@ -90,19 +90,19 @@ func loadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir, wor
 		result = NewConfig()
 	}
 
-	// 2. Merge workspace config if exists
-	if workspacePath != "" {
-		if data, err := os.ReadFile(workspacePath); err == nil {
-			var workspaceCfg Config
-			if err := unmarshalLayer(data, &workspaceCfg); err != nil {
-				log.Printf("[config] warning: failed to parse workspace config %s: %v", workspacePath, err)
+	// 2. Merge project folder config if exists
+	if projectFolderPath != "" {
+		if data, err := os.ReadFile(projectFolderPath); err == nil {
+			var projectFolderCfg Config
+			if err := unmarshalLayer(data, &projectFolderCfg); err != nil {
+				log.Printf("[config] warning: failed to parse project folder config %s: %v", projectFolderPath, err)
 			} else {
-				result = MergeConfig(result, &workspaceCfg)
+				result = MergeConfig(result, &projectFolderCfg)
 			}
 		}
-		// 2b. Merge workspace-local override (workspace.local.json) if present
-		localWsPath := filepath.Join(filepath.Dir(workspacePath), WorkspaceLocalFileName)
-		if localWsPath != workspacePath {
+		// 2b. Merge project-folder-local override (workspace.local.json) if present
+		localWsPath := filepath.Join(filepath.Dir(projectFolderPath), ProjectFolderLocalFileName)
+		if localWsPath != projectFolderPath {
 			if data, err := os.ReadFile(localWsPath); err == nil {
 				var localWsCfg Config
 				if err := unmarshalLayer(data, &localWsCfg); err != nil {
@@ -187,9 +187,9 @@ func loadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir, wor
 	// Personas are catalog-fixed and never read from disk; hydrate from the
 	// embedded catalog so every layered-load path matches the regular Load().
 	// Custom personas (SP-175) are merged in after core from the user scope
-	// and, when a workspace layer is present, the project scope.
+	// and, when a project folder layer is present, the project scope.
 	result.SubagentTypes = defaultSubagentTypes()
-	HydrateCustomPersonas(result, workspaceDir)
+	HydrateCustomPersonas(result, projectFolderDir)
 
 	// Merge missing default (built-in) skills so that a hot-reload via
 	// Manager.Reload() picks up new builtins added to the embedded library
@@ -239,9 +239,9 @@ func (m *Manager) saveConfigLocked() error {
 
 // saveConfigDirectLocked performs the actual config write without retry logic.
 func (m *Manager) saveConfigDirectLocked() error {
-	if m.configDir != "" && m.configFileName == WorkspaceConfigFileName {
-		if err := m.config.SaveWorkspaceOverlay(m.configDir, m.configFileName, m.lastSaved); err != nil {
-			return fmt.Errorf("save workspace config: %w", err)
+	if m.configDir != "" && m.configFileName == ProjectFolderConfigFileName {
+		if err := m.config.SaveProjectFolderOverlay(m.configDir, m.configFileName, m.lastSaved); err != nil {
+			return fmt.Errorf("save project folder config: %w", err)
 		}
 	} else if m.configDir != "" {
 		if err := m.config.SaveToDirAs(m.configDir, m.configFileName); err != nil {

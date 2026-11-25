@@ -84,13 +84,13 @@ func tpsWritePlanFile(t *testing.T, root, content string) {
 	}
 }
 
-// tpsAgent wires client into a fresh agent whose workspace root is a temp
+// tpsAgent wires client into a fresh agent whose project folder is a temp
 // project directory (the .sprout/ plan files land under it). It mirrors the
 // agent setup from plan_context_test.go but accepts any api.ClientInterface so
 // the scripted client's recorded requests can be inspected. The full context
 // profile keeps the todo_write tool on the roster; SkipPrompt keeps the turn
 // from ever blocking on an interactive prompt (stdin is closed in tests).
-func tpsAgent(t *testing.T, client api.ClientInterface, workspaceRoot string) *Agent {
+func tpsAgent(t *testing.T, client api.ClientInterface, projectFolder string) *Agent {
 	t.Helper()
 
 	mgr, cleanup := configuration.NewTestManager(t)
@@ -109,7 +109,7 @@ func tpsAgent(t *testing.T, client api.ClientInterface, workspaceRoot string) *A
 	}
 	t.Cleanup(ag.Shutdown)
 	ag.SetMaxIterations(10)
-	ag.SetWorkspaceRoot(workspaceRoot)
+	ag.SetProjectFolder(projectFolder)
 	return ag
 }
 

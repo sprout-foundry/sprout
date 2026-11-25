@@ -1,5 +1,5 @@
 /**
- * hostAgentBackend — the host's agent backend, wired for a composed workspace.
+ * hostAgentBackend — the host's agent backend, wired for composed spaces.
  *
  * The item under test: a host's transport states where the agent runs. A wasm
  * backend installs the cloud adapter from the host (with the host project's
@@ -31,7 +31,7 @@ const NOOP_ADAPTER: APIAdapter = {
   supportsSSH: false,
   supportsGit: false,
   supportsChat: false,
-  supportsWorkspaceSwitching: false,
+  supportsProjectFolderSwitching: false,
   supportsExport: false,
   supportsInstances: false,
   supportsLocalTerminal: false,

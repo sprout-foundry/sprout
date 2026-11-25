@@ -55,7 +55,7 @@ console.log("hello");
 `;
     // Write the file via the backend API
     await page.evaluate(async (content) => {
-      const workspace = await fetch('/api/workspace').then((r) => r.json());
+      const workspace = await fetch('/api/project-folder').then((r) => r.json());
       const path = (workspace?.root || '.') + '/test-e2e.md';
       await fetch('/api/files/write', {
         method: 'POST',

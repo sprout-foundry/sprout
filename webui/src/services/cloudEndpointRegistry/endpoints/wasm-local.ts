@@ -39,7 +39,7 @@ export const wasmLocalEndpoints: CloudEndpoint[] = [
     path: '/api/file-index',
     methods: ['GET'],
     category: 'wasm-local',
-    description: 'Whole-workspace quick-open index (WASM bulk walk)',
+    description: 'Whole-project quick-open index (WASM bulk walk)',
   },
   {
     path: '/api/file/check-modified',
@@ -96,10 +96,10 @@ export const wasmLocalEndpoints: CloudEndpoint[] = [
     description: 'Prettier config for a file (WASM filesystem)',
   },
   {
-    path: '/api/workspace/browse',
+    path: '/api/project-folder/browse',
     methods: ['GET'],
     category: 'wasm-local',
-    description: 'Workspace directory browsing (WASM filesystem)',
+    description: 'Project folder browsing (WASM filesystem)',
   },
   {
     path: '/api/search',

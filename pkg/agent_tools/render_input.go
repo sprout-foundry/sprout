@@ -138,7 +138,7 @@ const (
 //
 // The returned path is written by the browser process, so it necessarily
 // lives on the local filesystem — callers must not hand it to os.ReadFile
-// or VFS helpers in remote/SSH workspace modes (SP-126 VFS boundary).
+// or VFS helpers in remote/SSH project folder modes (SP-126 VFS boundary).
 func renderInputToPNG(
 	ctx context.Context,
 	env ToolEnv,

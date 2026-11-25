@@ -1,0 +1,56 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addStreamChunks",
+      "params": {
+        "chunks": [
+          {
+            "content": "Hel"
+          },
+          {
+            "content": "lo "
+          },
+          {
+            "content": "World"
+          }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "method": "agent.runStream",
+      "params": {
+        "query": "Hi"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 3,
+      "type": "noError"
+    },
+    {
+      "id": 3,
+      "result": {
+        "result": "Hello World"
+      },
+      "type": "response"
+    },
+    {
+      "eventType": "stream_chunk",
+      "type": "event"
+    }
+  ],
+  "description": "Streaming delivers content chunks via stream_chunk events",
+  "name": "stream_content"
+}

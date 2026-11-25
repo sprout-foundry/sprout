@@ -26,21 +26,21 @@ interface WebuiStatusBarProps {
   encoding?: string;
   indentation?: string;
   /**
-   * SP-022-W2.3: Full workspace directory path. When provided, the
-   * workspace basename is shown as a clickable indicator on the left
+   * SP-022-W2.3: Dev space directory path. When provided, the
+   * project folder basename is shown as a clickable indicator on the left
    * side of the status bar (before the SproutStatusBar content).
    */
-  workspacePath?: string;
+  projectFolderPath?: string;
   /**
-   * Overrides the workspace indicator's label. An embedding host's project
-   * name, shown instead of a basename derived from `workspacePath`.
+   * Overrides the project folder indicator's label. An embedding host's project
+   * name, shown instead of a basename derived from `projectFolderPath`.
    */
   projectName?: string;
   /**
-   * SP-022-W2.3: Callback fired when the workspace indicator is clicked.
-   * Typically used to open a workspace picker or focus the sidebar.
+   * SP-022-W2.3: Callback fired when the project folder indicator is clicked.
+   * Typically used to open a project folder picker or focus the sidebar.
    */
-  onWorkspaceClick?: () => void;
+  onProjectFolderClick?: () => void;
 }
 
 // Simple SVG icon for notification bell (similar to existing inline SVGs)
@@ -73,11 +73,11 @@ function StatusBar({
   buffer,
   encoding,
   indentation,
-  workspacePath,
+  projectFolderPath,
   projectName,
-  onWorkspaceClick,
+  onProjectFolderClick,
 }: WebuiStatusBarProps): JSX.Element {
-  const { git: supportsGit, workspaceSwitching, localTerminal } = useHostCapabilities();
+  const { git: supportsGit, projectFolderSwitching, localTerminal } = useHostCapabilities();
   // The hosted build's platform chooses the model for lower tiers; the badge
   // names that. host.8: the hosted transport authenticates against a platform
   // (authMode 'bearer') — the former isCloud branch.
@@ -98,23 +98,23 @@ function StatusBar({
     setIsNotificationCenterOpen(false);
   }, []);
 
-  // The hosted editor's workspace root is a fixed virtual folder, so the
+  // The hosted editor's project folder is a fixed virtual folder, so the
   // open repository names it instead.
   const activeRepoURL = useActiveRepoURL();
   const repoSlug = repoSlugFromURL(activeRepoURL);
-  const workspaceLabel = !workspaceSwitching ? repoSlug : workspacePath;
+  const projectFolderLabel = !projectFolderSwitching ? repoSlug : projectFolderPath;
 
-  // SP-022-W2.3: derive workspace basename from the full path
+  // SP-022-W2.3: derive project folder basename from the full path
   const hostProjectName = projectName?.trim() || '';
-  const workspaceName = useMemo(() => {
+  const projectFolderName = useMemo(() => {
     if (hostProjectName) return hostProjectName;
-    if (!workspaceSwitching) return repoNameFromURL(activeRepoURL) ?? '';
-    if (!workspacePath || workspacePath.trim() === '') return '';
+    if (!projectFolderSwitching) return repoNameFromURL(activeRepoURL) ?? '';
+    if (!projectFolderPath || projectFolderPath.trim() === '') return '';
     // Handle trailing slashes and extract last non-empty segment
-    const trimmed = workspacePath.replace(/\/+$/, '');
+    const trimmed = projectFolderPath.replace(/\/+$/, '');
     const segments = trimmed.split('/');
     return segments[segments.length - 1] || '';
-  }, [hostProjectName, workspacePath, repoSlug, workspaceSwitching]);
+  }, [hostProjectName, projectFolderPath, repoSlug, projectFolderSwitching]);
 
   // Language name — derived from buffer metadata using local language registry
   const language = useMemo(() => {
@@ -143,36 +143,36 @@ function StatusBar({
 
   return (
     <div className="statusbar-wrapper" data-testid="status-bar">
-      {workspaceName && (
+      {projectFolderName && (
         <div
-          className="statusbar-item statusbar-item-workspace"
-          onClick={onWorkspaceClick}
+          className="statusbar-item statusbar-item-project-folder"
+          onClick={onProjectFolderClick}
           role="button"
           tabIndex={0}
           title={
             hostProjectName
               ? `Project: ${hostProjectName}`
-              : !workspaceSwitching
-                ? `Repository: ${workspaceLabel}`
-                : `Workspace: ${workspacePath}`
+              : !projectFolderSwitching
+                ? `Repository: ${projectFolderLabel}`
+                : `Project folder: ${projectFolderPath}`
           }
           aria-label={
             hostProjectName
               ? `Project: ${hostProjectName}`
-              : !workspaceSwitching
-                ? `Repository: ${workspaceName}`
-                : `Workspace: ${workspaceName}`
+              : !projectFolderSwitching
+                ? `Repository: ${projectFolderName}`
+                : `Project folder: ${projectFolderName}`
           }
-          data-testid="status-bar-workspace"
+          data-testid="status-bar-project-folder"
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
-              onWorkspaceClick?.();
+              onProjectFolderClick?.();
             }
           }}
         >
           <FolderOpen size={12} />
-          <span className="statusbar-text">{workspaceName}</span>
+          <span className="statusbar-text">{projectFolderName}</span>
         </div>
       )}
       {hosted &&

@@ -15,19 +15,19 @@ import (
 
 // handleAPIFiles handles API requests for file listing
 func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request) {
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 
-	// Home-workspace hardening (SP-130): same gate as handleAPIBrowse.
-	// Listing the daemon's CWD-derived home workspace raises macOS TCC
-	// prompts for protected folders and is exactly what the workspace
+	// Home-project-folder hardening (SP-130): same gate as handleAPIBrowse.
+	// Listing the daemon's CWD-derived home project folder raises macOS TCC
+	// prompts for protected folders and is exactly what the project folder
 	// gate exists to prevent.
-	if isHomeWorkspace(workspaceRoot) && !hasHomeWorkspaceConsent() {
+	if isHomeProjectFolder(projectFolder) && !hasHomeProjectFolderConsent() {
 		writeJSON(w, http.StatusForbidden, map[string]interface{}{
-			"error": "Workspace is the home directory and no consent was granted; select a workspace first",
-			"code":  "workspace_not_selected",
+			"error": "Project folder is the home directory and no consent was granted; select a project folder first",
+			"code":  "project_folder_not_selected",
 		})
 		return
 	}
@@ -43,7 +43,7 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 	if dir == "" {
 		dir = "."
 	}
-	canonicalDir, err := canonicalizePath(dir, workspaceRoot, false)
+	canonicalDir, err := canonicalizePath(dir, projectFolder, false)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": fmt.Sprintf("Invalid directory: %v", err),
@@ -51,10 +51,10 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 		})
 		return
 	}
-	if !isWithinWorkspace(canonicalDir, workspaceRoot) && !ws.allowExternalAccessForRequest(r, canonicalDir) {
+	if !isWithinProjectFolder(canonicalDir, projectFolder) && !ws.allowExternalAccessForRequest(r, canonicalDir) {
 		writeJSON(w, http.StatusForbidden, map[string]interface{}{
-			"error": "Directory outside workspace",
-			"code":  "directory_outside_workspace",
+			"error": "Directory outside project folder",
+			"code":  "directory_outside_project_folder",
 		})
 		return
 	}
@@ -73,8 +73,8 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 	var modifiedSet, untrackedSet map[string]bool
 	var ignoreRules *ignore.GitIgnore
 	if includeGitStatus {
-		modifiedSet, untrackedSet = getGitFileStatusMap(workspaceRoot)
-		ignoreRules = filediscovery.GetIgnoreRules(workspaceRoot)
+		modifiedSet, untrackedSet = getGitFileStatusMap(projectFolder)
+		ignoreRules = filediscovery.GetIgnoreRules(projectFolder)
 	}
 
 	// Convert to JSON response
@@ -86,7 +86,7 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 		}
 
 		absPath := filepath.Join(canonicalDir, entry.Name())
-		relPath, _ := filepath.Rel(workspaceRoot, absPath)
+		relPath, _ := filepath.Rel(projectFolder, absPath)
 
 		fileInfo := map[string]interface{}{
 			"name":     entry.Name(),
@@ -98,7 +98,7 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 		}
 
 		if includeGitStatus {
-			gitStatus := getGitStatusForEntry(relPath, entry.IsDir(), modifiedSet, untrackedSet, ignoreRules, workspaceRoot)
+			gitStatus := getGitStatusForEntry(relPath, entry.IsDir(), modifiedSet, untrackedSet, ignoreRules, projectFolder)
 			if gitStatus != "" {
 				fileInfo["git_status"] = gitStatus
 			}

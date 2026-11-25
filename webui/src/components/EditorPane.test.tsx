@@ -289,20 +289,20 @@ vi.mock('../hooks/useEditorContextMenu', () => {
       } | null>(null);
       const [wsRoot, setWsRoot] = React.useState<string | null>(null);
       React.useEffect(() => {
-        // Read workspace root from apiService mock
+        // Read project folder from apiService mock
         const apiService = (globalThis as any).__mockApiService;
         if (apiService) {
           apiService
-            .getWorkspace()
+            .getProjectFolder()
             .then((ws: any) => {
-              setWsRoot(ws?.workspace_root || null);
+              setWsRoot(ws?.project_folder || null);
             })
             .catch(() => setWsRoot(null));
         }
       }, []);
       return {
         contextMenu: menuState,
-        workspaceRoot: wsRoot,
+        projectFolder: wsRoot,
         hideContextMenu: () => setMenuState(null),
         handleEditorContextMenu: (e: any) => {
           setMenuState({
@@ -499,7 +499,7 @@ vi.mock('./EditorContextMenu', () => {
         'Copy relative path',
       ),
     );
-    if (ctx.workspaceRoot) {
+    if (ctx.projectFolder) {
       items.push(
         React.createElement(
           'button',
@@ -907,7 +907,7 @@ const defaultMockEditorManager = {
   setBufferModified: vi.fn(),
   setBufferOriginalContent: vi.fn(),
   splitPane: vi.fn(),
-  openWorkspaceBuffer: vi.fn(),
+  openProjectFolderBuffer: vi.fn(),
   setBufferLanguageOverride: vi.fn(),
 };
 
@@ -994,14 +994,14 @@ describe('EditorPane', () => {
 
     // ── Context & service mocks ──
     apiServiceMock = {
-      getWorkspace: vi.fn().mockResolvedValue({
-        workspace_root: '/home/user/project',
+      getProjectFolder: vi.fn().mockResolvedValue({
+        project_folder: '/home/user/project',
         daemon_root: '/home/user/project/.sprout',
       }),
       getGitDiff: vi.fn().mockResolvedValue({ diff: '' }),
     };
     (ApiService.getInstance as vi.Mock).mockReturnValue(apiServiceMock);
-    // Update global ref so context menu mock can read workspace root
+    // Update global ref so context menu mock can read project folder
     (globalThis as any).__mockApiService = apiServiceMock;
 
     mockUseEditorManager.mockReturnValue({ ...defaultMockEditorManager });
@@ -1140,7 +1140,7 @@ describe('EditorPane', () => {
       expect(copyToClipboard).toHaveBeenCalledWith('src/components/EditorPane.tsx');
     });
 
-    it('"Copy absolute path" calls copyToClipboard with workspaceRoot + file path', async () => {
+    it('"Copy absolute path" calls copyToClipboard with projectFolder + file path', async () => {
       // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);
@@ -1190,8 +1190,8 @@ describe('EditorPane', () => {
     });
 
     it('"Copy absolute path" item is NOT present when workspace root is empty', async () => {
-      apiServiceMock.getWorkspace.mockResolvedValueOnce({
-        workspace_root: '',
+      apiServiceMock.getProjectFolder.mockResolvedValueOnce({
+        project_folder: '',
         daemon_root: '/home/user/project/.sprout',
       });
 

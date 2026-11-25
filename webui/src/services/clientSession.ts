@@ -2,7 +2,7 @@ import { getActiveHost } from '../host/accessor';
 import { backendURLs } from '../host/agentBackend';
 import { debugLog } from '../utils/log';
 import { getAdapter } from './apiAdapter';
-import { publishWorkspaceResponse } from './workspaceResponses';
+import { publishProjectFolderResponse } from './projectFolderResponses';
 
 export const WEBUI_CLIENT_ID_HEADER = 'X-Sprout-Client-ID';
 export const WEBUI_CLIENT_ID_QUERY_PARAM = 'client_id';
@@ -60,21 +60,21 @@ export function getProxyBase(): string {
 }
 
 /**
- * Returns the localStorage key to use for persisting the workspace path.
+ * Returns the localStorage key to use for persisting the project folder path.
  * For SSH proxy pages the key is scoped to the proxy base so that different
  * SSH host/path sessions do not bleed into each other or into the local UI.
  *
  * The key is ALSO scoped per browsing context (window): the un-suffixed
  * `sprout.workspaceTabPath` is shared by every window of this origin, so two
- * windows pointed at different workspaces kept overwriting each other's
+ * windows pointed at different project folders kept overwriting each other's
  * path — on next startup, whichever window booted last would silently
- * restore the other's workspace. We suffix with the browsing-context token
+ * restore the other's project folder. We suffix with the browsing-context token
  * from window.name when available (stable across reloads/discards, private
  * to the window), falling back to the shared legacy key only when window
  * has no usable marker (first-party popups that reuse window.name for their
  * own data, SSR, tests).
  */
-function workspacePathStorageKey(): string {
+function projectFolderPathStorageKey(): string {
   const proxyBase = getProxyBase();
   const suffixes: string[] = [];
   if (proxyBase) {
@@ -282,7 +282,7 @@ async function sharedClientIdCandidate(candidate: string): Promise<string> {
 }
 
 /**
- * Returns the per-tab client ID used to isolate server-side state (workspace,
+ * Returns the per-tab client ID used to isolate server-side state (project folder,
  * agent session, terminal sessions, WebSocket events) between browser tabs.
  *
  * Uses sessionStorage exclusively so that each tab gets a unique client_id.
@@ -297,9 +297,9 @@ async function sharedClientIdCandidate(candidate: string): Promise<string> {
  * Without this, every reload would create a fresh session.
  *
  * For Chrome tab-discard recovery:
- * - The workspace path is persisted separately in localStorage so the tab
- *   can restore the correct workspace after discard (chat history is lost but
- *   workspace is correct).
+ * - The project folder path is persisted separately in localStorage so the tab
+ *   can restore the correct project folder after discard (chat history is lost but
+ *   project folder is correct).
  * - The client_id is regenerated (fresh server context) because the old one
  *   may have been cleaned up by the server's idle-context gc.
  */
@@ -330,7 +330,7 @@ export function getWebUIClientId(): string {
   // Cross-origin fallback: read client ID from the server-set cookie.
   // This preserves the session across page reloads when the WebUI and API
   // are on different origins (Cloudflare Pages + tunnel) AND no other
-  // window has claimed that ID for a different workspace. See
+  // window has claimed that ID for a different project folder. See
   // claimOrGenerateClientId for why a naive adoption is unsafe.
   const cookieValue = readCookie(clientIDCookieName);
   if (cookieValue && cookieValue !== 'default') {
@@ -503,35 +503,35 @@ function readCookie(name: string): string | null {
 }
 
 /**
- * Persist the workspace path for Chrome tab-discard recovery.
- * Called whenever the workspace changes (via the workspace-changed listener).
+ * Persist the project folder path for Chrome tab-discard recovery.
+ * Called whenever the project folder changes (via the workspace-changed listener).
  * Stored in localStorage (per-origin) so it survives sessionStorage clearing
  * when Chrome discards a background tab.
  */
-export function persistTabWorkspacePath(workspacePath: string): void {
-  if (typeof window === 'undefined' || !workspacePath) {
+export function persistTabProjectFolderPath(projectFolderPath: string): void {
+  if (typeof window === 'undefined' || !projectFolderPath) {
     return;
   }
   try {
-    window.localStorage.setItem(workspacePathStorageKey(), workspacePath);
+    window.localStorage.setItem(projectFolderPathStorageKey(), projectFolderPath);
   } catch (err) {
-    debugLog('[persistTabWorkspacePath] failed to persist workspace path:', err);
+    debugLog('[persistTabProjectFolderPath] failed to persist workspace path:', err);
   }
 }
 
 /**
- * Retrieve the last-known workspace path for this origin.
- * Used after a tab discard to auto-restore the correct workspace
+ * Retrieve the last-known project folder path for this origin.
+ * Used after a tab discard to auto-restore the correct project folder
  * even though the client_id (and thus server context) is new.
  */
-export function getTabWorkspacePath(): string {
+export function getTabProjectFolderPath(): string {
   if (typeof window === 'undefined') {
     return '';
   }
   try {
-    return window.localStorage.getItem(workspacePathStorageKey()) || '';
+    return window.localStorage.getItem(projectFolderPathStorageKey()) || '';
   } catch (err) {
-    debugLog('[getTabWorkspacePath] failed to read workspace path:', err);
+    debugLog('[getTabProjectFolderPath] failed to read workspace path:', err);
     return '';
   }
 }
@@ -682,7 +682,7 @@ export function resolveWebUIClientId(): Promise<string> {
     // sends automatically with credentials: 'include') and echo the resolved
     // client ID in the X-Sprout-Client-ID response header. Only a server on
     // another origin can know a cookie this page cannot read: a same-origin
-    // one (the page's own server, a workspace or SSH proxy path) would echo
+    // one (the page's own server, a project folder or SSH proxy path) would echo
     // the cookie already checked above, and the page's own server need not
     // serve the daemon route at all.
     const probeURL = recoveryProbeURL();
@@ -745,7 +745,7 @@ export async function clientFetch(input: RequestInfo | URL, init?: RequestInit):
     headers.set(WEBUI_CLIENT_ID_HEADER, clientId);
     const response = await adapter.fetch(input, { ...init, headers });
     syncClientIdFromResponse(response);
-    publishWorkspaceResponse(input, response, init);
+    publishProjectFolderResponse(input, response, init);
     return response;
   }
 
@@ -755,7 +755,7 @@ export async function clientFetch(input: RequestInfo | URL, init?: RequestInit):
   // Prefix relative API paths so they reach the right backend. Precedence,
   // most specific first: an installed adapter already handled the request
   // above, so here the active backend's base wins when it is set (a daemon
-  // backend's own base — the host's workspace proxy — when the host named one,
+  // backend's own base — the host's project folder proxy — when the host named one,
   // else the host transport's), then the SSH proxy base
   // (window.SPROUT_PROXY_BASE, injected when the page is served through the
   // local reverse proxy), then same-origin (no prefix). An empty base is the
@@ -768,6 +768,6 @@ export async function clientFetch(input: RequestInfo | URL, init?: RequestInit):
   }
   const response = await fetch(url, { ...init, headers, credentials: 'include' });
   syncClientIdFromResponse(response);
-  publishWorkspaceResponse(input, response, init);
+  publishProjectFolderResponse(input, response, init);
   return response;
 }

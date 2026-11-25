@@ -31,7 +31,7 @@ func newStressTestRunner(t *testing.T) (*SubagentRunner, func()) {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: nil, // nil → createSubagent fails immediately (no LLM calls)
-		WorkspaceRoot: agent.workspaceRoot,
+		ProjectFolder: agent.projectFolder,
 	}
 	runner := NewSubagentRunner(agent, shared)
 	return runner, func() { agent.Shutdown() }

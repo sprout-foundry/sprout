@@ -62,7 +62,7 @@ func gateFactory(
 			return nil, err
 		}
 		ag.SetMaxIterations(10)
-		ag.SetWorkspaceRoot(runDir)
+		ag.SetProjectFolder(runDir)
 		if shapeAgent != nil {
 			shapeAgent(ag, runDir)
 		}
@@ -117,7 +117,7 @@ func TestRunner_VerifyGate_EditTool(t *testing.T) {
 
 // TestRunner_VerifyGate_ShellCommand pins the item's second scenario: a
 // scripted run that edits the copy through a shell command produces a
-// verification result. The command redirects inside the workspace — the
+// verification result. The command redirects inside the project folder — the
 // classifier escalates it to "prompt", so this scenario also pins the
 // runner's headless security posture: without it the command is denied
 // (no approval surface) and the copy never changes.

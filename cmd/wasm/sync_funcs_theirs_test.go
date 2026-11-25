@@ -9,7 +9,7 @@ import (
 )
 
 // These tests cover the their-content stash mechanism used in
-// workspace_patch conflict handling. They run only in WASM builds
+// project_folder_patch conflict handling. They run only in WASM builds
 // since the stash functions are defined in sync_funcs.go which
 // requires js+wasm.
 
@@ -67,7 +67,7 @@ func TestStashTheirsContent_Overwrite(t *testing.T) {
 
 func TestStashFileMetadata_RoundTrip(t *testing.T) {
 	path := "/metadata.txt"
-	md := agent.WorkspaceFileMetadata{
+	md := agent.ProjectFolderFileMetadata{
 		BrowserSeq:        42,
 		ContainerSeq:      10,
 		LastSyncedBrowser: 38,
@@ -89,7 +89,7 @@ func TestStashFileMetadata_RoundTrip(t *testing.T) {
 
 func TestStashFileMetadata_WithUnsyncedEdits(t *testing.T) {
 	path := "/unsynced.txt"
-	md := agent.WorkspaceFileMetadata{
+	md := agent.ProjectFolderFileMetadata{
 		BrowserSeq:        10,
 		ContainerSeq:      3,
 		LastSyncedBrowser: 5,

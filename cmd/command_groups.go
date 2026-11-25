@@ -17,7 +17,7 @@ var commandGroups = []struct {
 	{cobra.Group{ID: "diagnostics", Title: "Diagnostics & Maintenance:"}, []string{"diag", "explain", "health", "check", "audit", "api", "version", "update", "bug", "help", "completion"}},
 }
 
-// plumbingCommands are invoked by tooling (sprout-foundry's workspace
+// plumbingCommands are invoked by tooling (sprout-foundry's project folder
 // runner, the E2E harness), not typed by people. They stay callable under
 // their existing names but are left out of help.
 var plumbingCommands = []string{"txn-pull", "txn-push", "txn-status", "sync", "serve"}

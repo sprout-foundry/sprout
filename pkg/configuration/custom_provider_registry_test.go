@@ -736,7 +736,7 @@ func TestToProviderConfig_DefaultsEmptyBillingTypeToSubscription(t *testing.T) {
 }
 
 // TestLoadCustomProviders_FallsBackToGlobalHomeDir verifies that when
-// SPROUT_CONFIG points to a project workspace but custom provider
+// SPROUT_CONFIG points to a project project folder but custom provider
 // files actually live in the global home dir (~/.config/sprout/
 // providers/), LoadCustomProviders still finds them. This is the
 // regression for /provider listing providers that the switch path
@@ -764,7 +764,7 @@ func TestLoadCustomProviders_FallsBackToGlobalHomeDir(t *testing.T) {
 	))
 
 	// Now point SPROUT_CONFIG at a *different* directory — the user's
-	// project workspace. Its providers/ dir is intentionally empty so
+	// project project folder. Its providers/ dir is intentionally empty so
 	// the only place "ai-worker" can come from is the global home dir.
 	projDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", projDir)
@@ -774,7 +774,7 @@ func TestLoadCustomProviders_FallsBackToGlobalHomeDir(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, got, "ai-worker",
 		"LoadCustomProviders must surface providers from the global home dir "+
-			"even when SPROUT_CONFIG points to a workspace dir")
+			"even when SPROUT_CONFIG points to a project folder dir")
 	assert.Equal(t, "qwen3.6-27b", got["ai-worker"].ModelName)
 }
 

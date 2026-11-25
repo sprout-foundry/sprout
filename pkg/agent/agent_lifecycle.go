@@ -15,7 +15,7 @@ func (a *Agent) Shutdown() {
 }
 
 // IsShutdown reports whether Shutdown() has completed. The WebUI releases
-// agents on background goroutines (workspace switch, chat deletion, idle
+// agents on background goroutines (project folder switch, chat deletion, idle
 // eviction), so callers that need teardown to have finished — flushed history,
 // stopped MCP servers — have to be able to observe it.
 func (a *Agent) IsShutdown() bool {

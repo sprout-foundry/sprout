@@ -1,0 +1,56 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "after reset"
+      }
+    },
+    {
+      "id": 3,
+      "method": "agent.interrupt",
+      "params": {}
+    },
+    {
+      "id": 4,
+      "method": "agent.resetInterrupt",
+      "params": {}
+    },
+    {
+      "id": 5,
+      "method": "agent.run",
+      "params": {
+        "query": "hi"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "id": 4,
+      "type": "noError"
+    },
+    {
+      "id": 5,
+      "type": "noError"
+    },
+    {
+      "id": 5,
+      "result": {
+        "result": "after reset"
+      },
+      "type": "response"
+    }
+  ],
+  "description": "ResetInterrupt allows next Run() to succeed",
+  "name": "agent_reset_interrupt"
+}

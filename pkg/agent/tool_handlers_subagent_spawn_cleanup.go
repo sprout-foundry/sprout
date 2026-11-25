@@ -27,7 +27,7 @@ import (
 // (the review settings alias the reviewer role), the coder role otherwise
 // (the default subagent resolution and any persona's explicit provider/
 // model are not a role, so they attribute to the coder role).
-func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyProvided bool, subagentWorkspaceRoot string) (provider, model, role, systemPromptText string, _ error) {
+func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyProvided bool, subagentProjectFolder string) (provider, model, role, systemPromptText string, _ error) {
 	var systemPromptPath string
 	personaProviderExplicit := false
 	personaModelExplicit := false
@@ -199,16 +199,16 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 
 	// Resolve system prompt: inline text takes precedence over file path.
 	// If systemPromptPath is set but systemPromptText is empty, load from file.
-	// Resolve relative to workspace root (not process cwd) for daemon mode safety.
+	// Resolve relative to project folder (not process cwd) for daemon mode safety.
 	if systemPromptText == "" && systemPromptPath != "" {
 		absPromptPath := systemPromptPath
 		if !filepath.IsAbs(absPromptPath) {
-			absPromptPath = filepath.Join(subagentWorkspaceRoot, systemPromptPath)
+			absPromptPath = filepath.Join(subagentProjectFolder, systemPromptPath)
 		}
 		promptBytes, err := os.ReadFile(absPromptPath)
 		if err != nil && os.IsNotExist(err) && !filepath.IsAbs(systemPromptPath) {
 			// Built-in persona prompts are repo-relative paths that only exist
-			// on disk when the workspace is the sprout source tree; everywhere
+			// on disk when the project folder is the sprout source tree; everywhere
 			// else they come from the embedded copy.
 			if embedded, embeddedErr := readEmbeddedPromptFile(systemPromptPath); embeddedErr == nil {
 				promptBytes, err = embedded, nil

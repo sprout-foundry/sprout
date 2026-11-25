@@ -133,7 +133,7 @@ export default function SidebarGitSection({
             onCheckoutCommit={gitPanel.onCheckoutCommit}
             onRevertCommit={gitPanel.onRevertCommit}
             isActing={gitPanel.isActing}
-            openWorkspaceBuffer={gitPanel.openWorkspaceBuffer}
+            openProjectFolderBuffer={gitPanel.openProjectFolderBuffer}
           />
         </div>
       )}

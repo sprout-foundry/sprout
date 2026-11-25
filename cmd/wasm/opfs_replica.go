@@ -11,12 +11,12 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent"
 )
 
-// replicaFileEntry wraps WorkspaceFileMetadata with the file path and
+// replicaFileEntry wraps ProjectFolderFileMetadata with the file path and
 // optional base64-encoded content so the replica is a fully self-contained
 // mirror of OPFS state.
 type replicaFileEntry struct {
 	Path     string // file path (key in the map)
-	Metadata agent.WorkspaceFileMetadata
+	Metadata agent.ProjectFolderFileMetadata
 	Size     int64  // file size in bytes
 	Content  string // base64-encoded content (optional)
 }
@@ -69,17 +69,17 @@ func opfsReplicaJSFuncs() map[string]interface{} {
 // ─── initOPFSReplica ────────────────────────────────────────────────────
 
 // manifestEntry represents a single entry in the browser-provided manifest.
-// The browser serialises the path alongside WorkspaceFileMetadata because
+// The browser serialises the path alongside ProjectFolderFileMetadata because
 // the struct itself carries no path.
 type manifestEntry struct {
 	Path string `json:"path"`
 	Size int64  `json:"size,omitempty"`
-	agent.WorkspaceFileMetadata
+	agent.ProjectFolderFileMetadata
 }
 
 // initOPFSReplicaFunc initialises the replica from a JSON manifest produced
 // by the browser-side IndexedDB store.  The manifest is a JSON array of
-// objects, each containing a "path" field and WorkspaceFileMetadata fields.
+// objects, each containing a "path" field and ProjectFolderFileMetadata fields.
 //
 // Signature: initOPFSReplica(manifestJSON: string): {ok, fileCount, totalSize}
 func initOPFSReplicaFunc(_ js.Value, args []js.Value) interface{} {
@@ -105,7 +105,7 @@ func initOPFSReplicaFunc(_ js.Value, args []js.Value) interface{} {
 		e := manifest[i]
 		entry := &replicaFileEntry{
 			Path:     e.Path,
-			Metadata: e.WorkspaceFileMetadata,
+			Metadata: e.ProjectFolderFileMetadata,
 			Size:     e.Size,
 		}
 		opfsReplicaFiles[e.Path] = entry
@@ -149,10 +149,10 @@ func getOPFSReplicaStatusFunc(_ js.Value, args []js.Value) interface{} {
 
 // ─── syncOPFSReplica ────────────────────────────────────────────────────
 
-// patchEvent represents a single workspace-patch event pushed by the browser.
+// patchEvent represents a single project-folder-patch event pushed by the browser.
 type patchEvent struct {
-	Op            string                       `json:"op"`
-	Path          string                       `json:"path"`
-	ContentBase64 string                       `json:"content_base64,omitempty"`
-	Metadata      *agent.WorkspaceFileMetadata `json:"metadata,omitempty"`
+	Op            string                           `json:"op"`
+	Path          string                           `json:"path"`
+	ContentBase64 string                           `json:"content_base64,omitempty"`
+	Metadata      *agent.ProjectFolderFileMetadata `json:"metadata,omitempty"`
 }

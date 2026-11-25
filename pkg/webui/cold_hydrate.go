@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-// excludedDirNames lists directory names that are skipped during workspace
+// excludedDirNames lists directory names that are skipped during project folder
 // hydration scans. These are build artifacts, dependency caches, and VCS
 // data that are not needed in the OPFS replica.
 var excludedDirNames = map[string]bool{
@@ -73,14 +73,14 @@ const (
 	hydrateBatchPause = 50 * time.Millisecond
 
 	// estimatedThroughputBytesPerSecond is the assumed transfer rate for
-	// ETA calculations during workspace hydration.
+	// ETA calculations during project folder hydration.
 	estimatedThroughputBytesPerSecond = 2 * 1024 * 1024 // 2 MB/s
 )
 
 // hydrateFileInfo collects metadata about a single file during the scan
 // phase of cold hydration.
 type hydrateFileInfo struct {
-	path    string // relative to workspace root
+	path    string // relative to project folder
 	size    int64
 	modTime time.Time
 }
@@ -98,7 +98,7 @@ func isExcludedDir(relPath string) bool {
 
 // isHydrateBinaryFile reports whether the file extension indicates a binary
 // file that should be skipped if it exceeds maxBinaryFileSize during
-// workspace hydration. Uses extension-based detection (not content-based).
+// project folder hydration. Uses extension-based detection (not content-based).
 func isHydrateBinaryFile(path string) bool {
 	ext := strings.ToLower(filepath.Ext(path))
 	return excludedBinaryExtensions[ext]
@@ -123,29 +123,29 @@ func isSensitiveFile(relPath string) bool {
 	return false
 }
 
-// handleColdHydrateRequest scans the workspace root and streams all
+// handleColdHydrateRequest scans the project folder and streams all
 // eligible files over the WebSocket connection so the browser can
 // populate its OPFS replica (SP-046 §6).
 //
 // Protocol phases:
-//  1. Scan workspace, collect file list
+//  1. Scan project folder, collect file list
 //  2. Send hydrate_manifest with totals and ETA
 //  3. Stream each file as hydrate_file
 //  4. Send hydrate_complete with transfer statistics
-func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspaceRoot string) {
-	// Validate workspace root
-	if workspaceRoot == "" {
+func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, projectFolder string) {
+	// Validate project folder
+	if projectFolder == "" {
 		safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
-			"data": map[string]string{"message": "workspace root is not configured"},
+			"data": map[string]string{"message": "project folder is not configured"},
 		})
 		return
 	}
 
-	// Verify workspace exists
-	info, err := os.Stat(workspaceRoot)
+	// Verify project folder exists
+	info, err := os.Stat(projectFolder)
 	if err != nil {
-		errMsg := fmt.Sprintf("workspace root does not exist: %v", err)
+		errMsg := fmt.Sprintf("project folder does not exist: %v", err)
 		safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": errMsg},
@@ -155,7 +155,7 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 	if !info.IsDir() {
 		safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
-			"data": map[string]string{"message": "workspace root is not a directory"},
+			"data": map[string]string{"message": "project folder is not a directory"},
 		})
 		return
 	}
@@ -164,11 +164,11 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// --- Phase 1: Scan workspace ---
+	// --- Phase 1: Scan project folder ---
 	var files []hydrateFileInfo
 	var totalSize int64
 
-	err = filepath.Walk(workspaceRoot, func(path string, fi os.FileInfo, err error) error {
+	err = filepath.Walk(projectFolder, func(path string, fi os.FileInfo, err error) error {
 		if err != nil {
 			// Skip files we can't stat (permission errors, broken symlinks)
 			return nil
@@ -176,7 +176,7 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 
 		// Skip directories
 		if fi.IsDir() {
-			rel, relErr := filepath.Rel(workspaceRoot, path)
+			rel, relErr := filepath.Rel(projectFolder, path)
 			if relErr == nil && isExcludedDir(filepath.ToSlash(rel)) {
 				return filepath.SkipDir
 			}
@@ -189,7 +189,7 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 		}
 
 		// Get relative path
-		rel, relErr := filepath.Rel(workspaceRoot, path)
+		rel, relErr := filepath.Rel(projectFolder, path)
 		if relErr != nil {
 			return nil
 		}
@@ -232,7 +232,7 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 	if err != nil {
 		safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
-			"data": map[string]string{"message": fmt.Sprintf("workspace scan failed: %v", err)},
+			"data": map[string]string{"message": fmt.Sprintf("project folder scan failed: %v", err)},
 		})
 		return
 	}
@@ -266,19 +266,19 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 		return
 	}
 
-	ws.log().Info("workspace hydration streaming started", slog.Int64("file_count", totalFiles), slog.Int64("total_bytes", totalSize), slog.Int64("estimated_seconds", estimateSeconds), slog.String("workspace_root", workspaceRoot))
+	ws.log().Info("project folder hydration streaming started", slog.Int64("file_count", totalFiles), slog.Int64("total_bytes", totalSize), slog.Int64("estimated_seconds", estimateSeconds), slog.String("project_folder", projectFolder))
 
 	// --- Phase 3: Stream files ---
 	filesSent := int64(0)
 	var bytesSent int64
 
-	// Resolve the workspace root once for path validation (eval symlinks so
+	// Resolve the project folder once for path validation (eval symlinks so
 	// comparison with EvalSymlinks'd file paths is consistent — macOS /var
 	// → /private/var, etc.).
-	absRoot, rootErr := filepath.Abs(workspaceRoot)
+	absRoot, rootErr := filepath.Abs(projectFolder)
 	if rootErr != nil {
-		ws.log().Warn("hydration workspace root resolution failed; using unresolved path", slog.Any("err", rootErr))
-		absRoot = workspaceRoot
+		ws.log().Warn("hydration project folder resolution failed; using unresolved path", slog.Any("err", rootErr))
+		absRoot = projectFolder
 	}
 	if evaled, err := filepath.EvalSymlinks(absRoot); err == nil {
 		absRoot = evaled
@@ -287,20 +287,20 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 	for i, fi := range files {
 		select {
 		case <-ctx.Done():
-			ws.log().Info("workspace hydration cancelled", slog.Int64("files_sent", filesSent), slog.Int64("total_files", totalFiles))
+			ws.log().Info("project folder hydration cancelled", slog.Int64("files_sent", filesSent), slog.Int64("total_files", totalFiles))
 			return
 		default:
 		}
 
-		// Resolve full path and validate it stays within workspace root
-		fullPath := filepath.Join(workspaceRoot, fi.path)
+		// Resolve full path and validate it stays within project folder
+		fullPath := filepath.Join(projectFolder, fi.path)
 		resolvedPath, evalErr := filepath.EvalSymlinks(fullPath)
 		if evalErr != nil {
 			ws.log().Warn("skipping hydration file with unresolvable path", slog.String("path", fi.path), slog.Any("err", evalErr))
 			continue
 		}
 		if !strings.HasPrefix(resolvedPath, absRoot+string(filepath.Separator)) && resolvedPath != absRoot {
-			ws.log().Warn("skipping hydration file outside workspace root", slog.String("path", fi.path))
+			ws.log().Warn("skipping hydration file outside project folder", slog.String("path", fi.path))
 			continue
 		}
 
@@ -347,7 +347,7 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 		if (i+1)%hydrateFileBatchSize == 0 {
 			select {
 			case <-ctx.Done():
-				ws.log().Info("workspace hydration cancelled during batch pause", slog.Int64("files_sent", filesSent))
+				ws.log().Info("project folder hydration cancelled during batch pause", slog.Int64("files_sent", filesSent))
 				return
 			case <-time.After(hydrateBatchPause):
 			}
@@ -370,5 +370,5 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 		return
 	}
 
-	ws.log().Info("workspace hydration completed", slog.Int64("files_sent", filesSent), slog.Int64("bytes_sent", bytesSent), slog.Int64("duration_ms", durationMs))
+	ws.log().Info("project folder hydration completed", slog.Int64("files_sent", filesSent), slog.Int64("bytes_sent", bytesSent), slog.Int64("duration_ms", durationMs))
 }

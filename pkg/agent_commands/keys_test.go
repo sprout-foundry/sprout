@@ -168,7 +168,7 @@ func TestParseKeyScope(t *testing.T) {
 	}
 }
 
-// --global must actually write to the user-level root, not the workspace
+// --global must actually write to the user-level root, not the project folder
 // root the process happens to have resolved. DefaultConfigDir() resolves
 // XDG_CONFIG_HOME (ignoring SPROUT_CONFIG), so that is what we steer.
 func TestKeysCommand_SetGlobalWritesUserLevelStore(t *testing.T) {
@@ -198,80 +198,80 @@ func TestKeysCommand_SetGlobalWritesUserLevelStore(t *testing.T) {
 	require.Equal(t, "test-key-for-unit-tests", store["openrouter"])
 }
 
-// --local must write to <workspaceRoot>/.sprout regardless of the resolved
-// root, and must honour an explicit workspace root over the raw cwd.
-func TestKeysCommand_SetLocalWritesWorkspaceStore(t *testing.T) {
+// --local must write to <projectFolder>/.sprout regardless of the resolved
+// root, and must honour an explicit project folder over the raw cwd.
+func TestKeysCommand_SetLocalWritesProjectFolderStore(t *testing.T) {
 	mgr, cleanup := configuration.NewTestManager(t)
 	if cleanup != nil {
 		defer cleanup()
 	}
 
-	workspace := t.TempDir()
-	// cwd deliberately elsewhere: the workspace root must win.
+	projectFolder := t.TempDir()
+	// cwd deliberately elsewhere: the project folder must win.
 	t.Chdir(t.TempDir())
 
 	var buf bytes.Buffer
 	k := &KeysCommand{}
 	k.SetOutput(&buf)
 
-	if err := k.setKeyScoped(mgr, "openrouter", "test-key-for-unit-tests", keyScopeLocal, workspace); err != nil {
+	if err := k.setKeyScoped(mgr, "openrouter", "test-key-for-unit-tests", keyScopeLocal, projectFolder); err != nil {
 		t.Fatalf("setKeyScoped(local): %v", err)
 	}
 
 	out := buf.String()
-	require.Contains(t, out, "Scope: workspace")
+	require.Contains(t, out, "Scope: project folder")
 	require.Contains(t, out, filepath.Join(".sprout", "credentials", "api_keys.json"))
 
-	store, err := credentials.LoadFromDir(filepath.Join(workspace, ".sprout"))
+	store, err := credentials.LoadFromDir(filepath.Join(projectFolder, ".sprout"))
 	require.NoError(t, err)
 	require.Equal(t, "test-key-for-unit-tests", store["openrouter"])
 }
 
-// From a repo subdirectory the workspace store must be the repo root's
+// From a repo subdirectory the project folder store must be the repo root's
 // .sprout, not <subdir>/.sprout — the latter is a store nothing else reads.
-func TestWorkspaceConfigDir_WalksUpToRepoRoot(t *testing.T) {
+func TestProjectFolderConfigDir_WalksUpToRepoRoot(t *testing.T) {
 	repo := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(repo, ".git"), 0o755))
 	sub := filepath.Join(repo, "a", "b")
 	require.NoError(t, os.MkdirAll(sub, 0o755))
 	t.Chdir(sub)
 
-	got, err := workspaceConfigDir("")
+	got, err := projectFolderConfigDir("")
 	require.NoError(t, err)
 	require.Equal(t, filepath.Join(repo, ".sprout"), got)
 }
 
 // A git worktree or submodule has .git as a regular *file*, not a
 // directory. The walk-up must still find the repo root.
-func TestWorkspaceConfigDir_AcceptsGitFile(t *testing.T) {
+func TestProjectFolderConfigDir_AcceptsGitFile(t *testing.T) {
 	repo := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(repo, ".git"), []byte("gitdir: /elsewhere/.git/worktrees/x\n"), 0o644))
 	sub := filepath.Join(repo, "pkg")
 	require.NoError(t, os.MkdirAll(sub, 0o755))
 	t.Chdir(sub)
 
-	got, err := workspaceConfigDir("")
+	got, err := projectFolderConfigDir("")
 	require.NoError(t, err)
 	require.Equal(t, filepath.Join(repo, ".sprout"), got)
 }
 
-// The agent's resolved workspace root wins over cwd.
-func TestWorkspaceConfigDir_PrefersExplicitRoot(t *testing.T) {
+// The agent's resolved project folder wins over cwd.
+func TestProjectFolderConfigDir_PrefersExplicitRoot(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(t.TempDir())
 
-	got, err := workspaceConfigDir(root)
+	got, err := projectFolderConfigDir(root)
 	require.NoError(t, err)
 	require.Equal(t, filepath.Join(root, ".sprout"), got)
 }
 
-// $HOME has no workspace layer (a ~/.sprout layer is a documented footgun),
+// $HOME has no project folder layer (a ~/.sprout layer is a documented footgun),
 // so --local must refuse rather than create one.
-func TestWorkspaceConfigDir_RefusesHome(t *testing.T) {
+func TestProjectFolderConfigDir_RefusesHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	_, err := workspaceConfigDir(home)
+	_, err := projectFolderConfigDir(home)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "home directory")
 }

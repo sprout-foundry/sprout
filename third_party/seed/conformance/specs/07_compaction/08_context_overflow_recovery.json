@@ -1,0 +1,44 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {}
+    },
+    {
+      "id": 2,
+      "method": "mock.addError",
+      "params": {
+        "errorType": "context_overflow",
+        "message": "context length exceeded"
+      }
+    },
+    {
+      "id": 3,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "recovered response"
+      }
+    },
+    {
+      "id": 4,
+      "method": "agent.run",
+      "params": {
+        "query": "test"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    },
+    {
+      "errorType": "context_overflow",
+      "id": 4,
+      "type": "error"
+    }
+  ],
+  "description": "Context overflow error fails fast without recovery (recovery not implemented)",
+  "name": "context_overflow_recovery"
+}

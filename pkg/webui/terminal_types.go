@@ -322,7 +322,7 @@ func (s *TerminalSession) closeAllSubs() {
 type TerminalManager struct {
 	sessions      map[string]*TerminalSession
 	mutex         sync.RWMutex
-	workspaceRoot string
+	projectFolder string
 	cleanupOnce   sync.Once // ensures StartCleanupWorker only launches one goroutine
 	// onSessionUpdate, when set, is invoked on background-session
 	// lifecycle changes (started / command completed / stopped) so the
@@ -352,10 +352,10 @@ type TerminalManager struct {
 const bgTombstoneMax = 64
 
 // NewTerminalManager creates a new terminal manager.
-func NewTerminalManager(workspaceRoot string) *TerminalManager {
+func NewTerminalManager(projectFolder string) *TerminalManager {
 	return &TerminalManager{
 		sessions:         make(map[string]*TerminalSession),
-		workspaceRoot:    workspaceRoot,
+		projectFolder:    projectFolder,
 		bgExitTombstones: make(map[string]int),
 	}
 }

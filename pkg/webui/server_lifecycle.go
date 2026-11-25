@@ -130,7 +130,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	if ws.previewOrigin == nil {
 		ws.previewOrigin = newPreviewOrigin()
 	}
-	if err := ws.previewOrigin.start(ws.workspaceRoot); err != nil {
+	if err := ws.previewOrigin.start(ws.projectFolder); err != nil {
 		ws.log().Warn("preview origin unavailable; HTML preview falls back to srcDoc", slog.Any("err", err))
 	}
 

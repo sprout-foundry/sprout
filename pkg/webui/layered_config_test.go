@@ -161,9 +161,9 @@ func TestGetLayeredConfigManager_CreatesPerClientDir(t *testing.T) {
 	clientID := "test-client"
 	ctx := ws.getOrCreateClientContext(clientID)
 
-	// Set a workspace root for the client
-	workspaceDir := t.TempDir()
-	ctx.WorkspaceRoot = workspaceDir
+	// Set a project folder for the client
+	projectFolderDir := t.TempDir()
+	ctx.ProjectFolder = projectFolderDir
 
 	// Get the layered config manager
 	cm, err := ws.getLayeredConfigManager(clientID)
@@ -183,8 +183,8 @@ func TestGetLayeredConfigManager_CreatesPerClientDir(t *testing.T) {
 }
 
 func TestGetLayeredConfigManager_Isolation(t *testing.T) {
-	// Test that two clients with different workspaces get config managers
-	// scoped to their respective workspace directories.
+	// Test that two clients with different project folders get config managers
+	// scoped to their respective project folder directories.
 	isolatedHome := t.TempDir()
 	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
@@ -195,18 +195,18 @@ func TestGetLayeredConfigManager_Isolation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create two client contexts with different workspaces
+	// Create two client contexts with different project folders
 	clientA := "client-a"
 	clientB := "client-b"
 
-	workspaceA := t.TempDir()
-	workspaceB := t.TempDir()
+	projectFolderA := t.TempDir()
+	projectFolderB := t.TempDir()
 
 	ctxA := ws.getOrCreateClientContext(clientA)
-	ctxA.WorkspaceRoot = workspaceA
+	ctxA.ProjectFolder = projectFolderA
 
 	ctxB := ws.getOrCreateClientContext(clientB)
-	ctxB.WorkspaceRoot = workspaceB
+	ctxB.ProjectFolder = projectFolderB
 
 	// Get config managers for both clients
 	cmA, err := ws.getLayeredConfigManager(clientA)
@@ -224,7 +224,7 @@ func TestGetLayeredConfigManager_Isolation(t *testing.T) {
 		t.Fatal("one or both config managers are nil")
 	}
 
-	// They should be different instances (different workspace configs)
+	// They should be different instances (different project folder configs)
 	if cmA == cmB {
 		t.Error("config managers for different clients should be different instances")
 	}
@@ -241,30 +241,30 @@ func makeSettingsRequest(ws *ReactWebServer, method, urlPath string, body string
 	return rec
 }
 
-// TestHandlePutWorkspaceSettings_ReachesLiveConfigManager pins the folded
-// reload: a workspace-layer PUT writes the layer file AND updates the merged
+// TestHandlePutProjectFolderSettings_ReachesLiveConfigManager pins the folded
+// reload: a project-folder-layer PUT writes the layer file AND updates the merged
 // in-memory config the running agents read. Before the reload was added, the
 // file was correct but cm.GetConfig() kept serving the old value until restart.
-func TestHandlePutWorkspaceSettings_ReachesLiveConfigManager(t *testing.T) {
+func TestHandlePutProjectFolderSettings_ReachesLiveConfigManager(t *testing.T) {
 	isolatedHome := t.TempDir()
 	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 	t.Setenv("SPROUT_CONFIG", "")
 
-	workspaceRoot := t.TempDir()
+	projectFolder := t.TempDir()
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	clientID := "test-client"
 	ctx := ws.getOrCreateClientContext(clientID)
-	ctx.WorkspaceRoot = workspaceRoot
+	ctx.ProjectFolder = projectFolder
 
-	// Prime the merged config with a known value via a workspace-layer write.
-	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", `{"reasoning_effort": "low"}`)
+	// Prime the merged config with a known value via a project-folder-layer write.
+	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=project_folder", `{"reasoning_effort": "low"}`)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("initial workspace PUT failed: %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("initial project folder PUT failed: %d: %s", rec.Code, rec.Body.String())
 	}
 
 	cm := ws.resolveConfigManagerQuietly(makeClientRequest(clientID))
@@ -276,9 +276,9 @@ func TestHandlePutWorkspaceSettings_ReachesLiveConfigManager(t *testing.T) {
 	}
 
 	// Change the same key through a second layer write.
-	rec = makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", `{"reasoning_effort": "high"}`)
+	rec = makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=project_folder", `{"reasoning_effort": "high"}`)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("second workspace PUT failed: %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("second project folder PUT failed: %d: %s", rec.Code, rec.Body.String())
 	}
 
 	// The merged in-memory config must reflect the new value immediately —
@@ -340,37 +340,37 @@ func TestHandlePutSessionSettings(t *testing.T) {
 	}
 }
 
-func TestHandlePutWorkspaceSettings(t *testing.T) {
+func TestHandlePutProjectFolderSettings(t *testing.T) {
 	isolatedHome := t.TempDir()
 	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 
-	workspaceRoot := t.TempDir()
+	projectFolder := t.TempDir()
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	clientID := "test-client"
 	ctx := ws.getOrCreateClientContext(clientID)
-	ctx.WorkspaceRoot = workspaceRoot
+	ctx.ProjectFolder = projectFolder
 
 	body := `{"reasoning_effort": "low"}`
-	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", body)
+	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=project_folder", body)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// Verify workspace config file was created
-	workspaceConfigPath := filepath.Join(workspaceRoot, ".sprout", configuration.WorkspaceConfigFileName)
-	data, err := os.ReadFile(workspaceConfigPath)
+	// Verify project folder config file was created
+	projectFolderConfigPath := filepath.Join(projectFolder, ".sprout", configuration.ProjectFolderConfigFileName)
+	data, err := os.ReadFile(projectFolderConfigPath)
 	if err != nil {
-		t.Fatalf("workspace config file should exist: %v", err)
+		t.Fatalf("project folder config file should exist: %v", err)
 	}
 
 	if !strings.Contains(string(data), `"low"`) {
-		t.Errorf("workspace config should contain reasoning_effort=low, got: %s", string(data))
+		t.Errorf("project folder config should contain reasoning_effort=low, got: %s", string(data))
 	}
 }
 
@@ -431,22 +431,22 @@ func TestHandleAPISettingsPutDefault_NoLayer(t *testing.T) {
 	}
 }
 
-// TestHandlePutWorkspaceSettings_CopyFromGlobal tests the "copy global to workspace" flow
-// that the Settings panel uses when clicking "Create Workspace Config".
-func TestHandlePutWorkspaceSettings_CopyFromGlobal(t *testing.T) {
+// TestHandlePutProjectFolderSettings_CopyFromGlobal tests the "copy global to project folder" flow
+// that the Settings panel uses when clicking "Create Project folder Config".
+func TestHandlePutProjectFolderSettings_CopyFromGlobal(t *testing.T) {
 	isolatedHome := t.TempDir()
 	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 
-	workspaceRoot := t.TempDir()
+	projectFolder := t.TempDir()
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	clientID := "test-client"
 	ctx := ws.getOrCreateClientContext(clientID)
-	ctx.WorkspaceRoot = workspaceRoot
+	ctx.ProjectFolder = projectFolder
 
 	// Step 1: Set some global settings
 	globalBody := `{"reasoning_effort": "high", "history_scope": "global", "version": "2.0", "last_used_provider": "openai"}`
@@ -464,49 +464,49 @@ func TestHandlePutWorkspaceSettings_CopyFromGlobal(t *testing.T) {
 		t.Fatalf("global GET failed: %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// Step 3: PUT global data to workspace (simulates "updateSettings(globalData, 'workspace')")
-	rec = makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", rec.Body.String())
+	// Step 3: PUT global data to project folder (simulates "updateSettings(globalData, 'project folder')")
+	rec = makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=project_folder", rec.Body.String())
 	if rec.Code != http.StatusOK {
-		t.Fatalf("workspace PUT failed: %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("project folder PUT failed: %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// Step 4: GET workspace settings and verify data was preserved
-	req = httptest.NewRequest(http.MethodGet, "/api/settings?layer=workspace", nil)
+	// Step 4: GET project folder settings and verify data was preserved
+	req = httptest.NewRequest(http.MethodGet, "/api/settings?layer=project_folder", nil)
 	req.Header.Set("X-Sprout-Client-ID", clientID)
 	rec = httptest.NewRecorder()
 	ws.handleAPISettings(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("workspace GET failed: %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("project folder GET failed: %d: %s", rec.Code, rec.Body.String())
 	}
 
 	body := rec.Body.String()
 	// Verify key fields were preserved
 	for _, expected := range []string{`"reasoning_effort":"high"`, `"history_scope":"global"`, `"version":"2.0"`, `"last_used_provider":"openai"`} {
 		if !strings.Contains(body, expected) {
-			t.Errorf("workspace config missing %s, got: %s", expected, body)
+			t.Errorf("project folder config missing %s, got: %s", expected, body)
 		}
 	}
 }
 
 // --- Tests for provider/model mapping in putConfigToFile ---
 
-func TestHandlePutWorkspaceSettings_ProviderModel(t *testing.T) {
+func TestHandlePutProjectFolderSettings_ProviderModel(t *testing.T) {
 	isolatedHome := t.TempDir()
 	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 
-	workspaceRoot := t.TempDir()
+	projectFolder := t.TempDir()
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	clientID := "test-client"
 	ctx := ws.getOrCreateClientContext(clientID)
-	ctx.WorkspaceRoot = workspaceRoot
+	ctx.ProjectFolder = projectFolder
 
 	body := `{"provider": "openai", "model": "gpt-4"}`
-	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", body)
+	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=project_folder", body)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -522,16 +522,16 @@ func TestHandlePutWorkspaceSettings_ProviderModel(t *testing.T) {
 		t.Fatalf("should not have warnings, got: %v", warnings)
 	}
 
-	// Verify workspace config file contains mapped values
-	workspaceConfigPath := filepath.Join(workspaceRoot, ".sprout", configuration.WorkspaceConfigFileName)
-	data, err := os.ReadFile(workspaceConfigPath)
+	// Verify project folder config file contains mapped values
+	projectFolderConfigPath := filepath.Join(projectFolder, ".sprout", configuration.ProjectFolderConfigFileName)
+	data, err := os.ReadFile(projectFolderConfigPath)
 	if err != nil {
-		t.Fatalf("workspace config file should exist: %v", err)
+		t.Fatalf("project folder config file should exist: %v", err)
 	}
 
 	var cfg configuration.Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		t.Fatalf("failed to parse workspace config: %v", err)
+		t.Fatalf("failed to parse project folder config: %v", err)
 	}
 
 	if cfg.LastUsedProvider != "openai" {
@@ -596,23 +596,23 @@ func TestHandlePutGlobalSettings_ProviderModel(t *testing.T) {
 	}
 }
 
-func TestHandlePutWorkspaceSettings_ProviderOnly(t *testing.T) {
+func TestHandlePutProjectFolderSettings_ProviderOnly(t *testing.T) {
 	isolatedHome := t.TempDir()
 	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 
-	workspaceRoot := t.TempDir()
+	projectFolder := t.TempDir()
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	clientID := "test-client"
 	ctx := ws.getOrCreateClientContext(clientID)
-	ctx.WorkspaceRoot = workspaceRoot
+	ctx.ProjectFolder = projectFolder
 
 	body := `{"provider": "anthropic"}`
-	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", body)
+	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=project_folder", body)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -628,16 +628,16 @@ func TestHandlePutWorkspaceSettings_ProviderOnly(t *testing.T) {
 		t.Fatalf("should not have warnings, got: %v", warnings)
 	}
 
-	// Verify workspace config file
-	workspaceConfigPath := filepath.Join(workspaceRoot, ".sprout", configuration.WorkspaceConfigFileName)
-	data, err := os.ReadFile(workspaceConfigPath)
+	// Verify project folder config file
+	projectFolderConfigPath := filepath.Join(projectFolder, ".sprout", configuration.ProjectFolderConfigFileName)
+	data, err := os.ReadFile(projectFolderConfigPath)
 	if err != nil {
-		t.Fatalf("workspace config file should exist: %v", err)
+		t.Fatalf("project folder config file should exist: %v", err)
 	}
 
 	var cfg configuration.Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		t.Fatalf("failed to parse workspace config: %v", err)
+		t.Fatalf("failed to parse project folder config: %v", err)
 	}
 
 	if cfg.LastUsedProvider != "anthropic" {
@@ -645,35 +645,35 @@ func TestHandlePutWorkspaceSettings_ProviderOnly(t *testing.T) {
 	}
 }
 
-func TestHandlePutWorkspaceSettings_ModelWithoutProvider(t *testing.T) {
+func TestHandlePutProjectFolderSettings_ModelWithoutProvider(t *testing.T) {
 	isolatedHome := t.TempDir()
 	setTestHome(t, isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 
-	workspaceRoot := t.TempDir()
+	projectFolder := t.TempDir()
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	clientID := "test-client"
 	ctx := ws.getOrCreateClientContext(clientID)
-	ctx.WorkspaceRoot = workspaceRoot
+	ctx.ProjectFolder = projectFolder
 
-	// Pre-populate workspace config with last_used_provider so model mapping has context
-	workspaceConfigPath := filepath.Join(workspaceRoot, ".sprout", configuration.WorkspaceConfigFileName)
-	os.MkdirAll(filepath.Dir(workspaceConfigPath), 0700)
+	// Pre-populate project folder config with last_used_provider so model mapping has context
+	projectFolderConfigPath := filepath.Join(projectFolder, ".sprout", configuration.ProjectFolderConfigFileName)
+	_ = os.MkdirAll(filepath.Dir(projectFolderConfigPath), 0700)
 	existingCfg := configuration.Config{
 		LastUsedProvider: "openai",
 		Version:          "2.0",
 	}
 	existingData, _ := json.MarshalIndent(existingCfg, "", "  ")
-	if err := os.WriteFile(workspaceConfigPath, existingData, 0600); err != nil {
+	if err := os.WriteFile(projectFolderConfigPath, existingData, 0600); err != nil {
 		t.Fatalf("failed to write pre-existing config: %v", err)
 	}
 
 	body := `{"model": "gpt-4o"}`
-	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", body)
+	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=project_folder", body)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -689,15 +689,15 @@ func TestHandlePutWorkspaceSettings_ModelWithoutProvider(t *testing.T) {
 		t.Fatalf("should not have warnings, got: %v", warnings)
 	}
 
-	// Verify workspace config file now has provider_models updated
-	data, err := os.ReadFile(workspaceConfigPath)
+	// Verify project folder config file now has provider_models updated
+	data, err := os.ReadFile(projectFolderConfigPath)
 	if err != nil {
-		t.Fatalf("workspace config file should exist: %v", err)
+		t.Fatalf("project folder config file should exist: %v", err)
 	}
 
 	var cfg configuration.Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		t.Fatalf("failed to parse workspace config: %v", err)
+		t.Fatalf("failed to parse project folder config: %v", err)
 	}
 
 	if cfg.ProviderModels == nil || cfg.ProviderModels["openai"] != "gpt-4o" {

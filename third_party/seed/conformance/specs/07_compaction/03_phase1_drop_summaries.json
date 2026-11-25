@@ -1,0 +1,26 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "method": "agent.new",
+      "params": {
+        "compactionTriggerFraction": 0.01
+      }
+    },
+    {
+      "id": 2,
+      "method": "mock.addTextResponse",
+      "params": {
+        "content": "ok"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": 1,
+      "type": "noError"
+    }
+  ],
+  "description": "Placeholder: Checkpoint summaries dropped during compaction phase 1 when context pressure increases. Requires multi-turn checkpoint history.",
+  "name": "phase1_drop_summaries"
+}

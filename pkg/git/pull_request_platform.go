@@ -1,11 +1,11 @@
 package git
 
 // pull_request_platform.go — opening a pull/merge request through the
-// Sprout Foundry platform from inside one of its workspaces. The platform
-// knows the workspace's repository and holds its owner's credential for the
+// Sprout Foundry platform from inside one of its project folders. The platform
+// knows the project folder's repository and holds its owner's credential for the
 // repository's host, so this works on every host the platform supports
 // (GitHub, GitLab, Gitea/Forgejo) without the host's token ever
-// being in the workspace.
+// being in the project folder.
 
 import (
 	"bytes"
@@ -18,14 +18,14 @@ import (
 	"strings"
 )
 
-// platformWorkspace is the platform workspace this process runs in, read from
+// platformProjectFolder is the platform project folder this process runs in, read from
 // the environment the platform sets (WORKSPACE_ID, WORKSPACE_TOKEN,
-// PLATFORM_API_URL). ok is false outside a platform workspace.
-func platformWorkspace() (apiURL, workspaceID, token string, ok bool) {
+// PLATFORM_API_URL). ok is false outside a platform project folder.
+func platformProjectFolder() (apiURL, projectFolderID, token string, ok bool) {
 	apiURL = strings.TrimRight(os.Getenv("PLATFORM_API_URL"), "/")
-	workspaceID = os.Getenv("WORKSPACE_ID")
+	projectFolderID = os.Getenv("WORKSPACE_ID")
 	token = os.Getenv("WORKSPACE_TOKEN")
-	return apiURL, workspaceID, token, apiURL != "" && workspaceID != "" && token != ""
+	return apiURL, projectFolderID, token, apiURL != "" && projectFolderID != "" && token != ""
 }
 
 type platformPullRequest struct {
@@ -50,12 +50,12 @@ type platformPullResponse struct {
 // createPRViaPlatform asks the platform to open the change request
 // (POST {PLATFORM_API_URL}/internal/workspace/{id}/pulls). The head branch
 // must already be pushed.
-func createPRViaPlatform(ctx context.Context, apiURL, workspaceID, token, head, base, title, body string, draft bool) (*PullRequestResult, error) {
+func createPRViaPlatform(ctx context.Context, apiURL, projectFolderID, token, head, base, title, body string, draft bool) (*PullRequestResult, error) {
 	payload, err := json.Marshal(platformPullRequest{Title: title, Body: body, HeadBranch: head, BaseBranch: base, Draft: draft})
 	if err != nil {
 		return nil, fmt.Errorf("marshal pull request: %w", err)
 	}
-	endpoint := apiURL + "/internal/workspace/" + workspaceID + "/pulls"
+	endpoint := apiURL + "/internal/workspace/" + projectFolderID + "/pulls"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)

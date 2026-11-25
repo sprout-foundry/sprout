@@ -169,7 +169,7 @@
         "description": "Qwen3-235B-A22B-Instruct-2507 is the updated version of the Qwen3-235B-A22B non-thinking mode, featuring Significant improvements in general capabilities, including instruction following, logical reasoning, text comprehension, mathematics, science, coding and tool usage.  ",
         "id": "Qwen/Qwen3-235B-A22B-Instruct-2507",
         "input_cost": 0.09,
-        "name": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+        "name": "Qwen3 235B A22B Instruct 2507",
         "output_cost": 0.55,
         "tags": [
           "tools",
@@ -208,7 +208,7 @@
         "description": "Qwen3-Coder-480B-A35B-Instruct is the Qwen3's most agentic code model, featuring Significant Performance on Agentic Coding, Agentic Browser-Use and other foundational coding tasks, achieving results comparable to Claude Sonnet.",
         "id": "Qwen/Qwen3-Coder-480B-A35B-Instruct-Turbo",
         "input_cost": 0.3,
-        "name": "Qwen/Qwen3-Coder-480B-A35B-Instruct-Turbo",
+        "name": "Qwen3 Coder 480B A35B Instruct Turbo",
         "output_cost": 1,
         "tags": [
           "tools",
@@ -479,7 +479,7 @@
         "description": "The DeepSeek R1 model has undergone a minor version upgrade, with the current version being DeepSeek-R1-0528.",
         "id": "deepseek-ai/DeepSeek-R1-0528",
         "input_cost": 0.5,
-        "name": "deepseek-ai/DeepSeek-R1-0528",
+        "name": "DeepSeek R1 0528",
         "output_cost": 2.15,
         "tags": [
           "tools",
@@ -492,7 +492,7 @@
         "description": "DeepSeek-V3, a strong Mixture-of-Experts (MoE) language model with 671B total parameters with 37B activated for each token. To achieve efficient inference and cost-effective training, DeepSeek-V3 adopts Multi-head Latent Attention (MLA) and DeepSeekMoE architectures, which were thoroughly validated in DeepSeek-V2. ",
         "id": "deepseek-ai/DeepSeek-V3",
         "input_cost": 0.32,
-        "name": "deepseek-ai/DeepSeek-V3",
+        "name": "DeepSeek V3",
         "output_cost": 0.89,
         "tags": [
           "tools",
@@ -720,7 +720,7 @@
         "description": "Ultra speed version of gemma-4-31B-it",
         "id": "google/gemma-4-31B-it-Ultra",
         "input_cost": 0.27,
-        "name": "google/gemma-4-31B-it-Ultra",
+        "name": "Gemma 4 31B IT Ultra",
         "output_cost": 0.76,
         "tags": [
           "tools",
@@ -747,7 +747,7 @@
         "description": "Llama 3.3-70B Turbo is a highly optimized version of the Llama 3.3-70B model, utilizing FP8 quantization to deliver significantly faster inference speeds with a minor trade-off in accuracy. The model is designed to be helpful, safe, and flexible, with a focus on responsible deployment and mitigating potential risks such as bias, toxicity, and misinformation. It achieves state-of-the-art performance on various benchmarks, including conversational tasks, language translation, and text generation.",
         "id": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
         "input_cost": 0.1,
-        "name": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        "name": "Llama 3.3 70B Instruct Turbo",
         "output_cost": 0.32,
         "tags": [
           "tools",
@@ -759,7 +759,7 @@
         "description": "The Llama 4 collection of models are natively multimodal AI models that enable text and multimodal experiences. These models leverage a mixture-of-experts architecture to offer industry-leading performance in text and image understanding. Llama 4 Scout, a 17 billion parameter model with 16 experts",
         "id": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
         "input_cost": 0.1,
-        "name": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+        "name": "Llama 4 Scout 17B 16E Instruct",
         "output_cost": 0.3,
         "tags": [
           "tools",
@@ -904,6 +904,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.019,
         "context_length": 131072,
         "description": "gpt-oss-120b is an open-weight, 117B-parameter Mixture-of-Experts (MoE) language model from OpenAI designed for high-reasoning, agentic, and general-purpose production use cases. The model supports configurable reasoning depth, full chain-of-thought access, and native tool use, including function calling, browsing, and structured output generation.",
         "id": "openai/gpt-oss-120b",
@@ -930,6 +931,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.015,
         "context_length": 131072,
         "description": "gpt-oss-20b is an open-weight 21B parameter model released by OpenAI under the Apache 2.0 license. It uses a Mixture-of-Experts (MoE) architecture with 3.6B active parameters per forward pass, optimized for lower-latency inference. The model is trained in OpenAI’s Harmony response format and supports reasoning level configuration, fine-tuning, and agentic capabilities including function calling, tool use, and structured outputs.",
         "id": "openai/gpt-oss-20b",
@@ -1390,6 +1392,66 @@
         "input_cost": 1.413,
         "name": "Qwen4 Max",
         "output_cost": 4.24,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 262144,
+        "description": "DaisyRose-27B is RadixArk's multimodal reasoning model, trained from Qwen3.8-27B with reinforcement learning only on long-horizon agent tasks. It improves on the base model in agentic coding, reasoning and instruction following, with thinking that can be enabled or disabled, image understanding and a 256K-token context.",
+        "id": "RadixArk/DaisyRose-27B",
+        "input_cost": 0.2,
+        "name": "DaisyRose 27B",
+        "output_cost": 2.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.042,
+        "context_length": 1048576,
+        "description": "Hy4 is a 770B-parameter Mixture-of-Experts flagship model from the Tencent Hy Team, with 49B parameters activated per token, a 1M-token context window and image understanding. It uses Gated DeepSeek Sparse Attention with IndexCache, and improves on Hy4 preview in instruction following, long-context reasoning, long-horizon agentic tasks, computer use, coding and deep research.",
+        "id": "tencent/Hy4",
+        "input_cost": 0.834,
+        "name": "Hy4",
+        "output_cost": 2.501,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.003,
+        "context_length": 1048576,
+        "description": "Hy4 Flash is the cost-effective model from the Tencent Hy Team, with 220B total parameters (12B activated per token), text and image input and a 1M-token context window. It combines hybrid sparse and sliding-window attention, LatentMoE and Engram, and scores slightly above Hy4 preview on everyday productivity tasks.",
+        "id": "tencent/Hy4-flash",
+        "input_cost": 0.07,
+        "name": "Hy4 Flash",
+        "output_cost": 0.281,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.015,
+        "context_length": 1048576,
+        "description": "Inkling 2 Mini is a small general-purpose multimodal model from Thinking Machines Lab that accepts text and image inputs and generates text. It targets agentic and tool-use systems, coding assistants and RAG, and is the lab's first looped transformer, running its middle layers three times per token.",
+        "id": "thinkingmachines/Inkling-2-Mini",
+        "input_cost": 0.075,
+        "name": "Inkling 2 Mini",
+        "output_cost": 0.3,
         "tags": [
           "tools",
           "vision",

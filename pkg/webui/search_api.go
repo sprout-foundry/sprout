@@ -68,7 +68,7 @@ func (ws *ReactWebServer) handleAPIQuerySearch(w http.ResponseWriter, r *http.Re
 	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 
 	query := r.URL.Query().Get("query")
 	if query == "" {
@@ -111,14 +111,14 @@ func (ws *ReactWebServer) handleAPIQuerySearch(w http.ResponseWriter, r *http.Re
 	exclude := r.URL.Query().Get("exclude")
 
 	// Get ignore rules
-	ignoreRules := filediscovery.GetIgnoreRules(workspaceRoot)
+	ignoreRules := filediscovery.GetIgnoreRules(projectFolder)
 
 	// Build include/exclude patterns
 	includePatterns := parsePatterns(include)
 	excludePatterns := parsePatterns(exclude)
 
 	// Perform search
-	results, totalMatches, totalFiles, truncated, err := ws.performSearch(ctx, workspaceRoot, query, caseSensitive, wholeWord, isRegex,
+	results, totalMatches, totalFiles, truncated, err := ws.performSearch(ctx, projectFolder, query, caseSensitive, wholeWord, isRegex,
 		includePatterns, excludePatterns, maxResults, contextLines, ignoreRules)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
@@ -141,8 +141,8 @@ func (ws *ReactWebServer) handleAPIQuerySearch(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, response)
 }
 
-// performSearch performs the actual search across workspace files
-func (ws *ReactWebServer) performSearch(ctx context.Context, workspaceRoot, query string, caseSensitive, wholeWord, isRegex bool,
+// performSearch performs the actual search across project folder files
+func (ws *ReactWebServer) performSearch(ctx context.Context, projectFolder, query string, caseSensitive, wholeWord, isRegex bool,
 	includePatterns, excludePatterns []string, maxResults, contextLines int, ignoreRules *ignore.GitIgnore) (
 	[]SearchResult, int, int, bool, error) {
 
@@ -158,8 +158,8 @@ func (ws *ReactWebServer) performSearch(ctx context.Context, workspaceRoot, quer
 		return nil, 0, 0, false, fmt.Errorf("invalid search pattern: %w", err)
 	}
 
-	// Calculate the depth of the workspace root for relative depth tracking
-	rootRel, _ := filepath.Rel(workspaceRoot, workspaceRoot)
+	// Calculate the depth of the project folder for relative depth tracking
+	rootRel, _ := filepath.Rel(projectFolder, projectFolder)
 	rootDepth := strings.Count(rootRel, string(filepath.Separator))
 
 	// Ensure hard timeout is enforced on the context
@@ -169,8 +169,8 @@ func (ws *ReactWebServer) performSearch(ctx context.Context, workspaceRoot, quer
 		defer cancel()
 	}
 
-	// Walk the workspace directory
-	err = filepath.WalkDir(workspaceRoot, func(path string, d os.DirEntry, err error) error {
+	// Walk the project folder
+	err = filepath.WalkDir(projectFolder, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil // Skip inaccessible paths
 		}
@@ -187,7 +187,7 @@ func (ws *ReactWebServer) performSearch(ctx context.Context, workspaceRoot, quer
 		}
 
 		// Enforce max depth
-		relPath, _ := filepath.Rel(workspaceRoot, path)
+		relPath, _ := filepath.Rel(projectFolder, path)
 		depth := strings.Count(relPath, string(filepath.Separator)) + rootDepth
 		if d.IsDir() && depth > searchMaxDepth {
 			return filepath.SkipDir
@@ -210,7 +210,7 @@ func (ws *ReactWebServer) performSearch(ctx context.Context, workspaceRoot, quer
 
 			// Check gitignore rules
 			if ignoreRules != nil {
-				relPath, _ := filepath.Rel(workspaceRoot, path)
+				relPath, _ := filepath.Rel(projectFolder, path)
 				if ignoreRules.MatchesPath(relPath) {
 					return filepath.SkipDir
 				}
@@ -238,7 +238,7 @@ func (ws *ReactWebServer) performSearch(ctx context.Context, workspaceRoot, quer
 
 		// Check gitignore for files
 		if ignoreRules != nil {
-			relPath, _ := filepath.Rel(workspaceRoot, path)
+			relPath, _ := filepath.Rel(projectFolder, path)
 			if ignoreRules.MatchesPath(relPath) {
 				return nil
 			}
@@ -252,7 +252,7 @@ func (ws *ReactWebServer) performSearch(ctx context.Context, workspaceRoot, quer
 		}
 
 		if matchCount > 0 {
-			relPath, _ := filepath.Rel(workspaceRoot, path)
+			relPath, _ := filepath.Rel(projectFolder, path)
 			results = append(results, SearchResult{
 				File:       relPath,
 				Matches:    fileResults,

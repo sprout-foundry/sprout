@@ -76,8 +76,8 @@ func (tm *TerminalManager) resolveWindowsShell(shellOverride string) (string, []
 func (tm *TerminalManager) startPipeSession(sessionID, shell string, shellArgs []string) (*TerminalSession, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, shell, shellArgs...) //nolint:gosec // G204: the user's terminal shell, by design
-	if strings.TrimSpace(tm.workspaceRoot) != "" {
-		cmd.Dir = tm.workspaceRoot
+	if strings.TrimSpace(tm.projectFolder) != "" {
+		cmd.Dir = tm.projectFolder
 	}
 	defaultSize := &pty.Winsize{Rows: 24, Cols: 80}
 	cmd.Env = buildTerminalEnv(shell, defaultSize)

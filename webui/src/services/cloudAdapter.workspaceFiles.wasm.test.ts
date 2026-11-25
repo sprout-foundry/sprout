@@ -1,5 +1,5 @@
 /**
- * The workspace file routes against the real WASM binary: a repo imported
+ * The project folder file routes against the real WASM binary: a repo imported
  * through CloudAdapter.restoreRepo is listed, read and searched by the file
  * API at every root spelling, and the editor and the agent's shell see each
  * other's writes.
@@ -116,7 +116,7 @@ describe.skipIf(!haveBinary)('workspace file routes on the WASM binary', () => {
 
   it('reports the root the binary uses', async () => {
     expect(shell.getWorkspaceRoot()).toBe('/workspace');
-    expect(await (await adapter.fetch('/api/workspace')).json()).toMatchObject({ workspace_root: '/workspace' });
+    expect(await (await adapter.fetch('/api/project-folder')).json()).toMatchObject({ project_folder: '/workspace' });
   });
 
   it.each(ROOT_SPELLINGS)('lists the imported files at the root spelled %j', async (spelling) => {

@@ -106,7 +106,7 @@ func commandContext(chatAgent *agent.Agent) context.Context {
 
 // refreshSessionMCP applies a just-completed platform sign-in to the running
 // session's MCP servers. The login flow writes the platform's MCP server to
-// the workspace's mcp_config.json (or removes it on sign-out), but the
+// the project folder's mcp_config.json (or removes it on sign-out), but the
 // session's manager was reconciled from the config on disk at startup and has
 // no way to know the file changed underneath it. Refreshing re-reads the
 // config, starts the newly added server, drops the removed one, and clears

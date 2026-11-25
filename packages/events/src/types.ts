@@ -82,8 +82,8 @@ export interface ErrorData {
   subagent_depth?: number;
 }
 
-/** A warning that the hosting platform is about to stop the workspace. */
-export interface WorkspaceStoppingData {
+/** A warning that the hosting platform is about to stop the project folder. */
+export interface ProjectFolderStoppingData {
   /** Why: idle, max_runtime, credits, drain, user, txn_finish. */
   reason: string;
   /** RFC 3339 time the notice was issued. */
@@ -254,8 +254,8 @@ export interface FileContentChangedData {
   size?: number;
 }
 
-/** File-change notification payload from WorkspacePatchEvent (no content — see WorkspacePatchEvent). */
-export interface WorkspacePatchData {
+/** File-change notification payload from ProjectFolderPatchEvent (no content — see ProjectFolderPatchEvent). */
+export interface ProjectFolderPatchData {
   file_path: string;
   /**
    * @deprecated No longer transmitted — the event never carried content the
@@ -503,10 +503,10 @@ export interface ProgressCompleteData {
   not_verified_reason?: string;
 }
 
-export interface WorkspaceChangedData {
+export interface ProjectFolderChangedData {
   daemon_root?: string;
-  workspace_root?: string;
-  previous_workspace_root?: string;
+  project_folder?: string;
+  previous_project_folder?: string;
   client_id?: string;
   source?: string;
 }
@@ -716,8 +716,8 @@ export type WsEvent =
     }
   | { type: "error"; data?: ErrorData; id?: string; timestamp?: string }
   | {
-      type: "workspace_stopping";
-      data?: WorkspaceStoppingData;
+      type: "dev_space_stopping";
+      data?: ProjectFolderStoppingData;
       id?: string;
       timestamp?: string;
     }
@@ -795,8 +795,8 @@ export type WsEvent =
       timestamp?: string;
     }
   | {
-      type: "workspace_patch";
-      data?: WorkspacePatchData;
+      type: "project_folder_patch";
+      data?: ProjectFolderPatchData;
       id?: string;
       timestamp?: string;
     }
@@ -813,8 +813,8 @@ export type WsEvent =
       timestamp?: string;
     }
   | {
-      type: "workspace_changed";
-      data?: WorkspaceChangedData;
+      type: "project_folder_changed";
+      data?: ProjectFolderChangedData;
       id?: string;
       timestamp?: string;
     }

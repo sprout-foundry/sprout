@@ -610,22 +610,22 @@ describe('per-chat cache error lifecycle (background chats)', () => {
     expect(stateHolder.current.perChatCache['chat-1'].stats).toMatchObject({ total_tokens: 42 });
   });
 
-  it('releases a chat held back by workspace_busy when the running chat finishes in the background', () => {
+  it('releases a chat held back by project_folder_busy when the running chat finishes in the background', () => {
     const { stateHolder } = setupWithCache('chat-1', { isProcessing: true });
     stateHolder.current = {
       ...stateHolder.current,
-      workspaceBusy: { chatId: 'other-chat', runningChatId: 'chat-1', runningChatName: 'Chat 1' },
+      projectFolderBusy: { chatId: 'other-chat', runningChatId: 'chat-1', runningChatName: 'Chat 1' },
     };
 
     act(() => {
       hookHandleEvent!({ id: 'evt-sub', type: 'query_completed', data: { chat_id: 'chat-1', subagent_depth: 1 } });
     });
-    expect(stateHolder.current.workspaceBusy).not.toBeNull();
+    expect(stateHolder.current.projectFolderBusy).not.toBeNull();
 
     act(() => {
       hookHandleEvent!({ id: 'evt-done', type: 'query_completed', data: { chat_id: 'chat-1', response: 'done' } });
     });
-    expect(stateHolder.current.workspaceBusy).toBeNull();
+    expect(stateHolder.current.projectFolderBusy).toBeNull();
   });
 
   it('clears cached lastError when a background chat starts a new primary query', () => {
@@ -933,11 +933,11 @@ describe('error cause surfacing', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Tests: workspace_changed handler — in-place refresh, NOT page reload
+// Tests: project_folder_changed handler — in-place refresh, NOT page reload
 //
 // Bug: the old handler called window.location.reload() unconditionally,
 // which in service mode caused the user to land in the home directory
-// because per-client server state was re-initialised from ws.workspaceRoot
+// because per-client server state was re-initialised from ws.projectFolder
 // (home) after the reload destroyed in-memory React state.
 //
 // Fix: the handler now does an in-place refresh — LSP teardown, cache
@@ -945,10 +945,10 @@ describe('error cause surfacing', () => {
 // of a hard reload.
 // ---------------------------------------------------------------------------
 
-describe('workspace_changed', () => {
+describe('project_folder_changed', () => {
   function setup(clientId?: string) {
     const stateHolder = { current: createDefaultState() };
-    // Seed caches that should be cleared on workspace change.
+    // Seed caches that should be cleared on project folder change.
     stateHolder.current.recentLogs = ['old log entry'];
 
     const setStateMock = vi.fn((updater: unknown) => {
@@ -965,10 +965,10 @@ describe('workspace_changed', () => {
     });
 
     // Track sprout:workspace-changed DOM events.
-    const events: Array<{ workspaceRoot: string; daemonRoot: string }> = [];
+    const events: Array<{ projectFolder: string; daemonRoot: string }> = [];
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      events.push({ workspaceRoot: detail?.workspaceRoot, daemonRoot: detail?.daemonRoot });
+      events.push({ projectFolder: detail?.projectFolder, daemonRoot: detail?.daemonRoot });
     };
     window.addEventListener('sprout:workspace-changed', handler);
 
@@ -979,7 +979,7 @@ describe('workspace_changed', () => {
     vi.restoreAllMocks();
   });
 
-  it('does NOT call window.location.reload on workspace_changed', () => {
+  it('does NOT call window.location.reload on project_folder_changed', () => {
     const reloadSpy = vi.fn();
     Object.defineProperty(window, 'location', {
       value: { reload: reloadSpy },
@@ -990,8 +990,8 @@ describe('workspace_changed', () => {
     act(() => {
       hookHandleEvent!({
         id: 'e',
-        type: 'workspace_changed',
-        data: { workspace_root: '/new/path', daemon_root: '/home', client_id: 'test-client-id' },
+        type: 'project_folder_changed',
+        data: { project_folder: '/new/path', daemon_root: '/home', client_id: 'test-client-id' },
       });
     });
 
@@ -1003,13 +1003,13 @@ describe('workspace_changed', () => {
     act(() => {
       hookHandleEvent!({
         id: 'e',
-        type: 'workspace_changed',
-        data: { workspace_root: '/new/worktree', daemon_root: '/home/user', client_id: 'test-client-id' },
+        type: 'project_folder_changed',
+        data: { project_folder: '/new/worktree', daemon_root: '/home/user', client_id: 'test-client-id' },
       });
     });
 
     expect(events).toHaveLength(1);
-    expect(events[0].workspaceRoot).toBe('/new/worktree');
+    expect(events[0].projectFolder).toBe('/new/worktree');
     expect(events[0].daemonRoot).toBe('/home/user');
     cleanup();
   });
@@ -1019,8 +1019,8 @@ describe('workspace_changed', () => {
     act(() => {
       hookHandleEvent!({
         id: 'e',
-        type: 'workspace_changed',
-        data: { workspace_root: '/new/path', daemon_root: '/home', client_id: 'test-client-id' },
+        type: 'project_folder_changed',
+        data: { project_folder: '/new/path', daemon_root: '/home', client_id: 'test-client-id' },
       });
     });
 
@@ -1028,13 +1028,13 @@ describe('workspace_changed', () => {
     cleanup();
   });
 
-  it('ignores workspace_changed events for a different client_id', () => {
+  it('ignores project_folder_changed events for a different client_id', () => {
     const { events, cleanup } = setup();
     act(() => {
       hookHandleEvent!({
         id: 'e',
-        type: 'workspace_changed',
-        data: { workspace_root: '/other/path', daemon_root: '/home', client_id: 'different-client-id' },
+        type: 'project_folder_changed',
+        data: { project_folder: '/other/path', daemon_root: '/home', client_id: 'different-client-id' },
       });
     });
 
@@ -1047,13 +1047,13 @@ describe('workspace_changed', () => {
     act(() => {
       hookHandleEvent!({
         id: 'e',
-        type: 'workspace_changed',
-        data: { workspace_root: '/broadcast/path', daemon_root: '/home' },
+        type: 'project_folder_changed',
+        data: { project_folder: '/broadcast/path', daemon_root: '/home' },
       });
     });
 
     expect(events).toHaveLength(1);
-    expect(events[0].workspaceRoot).toBe('/broadcast/path');
+    expect(events[0].projectFolder).toBe('/broadcast/path');
     cleanup();
   });
 });

@@ -1,9 +1,9 @@
-import type { UseGitWorkspaceOptions, UseGitWorkspaceResult } from '../../hooks/useGitWorkspace';
+import type { UseGitProjectFolderOptions, UseGitProjectFolderResult } from '../../hooks/useGitProjectFolder';
 import type { GitCommitDetail, GitCommitSummary } from '../../types/git-types';
 import type { GitSidebarPanelProps } from '../GitSidebarPanel';
 
-/** Opens a workspace tab (a diff, a review, a compare view) and returns its buffer id. */
-export type OpenWorkspaceBuffer = UseGitWorkspaceOptions['openWorkspaceBuffer'];
+/** Opens a project folder tab (a diff, a review, a compare view) and returns its buffer id. */
+export type OpenProjectFolderBuffer = UseGitProjectFolderOptions['openProjectFolderBuffer'];
 
 /**
  * Everything the git section renders from: the working-tree panel's props
@@ -11,7 +11,7 @@ export type OpenWorkspaceBuffer = UseGitWorkspaceOptions['openWorkspaceBuffer'];
  * for commit diffs.
  */
 export interface SidebarGitPanelProps extends GitSidebarPanelProps {
-  openWorkspaceBuffer: OpenWorkspaceBuffer;
+  openProjectFolderBuffer: OpenProjectFolderBuffer;
   onLoadCommits: (
     limit: number,
     offset: number,
@@ -35,23 +35,23 @@ export interface SidebarGitPanelProps extends GitSidebarPanelProps {
 }
 
 export interface GitPanelPropsExtras {
-  openWorkspaceBuffer: OpenWorkspaceBuffer;
+  openProjectFolderBuffer: OpenProjectFolderBuffer;
   onOpenFile?: (path: string) => void;
 }
 
 /**
- * Map the git workspace state (`useGitWorkspace`) onto the git section's
- * props. The app's sidebar and the composed workspace's `git` view both build
+ * Map the git project folder state (`useGitProjectFolder`) onto the git section's
+ * props. The app's sidebar and the composed project folder's `git` view both build
  * their panel through it, so the two cannot drift apart.
  */
 export function buildGitPanelProps(
-  git: UseGitWorkspaceResult,
-  { openWorkspaceBuffer, onOpenFile }: GitPanelPropsExtras,
+  git: UseGitProjectFolderResult,
+  { openProjectFolderBuffer, onOpenFile }: GitPanelPropsExtras,
 ): SidebarGitPanelProps {
   return {
     gitStatus: git.gitStatus,
     gitBranches: git.gitBranches,
-    workspaceRoot: git.workspaceRoot,
+    projectFolder: git.projectFolder,
     selectedFiles: git.selectedFiles,
     activeDiffSelectionKey: git.activeDiffSelectionKey,
     commitMessage: git.commitMessage,
@@ -89,6 +89,6 @@ export function buildGitPanelProps(
     onLoadCommitFileDiff: git.handleLoadCommitFileDiff,
     onCheckoutCommit: git.handleCheckoutCommit,
     onRevertCommit: git.handleRevertCommit,
-    openWorkspaceBuffer,
+    openProjectFolderBuffer,
   };
 }

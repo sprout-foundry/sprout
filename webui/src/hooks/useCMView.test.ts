@@ -108,7 +108,7 @@ interface RenderResult {
     bufferRef: React.MutableRefObject<any>;
     languageId: string | null;
     handleSaveRef: React.MutableRefObject<() => Promise<void>>;
-    openWorkspaceBufferRef: React.MutableRefObject<any>;
+    openProjectFolderBufferRef: React.MutableRefObject<any>;
     onUpdateRef: React.MutableRefObject<(u: any) => void>;
     settingsRef: React.MutableRefObject<CMViewSettings | null>;
     keymapsRef: React.MutableRefObject<any>;
@@ -134,7 +134,7 @@ function render(opts: Partial<RenderResult['args']> = {}) {
   const handleSaveRef: React.MutableRefObject<() => Promise<void>> = {
     current: async () => {},
   };
-  const openWorkspaceBufferRef: React.MutableRefObject<any> = {
+  const openProjectFolderBufferRef: React.MutableRefObject<any> = {
     current: vi.fn(),
   };
   const onUpdateRef: React.MutableRefObject<(u: any) => void> = {
@@ -170,7 +170,7 @@ function render(opts: Partial<RenderResult['args']> = {}) {
       bufferRef,
       languageId: opts.languageId ?? 'typescript',
       handleSaveRef,
-      openWorkspaceBufferRef,
+      openProjectFolderBufferRef,
       onUpdateRef,
       settingsRef,
       keymapsRef,
@@ -197,7 +197,7 @@ function render(opts: Partial<RenderResult['args']> = {}) {
       bufferRef,
       languageId: opts.languageId ?? 'typescript',
       handleSaveRef,
-      openWorkspaceBufferRef,
+      openProjectFolderBufferRef,
       onUpdateRef,
       settingsRef,
       keymapsRef,
@@ -474,14 +474,14 @@ describe('useCMView — bug-class regression', () => {
     expect(api.getContent()).toBe('new content');
   });
 
-  it('LSP-style callback fired after mount reads latest openWorkspaceBufferRef', () => {
-    const openWorkspaceBufferV1 = vi.fn();
-    const openWorkspaceBufferV2 = vi.fn();
-    const openWorkspaceBufferRef: React.MutableRefObject<any> = {
-      current: openWorkspaceBufferV1,
+  it('LSP-style callback fired after mount reads latest openProjectFolderBufferRef', () => {
+    const openProjectFolderBufferV1 = vi.fn();
+    const openProjectFolderBufferV2 = vi.fn();
+    const openProjectFolderBufferRef: React.MutableRefObject<any> = {
+      current: openProjectFolderBufferV1,
     };
 
-    let getOpenWorkspaceBuffer: (() => any) | null = null;
+    let getOpenProjectFolderBuffer: (() => any) | null = null;
     let displayFileCallback: ((filePath: string) => void) | null = null;
     let api: CMViewAPI | null = null;
 
@@ -490,7 +490,7 @@ describe('useCMView — bug-class regression', () => {
       // This is the same stable action captured by CodeMirror/LSP extensions
       // when the view is built. It must resolve the ref lazily when the
       // registered callback eventually fires.
-      getOpenWorkspaceBuffer = opts.actions.getOpenWorkspaceBuffer;
+      getOpenProjectFolderBuffer = opts.actions.getOpenProjectFolderBuffer;
       return [EditorView.editable.of(true), compartments.hotkeys.of([]), ...(opts.extraKeymaps ?? [])];
     });
     const editorRef: React.RefObject<HTMLDivElement | null> = { current: container };
@@ -526,7 +526,7 @@ describe('useCMView — bug-class regression', () => {
         const fileName = filePath.split('/').pop() || filePath;
         const dotIndex = fileName.lastIndexOf('.');
         const ext = dotIndex >= 0 ? fileName.slice(dotIndex) : undefined;
-        getOpenWorkspaceBuffer!()({
+        getOpenProjectFolderBuffer!()({
           kind: 'file',
           path: filePath,
           title: fileName,
@@ -535,11 +535,11 @@ describe('useCMView — bug-class regression', () => {
       };
     });
 
-    function Wrapper({ openWorkspaceBuffer }: { openWorkspaceBuffer: (request: any) => void }) {
+    function Wrapper({ openProjectFolderBuffer }: { openProjectFolderBuffer: (request: any) => void }) {
       // EditorPane performs this assignment during every render. The
       // CodeMirror extension itself remains mounted with the getter captured
       // during the first render.
-      openWorkspaceBufferRef.current = openWorkspaceBuffer;
+      openProjectFolderBufferRef.current = openProjectFolderBuffer;
       api = useCMView({
         paneId: 'pane-1',
         editorRef,
@@ -547,7 +547,7 @@ describe('useCMView — bug-class regression', () => {
         bufferRef,
         languageId: 'typescript',
         handleSaveRef,
-        openWorkspaceBufferRef,
+        openProjectFolderBufferRef,
         onUpdateRef,
         settingsRef,
         keymapsRef,
@@ -561,14 +561,14 @@ describe('useCMView — bug-class regression', () => {
     }
 
     act(() => {
-      root.render(createElement(Wrapper, { openWorkspaceBuffer: openWorkspaceBufferV1 }));
+      root.render(createElement(Wrapper, { openProjectFolderBuffer: openProjectFolderBufferV1 }));
     });
     const viewAtMount = api!.view;
     expect(viewAtMount).not.toBeNull();
     expect(onDidMount).toHaveBeenCalledTimes(1);
 
     act(() => {
-      root.render(createElement(Wrapper, { openWorkspaceBuffer: openWorkspaceBufferV2 }));
+      root.render(createElement(Wrapper, { openProjectFolderBuffer: openProjectFolderBufferV2 }));
     });
 
     // The callback identity change is not a view-lifecycle input. The callback
@@ -578,9 +578,9 @@ describe('useCMView — bug-class regression', () => {
 
     displayFileCallback!('/workspace/new-file.ts');
 
-    expect(openWorkspaceBufferV1).not.toHaveBeenCalled();
-    expect(openWorkspaceBufferV2).toHaveBeenCalledTimes(1);
-    expect(openWorkspaceBufferV2).toHaveBeenCalledWith({
+    expect(openProjectFolderBufferV1).not.toHaveBeenCalled();
+    expect(openProjectFolderBufferV2).toHaveBeenCalledTimes(1);
+    expect(openProjectFolderBufferV2).toHaveBeenCalledWith({
       kind: 'file',
       path: '/workspace/new-file.ts',
       title: 'new-file.ts',

@@ -1,6 +1,6 @@
 //go:build !js
 
-// preview_origin.go serves workspace files to the HTML preview iframe from a
+// preview_origin.go serves project folder files to the HTML preview iframe from a
 // dedicated loopback listener with its own origin.
 //
 // Why a second origin: the preview document runs untrusted HTML (a downloaded
@@ -12,13 +12,13 @@
 //
 // The listener serves exactly two things:
 //
-//	/__preview/<token>/<workspace-relative-path>  the file, with its MIME type
+//	/__preview/<token>/<project-folder-relative-path>  the file, with its MIME type
 //	/__preview/<token>/__sprout_preview_status    readiness probe
 //
-// Every path is resolved through canonicalizePath against the workspace root,
+// Every path is resolved through canonicalizePath against the project folder,
 // so traversal and symlink escapes are rejected the same way /api/file rejects
 // them. The token is minted per preview open and expires, so a stale URL in a
-// browser history cannot re-read the workspace.
+// browser history cannot re-read the project folder.
 package webui
 
 import (
@@ -80,7 +80,7 @@ func newPreviewOrigin() *previewOrigin {
 	return &previewOrigin{tokens: make(map[string]previewToken)}
 }
 
-// mintToken issues a fresh preview token for a workspace root and returns it.
+// mintToken issues a fresh preview token for a project folder and returns it.
 func (p *previewOrigin) mintToken() (string, error) {
 	buf := make([]byte, 16)
 	if _, err := rand.Read(buf); err != nil {
@@ -114,7 +114,7 @@ func (p *previewOrigin) validToken(token string) bool {
 // start binds the preview listener on loopback and begins serving. It is a
 // no-op when already started. A bind failure is returned to the caller, which
 // degrades the preview to srcDoc rather than failing the whole server.
-func (p *previewOrigin) start(workspaceRoot string) error {
+func (p *previewOrigin) start(projectFolder string) error {
 	p.mu.Lock()
 	if p.started {
 		p.mu.Unlock()
@@ -129,11 +129,11 @@ func (p *previewOrigin) start(workspaceRoot string) error {
 
 	p.mu.Lock()
 	// Resolve the root the same way canonicalizePath resolves request paths
-	// (EvalSymlinks), so isWithinWorkspace compares like with like. On macOS a
+	// (EvalSymlinks), so isWithinProjectFolder compares like with like. On macOS a
 	// temp dir is /var/... while its resolved form is /private/var/..., and an
 	// unresolved root would reject every file under it.
-	resolvedRoot := workspaceRoot
-	if resolved, err := filepath.EvalSymlinks(workspaceRoot); err == nil {
+	resolvedRoot := projectFolder
+	if resolved, err := filepath.EvalSymlinks(projectFolder); err == nil {
 		resolvedRoot = resolved
 	}
 	p.root = resolvedRoot
@@ -217,8 +217,8 @@ func (p *previewOrigin) handler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		if !isWithinWorkspace(canonical, root) {
-			http.Error(w, "path outside workspace", http.StatusForbidden)
+		if !isWithinProjectFolder(canonical, root) {
+			http.Error(w, "path outside project folder", http.StatusForbidden)
 			return
 		}
 
@@ -228,7 +228,7 @@ func (p *previewOrigin) handler() http.Handler {
 			return
 		}
 
-		content, err := os.ReadFile(canonical) //nolint:gosec // G304: canonical, workspace-verified path
+		content, err := os.ReadFile(canonical) //nolint:gosec // G304: canonical, project-folder-verified path
 		if err != nil {
 			http.Error(w, "failed to read file", http.StatusInternalServerError)
 			return
@@ -239,10 +239,10 @@ func (p *previewOrigin) handler() http.Handler {
 		if r.Method == http.MethodHead {
 			return
 		}
-		// The bytes are a workspace file served with an explicit Content-Type
+		// The bytes are a project folder file served with an explicit Content-Type
 		// and nosniff, from an origin whose CSP confines it — this is the
 		// documented purpose of the endpoint, not an injection sink.
-		_, _ = w.Write(content) //nolint:gosec // G705: serving workspace files is the endpoint's purpose
+		_, _ = w.Write(content) //nolint:gosec // G705: serving project folder files is the endpoint's purpose
 	})
 }
 
@@ -275,7 +275,7 @@ func previewContentType(path string, content []byte) string {
 	return "application/octet-stream"
 }
 
-// previewURLFor builds the URL the iframe loads for a workspace-relative path.
+// previewURLFor builds the URL the iframe loads for a project-folder-relative path.
 // The token is compared in constant time by validToken's map lookup, so no
 // extra comparison is needed here.
 func (p *previewOrigin) previewURLFor(token, relPath string) string {

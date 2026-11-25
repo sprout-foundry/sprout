@@ -40,7 +40,7 @@ type subagentLaunchSpec struct {
 	outputFormat          string
 	systemPromptText      string
 	enhancedPrompt        string
-	subagentWorkspaceRoot string
+	subagentProjectFolder string
 	// maxIterations and timeout override the persona's run budget for this
 	// spawn (the `max_iterations` and `timeout_seconds` arguments). Zero
 	// means "use the persona's budget".
@@ -49,7 +49,7 @@ type subagentLaunchSpec struct {
 }
 
 // prepareSubagentLaunch parses the raw args map, validates paths and
-// workspace access, resolves the persona's provider/model, loads any
+// project folder access, resolves the persona's provider/model, loads any
 // system prompt file, and builds the enhanced prompt with context +
 // file contents. Returns a subagentLaunchSpec ready for dispatch.
 func prepareSubagentLaunch(ctx context.Context, a *Agent, args map[string]interface{}) (*subagentLaunchSpec, error) {
@@ -131,33 +131,33 @@ func prepareSubagentLaunch(ctx context.Context, a *Agent, args map[string]interf
 		return nil, err
 	}
 
-	// --- Resolve workspace root ---
-	absWorkspaceDir, err := filepath.Abs(a.currentWorkspaceRoot())
+	// --- Resolve project folder ---
+	absProjectFolderDir, err := filepath.Abs(a.currentProjectFolder())
 	if err != nil {
-		return nil, agenterrors.NewConfig("failed to resolve absolute workspace path", err)
+		return nil, agenterrors.NewConfig("failed to resolve absolute project folder path", err)
 	}
 
 	// --- Validate file paths ---
-	absFilePaths, outsidePaths, err := validateFilePaths(spec.files, absWorkspaceDir, a)
+	absFilePaths, outsidePaths, err := validateFilePaths(spec.files, absProjectFolderDir, a)
 	if err != nil {
 		return nil, err
 	}
 
-	// --- Approve external workspace access if needed ---
-	spec.subagentWorkspaceRoot = absWorkspaceDir
+	// --- Approve external project folder access if needed ---
+	spec.subagentProjectFolder = absProjectFolderDir
 	if len(outsidePaths) > 0 {
-		spec.subagentWorkspaceRoot, err = approveExternalWorkspace(a, outsidePaths, absFilePaths)
+		spec.subagentProjectFolder, err = approveExternalProjectFolder(a, outsidePaths, absFilePaths)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	// --- Override workspace root with working_dir if specified ---
-	spec.subagentWorkspaceRoot = overrideWorkspaceRoot(spec.subagentWorkspaceRoot, spec.workingDir, absFilePaths, a)
+	// --- Override project folder with working_dir if specified ---
+	spec.subagentProjectFolder = overrideProjectFolder(spec.subagentProjectFolder, spec.workingDir, absFilePaths, a)
 
 	// --- Build enhanced prompt ---
 	// --- Resolve provider/model ---
-	spec.provider, spec.model, spec.role, spec.systemPromptText, err = resolveSubagentProviderModel(a, spec.persona, spec.personaExplicitlyProvided, spec.subagentWorkspaceRoot)
+	spec.provider, spec.model, spec.role, spec.systemPromptText, err = resolveSubagentProviderModel(a, spec.persona, spec.personaExplicitlyProvided, spec.subagentProjectFolder)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +172,7 @@ func prepareSubagentLaunch(ctx context.Context, a *Agent, args map[string]interf
 			return nil, err
 		}
 		budget := changeContextBudgetFor(a.subagentContextWindow(spec.provider, spec.model))
-		spec.enhancedPrompt = buildReviewerChangeContext(ctx, spec.subagentWorkspaceRoot, budget) + spec.enhancedPrompt
+		spec.enhancedPrompt = buildReviewerChangeContext(ctx, spec.subagentProjectFolder, budget) + spec.enhancedPrompt
 	} else {
 		spec.enhancedPrompt, err = buildEnhancedPrompt(ctx, spec.prompt, spec.context, spec.files, a)
 		if err != nil {
@@ -230,7 +230,7 @@ func validateWorkingDir(workingDir string, a *Agent) (string, error) {
 	if err != nil {
 		return "", agenterrors.NewConfig("failed to resolve home directory symlinks", err)
 	}
-	if !isPathInWorkspace(resolvedWorkingDir, resolvedHome) {
+	if !isPathInProjectFolder(resolvedWorkingDir, resolvedHome) {
 		return "", agenterrors.NewPermission(fmt.Sprintf("working_dir resolves outside $HOME via symlink: %s -> %s", absWorkingDir, resolvedWorkingDir), nil)
 	}
 

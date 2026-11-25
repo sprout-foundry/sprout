@@ -10,16 +10,16 @@ import { ApiService } from '../services/api';
 import { getStoredToken } from '../services/githubService';
 import { searchForRepo } from '../services/homeView';
 import { gitCorsProxy } from '../services/gitCorsProxy';
-import { cloneIntoWorkspace } from '../services/workspaceClone';
-import { useWorkspaceCwd, setWorkspaceCwd } from '../services/workspaceCwd';
-import { getWorkspaceFs, listWorkspaceRepos } from '../services/workspaceFs/backendsExport';
-import type { FsEntry } from '../services/workspaceFs/types';
-import { parseRepoRef, repoDir } from '../services/workspaceFs/workspaceGit';
+import { cloneIntoProjectFolder } from '../services/projectFolderClone';
+import { useProjectFolderCwd, setProjectFolderCwd } from '../services/projectFolderCwd';
+import { getProjectFolderFs, listProjectFolderRepos } from '../services/projectFolderFs/backendsExport';
+import type { FsEntry } from '../services/projectFolderFs/types';
+import { parseRepoRef, repoDir } from '../services/projectFolderFs/projectFolderGit';
 import { repoSlug } from '../host/repoName';
-import { useWorkspaceFileTree } from '../views/useWorkspaceFileTree';
+import { useProjectFolderFileTree } from '../views/useProjectFolderFileTree';
 import GitHubRepoPicker from './GitHubRepoPicker';
 import { showThemedAlert, showThemedPrompt } from './ThemedDialog';
-import WorkspaceCwdBar from './WorkspaceCwdBar';
+import ProjectFolderCwdBar from './ProjectFolderCwdBar';
 
 export interface FileTreeHandle {
   refresh: (options?: FileTreeRefreshOptions) => void;
@@ -34,7 +34,7 @@ export interface FileTreeHandle {
  */
 async function findClonedReadme(repoDir: string): Promise<string | undefined> {
   try {
-    const fs = await getWorkspaceFs();
+    const fs = await getProjectFolderFs();
     const listing = await fs.list(repoDir, 1);
     if (!listing.ok) return undefined;
     const readme = listing.files.find(
@@ -48,13 +48,13 @@ async function findClonedReadme(repoDir: string): Promise<string | undefined> {
 
 interface SidebarFilesSectionProps {
   onFileClick?: (filePath: string, lineNumber?: number) => void;
-  workspaceRoot?: string;
+  projectFolder?: string;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
 
 const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>(
-  ({ onFileClick, workspaceRoot }, ref) => {
+  ({ onFileClick, projectFolder }, ref) => {
     const fileTreeRef = useRef<FileTreeHandle | null>(null);
     // Files the agent or a shell command creates or deletes show up without
     // a manual refresh; in place, so the tree doesn't flash.
@@ -74,22 +74,26 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
     const { localTerminal } = useHostCapabilities();
 
     // ── Working directory (session-level cwd) ─────────────────────
-    // Shared with the terminal / git / agent surfaces via the workspaceCwd
-    // external store. '' = workspace root → the tree roots at '.' exactly as
+    // Shared with the terminal / git / agent surfaces via the projectFolderCwd
+    // external store. '' = project folder → the tree roots at '.' exactly as
     // before (byte-identical default-build behavior).
-    const cwd = useWorkspaceCwd();
+    const cwd = useProjectFolderCwd();
     const treeRoot = cwd === '' ? '.' : cwd;
     const handleFileSelect = useCallback((file: FileInfo) => onFileClick?.(file.path), [onFileClick]);
-    const treeProps = useWorkspaceFileTree({ rootPath: treeRoot, workspaceRoot, onFileSelect: handleFileSelect });
+    const treeProps = useProjectFolderFileTree({
+      rootPath: treeRoot,
+      projectFolder,
+      onFileSelect: handleFileSelect,
+    });
 
     // Repos available for the cwd selector (repos/<owner>/<name>). Fetched
-    // through the same workspaceFs seam the clone flow uses; failures degrade
+    // through the same projectFolderFs seam the clone flow uses; failures degrade
     // to an empty list (the selector still offers the root). Re-fetchable via
     // refreshRepos so a freshly cloned repo appears in the selector without a
     // remount.
     const [repos, setRepos] = useState<string[]>([]);
     const refreshRepos = useCallback(() => {
-      listWorkspaceRepos()
+      listProjectFolderRepos()
         .then((list) => setRepos(list))
         .catch(() => {
           // No repos/ yet (or the backend is unreachable): keep [].
@@ -97,8 +101,8 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
     }, []);
 
     // The cwd row is shell-scoped: the studio shell is a single native
-    // workspace (the gate modal picks it, the shell owns the root), so the
-    // select is the only cwd surface. On the plain webui the workspace root
+    // project folder (the gate modal picks it, the shell owns the root), so the
+    // select is the only cwd surface. On the plain webui the project folder
     // is fixed for the daemon's lifetime and the sidebar header's
     // LocationSwitcher already shows it — a second selector here is noise.
     // Starts from the boot-time identity (index.tsx sets data-shell before
@@ -111,7 +115,7 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
     }, []);
 
     // Only the studio shell shows the repo selector; elsewhere the list has
-    // no reader, and a workspace without repos/ answers with an error.
+    // no reader, and a project folder without repos/ answers with an error.
     useEffect(() => {
       if (isStudioShell) refreshRepos();
     }, [isStudioShell, refreshRepos]);
@@ -126,7 +130,7 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
       if (repos.length === 0) return; // list not loaded yet — nothing to compare
       const isKnownRepo = repos.some((repo) => repoDir(repo) === cwd);
       if (!isKnownRepo) {
-        setWorkspaceCwd('');
+        setProjectFolderCwd('');
       }
     }, [cwd, repos]);
 
@@ -250,9 +254,9 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
 
       try {
         // A real clone (through the platform's git proxy) rather than a file
-        // dump: the workspace gets history, the origin remote and branches, so
+        // dump: the project folder gets history, the origin remote and branches, so
         // git status, commit and push work on it.
-        const result = await cloneIntoWorkspace(url);
+        const result = await cloneIntoProjectFolder(url);
         setActiveRepoURL(url);
         refreshRepos();
         setTimeout(() => {
@@ -268,7 +272,7 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
       }
     };
 
-    // "Add repo" trigger for the workspace row. Clone is a hosted capability
+    // "Add repo" trigger for the project folder row. Clone is a hosted capability
     // (the host holds one repository per page); local builds manage files on
     // disk. Studio dists clone via the GitHub account panel / device-flow
     // sign-in surface; the layered layout opens repositories from its
@@ -295,7 +299,7 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
                 </span>
                 <div className="repo-import-text">
                   <strong>{importRepoName} ready</strong>
-                  <span>Files loaded into browser workspace</span>
+                  <span>Files loaded into the browser</span>
                 </div>
               </>
             )}
@@ -345,17 +349,17 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
         />
         {/* Working-directory row. STUDIO: full row — the select is the
             single source of truth for the session cwd (Files / Terminal /
-            Git / Agent share it via services/workspaceCwd.ts); a cwd inside
+            Git / Agent share it via services/projectFolderCwd.ts); a cwd inside
             a repo shows as a dynamic "owner/name › sub/path" option instead
             of the select silently claiming the root. PLAIN WEBUI: selector
             hidden (root is fixed for the daemon's lifetime; LocationSwitcher
             already names it) but the row stays for the "+ add repo" clone
             button — this is the only clone affordance in the Files panel. */}
-        <WorkspaceCwdBar
+        <ProjectFolderCwdBar
           cwd={cwd}
           repos={repos}
           showSelector={isStudioShell}
-          onChange={setWorkspaceCwd}
+          onChange={setProjectFolderCwd}
           onAddRepo={cloneTrigger ? () => void cloneTrigger() : undefined}
           addRepoDisabled={importStatus === 'loading'}
         />

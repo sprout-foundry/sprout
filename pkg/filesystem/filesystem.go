@@ -23,16 +23,16 @@ import (
 // This is a local definition to avoid import cycles - the fields must match
 // pkg/agent_tools.AuditEntry for compatibility.
 type AuditEntry struct {
-	Timestamp time.Time `json:"timestamp"`
-	Tool      string    `json:"tool"`
-	Args      string    `json:"args,omitempty"`
-	RiskLevel string    `json:"risk_level"`
-	Category  string    `json:"category"`
-	Action    string    `json:"action"`
-	Reasoning string    `json:"reasoning,omitempty"`
-	Source    string    `json:"source,omitempty"`
-	SessionID string    `json:"session_id,omitempty"`
-	Workspace string    `json:"workspace,omitempty"`
+	Timestamp     time.Time `json:"timestamp"`
+	Tool          string    `json:"tool"`
+	Args          string    `json:"args,omitempty"`
+	RiskLevel     string    `json:"risk_level"`
+	Category      string    `json:"category"`
+	Action        string    `json:"action"`
+	Reasoning     string    `json:"reasoning,omitempty"`
+	Source        string    `json:"source,omitempty"`
+	SessionID     string    `json:"session_id,omitempty"`
+	ProjectFolder string    `json:"workspace,omitempty"`
 }
 
 // ErrOutsideWorkingDirectory is returned when a path is outside the working directory

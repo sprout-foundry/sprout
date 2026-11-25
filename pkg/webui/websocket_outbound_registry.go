@@ -84,7 +84,7 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	events.EventTypeDelegateClarificationResponded: {},
 	events.EventTypeTodoUpdate:                     {},
 	events.EventTypeFileChanged:                    {},
-	events.EventTypeWorkspacePatch:                 {},
+	events.EventTypeProjectFolderPatch:             {},
 	events.EventTypeFileContentChanged:             {},
 	events.EventTypeStreamChunk:                    {},
 	events.EventTypeMetricsUpdate:                  {},
@@ -97,9 +97,9 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	events.EventTypeInputRequired:                  {},
 	events.EventTypeAgentMessage:                   {},
 	events.EventTypeProviderNoCredential:           {},
-	events.EventTypeWorkspaceChanged:               {},
+	events.EventTypeProjectFolderChanged:           {},
 	events.EventTypeSessionTerminated:              {},
-	events.EventTypeWorkspaceStopping:              {},
+	events.EventTypeDevSpaceStopping:               {},
 	events.EventTypeSessionChanged:                 {}, // SP-034-3e
 	events.EventTypeCompactStarted:                 {},
 	events.EventTypeCompactCompleted:               {},
@@ -112,7 +112,7 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	events.EventTypeProgressVerification: {},
 	events.EventTypeProgressComplete:     {},
 
-	// Cold hydration (SP-046) — server streams workspace files on first-load
+	// Cold hydration (SP-046) — server streams project folder files on first-load
 	AllowedMessageTypeHydrateManifest: {},
 	AllowedMessageTypeHydrateFile:     {},
 	AllowedMessageTypeHydrateComplete: {},

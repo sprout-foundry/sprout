@@ -36,7 +36,7 @@ func newScriptedStreamDaemonAgent(t *testing.T, workDir string, chunks []string)
 	if err != nil {
 		return nil, err
 	}
-	a.SetWorkspaceRoot(workDir)
+	a.SetProjectFolder(workDir)
 	return a, nil
 }
 

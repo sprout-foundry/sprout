@@ -757,7 +757,7 @@ describe('CommandPalette file folders', () => {
           onClose: vi.fn(),
           onOpenFile: vi.fn(),
           initialMode: 'files',
-          workspaceRoot: '/workspace',
+          projectFolder: '/workspace',
           recentFiles: [
             { name: 'oauth.go', path: '/workspace/oauth.go', type: 'file' },
             { name: 'flow.go', path: '/workspace/device/flow.go', type: 'file' },

@@ -1,0 +1,287 @@
+package agent
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+// TestCommonParent verifies the commonParent helper function correctly
+// finds the common parent directory of multiple file paths
+func TestCommonParent(t *testing.T) {
+	tests := []struct {
+		name     string
+		paths    []string
+		expected string
+	}{
+		{
+			name:     "single path",
+			paths:    []string{"/home/user/project/file.go"},
+			expected: "/home/user/project",
+		},
+		{
+			name:     "same directory",
+			paths:    []string{"/home/user/project/file1.go", "/home/user/project/file2.go"},
+			expected: "/home/user/project",
+		},
+		{
+			name:     "same parent directory",
+			paths:    []string{"/home/user/project/pkg/file.go", "/home/user/project/cmd/main.go"},
+			expected: "/home/user/project",
+		},
+		{
+			name:     "different depths",
+			paths:    []string{"/home/user/project/pkg/sub/file.go", "/home/user/project/cmd/main.go"},
+			expected: "/home/user/project",
+		},
+		{
+			name:     "root level",
+			paths:    []string{"/home/user/file1.go", "/opt/file2.go"},
+			expected: "/",
+		},
+		{
+			name:     "empty list",
+			paths:    []string{},
+			expected: "",
+		},
+		{
+			name:     "relative paths",
+			paths:    []string{"./pkg/file.go", "./cmd/main.go"},
+			expected: ".",
+		},
+		{
+			name:     "deep nesting",
+			paths:    []string{"/home/user/project/pkg/sub1/sub2/file.go", "/home/user/project/cmd/main.go"},
+			expected: "/home/user/project",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := commonParent(fromSlashAll(tt.paths))
+			if result != filepath.FromSlash(tt.expected) {
+				t.Errorf("commonParent(%v) = %q, want %q", tt.paths, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestIsPathInProjectFolder verifies the path-in-project-folder check works correctly
+func TestIsPathInProjectFolder(t *testing.T) {
+	projectFolderDir := "/home/user/project"
+
+	tests := []struct {
+		name          string
+		path          string
+		projectFolder string
+		expected      bool
+	}{
+		{
+			name:          "file in project folder",
+			path:          "/home/user/project/pkg/file.go",
+			projectFolder: projectFolderDir,
+			expected:      true,
+		},
+		{
+			name:          "file directly in project folder",
+			path:          "/home/user/project/file.go",
+			projectFolder: projectFolderDir,
+			expected:      true,
+		},
+		{
+			name:          "deep nested file in project folder",
+			path:          "/home/user/project/pkg/sub1/sub2/file.go",
+			projectFolder: projectFolderDir,
+			expected:      true,
+		},
+		{
+			name:          "file outside project folder (different project)",
+			path:          "/home/user/other-project/file.go",
+			projectFolder: projectFolderDir,
+			expected:      false,
+		},
+		{
+			name:          "file outside project folder (different user)",
+			path:          "/home/other-user/project/file.go",
+			projectFolder: projectFolderDir,
+			expected:      false,
+		},
+		{
+			name:          "file outside project folder (system path)",
+			path:          "/usr/local/bin/file",
+			projectFolder: projectFolderDir,
+			expected:      false,
+		},
+		{
+			name:          "project folder itself",
+			path:          "/home/user/project",
+			projectFolder: projectFolderDir,
+			expected:      true,
+		},
+		{
+			name:          "file in subdirectory of project folder with same prefix",
+			path:          "/home/user/project-2/file.go",
+			projectFolder: projectFolderDir,
+			expected:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isPathInProjectFolder(filepath.FromSlash(tt.path), filepath.FromSlash(tt.projectFolder))
+			if result != tt.expected {
+				t.Errorf("isPathInProjectFolder(%q, %q) = %v, want %v", tt.path, tt.projectFolder, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestIsPathInTmp verifies the /tmp detection works correctly
+func TestIsPathInTmp(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		expected bool
+	}{
+		{
+			name:     "file in /tmp",
+			path:     "/tmp/file.txt",
+			expected: true,
+		},
+		{
+			name:     "file in subdirectory of /tmp",
+			path:     "/tmp/sprout/file.txt",
+			expected: true,
+		},
+		{
+			name:     "file in /tmp with deep nesting",
+			path:     "/tmp/sprout/sub1/sub2/file.txt",
+			expected: true,
+		},
+		{
+			name:     "file in project folder",
+			path:     "/home/user/project/file.go",
+			expected: false,
+		},
+		{
+			name:     "file in system directory",
+			path:     "/usr/local/bin/file",
+			expected: false,
+		},
+		{
+			name:     "file in home directory",
+			path:     "/home/user/.config/file",
+			expected: false,
+		},
+		{
+			name:     "file path containing tmp but not in /tmp",
+			path:     "/home/user/tmp-files/file.txt",
+			expected: false,
+		},
+		{
+			name:     "macOS temp directory pattern",
+			path:     "/var/folders/xx/xxxxxxxxxx/T/file.txt",
+			expected: false, // Pattern matches /var/folders/.../T/, not the exact structure
+		},
+		{
+			name:     "exact macOS temp path",
+			path:     "/var/folders/.../T/",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isPathInTmp(tt.path)
+			if result != tt.expected {
+				t.Errorf("isPathInTmp(%q) = %v, want %v", tt.path, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestCommonParentWithMixedPaths tests edge cases for commonParent
+func TestCommonParentWithMixedPaths(t *testing.T) {
+	tests := []struct {
+		name     string
+		paths    []string
+		expected string
+	}{
+		{
+			name:     "paths with clean/unclean versions",
+			paths:    []string{"/home/user/project/./file.go", "/home/user/project/pkg/file.go"},
+			expected: "/home/user/project",
+		},
+		{
+			name:     "three paths from different subdirs",
+			paths:    []string{"/a/b/c/d/file1.go", "/a/b/c/e/file2.go", "/a/b/c/f/file3.go"},
+			expected: "/a/b/c",
+		},
+		{
+			name:     "paths that converge at root",
+			paths:    []string{"/a/b/file.go", "/c/d/file.go"},
+			expected: "/",
+		},
+		{
+			name:     "Windows-style separators on Unix (treated as part of name)",
+			paths:    []string{"/home/user/project/file.go"},
+			expected: "/home/user/project",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := commonParent(fromSlashAll(tt.paths))
+			if result != filepath.FromSlash(tt.expected) {
+				t.Errorf("commonParent(%v) = %q, want %q", tt.paths, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestCommonParentBehavior tests commonParent behavior with filepath.Clean
+func TestCommonParentBehavior(t *testing.T) {
+	// This test verifies that commonParent works correctly with filepath.Clean
+	// which is what handleRunSubagent uses before calling commonParent
+
+	paths := []string{
+		"/home/user/project/pkg/sub1/file.go",
+		"/home/user/project/pkg/sub2/file.go",
+		"/home/user/project/cmd/main.go",
+	}
+
+	// Clean all paths first (as handleRunSubagent does)
+	cleanedPaths := make([]string, len(paths))
+	for i, path := range paths {
+		cleanedPaths[i] = filepath.Clean(filepath.FromSlash(path))
+	}
+
+	result := commonParent(cleanedPaths)
+	expected := filepath.FromSlash("/home/user/project")
+
+	if result != expected {
+		t.Errorf("commonParent(cleaned paths) = %q, want %q", result, expected)
+	}
+}
+
+func fromSlashAll(paths []string) []string {
+	out := make([]string, len(paths))
+	for i, p := range paths {
+		out[i] = filepath.FromSlash(p)
+	}
+	return out
+}
+
+func TestIsPathInProjectFolder_VolumeRootAndOSTemp(t *testing.T) {
+	root := filepath.VolumeName(os.TempDir()) + string(filepath.Separator)
+	inside := filepath.Join(os.TempDir(), "sprout", "file.go")
+	if !isPathInProjectFolder(inside, root) {
+		t.Errorf("isPathInProjectFolder(%q, %q) = false, want true", inside, root)
+	}
+	if !isPathInTmp(inside) {
+		t.Errorf("isPathInTmp(%q) = false, want true", inside)
+	}
+	if got := commonParent([]string{inside, filepath.Join(root, "other", "x.go")}); got != root {
+		t.Errorf("commonParent at volume root = %q, want %q", got, root)
+	}
+}

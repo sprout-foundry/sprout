@@ -108,7 +108,7 @@ const (
 func runShellCommandWithPasswordSupport(ctx context.Context, command string, prompter PasswordPrompter) (string, error) {
 	cmd := shellexec.Command(command)
 
-	if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
+	if wd := filesystem.ProjectFolderFromContext(ctx); wd != "" {
 		cmd.Dir = wd
 	} else if wd, err := os.Getwd(); err == nil {
 		cmd.Dir = wd

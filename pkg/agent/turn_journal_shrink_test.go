@@ -46,7 +46,7 @@ func TestTurnJournalCompactionShrinkEvent(t *testing.T) {
 
 	dir := t.TempDir()
 
-	a := &Agent{workspaceRoot: dir}
+	a := &Agent{projectFolder: dir}
 	a.initSubManagers()
 	a.state.SetSessionID("journal-shrink-test")
 

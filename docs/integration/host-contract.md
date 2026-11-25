@@ -134,7 +134,7 @@ proxy path). A daemon backend has no in-browser model endpoint: the daemon
 makes its own model calls, and its `/api/proxy/chat` is a query route, not an
 OpenAI-shaped base URL.
 
-A host that mounts a workspace through `SproutWorkspace` gets this wiring for
+A host that mounts a workspace through `SproutSpaces` gets this wiring for
 free: in own mode the composition honours `transport.agent` (a daemon backend is
 the no-wiring default; a wasm backend installs the adapter and the dispatcher).
 A host that composes its own provider stack (ambient mode) owns the wiring.
@@ -142,7 +142,7 @@ A host that composes its own provider stack (ambient mode) owns the wiring.
 **Switching backends.** A host may switch backends when a daemon becomes
 available. The supported switch is **in place**: the host re-reads its
 `transport` and passes the updated `host` (the new `transport.agent`) to the
-already-mounted `SproutWorkspace`. The composition re-runs its wiring against
+already-mounted `SproutSpaces`. The composition re-runs its wiring against
 the new backend without a re-mount — it retires the in-browser adapter (so the
 daemon backend's URLs drive the calls again, and a late-arriving bootstrap or
 wasm install cannot re-install it), reconnects the event stream to the new
@@ -155,7 +155,7 @@ works and is equivalent; the in-place swap is the one that keeps the open
 editor tabs.
 
 **How the transport fields are consumed.** A component that mounts a
-workspace in its own provider stack (`SproutWorkspace` with the default
+workspace in its own provider stack (`SproutSpaces` with the default
 `providers="own"`) registers its host as the *active* host for the
 module-level services while it is mounted, and restores the previous host on
 unmount. The non-React services then resolve their URLs against it:
@@ -177,7 +177,7 @@ unmount. The non-React services then resolve their URLs against it:
 In `providers="ambient"` mode the caller has already registered its host and
 owns the transport, so the composition neither registers nor connects — see
 "one workspace per page" in
-[workspace-package.md](workspace-package.md).
+[spaces-package.md](spaces-package.md).
 
 For an in-browser agent, which calls the adapter answers itself and which it
 forwards to `apiBaseURL` is listed in
@@ -277,7 +277,7 @@ follows whatever the host overrides those referenced tokens to.
 #### Scoping
 
 The host's `theme.tokens` overrides are applied on the **workspace root
-element** (`.sprout-workspace`, the element `SproutWorkspace` renders), as
+element** (`.sprout-workspace`, the element `SproutSpaces` renders), as
 inline custom properties — never on `document.documentElement`. A host page and
 the Sprout workspace it mounts share one document, so confining the overrides
 to the root is what keeps a host theme from restyling the host's *own* chrome.
@@ -298,7 +298,7 @@ helpers).
 | `ssh` | Shell-over-SSH transport for remote/terminal sessions |
 | `git` | Git operations (in-browser or host-provided) |
 | `chat` | Agent chat |
-| `workspaceSwitching` | The workspace switcher UI |
+| `projectFolderSwitching` | The workspace switcher UI |
 | `folderPicker` | A native folder picker (host shells only) |
 | `export` | Exporting the workspace to a local filesystem |
 | `instances` | Instance management (the instance list and its actions) |
@@ -354,7 +354,7 @@ transport records the same-origin sentinel `''` rather than a fixed host.
   local build has no outward platform pages.
 - `notifications.post` forwards to Sprout's in-app notification bus, so local
   toasts and the NotificationCenter are unchanged.
-- Capabilities: `ssh`, `git`, `chat`, `workspaceSwitching`, `export`,
+- Capabilities: `ssh`, `git`, `chat`, `projectFolderSwitching`, `export`,
   `localTerminal`, `settings`, `automations`, `agentChanges`, `preview`,
   `mcp`, `localModels`, `verification`, `serverGit` are **on**; `folderPicker`,
   `instances`, `chatSessions` and `browserFiles` are **off** (the local build
@@ -384,7 +384,7 @@ bootstrap adapter.
   `git`, `chat`, `instances`, `settings` and `browserFiles` are **on** (the
   in-browser agent means the host may read the in-browser workspace's files —
   see "In-browser workspace files" — to carry them into a container); `ssh`,
-  `workspaceSwitching`, `folderPicker`, `export`, `localTerminal`,
+  `projectFolderSwitching`, `folderPicker`, `export`, `localTerminal`,
   `automations`, `agentChanges`, `preview`, `mcp`, `localModels`,
   `verification`, `serverGit`, `chatSessions` are **off** (the hosted
   platform keeps no chat session store; the chat list lives in the browser).
@@ -490,7 +490,7 @@ const host: SproutHost = {
     ssh: false,
     git: true,
     chat: true,
-    workspaceSwitching: false,
+    projectFolderSwitching: false,
     folderPicker: false,
     export: false,
     instances: false,
@@ -528,14 +528,14 @@ transport's `apiBaseURL` (`''` is the same-origin sentinel); the paths below
 are appended to it.
 
 **Project scope.** A host store keeps one chat list per project. When the
-workspace has a project — `SproutWorkspace`'s `project.repoUrl`, else
+workspace has a project — `SproutSpaces`'s `project.repoUrl`, else
 `project.id` — every call below carries it as `project`: a `project` query
 parameter on the `GET`s, a `project` field in the JSON body of the `POST`s
 (delete-all, which otherwise has no body, sends `{ "project": … }`). The host
 keys its buckets by it (normalizing a repository URL and an `owner/repo` id
 to the same key is the host's choice), so chats never mix across projects and
 a turn the host seeds into a project's bucket is what that project's
-workspace lists. Without a project (a `WorkspaceChatProvider` mounted with no
+workspace lists. Without a project (a `SpacesChatProvider` mounted with no
 `chatSessionsProject`) no `project` is sent and the host serves its unscoped
 bucket. The daemon and the browser-local store are not project-scoped and
 never receive it.
@@ -641,7 +641,7 @@ list/create/rename/delete/switch behaviour.
 On reload, the active chat's transcript is restored through `GET
 /api/chat-sessions` + `POST /api/chat-sessions/switch` (the same calls the
 chat unit makes at boot), so the host store is the source of truth for the
-conversation across reloads. A workspace mounted through `SproutWorkspace` in
+conversation across reloads. A workspace mounted through `SproutSpaces` in
 own mode makes these calls each time the workspace connects (and again after
 a reconnect), so the session list is populated at start. For an in-browser
 agent, "connected" means the adapter is installed (see "Agent backend").
@@ -683,14 +683,14 @@ and the calls below reject.
 needs alongside):
 
 ```ts
-listBrowserWorkspaceFiles(): Promise<WorkspaceFileEntry[]>;
-readBrowserWorkspaceFile(path: string): Promise<Uint8Array>;
+listBrowserProjectFolderFiles(): Promise<ProjectFolderFileEntry[]>;
+readBrowserProjectFolderFile(path: string): Promise<Uint8Array>;
 ```
 
-`WorkspaceFileEntry` is one row of the listing:
+`ProjectFolderFileEntry` is one row of the listing:
 
 ```ts
-interface WorkspaceFileEntry {
+interface ProjectFolderFileEntry {
   path: string;    // workspace-relative slash path, e.g. 'src/a.ts'
   size: number;    // bytes, or 0 when the listing carried no size
   mode: number;    // POSIX mode bits, or 0 when the listing carried no mode
@@ -714,7 +714,7 @@ broken and the walk falls back to the write manifest (which records paths
 only), both are `0` — a consumer treats `0` as "unknown", not as an empty
 file.
 
-**Reading.** `readBrowserWorkspaceFile` takes the same path spellings the
+**Reading.** `readBrowserProjectFolderFile` takes the same path spellings the
 file API does elsewhere (workspace-relative or absolute, resolved against the
 workspace root) and returns the file's bytes. A path that resolves outside
 the workspace root or into a runtime dir is refused with an error naming the
@@ -733,7 +733,7 @@ human-facing and may change.
 scoped module singletons: the listing and the reads describe the one
 in-browser workspace this page holds, and a host that moves it to a
 container reads it while that page (and its shell) is still alive. A
-second `SproutWorkspace` on the page does not get a second file set.
+second `SproutSpaces` on the page does not get a second file set.
 
 **The platform flow.** The platform's move-to-container upgrade collects the
 files (list, then read the ones that differ from the checkout), uploads
@@ -749,7 +749,7 @@ some API calls in the page and forwards every other call to
 `transport.apiBaseURL` (`CloudAdapter.fetch` in
 `webui/src/services/cloudAdapter.ts`). A self-hosted backend for such a host
 serves the forwarded paths below, with the daemon's request and response
-shapes. The list covers the surfaces an own-mode `SproutWorkspace` reaches
+shapes. The list covers the surfaces an own-mode `SproutSpaces` reaches
 (the composed space shell, the arranged views, the chat unit) plus the
 escalation pieces a host mounts as its children.
 
@@ -764,12 +764,12 @@ git); `/api/sessions*` and, unless the host declares `chatSessions`,
 `/api/chat-sessions*` (browser-local stores);
 `/api/upload/image`; the edit and shell approval decisions; and the stubs in
 `endpoints/synthetic.ts` / `endpoints/noop.ts` (onboarding, instances,
-hotkeys, LSP status, `/api/config`, `/api/workspace`, the MCP and skills
+hotkeys, LSP status, `/api/config`, `/api/project-folder`, the MCP and skills
 settings reads).
 
 The in-browser workspace has one filesystem: the startup repo import, the
 agent and its shell, and the file paths above all work on the WASM shell's
-workspace root, which `GET /api/workspace` reports (`/workspace`). The file
+workspace root, which `GET /api/project-folder` reports (`/workspace`). The file
 paths take the daemon's path forms: workspace-relative (`src/a.ts`) or
 absolute (`/workspace/src/a.ts`, the form listings return), and `''`, `.`,
 `./`, `/workspace` and `workspace` (with or without a trailing slash) all
@@ -792,18 +792,18 @@ instead.
 | In-browser terminal | `GET /api/terminal/agent-sessions` (polled while expanded), `POST /api/terminal/agent-sessions/{id}/attach`, `/kill` | `capabilities.localTerminal` is `false` (the Code shell then renders the in-browser terminal) |
 | Arranged `terminal` view | the in-browser terminal's paths above (polled while it is mounted) | the arrangement places `terminal` on a wasm-agent host |
 | Editor | `POST /api/completion` | the user enables AI completions |
-| Escalation | `GET /workspace`, `GET /workspace/{id}`, `/workspace/txn*`, `GET /runners` | the host mounts `AgentEscalationBridge` / `EscalationListener` |
+| Escalation | `GET /dev-space`, `GET /dev-space/{id}`, `/dev-space/txn*`, `GET /runners` | the host mounts `AgentEscalationBridge` / `EscalationListener` |
 
 **Source control and search views.** On an in-browser-agent host an arranged
 `git` or `search` view forwards nothing: `/api/git/*` is answered by browser
 git, `/api/search` and `/api/search/replace` by the WASM shell, and
-`/api/workspace` by a stub. A daemon-backed host serves the daemon's paths
+`/api/project-folder` by a stub. A daemon-backed host serves the daemon's paths
 for them: `GET /api/git/status`, `/api/git/branches`, `/api/git/diff?path=`,
 `/api/git/log`, `/api/git/commit/show`, `/api/git/commit/show/file`;
 `POST /api/git/stage`, `/unstage`, `/discard`, `/commit`, `/commit-message`,
 `/checkout`, `/branch/create`, `/pull`, `/push`, `/pull-request`, `/revert`;
 with `capabilities.serverGit`, `GET /api/git/worktrees` and
-`POST /api/git/worktree/{create,remove,checkout}`; `GET /api/workspace` (the
+`POST /api/git/worktree/{create,remove,checkout}`; `GET /api/project-folder` (the
 root shown in file paths); and `GET /api/search`, `POST /api/search/replace`.
 Each git call carries the session's repo directory (`dir`) when one is set.
 
@@ -820,7 +820,7 @@ endpoint resolves against `apiBaseURL`). When a
 startup repository is set and there is no git proxy or the browser clone
 fails, the adapter falls back to `POST <apiBase>/api/repo/import`. The git
 proxy (below) is at `transport.gitProxyURL`, by default `/git-proxy` at the
-page origin for a `bearer` host, which also serves `/workspace/fly` there.
+page origin for a `bearer` host, which also serves `/dev-space/fly` there.
 
 **Git proxy for in-browser git.** A startup repository (`project.repoUrl`, or
 the hosted build's `?repo=`) opens as a git repository in the browser, so the
@@ -905,7 +905,7 @@ A daemon exposes its live agent-turn events as a Server-Sent Events stream at
 `/ws`: the same events, the same filtering, but carried over a plain HTTP
 response so a host that reaches the daemon through a request/response transport
 (the runner relay tunnel, `pkg/runner`) can consume it without a protocol
-change. The runner's host server reverse-proxies `/daemon/{workspaceID}/...`
+change. The runner's host server reverse-proxies `/daemon/{projectFolderID}/...`
 with streaming enabled, so the SSE bytes flow through the relay's existing
 `data` frames unchanged.
 
@@ -1089,11 +1089,11 @@ the same shape:
 ```tsx
 import { HostProvider, useHost } from '../../webui/src/host/index';
 import type { HostNotification, HostNavigationIntent, SproutHost } from '../../webui/src/host/index';
-import { ViewsLayout, resolveWorkspaceMode } from '../../webui/src/views/index';
+import { ViewsLayout, resolveSpace } from '../../webui/src/views/index';
 
 function MyRoot() {
   const host = useHost();
-  const space = resolveWorkspaceMode('code', { hasMockup: false });
+  const space = resolveSpace('code', { hasMockup: false });
   return (
     <div data-theme={host.theme?.mode}>
       <MyChrome />
@@ -1127,7 +1127,7 @@ branch is recoverable from the conversion commits (`git show 536a191c2`,
 | `config/mode.ts` — `supportsSSH`, local on / cloud off | `capabilities.ssh` |
 | `config/mode.ts` — `supportsGit`, local on / cloud on | `capabilities.git` |
 | `config/mode.ts` — `supportsChat`, local on / cloud on | `capabilities.chat` |
-| `config/mode.ts` — `supportsWorkspaceSwitching`, local on / cloud off | `capabilities.workspaceSwitching` |
+| `config/mode.ts` — `supportsProjectFolderSwitching`, local on / cloud off | `capabilities.projectFolderSwitching` |
 | `config/mode.ts` — `supportsFolderPicker`, local off / cloud off | `capabilities.folderPicker` |
 | `config/mode.ts` — `supportsExport`, local on / cloud off | `capabilities.export` |
 | `config/mode.ts` — `supportsInstances`, local off / cloud on | `capabilities.instances` |
@@ -1135,12 +1135,12 @@ branch is recoverable from the conversion commits (`git show 536a191c2`,
 | `config/mode.ts` — `supportsSettings`, local on / cloud on | `capabilities.settings` |
 | `config/mode.ts` — `supportsAutomations` (`!isCloud`) | `capabilities.automations` |
 | `config/mode.ts` — `supportsAgentChanges` (`!isCloud`) | `capabilities.agentChanges` |
-| `components/StatusBar.tsx` — workspace label/name shown when not cloud | `capabilities.workspaceSwitching` |
+| `components/StatusBar.tsx` — workspace label/name shown when not cloud | `capabilities.projectFolderSwitching` |
 | `components/StatusBar.tsx` — git branch placeholder when not cloud | `capabilities.localTerminal` |
 | `components/StatusBar.tsx` — account-managed model badge | `transport.authMode === 'bearer'` |
 | `components/HeaderBar.tsx` — platform header affordances (back-to-dashboard, Start Building, credits) vs Sprout's MenuBar | `transport.authMode === 'bearer'` |
 | `components/AppContent.tsx` — platform notification polling + phone tab bar | `transport.authMode === 'bearer'` |
-| `workspaces/CodeShell.tsx` — project named by repo slug | `transport.authMode === 'bearer'` |
+| `spaces/CodeShell.tsx` — project named by repo slug | `transport.authMode === 'bearer'` |
 | `components/chat/EmptyChatPanel.tsx` — offer the "open a repository" panel | `transport.authMode === 'bearer'`, and not a daemon backend (a daemon has the project's checkout, so there is nothing to open) |
 | `components/chat/ChatMetricsStrip.tsx` — hide the dollar cost (credits are metered) | `transport.authMode === 'bearer'` (inverted) |
 | `components/GitSidebarPanel.tsx` — browser git, and the "unsupported in browser mode" ops | `transport.authMode === 'bearer'` |
@@ -1160,12 +1160,12 @@ branch is recoverable from the conversion commits (`git show 536a191c2`,
 | `components/SidebarGitSection.tsx` — two local-only panes (worktrees) | `capabilities.localTerminal` |
 | `components/SidebarFilesSection.tsx` — clone-repo action | `capabilities.localTerminal` |
 | `components/Sidebar.tsx` — the Automations tab (`supportsAutomations`, i.e. `!isCloud`) | `capabilities.automations` |
-| `components/WorkspaceBar.tsx` — hidden host name | `capabilities.workspaceSwitching` |
+| `components/ProjectFolderBar.tsx` — hidden host name | `capabilities.projectFolderSwitching` |
 | `components/TerminalWorkbench.tsx` — the WASM terminal notice | the pane transport: shown on the in-browser shell, not on a PTY |
 | `hooks/useSecurityHandlers.ts` — the ask-user POST path | `transport.agent` (`hostRunsInBrowserAgent`): the in-browser agent takes the POST, a daemon the socket event |
 | `hooks/useEscalationTriggers.ts` + `components/AgentEscalationBridge.tsx` — hosted-only escalation | `capabilities.localTerminal` (inverted) |
 | `components/locationSwitcher/SSHPanel.tsx` — the SSH panel | `capabilities.ssh` |
-| `components/locationSwitcher/WorkspacePopover.tsx` + `hooks/useInstances.ts` — the instance list | `capabilities.instances` |
+| `components/locationSwitcher/ProjectFolderPopover.tsx` + `hooks/useInstances.ts` — the instance list | `capabilities.instances` |
 | `components/chat/ChatHistorySwitcher.tsx` + `components/ChatView.tsx` — session export | `capabilities.export` |
 | `components/layered/LayeredSidebar.tsx` — hosted layout title, project rail, terminal section | `capabilities.instances` (`hosted` = `instances`) |
 
@@ -1209,7 +1209,7 @@ or aliasing.
 
 A host shell advertises what it provides by installing an adapter (a studio
 `--native-fs` dist ships a `capabilities.json` declaring
-`supportsFolderPicker` / `supportsWorkspaceSwitching`, which its shell reports
+`supportsFolderPicker` / `supportsProjectFolderSwitching`, which its shell reports
 through the installed adapter). The host shell is the one that ships the
 native operations, so its declaration wins over the host's local default.
 

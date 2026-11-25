@@ -24,7 +24,7 @@ func TestMain(m *testing.M) {
 	// subprocesses; redirect their config so the real ~/.gitconfig is never
 	// read or written.
 	testgit.Configure()
-	// Isolate from the real workspace config. Inside a git repo,
+	// Isolate from the real project folder config. Inside a git repo,
 	// SPROUT_CONFIG points at .sprout/; without this override, tests
 	// using NewManagerSilent/NewManager leak config writes there.
 	os.Setenv("SPROUT_CONFIG", filepath.Join(os.TempDir(), "sprout-cmds-test-config"))

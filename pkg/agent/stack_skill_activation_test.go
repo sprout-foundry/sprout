@@ -102,14 +102,14 @@ func ssWriteStarterManifest(t *testing.T, root, content string) {
 	}
 }
 
-// ssAgent wires client into a fresh agent whose workspace root is a project
+// ssAgent wires client into a fresh agent whose project folder is a project
 // directory (the .sprout/ starter manifest lives under it). It mirrors the
 // e2e agent setup from plan_context_test.go: the full context profile keeps
 // the tools on the roster, and SkipPrompt keeps the turn from ever blocking
 // on an interactive prompt (stdin is closed in tests). The test manager's
 // config seeds the embedded skill library (pkg/skills/library), so the
 // manifest's starter ID has a skill to activate.
-func ssAgent(t *testing.T, client api.ClientInterface, workspaceRoot string) *Agent {
+func ssAgent(t *testing.T, client api.ClientInterface, projectFolder string) *Agent {
 	t.Helper()
 
 	mgr, cleanup := configuration.NewTestManager(t)
@@ -128,7 +128,7 @@ func ssAgent(t *testing.T, client api.ClientInterface, workspaceRoot string) *Ag
 	}
 	t.Cleanup(ag.Shutdown)
 	ag.SetMaxIterations(10)
-	ag.SetWorkspaceRoot(workspaceRoot)
+	ag.SetProjectFolder(projectFolder)
 	return ag
 }
 

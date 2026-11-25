@@ -21,7 +21,7 @@ func newMCPInheritanceRunner(t *testing.T, parent *Agent) *SubagentRunner {
 		EventBus:      events.NewEventBus(),
 		TodoManager:   tools.NewTodoManager(),
 		ConfigManager: parent.configManager,
-		WorkspaceRoot: parent.workspaceRoot,
+		ProjectFolder: parent.projectFolder,
 	})
 	runner.testClientFactory = func(api.ClientType, string) (api.ClientInterface, error) {
 		return NewScriptedClient(NewScriptedResponseBuilder().Content("ok").Build()), nil

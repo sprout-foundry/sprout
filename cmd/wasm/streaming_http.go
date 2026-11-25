@@ -77,8 +77,7 @@ func (r *wasmStreamReader) Read(p []byte) (int, error) {
 			return nil
 		})
 
-		readPromise.Call("then", thenCB)
-		readPromise.Call("catch", catchCB)
+		readPromise.Call("then", thenCB).Call("catch", catchCB)
 
 		res := <-ch
 		if res.err != nil {
@@ -223,8 +222,7 @@ func (t *wasmRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 		return nil
 	})
 
-	fetchPromise.Call("then", thenCB)
-	fetchPromise.Call("catch", catchCB)
+	fetchPromise.Call("then", thenCB).Call("catch", catchCB)
 
 	res := <-ch
 	return res.resp, res.err

@@ -35,7 +35,7 @@ func (h *repoMapHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 	}
 
 	// Gate 1 precheck — only when the caller named a non-default directory.
-	// The default "." resolves to the workspace root, which is already
+	// The default "." resolves to the project folder, which is already
 	// allowlisted; gating it would prompt on every vanilla repo_map call.
 	if directory != "." {
 		resolvedPath, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "repo_map", directory)
@@ -44,11 +44,11 @@ func (h *repoMapHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 				fmt.Errorf("read blocked: %s is not accessible", directory)
 		}
 		if decision == "prompt" && env.FileAccessPrompter != nil {
-			if ctx2, approved := promptForOffWorkspacePath(ctx, env, "repo_map", directory, resolvedPath, "read"); approved {
+			if ctx2, approved := promptForOffProjectFolderPath(ctx, env, "repo_map", directory, resolvedPath, "read"); approved {
 				ctx = ctx2
 			} else {
-				return ToolResult{Output: fmt.Sprintf("read blocked: off-workspace access to %s was not approved", directory), IsError: true},
-					fmt.Errorf("read blocked: off-workspace access to %s was not approved", directory)
+				return ToolResult{Output: fmt.Sprintf("read blocked: off-project-folder access to %s was not approved", directory), IsError: true},
+					fmt.Errorf("read blocked: off-project-folder access to %s was not approved", directory)
 			}
 		}
 	}

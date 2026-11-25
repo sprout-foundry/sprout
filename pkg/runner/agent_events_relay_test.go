@@ -51,7 +51,7 @@ func relayPair(t *testing.T, handler relay.Handler) (platform, runner *relay.Mux
 }
 
 // relayClient returns an HTTP client whose transport sends requests through
-// the platform mux to workspace ws.
+// the platform mux to dev space ws.
 func relayClient(m *relay.Mux, ws string) *http.Client {
 	return &http.Client{Transport: m.RoundTripper(ws)}
 }

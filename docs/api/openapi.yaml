@@ -74,7 +74,7 @@ openapi: 3.1.0
 paths:
   /api/browse:
     get:
-      description: Lists the files and directories inside the `path` (defaulting to the workspace root), always skipping the .git directory. `ignore=true` additionally skips entries matched by the workspace's gitignore rules.
+      description: Lists the files and directories inside the `path` (defaulting to the project folder), always skipping the .git directory. `ignore=true` additionally skips entries matched by the project folder's gitignore rules.
       operationId: browseDir
       responses:
         "200":
@@ -105,7 +105,7 @@ paths:
       tags:
         - conversation/query
     post:
-      description: Sets the worktree path for the chat session at the /api/chat-session/{chatId}/worktree shape, or switches the active workspace to it at the /api/chat-session/{chatId}/worktree/switch shape. Only the switch and set branches accept POST.
+      description: Sets the worktree path for the chat session at the /api/chat-session/{chatId}/worktree shape, or switches the active project folder to it at the /api/chat-session/{chatId}/worktree/switch shape. Only the switch and set branches accept POST.
       operationId: chatSessionWorktreeSet
       responses:
         "200":
@@ -425,7 +425,7 @@ paths:
         - misc/static
   /api/config:
     get:
-      description: Reports the server's port, daemon and workspace roots, agent metadata, and enabled features.
+      description: Reports the server's port, daemon and project folders, agent metadata, and enabled features.
       operationId: get-config
       responses:
         "200":
@@ -540,7 +540,7 @@ paths:
         - conversation/query
   /api/file:
     get:
-      description: Reads and returns the raw content of the file at the `path` query parameter, with a detected Content-Type. Serves a conditional 304 when the `If-Modified-Since` header matches the file's mtime. External paths (outside the workspace and app-config directory) require an unconsumed file-consent token.
+      description: Reads and returns the raw content of the file at the `path` query parameter, with a detected Content-Type. Serves a conditional 304 when the `If-Modified-Since` header matches the file's mtime. External paths (outside the project folder and app-config directory) require an unconsumed file-consent token.
       operationId: fileRead
       responses:
         "200":
@@ -571,7 +571,7 @@ paths:
         - files
   /api/file-index:
     get:
-      description: Walks the workspace once and returns every non-ignored file as a workspace-relative path, bounded by the indexer caps (12k files / 3k dirs / depth 8). One response replaces the palette's per-directory crawl; `truncated` reports when the caps bit.
+      description: Walks the project folder once and returns every non-ignored file as a project-folder-relative path, bounded by the indexer caps (12k files / 3k dirs / depth 8). One response replaces the palette's per-directory crawl; `truncated` reports when the caps bit.
       operationId: fileIndex
       responses:
         "200":
@@ -582,7 +582,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorModel'
           description: Error
-      summary: Return the workspace's whole quick-open file index.
+      summary: Return the project folder's whole quick-open file index.
       tags:
         - files
   /api/file/check-modified:
@@ -603,7 +603,7 @@ paths:
         - files
   /api/file/consent:
     post:
-      description: Mints a short-lived consent token that authorizes a read or write of a file outside the workspace and the app-config directory. Paths that are already within the workspace (or the app-config directory) need no consent and are rejected with 400.
+      description: Mints a short-lived consent token that authorizes a read or write of a file outside the project folder and the app-config directory. Paths that are already within the project folder (or the app-config directory) need no consent and are rejected with 400.
       operationId: fileConsent
       responses:
         "200":
@@ -619,7 +619,7 @@ paths:
         - files
   /api/files:
     get:
-      description: Lists the entries of a directory, computing per-entry git status (modified, untracked, ignored) unless `git_status=false` is set for a faster, status-free listing. Defaults to the workspace root when `path` (or `dir`) is omitted.
+      description: Lists the entries of a directory, computing per-entry git status (modified, untracked, ignored) unless `git_status=false` is set for a faster, status-free listing. Defaults to the project folder when `path` (or `dir`) is omitted.
       operationId: filesList
       responses:
         "200":
@@ -635,7 +635,7 @@ paths:
         - files
   /api/files/prettier-config:
     get:
-      description: Merges the Prettier configuration found in the workspace (the .prettierrc family of files and the `prettier` key in package.json) into a single object, with later sources overriding earlier ones. Only the formats the Go backend can parse are read; JS and TOML config files are intentionally skipped.
+      description: Merges the Prettier configuration found in the project folder (the .prettierrc family of files and the `prettier` key in package.json) into a single object, with later sources overriding earlier ones. Only the formats the Go backend can parse are read; JS and TOML config files are intentionally skipped.
       operationId: prettierConfig
       responses:
         "200":
@@ -646,7 +646,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorModel'
           description: Error
-      summary: Discover the workspace's Prettier configuration.
+      summary: Discover the project folder's Prettier configuration.
       tags:
         - files
   /api/git/branch/create:
@@ -683,7 +683,7 @@ paths:
         - git
   /api/git/checkout:
     post:
-      description: Checks out the branch at `branch` in the workspace.
+      description: Checks out the branch at `branch` in the project folder.
       operationId: gitCheckout
       responses:
         "200":
@@ -987,7 +987,7 @@ paths:
         - git
   /api/git/status:
     get:
-      description: 'Reports the workspace''s git status: staged, unstaged, and untracked changes, plus branch and ahead/behind counts.'
+      description: 'Reports the project folder''s git status: staged, unstaged, and untracked changes, plus branch and ahead/behind counts.'
       operationId: gitStatus
       responses:
         "200":
@@ -998,7 +998,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorModel'
           description: Error
-      summary: Report the workspace's git status.
+      summary: Report the project folder's git status.
       tags:
         - git
   /api/git/unstage:
@@ -1035,7 +1035,7 @@ paths:
         - git
   /api/git/worktree/checkout:
     post:
-      description: Switches the client's active workspace to the git worktree at `path`.
+      description: Switches the client's active project folder to the git worktree at `path`.
       operationId: gitWorktreeCheckout
       responses:
         "200":
@@ -1194,7 +1194,7 @@ paths:
         - workspace/instances
   /api/instances/ssh-browse:
     post:
-      description: Lists the directories on the remote host over the SSH session so the client can pick a remote workspace.
+      description: Lists the directories on the remote host over the SSH session so the client can pick a remote project folder.
       operationId: sshBrowse
       responses:
         "200":
@@ -1301,12 +1301,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorModel'
           description: Error
-      summary: Report whether the workspace is busy and when it was last used.
+      summary: Report whether the project folder is busy and when it was last used.
       tags:
         - sync/txn
   /api/lifecycle/notice:
     post:
-      description: Relays a workspace_stopping event ({reason, at, deadline_seconds}) to every connected client so the UI can warn before a timer-driven stop. Does not change daemon state.
+      description: Relays a dev_space_stopping event ({reason, at, deadline_seconds}) to every connected client so the UI can warn before a timer-driven stop. Does not change daemon state.
       operationId: lifecycleNotice
       responses:
         "200":
@@ -1317,7 +1317,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorModel'
           description: Error
-      summary: Warn connected clients that the workspace will stop.
+      summary: Warn connected clients that the project folder will stop.
       tags:
         - sync/txn
   /api/lifecycle/prepare-stop:
@@ -1333,7 +1333,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorModel'
           description: Error
-      summary: Drain the workspace before it stops.
+      summary: Drain the project folder before it stops.
       tags:
         - sync/txn
   /api/local-llm/download:
@@ -1418,7 +1418,7 @@ paths:
         - settings
   /api/lsp/status:
     get:
-      description: Lists the configured language servers with their supported languages, binary, install hint, and whether the binary is resolvable on PATH, plus the count of currently active LSP sessions and the workspace root.
+      description: Lists the configured language servers with their supported languages, binary, install hint, and whether the binary is resolvable on PATH, plus the count of currently active LSP sessions and the project folder.
       operationId: lspStatus
       responses:
         "200":
@@ -1514,7 +1514,7 @@ paths:
         - settings
   /api/preview/source:
     get:
-      description: 'Returns a short-lived URL on the dedicated preview origin for the workspace file at `path`, so the editor''s HTML preview renders with a real document URL (relative assets and `blob:` navigation resolve) on an origin that cannot reach the app''s session storage or cookies. Reports `available: false` when the preview origin is not running, in which case the editor falls back to a `srcDoc` iframe.'
+      description: 'Returns a short-lived URL on the dedicated preview origin for the project folder file at `path`, so the editor''s HTML preview renders with a real document URL (relative assets and `blob:` navigation resolve) on an origin that cannot reach the app''s session storage or cookies. Reports `available: false` when the preview origin is not running, in which case the editor falls back to a `srcDoc` iframe.'
       operationId: previewSource
       responses:
         "200":
@@ -1528,6 +1528,101 @@ paths:
       summary: Mint a URL for the HTML preview iframe.
       tags:
         - preview
+  /api/project-folder:
+    get:
+      description: Reports the requesting client's active project folder, whether it is a recognized project directory, and recent-project-folder metadata.
+      operationId: projectFolderGet
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Report the client's active project folder.
+      tags:
+        - workspace/instances
+    post:
+      description: Sets the requesting client's active project folder to the `path` in the body. The path must resolve within the daemon root.
+      operationId: projectFolderSet
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Set the client's active project folder.
+      tags:
+        - workspace/instances
+  /api/project-folder/browse:
+    get:
+      description: Lists the directories under the daemon root (the parent of the active project folder) so the client can pick a new project folder. Defaults to the daemon root when `path` is omitted.
+      operationId: projectFolderBrowse
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Browse directories under the daemon root.
+      tags:
+        - workspace/instances
+  /api/project-folder/projects:
+    get:
+      description: Lists the recent projects known to the client (the project folder picker) with their last-used ordering.
+      operationId: projectFolderProjects
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: List known projects.
+      tags:
+        - workspace/instances
+  /api/project-folder/sync:
+    post:
+      description: Applies the pending file-sync operations for the project folder (the SP-046 workspace-sync surface).
+      operationId: projectFolderSync
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Synchronize the project folder tree.
+      tags:
+        - workspace/instances
+  /api/project-folder/takeover:
+    post:
+      description: Marks the requesting client as the active owner of the project folder, superseding the previous owner.
+      operationId: projectFolderTakeover
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Take over a project folder from another device.
+      tags:
+        - workspace/instances
   /api/providers:
     get:
       description: Lists the LLM providers available to the agent, with their connection status and configuration.
@@ -1738,7 +1833,7 @@ paths:
         - files
   /api/search:
     get:
-      description: Searches the workspace files for matches of `query`, returning the matched lines with surrounding context. The search is bounded by a timeout and by a file-walk and match cap; when any cap is hit the result is marked truncated.
+      description: Searches the project folder files for matches of `query`, returning the matched lines with surrounding context. The search is bounded by a timeout and by a file-walk and match cap; when any cap is hit the result is marked truncated.
       operationId: searchQuery
       responses:
         "200":
@@ -1749,12 +1844,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorModel'
           description: Error
-      summary: Search for matches across workspace files.
+      summary: Search for matches across project folder files.
       tags:
         - search
   /api/search/replace:
     post:
-      description: Replaces matches of `search` with `replace` within the listed `files`, honoring the same case/whole-word/regex modifiers as the search. When `preview` is true the changes are computed but not written. Files are restricted to the workspace.
+      description: Replaces matches of `search` with `replace` within the listed `files`, honoring the same case/whole-word/regex modifiers as the search. When `preview` is true the changes are computed but not written. Files are restricted to the project folder.
       operationId: searchReplace
       responses:
         "200":
@@ -1850,7 +1945,7 @@ paths:
         - conversation/query
   /api/settings:
     get:
-      description: Returns the effective (merged) configuration for the client, or a specific layer with `layer=global|workspace|session|provenance`.
+      description: Returns the effective (merged) configuration for the client, or a specific layer with `layer=global|project folder|session|provenance`.
       operationId: settingsGet
       responses:
         "200":
@@ -2353,7 +2448,7 @@ paths:
         - diagnostics
   /api/sync:
     get:
-      description: 'Returns the workspace git reconciliation report (the same JSON `sprout sync` prints). GET/HEAD are status-only and never pull: the pull query parameter is deliberately ignored on read requests because they pass through the auth middleware unauthenticated.'
+      description: 'Returns the project folder git reconciliation report (the same JSON `sprout sync` prints). GET/HEAD are status-only and never pull: the pull query parameter is deliberately ignored on read requests because they pass through the auth middleware unauthenticated.'
       operationId: syncStatus
       responses:
         "200":
@@ -2364,11 +2459,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorModel'
           description: Error
-      summary: Report the workspace git reconciliation status.
+      summary: Report the project folder git reconciliation status.
       tags:
         - sync/txn
     post:
-      description: Returns the workspace git reconciliation report and, by default, pulls (POST is the only method that may pull). `pull=0` degrades the call to status-only. The pull runs detached from request cancellation so a client hang-up cannot strand git.
+      description: Returns the project folder git reconciliation report and, by default, pulls (POST is the only method that may pull). `pull=0` degrades the call to status-only. The pull runs detached from request cancellation so a client hang-up cannot strand git.
       operationId: syncPull
       responses:
         "200":
@@ -2379,12 +2474,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorModel'
           description: Error
-      summary: Pull and reconcile the workspace git state.
+      summary: Pull and reconcile the project folder git state.
       tags:
         - sync/txn
   /api/sync/batch:
     post:
-      description: Applies a batch of file-sync operations (the body's `ops`) to the workspace and returns the per-operation results.
+      description: Applies a batch of file-sync operations (the body's `ops`) to the project folder and returns the per-operation results.
       operationId: syncBatch
       responses:
         "200":
@@ -2400,7 +2495,7 @@ paths:
         - sync/txn
   /api/sync/op:
     post:
-      description: Applies a single file-sync operation (the body's `op`) to the workspace, updating the agent's tracked file metadata. Conflicts are reported with 409.
+      description: Applies a single file-sync operation (the body's `op`) to the project folder, updating the agent's tracked file metadata. Conflicts are reported with 409.
       operationId: syncOp
       responses:
         "200":
@@ -2416,7 +2511,7 @@ paths:
         - sync/txn
   /api/sync/status:
     get:
-      description: Returns the current file-sync state (the agent's tracked files) for the client's workspace.
+      description: Returns the current file-sync state (the agent's tracked files) for the client's project folder.
       operationId: syncAgentStatus
       responses:
         "200":
@@ -2542,7 +2637,7 @@ paths:
         - terminal
   /api/txn/pull:
     post:
-      description: Builds the container→browser delta manifest for the request's workspace (a read of the tree that is detached from request cancellation so a client hang-up cannot tear the encoding down).
+      description: Builds the container→browser delta manifest for the request's project folder (a read of the tree that is detached from request cancellation so a client hang-up cannot tear the encoding down).
       operationId: txnPull
       responses:
         "200":
@@ -2558,7 +2653,7 @@ paths:
         - sync/txn
   /api/txn/push:
     post:
-      description: Applies the browser→container delta manifest in the body to the request's workspace. A partial apply is still reported (200) with the per-file outcomes so the platform can reason about it.
+      description: Applies the browser→container delta manifest in the body to the request's project folder. A partial apply is still reported (200) with the per-file outcomes so the platform can reason about it.
       operationId: txnPush
       responses:
         "200":
@@ -2569,12 +2664,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorModel'
           description: Error
-      summary: Apply a push delta manifest to the workspace.
+      summary: Apply a push delta manifest to the project folder.
       tags:
         - sync/txn
   /api/txn/run:
     post:
-      description: Executes the command in the body in the request's workspace, in its own process group and bounded by its own timeout so a client hang-up cannot strand it.
+      description: Executes the command in the body in the request's project folder, in its own process group and bounded by its own timeout so a client hang-up cannot strand it.
       operationId: txnRun
       responses:
         "200":
@@ -2585,12 +2680,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorModel'
           description: Error
-      summary: Execute a command in the workspace.
+      summary: Execute a command in the project folder.
       tags:
         - sync/txn
   /api/txn/status:
     get:
-      description: 'Returns the read-only working-tree preflight for the request''s workspace. This is the read-only half of the transaction surface: it is reachable unauthenticated (GET/HEAD pass through the auth middleware) and never mutates.'
+      description: 'Returns the read-only working-tree preflight for the request''s project folder. This is the read-only half of the transaction surface: it is reachable unauthenticated (GET/HEAD pass through the auth middleware) and never mutates.'
       operationId: txnStatus
       responses:
         "200":
@@ -2601,12 +2696,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorModel'
           description: Error
-      summary: Report the workspace's working-tree preflight.
+      summary: Report the project folder's working-tree preflight.
       tags:
         - sync/txn
   /api/upload/image:
     post:
-      description: Accepts an image either as a raw body or as a multipart form field named `image`. The image format is validated by magic bytes and the file is saved into the workspace; the response returns the absolute path and filename so the client can reference it in a message.
+      description: Accepts an image either as a raw body or as a multipart form field named `image`. The image format is validated by magic bytes and the file is saved into the project folder; the response returns the absolute path and filename so the client can reference it in a message.
       operationId: uploadImage
       responses:
         "200":
@@ -2620,72 +2715,9 @@ paths:
       summary: Upload an image for use in a chat.
       tags:
         - files
-  /api/workspace:
-    get:
-      description: Reports the requesting client's active workspace root, whether it is a recognized project directory, and recent-workspace metadata.
-      operationId: workspaceGet
-      responses:
-        "200":
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ErrorModel'
-          description: Error
-      summary: Report the client's active workspace.
-      tags:
-        - workspace/instances
-    post:
-      description: Sets the requesting client's active workspace root to the `path` in the body. The path must resolve within the daemon root.
-      operationId: workspaceSet
-      responses:
-        "200":
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ErrorModel'
-          description: Error
-      summary: Set the client's active workspace.
-      tags:
-        - workspace/instances
-  /api/workspace/browse:
-    get:
-      description: Lists the directories under the daemon root (the parent of the active workspace) so the client can pick a new workspace. Defaults to the daemon root when `path` is omitted.
-      operationId: workspaceBrowse
-      responses:
-        "200":
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ErrorModel'
-          description: Error
-      summary: Browse directories under the daemon root.
-      tags:
-        - workspace/instances
-  /api/workspace/projects:
-    get:
-      description: Lists the recent projects known to the client (the workspace picker) with their last-used ordering.
-      operationId: workspaceProjects
-      responses:
-        "200":
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ErrorModel'
-          description: Error
-      summary: List known projects.
-      tags:
-        - workspace/instances
   /api/workspace/symbols:
     get:
-      description: Returns the workspace's indexed symbols, optionally filtered by `query`. Falls back to building the index on a cache miss.
+      description: Returns the project folder's indexed symbols, optionally filtered by `query`. Falls back to building the index on a cache miss.
       operationId: workspaceSymbols
       responses:
         "200":
@@ -2696,39 +2728,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorModel'
           description: Error
-      summary: List workspace symbols.
-      tags:
-        - workspace/instances
-  /api/workspace/sync:
-    post:
-      description: Applies the pending file-sync operations for the workspace (the SP-046 workspace-sync surface).
-      operationId: workspaceSync
-      responses:
-        "200":
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ErrorModel'
-          description: Error
-      summary: Synchronize the workspace tree.
-      tags:
-        - workspace/instances
-  /api/workspace/takeover:
-    post:
-      description: Marks the requesting client as the active owner of the workspace, superseding the previous owner.
-      operationId: workspaceTakeover
-      responses:
-        "200":
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ErrorModel'
-          description: Error
-      summary: Take over a workspace from another device.
+      summary: List project folder symbols.
       tags:
         - workspace/instances
   /api/ws-metrics:

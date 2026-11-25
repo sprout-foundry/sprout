@@ -23,9 +23,9 @@ import (
 // fakePlatform records what a runner reports and serves queued tasks.
 type fakePlatform struct {
 	mu         sync.Mutex
-	tasks      []WorkspaceTask
+	tasks      []DevSpaceTask
 	heartbeats []Heartbeat
-	results    []WorkspaceResult
+	results    []DevSpaceResult
 	statuses   map[string]string
 	keys       []string
 	pollStatus int
@@ -51,23 +51,23 @@ func (f *fakePlatform) handler() http.Handler {
 		_ = json.NewDecoder(r.Body).Decode(&hb)
 		f.record(r, func() { f.heartbeats = append(f.heartbeats, hb) })
 	})
-	mux.HandleFunc("GET /runners/r-1/workspace-tasks", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /runners/r-1/dev-space-tasks", func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		tasks := f.tasks
 		f.tasks = nil
 		f.keys = append(f.keys, r.Header.Get("X-Runner-Key"))
 		f.mu.Unlock()
 		if tasks == nil {
-			tasks = []WorkspaceTask{}
+			tasks = []DevSpaceTask{}
 		}
 		_ = json.NewEncoder(w).Encode(tasks)
 	})
-	mux.HandleFunc("POST /runners/r-1/workspace-result", func(w http.ResponseWriter, r *http.Request) {
-		var res WorkspaceResult
+	mux.HandleFunc("POST /runners/r-1/dev-space-result", func(w http.ResponseWriter, r *http.Request) {
+		var res DevSpaceResult
 		_ = json.NewDecoder(r.Body).Decode(&res)
 		f.record(r, func() { f.results = append(f.results, res) })
 	})
-	mux.HandleFunc("POST /runners/r-1/workspace/{ws}/status", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /runners/r-1/dev-space/{ws}/status", func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]string
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		f.record(r, func() { f.statuses[r.PathValue("ws")] = body["status"] })
@@ -88,13 +88,13 @@ func (f *fakePlatform) setPollStatus(status int) {
 	f.pollStatus = status
 }
 
-func (f *fakePlatform) push(t WorkspaceTask) {
+func (f *fakePlatform) push(t DevSpaceTask) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.tasks = append(f.tasks, t)
 }
 
-// fakeLauncher "starts" a workspace by pointing at a fake daemon.
+// fakeLauncher "starts" a dev space by pointing at a fake daemon.
 type fakeLauncher struct {
 	port    int
 	mu      sync.Mutex
@@ -102,14 +102,14 @@ type fakeLauncher struct {
 	stopped []string
 }
 
-func (l *fakeLauncher) Start(_ context.Context, t WorkspaceTask) (*Workspace, error) {
+func (l *fakeLauncher) Start(_ context.Context, t DevSpaceTask) (*DevSpace, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.started = append(l.started, t.WorkspaceID)
-	return &Workspace{ID: t.WorkspaceID, Port: l.port, Handle: "h-" + t.WorkspaceID}, nil
+	l.started = append(l.started, t.DevSpaceID)
+	return &DevSpace{ID: t.DevSpaceID, Port: l.port, Handle: "h-" + t.DevSpaceID}, nil
 }
 
-func (l *fakeLauncher) Stop(_ context.Context, ws *Workspace) error {
+func (l *fakeLauncher) Stop(_ context.Context, ws *DevSpace) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if ws != nil {
@@ -118,7 +118,7 @@ func (l *fakeLauncher) Stop(_ context.Context, ws *Workspace) error {
 	return nil
 }
 
-func (l *fakeLauncher) Destroy(_ context.Context, id string, _ *Workspace) error {
+func (l *fakeLauncher) Destroy(_ context.Context, id string, _ *DevSpace) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.stopped = append(l.stopped, id)
@@ -136,7 +136,7 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 	}
 }
 
-func TestRunnerServesWorkspaceLifecycle(t *testing.T) {
+func TestRunnerServesDevSpaceLifecycle(t *testing.T) {
 	plat := &fakePlatform{statuses: map[string]string{}, pollStatus: http.StatusOK}
 	platSrv := httptest.NewServer(plat.handler())
 	t.Cleanup(platSrv.Close)
@@ -171,7 +171,7 @@ func TestRunnerServesWorkspaceLifecycle(t *testing.T) {
 		t.Errorf("heartbeat must report mode, sandbox and version; got %+v", hb)
 	}
 
-	plat.push(WorkspaceTask{WorkspaceID: "ws-1", Action: "start", RepoURL: "https://github.com/o/r", TxnSecret: "s3cret"})
+	plat.push(DevSpaceTask{DevSpaceID: "ws-1", Action: "start", RepoURL: "https://github.com/o/r", TxnSecret: "s3cret"})
 	waitFor(t, "start result", func() bool {
 		plat.mu.Lock()
 		defer plat.mu.Unlock()
@@ -192,17 +192,17 @@ func TestRunnerServesWorkspaceLifecycle(t *testing.T) {
 		t.Errorf("an unauthenticated call through the live host server must be refused, got %d", resp.StatusCode)
 	}
 
-	plat.push(WorkspaceTask{WorkspaceID: "ws-1", Action: "stop"})
+	plat.push(DevSpaceTask{DevSpaceID: "ws-1", Action: "stop"})
 	waitFor(t, "stop status", func() bool {
 		plat.mu.Lock()
 		defer plat.mu.Unlock()
 		return plat.statuses["ws-1"] == "stopped"
 	})
 	if _, bound := host.lookup("ws-1"); bound {
-		t.Error("a stopped workspace must be unbound from the host server")
+		t.Error("a stopped project folder must be unbound from the host server")
 	}
 
-	plat.push(WorkspaceTask{WorkspaceID: "ws-2", Action: "start", RepoURL: "https://github.com/o/r"})
+	plat.push(DevSpaceTask{DevSpaceID: "ws-2", Action: "start", RepoURL: "https://github.com/o/r"})
 	waitFor(t, "refused start", func() bool {
 		plat.mu.Lock()
 		defer plat.mu.Unlock()
@@ -267,7 +267,7 @@ func TestRunnerServesThePlatformThroughTheRelay(t *testing.T) {
 		t.Fatal("a runner without a public URL must dial the platform's relay")
 	}
 
-	plat.push(WorkspaceTask{WorkspaceID: "ws-1", Action: "start", RepoURL: "https://github.com/o/r", TxnSecret: "s3cret"})
+	plat.push(DevSpaceTask{DevSpaceID: "ws-1", Action: "start", RepoURL: "https://github.com/o/r", TxnSecret: "s3cret"})
 	waitFor(t, "start result", func() bool {
 		plat.mu.Lock()
 		defer plat.mu.Unlock()
@@ -277,7 +277,7 @@ func TestRunnerServesThePlatformThroughTheRelay(t *testing.T) {
 	res := plat.results[0]
 	plat.mu.Unlock()
 	if res.Status != "running" || res.ConnectionURL != "" {
-		t.Fatalf("a relayed workspace reports no URL; got %+v", res)
+		t.Fatalf("a relayed project folder reports no URL; got %+v", res)
 	}
 
 	call := func(bearer string) (int, string) {
@@ -302,7 +302,7 @@ func TestRunnerServesThePlatformThroughTheRelay(t *testing.T) {
 	}
 }
 
-func TestRunnerServesLocalDirectoryWorkspaces(t *testing.T) {
+func TestRunnerServesLocalDirectoryDevSpaces(t *testing.T) {
 	plat := &fakePlatform{statuses: map[string]string{}, pollStatus: http.StatusOK}
 	platSrv := httptest.NewServer(plat.handler())
 	t.Cleanup(platSrv.Close)
@@ -346,7 +346,7 @@ func TestRunnerServesLocalDirectoryWorkspaces(t *testing.T) {
 
 	// A path the runner was not configured to serve is refused before any
 	// launcher runs — this is the safety gate for the user's real files.
-	plat.push(WorkspaceTask{WorkspaceID: "ws-nope", Action: "start", WorkspaceDir: t.TempDir(), TxnSecret: "s"})
+	plat.push(DevSpaceTask{DevSpaceID: "ws-nope", Action: "start", DevSpaceDir: t.TempDir(), TxnSecret: "s"})
 	waitFor(t, "refused local start", func() bool {
 		plat.mu.Lock()
 		defer plat.mu.Unlock()
@@ -364,7 +364,7 @@ func TestRunnerServesLocalDirectoryWorkspaces(t *testing.T) {
 
 	// Even the allowlisted directory is refused when the task also names a
 	// repo: nothing may clone into, or clear, the user's real files.
-	plat.push(WorkspaceTask{WorkspaceID: "ws-both", Action: "start", WorkspaceDir: local, RepoURL: "https://example.com/r.git", TxnSecret: "s"})
+	plat.push(DevSpaceTask{DevSpaceID: "ws-both", Action: "start", DevSpaceDir: local, RepoURL: "https://example.com/r.git", TxnSecret: "s"})
 	waitFor(t, "refused repo+dir start", func() bool {
 		plat.mu.Lock()
 		defer plat.mu.Unlock()
@@ -380,7 +380,7 @@ func TestRunnerServesLocalDirectoryWorkspaces(t *testing.T) {
 
 	// The allowlisted directory starts in place and the task's path is
 	// normalized (symlinks resolved) before the launcher sees it.
-	plat.push(WorkspaceTask{WorkspaceID: "ws-local", Action: "start", WorkspaceDir: local, TxnSecret: "s"})
+	plat.push(DevSpaceTask{DevSpaceID: "ws-local", Action: "start", DevSpaceDir: local, TxnSecret: "s"})
 	waitFor(t, "local start result", func() bool {
 		plat.mu.Lock()
 		defer plat.mu.Unlock()
@@ -399,8 +399,8 @@ func TestRunnerServesLocalDirectoryWorkspaces(t *testing.T) {
 		t.Fatalf("the allowlisted start must reach the launcher once; started %v", launcher.started)
 	}
 
-	// Destroying a local workspace keeps the user's directory.
-	plat.push(WorkspaceTask{WorkspaceID: "ws-local", Action: "destroy"})
+	// Destroying a local dev space keeps the user's directory.
+	plat.push(DevSpaceTask{DevSpaceID: "ws-local", Action: "destroy"})
 	waitFor(t, "destroy status", func() bool {
 		plat.mu.Lock()
 		defer plat.mu.Unlock()
@@ -408,7 +408,7 @@ func TestRunnerServesLocalDirectoryWorkspaces(t *testing.T) {
 	})
 	entries, err := os.ReadDir(local)
 	if err != nil || len(entries) != 0 {
-		t.Errorf("destroying a local workspace must not touch the user's directory (err: %v, entries: %d)", err, len(entries))
+		t.Errorf("destroying a local project folder must not touch the user's directory (err: %v, entries: %d)", err, len(entries))
 	}
 }
 
@@ -416,17 +416,17 @@ func TestHostLauncherRunsALocalDirectoryInPlace(t *testing.T) {
 	t.Setenv("SPROUT_STATE_DIR", t.TempDir())
 	local := t.TempDir()
 	l := &HostLauncher{SproutBin: "/nonexistent/sprout"}
-	task := WorkspaceTask{WorkspaceID: "ws-inplace", Action: "start", WorkspaceDir: local, TxnSecret: "s"}
+	task := DevSpaceTask{DevSpaceID: "ws-inplace", Action: "start", DevSpaceDir: local, TxnSecret: "s"}
 	// No RepoURL, no clone: Start must get as far as launching the daemon
 	// (which fails fast on the missing binary), proving the clone path was
 	// skipped for a plain directory with no git.
 	_, err := l.Start(context.Background(), task)
 	if err == nil {
-		t.Cleanup(func() { _ = l.Destroy(context.Background(), task.WorkspaceID, nil) })
+		t.Cleanup(func() { _ = l.Destroy(context.Background(), task.DevSpaceID, nil) })
 		t.Fatal("the daemon cannot start from a nonexistent binary; expected an error")
 	}
 	if strings.Contains(err.Error(), "refusing to clone") {
-		t.Fatalf("a local-directory workspace must not be cloned: %v", err)
+		t.Fatalf("a local-directory project folder must not be cloned: %v", err)
 	}
 }
 

@@ -48,7 +48,7 @@ func TestBuildFileIndex_WalksTree(t *testing.T) {
 	if res.Truncated {
 		t.Error("small tree must not be truncated")
 	}
-	// Paths are workspace-relative slash paths.
+	// Paths are project-folder-relative slash paths.
 	for _, p := range paths {
 		if filepath.IsAbs(p) || containsBackslash(p) {
 			t.Errorf("path %q must be relative with forward slashes", p)

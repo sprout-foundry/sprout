@@ -67,7 +67,7 @@ func newSlowProviderTestServer(t *testing.T) (*ReactWebServer, *atomic.Int32, *a
 	}
 	root := t.TempDir()
 	ws.daemonRoot = root
-	ws.workspaceRoot = root
+	ws.projectFolder = root
 
 	var pinnedLookups atomic.Int32
 	ws.providerModels.fetch = func(ctx context.Context, pt api.ClientType) ([]api.ModelInfo, error) {
@@ -189,7 +189,7 @@ func countAgentBuilds(t *testing.T, delay time.Duration) *atomic.Int32 {
 	t.Helper()
 	var builds atomic.Int32
 	orig := buildWebUIAgent
-	buildWebUIAgent = func(configBase, workspaceDir, workspaceRoot, model string) (*agent.Agent, error) {
+	buildWebUIAgent = func(configBase, projectFolderDir, projectFolder, model string) (*agent.Agent, error) {
 		builds.Add(1)
 		time.Sleep(delay)
 		return nil, errors.New("agent builds are stubbed in this test")

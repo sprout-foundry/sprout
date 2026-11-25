@@ -2,7 +2,7 @@
 // ResolveToolRisk produces the unified risk assessment for a tool call by
 // folding all security inputs onto the Low/Medium/High/Critical scale:
 // the static classifier, the persona cascade, the git gates, the
-// workspace security policy, and the filesystem path tiers. It operates
+// project folder security policy, and the filesystem path tiers. It operates
 // on the RiskAgent seam (risk_agent.go) so it lives here, out of the god
 // package.
 package approvals
@@ -16,12 +16,12 @@ import (
 )
 
 func ResolveToolRisk(a RiskAgent, toolName string, args map[string]interface{}) RiskAssessment {
-	// 1. Static classifier (always), workspace-augmented for shell commands
+	// 1. Static classifier (always), project-folder-augmented for shell commands
 	var wsRoot string
 	if a != nil {
-		wsRoot = a.GetWorkspaceRoot()
+		wsRoot = a.GetProjectFolder()
 	}
-	secResult := tools.ClassifyToolCallWithWorkspace(toolName, args, wsRoot)
+	secResult := tools.ClassifyToolCallWithProjectFolder(toolName, args, wsRoot)
 	assessment := AssessmentFromClassifier(secResult)
 
 	// Downgrade privileged commands when a password prompter is registered.
@@ -79,7 +79,7 @@ func ResolveToolRisk(a RiskAgent, toolName string, args map[string]interface{}) 
 				)
 			}
 
-			// 6. Workspace security policy
+			// 6. Project folder security policy
 			if cfg := a.GetConfig(); cfg != nil && cfg.SecurityPolicy != nil {
 				policyAction := cfg.SecurityPolicy.Evaluate(cmd)
 				switch policyAction {
@@ -88,8 +88,8 @@ func ResolveToolRisk(a RiskAgent, toolName string, args map[string]interface{}) 
 						RiskAssessment{
 							Level:       configuration.RiskLevelCritical,
 							IsHardBlock: true,
-							Sources:     []RiskSource{RiskSourceWorkspacePolicy},
-							Reason:      "workspace security policy denies this command",
+							Sources:     []RiskSource{RiskSourceProjectFolderPolicy},
+							Reason:      "project folder security policy denies this command",
 						},
 					)
 				case configuration.PolicyPrompt:
@@ -97,8 +97,8 @@ func ResolveToolRisk(a RiskAgent, toolName string, args map[string]interface{}) 
 						assessment = assessment.Combine(
 							RiskAssessment{
 								Level:   configuration.RiskLevelMedium,
-								Sources: []RiskSource{RiskSourceWorkspacePolicy},
-								Reason:  "workspace security policy requires prompt for this command",
+								Sources: []RiskSource{RiskSourceProjectFolderPolicy},
+								Reason:  "project folder security policy requires prompt for this command",
 							},
 						)
 					}
@@ -113,7 +113,7 @@ func ResolveToolRisk(a RiskAgent, toolName string, args map[string]interface{}) 
 		toolName == "read_file") && a != nil {
 		if pathRaw, ok := args["path"].(string); ok && pathRaw != "" {
 			home := a.HomeDir()
-			tier := ClassifyPathAccess(pathRaw, a.GetWorkspaceRoot(), home, a.EffectiveCwd())
+			tier := ClassifyPathAccess(pathRaw, a.GetProjectFolder(), home, a.EffectiveCwd())
 			assessment.PathTier = tier
 			assessment.FileMode = AccessModeForTool(toolName)
 
@@ -141,7 +141,7 @@ func ResolveToolRisk(a RiskAgent, toolName string, args map[string]interface{}) 
 							RiskAssessment{
 								Level:   configuration.RiskLevelMedium,
 								Sources: []RiskSource{RiskSourceFSTier},
-								Reason:  fmt.Sprintf("path %s is outside the workspace (external tier)", pathRaw),
+								Reason:  fmt.Sprintf("path %s is outside the project folder (external tier)", pathRaw),
 							},
 						)
 					}

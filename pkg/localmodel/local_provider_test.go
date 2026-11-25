@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sprout-foundry/sinter/llm"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
@@ -368,5 +369,347 @@ func TestParseQwenToolCalls_InlineFallbackDoesNotOverrideStandard(t *testing.T) 
 	_ = json.Unmarshal([]byte(calls[0].Function.Arguments), &args)
 	if len(args) != 1 || args["command"] != "go test ./..." {
 		t.Errorf("args = %v, want only command", args)
+	}
+}
+
+func TestParseMiniCPM5ToolCalls(t *testing.T) {
+	text := `<function name="read_file"><param name="path">/some/file.go</param></function>`
+	content, calls := parseMiniCPM5ToolCalls(text)
+
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 tool call, got %d", len(calls))
+	}
+	if calls[0].Function.Name != "read_file" {
+		t.Errorf("expected 'read_file', got %q", calls[0].Function.Name)
+	}
+	var args map[string]interface{}
+	_ = json.Unmarshal([]byte(calls[0].Function.Arguments), &args)
+	if args["path"] != "/some/file.go" {
+		t.Errorf("args[path] = %v, want /some/file.go", args["path"])
+	}
+	if content != "" {
+		t.Errorf("expected empty content, got %q", content)
+	}
+}
+
+func TestParseMiniCPM5ToolCalls_CDATA(t *testing.T) {
+	text := `<function name="write_file"><param name="content"><![CDATA[hello <world> & friends\nline2]]></param></function>`
+	_, calls := parseMiniCPM5ToolCalls(text)
+
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 tool call, got %d", len(calls))
+	}
+	var args map[string]interface{}
+	_ = json.Unmarshal([]byte(calls[0].Function.Arguments), &args)
+	content, _ := args["content"].(string)
+	if !strings.Contains(content, "hello <world> & friends") || !strings.Contains(content, "line2") {
+		t.Errorf("CDATA content lost its inner markup: %q", content)
+	}
+}
+
+// An empty CDATA body must parse as an empty string, not fall through to
+// the plain branch where the regex can swallow the ]]> tail as the value.
+func TestParseMiniCPM5ToolCalls_EmptyCDATA(t *testing.T) {
+	text := `<function name="write_file"><param name="content"><![CDATA[]]></param></function>`
+	_, calls := parseMiniCPM5ToolCalls(text)
+
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 tool call, got %d", len(calls))
+	}
+	var args map[string]interface{}
+	_ = json.Unmarshal([]byte(calls[0].Function.Arguments), &args)
+	content, _ := args["content"].(string)
+	if content != "" {
+		t.Errorf("empty CDATA should parse as empty string, got %q", content)
+	}
+}
+
+// A CDATA value containing ]]> must round-trip: parse keeps the literal,
+// replay re-escapes it so the markup stays parseable.
+func TestMiniCPM5CDATA_CloseBracketRoundTrip(t *testing.T) {
+	const tricky = `array literal: a]]>b`
+	_, calls := parseMiniCPM5ToolCalls(
+		`<function name="write_file"><param name="content"><![CDATA[` + tricky + `]]></param></function>`)
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 tool call, got %d", len(calls))
+	}
+	var args map[string]interface{}
+	_ = json.Unmarshal([]byte(calls[0].Function.Arguments), &args)
+	if got, _ := args["content"].(string); got != tricky {
+		t.Errorf("CDATA with ]]>> lost content: got %q, want %q", got, tricky)
+	}
+
+	replayed := formatMiniCPM5AssistantToolCalls(calls)
+	_, back := parseMiniCPM5ToolCalls(replayed)
+	if len(back) != 1 {
+		t.Fatalf("replayed markup unparseable: %q", replayed)
+	}
+	var backArgs map[string]interface{}
+	_ = json.Unmarshal([]byte(back[0].Function.Arguments), &backArgs)
+	if got, _ := backArgs["content"].(string); got != tricky {
+		t.Errorf("replay round-trip broke content: got %q, want %q", got, tricky)
+	}
+}
+
+// A param value containing the literal "</function>" (a model writing code)
+// must not end the call early: the scanner tracks open/close depth, so the
+// call survives to its real close and the value round-trips whole.
+func TestParseMiniCPM5ToolCalls_LiteralCloseInValue(t *testing.T) {
+	inner := "call it via </function> and then retry"
+	text := `<function name="write_file"><param name="content"><![CDATA[` + inner + `]]></param></function>`
+	content, calls := parseMiniCPM5ToolCalls(text)
+
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 tool call, got %d (%q)", len(calls), content)
+	}
+	var args map[string]interface{}
+	_ = json.Unmarshal([]byte(calls[0].Function.Arguments), &args)
+	if got, _ := args["content"].(string); got != inner {
+		t.Errorf("literal </function> in value truncated the call: got %q, want %q", got, inner)
+	}
+	if content != "" {
+		t.Errorf("expected empty visible content, got %q", content)
+	}
+}
+
+// Same hazard in the plain (non-CDATA) form: the first close tag after the
+// open is another param's value, not the call's close.
+func TestParseMiniCPM5ToolCalls_LiteralCloseInPlainValue(t *testing.T) {
+	text := `<function name="write_file"><param name="content">a </function> trick</param></function>`
+	content, calls := parseMiniCPM5ToolCalls(text)
+
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 tool call, got %d (%q)", len(calls), content)
+	}
+	var args map[string]interface{}
+	_ = json.Unmarshal([]byte(calls[0].Function.Arguments), &args)
+	if got, _ := args["content"].(string); got != "a </function> trick" {
+		t.Errorf("plain value with literal close parsed as %q", got)
+	}
+}
+
+// A plain (non-CDATA) param value that happens to contain the literal text
+// "<![CDATA[" must parse as the plain branch — the value text, not an empty
+// CDATA body.
+func TestParseMiniCPM5ToolCalls_PlainValueWithCDATALiteral(t *testing.T) {
+	text := `<function name="write_file"><param name="content">docs: <![CDATA[ syntax</param></function>`
+	_, calls := parseMiniCPM5ToolCalls(text)
+
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 tool call, got %d", len(calls))
+	}
+	var args map[string]interface{}
+	_ = json.Unmarshal([]byte(calls[0].Function.Arguments), &args)
+	if got, _ := args["content"].(string); got != "docs: <![CDATA[ syntax" {
+		t.Errorf("plain value with CDATA marker parsed as %q", got)
+	}
+}
+
+// A CDATA-wrapped call (the form the tool prompt tells the model to use for
+// any value with <, & or a newline — i.e. nearly every write_file) must end
+// at its own close: a second call after it parses separately, and trailing
+// visible text survives.
+func TestParseMiniCPM5ToolCalls_CDATAThenSecondCall(t *testing.T) {
+	text := `<function name="write_file"><param name="content"><![CDATA[hello <world>]]></param></function>` +
+		`<function name="read_file"><param name="path">/b.go</param></function>`
+	_, calls := parseMiniCPM5ToolCalls(text)
+
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 tool calls, got %d", len(calls))
+	}
+	var wargs map[string]interface{}
+	_ = json.Unmarshal([]byte(calls[0].Function.Arguments), &wargs)
+	if wargs["content"] != "hello <world>" {
+		t.Errorf("first call content = %v", wargs["content"])
+	}
+	if calls[1].Function.Name != "read_file" {
+		t.Errorf("second call = %q, want read_file", calls[1].Function.Name)
+	}
+}
+
+// Trailing visible text after a CDATA-wrapped call is content, not part of
+// the call body.
+func TestParseMiniCPM5ToolCalls_CDATAThenTrailingText(t *testing.T) {
+	text := `<function name="write_file"><param name="content"><![CDATA[hello <world>]]></param></function>` + "\nDone."
+	content, calls := parseMiniCPM5ToolCalls(text)
+
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 tool call, got %d", len(calls))
+	}
+	if content != "Done." {
+		t.Errorf("trailing text lost: content = %q", content)
+	}
+}
+
+// Two calls back to back must each parse as their own call — the body
+// regex is non-greedy, so the first close tag ends the first call.
+func TestParseMiniCPM5ToolCalls_TwoAdjacentCalls(t *testing.T) {
+	text := `<function name="read_file"><param name="path">/a.go</param></function>` +
+		`<function name="read_file"><param name="path">/b.go</param></function>`
+	_, calls := parseMiniCPM5ToolCalls(text)
+
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 tool calls, got %d", len(calls))
+	}
+	for i, want := range []string{"/a.go", "/b.go"} {
+		var args map[string]interface{}
+		_ = json.Unmarshal([]byte(calls[i].Function.Arguments), &args)
+		if got, _ := args["path"].(string); got != want {
+			t.Errorf("call %d: path = %q, want %q", i, got, want)
+		}
+	}
+}
+
+func TestParseMiniCPM5ToolCalls_NoToolCalls(t *testing.T) {
+	text := "Just a regular response."
+	content, calls := parseMiniCPM5ToolCalls(text)
+
+	if len(calls) != 0 {
+		t.Fatalf("expected 0 tool calls, got %d", len(calls))
+	}
+	if content != text {
+		t.Errorf("content should be unchanged")
+	}
+}
+
+func TestParseMiniCPM5ToolCalls_Preamble(t *testing.T) {
+	text := `Let me check that file.
+<function name="read_file"><param name="path">/a.go</param></function>`
+	content, calls := parseMiniCPM5ToolCalls(text)
+
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 tool call, got %d", len(calls))
+	}
+	if !strings.Contains(content, "Let me check") {
+		t.Errorf("expected preamble to survive, got %q", content)
+	}
+}
+
+func TestFormatMiniCPM5ToolsPrompt(t *testing.T) {
+	tools := []api.Tool{
+		{Type: "function", Function: api.ToolFunction{Name: "read_file", Description: "Read a file"}},
+	}
+	prompt := formatMiniCPM5ToolsPrompt(tools)
+	if prompt == "" {
+		t.Fatal("MiniCPM5 tool prompt should not be empty")
+	}
+	if !contains(prompt, "<tools>") {
+		t.Error("MiniCPM5 tool prompt should contain <tools>")
+	}
+	if !contains(prompt, "read_file") {
+		t.Error("MiniCPM5 tool prompt should contain function name")
+	}
+	if !contains(prompt, "<function name=") {
+		t.Error("MiniCPM5 tool prompt should contain the call-format example")
+	}
+}
+
+func TestFormatMiniCPM5AssistantToolCalls(t *testing.T) {
+	calls := []api.ToolCall{
+		{
+			Type: "function",
+			Function: api.ToolCallFunction{
+				Name:      "read_file",
+				Arguments: `{"path":"/some/file.go"}`,
+			},
+		},
+	}
+	result := formatMiniCPM5AssistantToolCalls(calls)
+	if !contains(result, `<function name="read_file">`) {
+		t.Errorf("expected native function tag, got %q", result)
+	}
+	if !contains(result, `<param name="path">/some/file.go</param>`) {
+		t.Errorf("expected native param tag, got %q", result)
+	}
+}
+
+func TestFormatMiniCPM5AssistantToolCalls_CDATA(t *testing.T) {
+	calls := []api.ToolCall{
+		{
+			Type: "function",
+			Function: api.ToolCallFunction{
+				Name:      "write_file",
+				Arguments: `{"content":"hello <world>\nline2"}`,
+			},
+		},
+	}
+	result := formatMiniCPM5AssistantToolCalls(calls)
+	if !contains(result, "<![CDATA[") {
+		t.Errorf("multi-line value should be wrapped in CDATA, got %q", result)
+	}
+	if !contains(result, "hello <world>") {
+		t.Errorf("CDATA content missing, got %q", result)
+	}
+}
+
+func TestFormatToolsPrompt_MiniCPM5(t *testing.T) {
+	tools := []api.Tool{
+		{Type: "function", Function: api.ToolFunction{Name: "read_file", Description: "Read a file"}},
+	}
+	prompt := formatToolsPrompt(minicpm5Arch, tools)
+	if prompt == "" {
+		t.Fatal("MiniCPM5 tool prompt should not be empty")
+	}
+	if !contains(prompt, "<tools>") {
+		t.Error("MiniCPM5 tool prompt should contain <tools>")
+	}
+}
+
+func TestParseLocalToolCalls_MiniCPM5(t *testing.T) {
+	text := `<function name="read_file"><param name="path">/some/file.go</param></function>`
+	content, calls := parseLocalToolCalls(minicpm5Arch, text)
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 tool call, got %d", len(calls))
+	}
+	if calls[0].Function.Name != "read_file" {
+		t.Errorf("expected 'read_file', got %q", calls[0].Function.Name)
+	}
+	if content != "" {
+		t.Errorf("expected empty content, got %q", content)
+	}
+}
+
+func TestEffectiveArch_MiniCPM5(t *testing.T) {
+	dir := t.TempDir()
+	tokPath := dir + "/tokenizer.json"
+	content := `{"added_tokens":[{"content":"<|im_start|>","id":130072},{"content":"/think","id":130080},{"content":"/no_think","id":130081}]}`
+	if err := writeFile(tokPath, []byte(content)); err != nil {
+		t.Fatal(err)
+	}
+	if !isMiniCPM5Model(dir) {
+		t.Error("expected isMiniCPM5Model to detect adjacent /think + /no_think")
+	}
+	cfg := llm.ModelConfig{Arch: "llama"}
+	if got := effectiveArch(cfg, dir); got != minicpm5Arch {
+		t.Errorf("expected %q, got %q", minicpm5Arch, got)
+	}
+}
+
+// A tokenizer with the control tokens but on non-adjacent ids (Qwen3's
+// layout) is not MiniCPM5 — effectiveArch must keep the config's arch.
+func TestEffectiveArch_NonAdjacentThinkTokens(t *testing.T) {
+	dir := t.TempDir()
+	tokPath := dir + "/tokenizer.json"
+	content := `{"added_tokens":[{"content":"/think","id":76511},{"content":"/no_think","id":76519}]}`
+	if err := writeFile(tokPath, []byte(content)); err != nil {
+		t.Fatal(err)
+	}
+	if isMiniCPM5Model(dir) {
+		t.Error("non-adjacent /think ids must not detect as MiniCPM5")
+	}
+	cfg := llm.ModelConfig{Arch: "qwen3"}
+	if got := effectiveArch(cfg, dir); got != "qwen3" {
+		t.Errorf("expected qwen3, got %q", got)
+	}
+}
+
+func TestEffectiveArch_NonMiniCPM5(t *testing.T) {
+	dir := t.TempDir()
+	if isMiniCPM5Model(dir) {
+		t.Error("empty dir should not be MiniCPM5")
+	}
+	cfg := llm.ModelConfig{Arch: "llama"}
+	if got := effectiveArch(cfg, dir); got != "llama" {
+		t.Errorf("expected llama, got %q", got)
 	}
 }

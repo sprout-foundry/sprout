@@ -22,9 +22,9 @@ func (p *LocalProvider) SendChatRequest(ctx context.Context, messages []api.Mess
 		return nil, fmt.Errorf("local provider: %w", err)
 	}
 	TouchActivity()
-	warmSystemPrefix(model, messages, tools)
+	warmSystemPrefix(model, p.modelDir, messages, tools)
 
-	prompt := buildPrompt(model, messages, tools, !disableThinking)
+	prompt := buildPrompt(model, p.modelDir, messages, tools, !disableThinking)
 	cfg := llm.DefaultGenerateConfig()
 	// Real output budget against the context window — see
 	// localMaxOutputTokens. The 512 default truncated real turns
@@ -71,7 +71,7 @@ func (p *LocalProvider) SendChatRequest(ctx context.Context, messages []api.Mess
 	}
 	elapsed := time.Since(start).Seconds()
 
-	content, toolCalls := parseLocalToolCalls(p.model.Config().Arch, text)
+	content, toolCalls := parseLocalToolCalls(effectiveArch(p.model.Config(), p.modelDir), text)
 	promptTokens := len(model.TokenizerEncode(prompt))
 	logLocalExchange("chat", prompt, text, promptTokens, len(toolCalls))
 	completionTokens := len(model.TokenizerEncode(text))
@@ -110,9 +110,9 @@ func (p *LocalProvider) SendChatRequestStream(ctx context.Context, messages []ap
 		return nil, fmt.Errorf("local provider: %w", err)
 	}
 	TouchActivity()
-	warmSystemPrefix(model, messages, tools)
+	warmSystemPrefix(model, p.modelDir, messages, tools)
 
-	prompt := buildPrompt(model, messages, tools, !disableThinking)
+	prompt := buildPrompt(model, p.modelDir, messages, tools, !disableThinking)
 	cfg := llm.DefaultGenerateConfig()
 	// Real output budget against the context window — see
 	// localMaxOutputTokens. The 512 default truncated real turns
@@ -165,7 +165,7 @@ func (p *LocalProvider) SendChatRequestStream(ctx context.Context, messages []ap
 	elapsed := time.Since(start).Seconds()
 
 	if hasTools {
-		content, toolCalls := parseLocalToolCalls(p.model.Config().Arch, outputBuf.String())
+		content, toolCalls := parseLocalToolCalls(effectiveArch(p.model.Config(), p.modelDir), outputBuf.String())
 		promptTokens := len(model.TokenizerEncode(prompt))
 		logLocalExchange("stream", prompt, outputBuf.String(), promptTokens, len(toolCalls))
 		if content != "" && callback != nil {

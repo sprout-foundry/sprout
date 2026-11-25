@@ -25,6 +25,7 @@ import (
 	"github.com/sprout-foundry/sinter/llm/catalog"
 	_ "github.com/sprout-foundry/sinter/llm/gemma4"
 	_ "github.com/sprout-foundry/sinter/llm/lfm2"
+	_ "github.com/sprout-foundry/sinter/llm/qwen2"
 	_ "github.com/sprout-foundry/sinter/llm/qwen3"
 	_ "github.com/sprout-foundry/sinter/llm/qwen35"
 	"github.com/sprout-foundry/sinter/mlx"

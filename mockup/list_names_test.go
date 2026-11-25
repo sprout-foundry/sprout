@@ -83,3 +83,28 @@ func TestTextLabel_BareNumberIsANumber(t *testing.T) {
 		t.Fatalf("textLabel(9:30am) = %q, want Time", got)
 	}
 }
+
+// A row of cards each naming a different fact is the page's facts, not a
+// list, even where the drawing named it one; cards sharing labels still are.
+func TestKeyed_FactCardsAreNotAList(t *testing.T) {
+	_, c := Keyed(`<section data-screen="home"><div class="grid" data-list="Party facts">
+<div class="card"><span data-label="Party date">Saturday 14 March</span><span>2pm – 4pm</span></div>
+<div class="card"><span data-label="Party place">12 Example Lane</span><span>Our house</span></div>
+<div class="card"><span data-label="Reply by">Wed 11 March</span><span>Don't be late!</span></div>
+</div></section>`, nil)
+	if len(c.Lists) != 0 {
+		t.Fatalf("lists = %+v: distinct fact cards are not a list", c.Lists)
+	}
+	for _, f := range c.Fields {
+		if f.Label == "Party date" && f.List != "" {
+			t.Fatalf("the party date is in a list: %+v", f)
+		}
+	}
+	lists := listsOf(t, `<section data-screen="home"><h2>Breads</h2><div class="grid">
+<div class="card"><h3>Sourdough</h3><span data-label="Sourdough price">£4.50</span></div>
+<div class="card"><h3>Rye</h3><span data-label="Rye price">£5.00</span></div>
+</div></section>`)
+	if len(lists) != 1 {
+		t.Fatalf("lists = %+v: cards of one kind stay a list", lists)
+	}
+}

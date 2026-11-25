@@ -27,11 +27,11 @@ func fieldByText(c Content, text string) (Field, bool) {
 func TestKeyed_EveryPieceOfTextHasAKeyLabelAndSection(t *testing.T) {
 	doc, c := Keyed(invite, nil)
 	want := []struct{ text, label, section string }{
-		{"Maya turns thirty", "Main heading", "Invitation"},
+		{"Maya turns thirty", "Main heading", "Invitation · Maya turns thirty"},
 		{"Saturday, June 14 · 7pm", "Event date", "Invitation · Maya turns thirty"},
 		{"Come hungry, stay late, bring someone.", "Text", "Invitation · Maya turns thirty"},
 		{"RSVP by June 7", "Button", "Invitation · Maya turns thirty"},
-		{"Will you be there?", "Heading", "Rsvp"},
+		{"Will you be there?", "Heading", "Rsvp · Will you be there?"},
 		{"Your name", "Field label", "Rsvp · Will you be there?"},
 		{"Priya Raman", "Placeholder", "Rsvp · Will you be there?"},
 		{"Send", "Button", "Rsvp · Will you be there?"},
@@ -138,5 +138,24 @@ func TestKeyed_ALineBreakSeparatesWords(t *testing.T) {
 	_, c := Keyed(`<html><body><h1>Bring a book,<br>leave with another.</h1></body></html>`, nil)
 	if len(c.Fields) != 1 || c.Fields[0].Text != "Bring a book, leave with another." {
 		t.Fatalf("fields = %+v, want the heading's words separated at the line break", c.Fields)
+	}
+}
+
+// On a page with no screens (a built app), a heading is not filed under the
+// heading before it: each heading starts its own section, with its texts.
+func TestKeyed_HeadingDoesNotJoinThePreviousSection(t *testing.T) {
+	_, c := Keyed(`<main><h2>Seeded wholemeal</h2><p>Soft enough for sandwiches.</p><h2>Country white</h2><p>A big open crumb.</p></main>`, nil)
+	sections := map[string]string{}
+	for _, f := range c.Fields {
+		sections[f.Text] = f.Section
+	}
+	if got := sections["Country white"]; got != "Country white" {
+		t.Fatalf("the Country white heading has section %q, want its own", got)
+	}
+	if got := sections["A big open crumb."]; got != "Country white" {
+		t.Fatalf("text after a heading has section %q, want %q", got, "Country white")
+	}
+	if got := sections["Soft enough for sandwiches."]; got != "Seeded wholemeal" {
+		t.Fatalf("text after a heading has section %q, want %q", got, "Seeded wholemeal")
 	}
 }

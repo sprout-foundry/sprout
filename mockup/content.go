@@ -169,10 +169,11 @@ func Keyed(doc string, saved *Content) (string, Content) {
 		if label == "" {
 			label = elementLabel(f.tag, attr(f.token, "class"))
 		}
-		fields = append(fields, Field{Key: key, Label: label, Section: section(), Text: text, Mine: mine[key].Mine, pos: f.tagPiece})
+		// A heading starts its own section rather than ending the one before.
 		if f.tag == "h1" || f.tag == "h2" || f.tag == "h3" {
 			heading = text
 		}
+		fields = append(fields, Field{Key: key, Label: label, Section: section(), Text: text, Mine: mine[key].Mine, pos: f.tagPiece})
 	}
 
 	// closeFrame settles an element as it closes, while it is still on the

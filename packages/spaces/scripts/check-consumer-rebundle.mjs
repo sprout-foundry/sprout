@@ -81,7 +81,7 @@ async function main() {
         stdio: ["ignore", "pipe", "inherit"],
       }),
     )[0].filename;
-    const installed = join(work, "node_modules", "@sprout-foundry", "workspace");
+    const installed = join(work, "node_modules", "@sprout-foundry", "spaces");
     mkdirSync(installed, { recursive: true });
     execFileSync("tar", ["-xzf", join(work, packed), "-C", installed, "--strip-components=1"]);
     linkFromRepo(join(work, "node_modules"), "react");

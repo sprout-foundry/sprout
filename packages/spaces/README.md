@@ -1,6 +1,6 @@
 # @sprout-foundry/spaces
 
-The composition API for Sprout. A host application mounts Sprout's workspace —
+The composition API for Sprout. A host application mounts Sprout's spaces —
 one project, one of the registered spaces — inside its own product through
 this package instead of reaching into web UI internals.
 
@@ -63,18 +63,18 @@ await agent.send("Sketch a landing page");
 
 ## Styles
 
-The workspace's styles ship as one stylesheet:
+The styles ship as one stylesheet:
 
 ```tsx
 import "@sprout-foundry/spaces/styles.css";
 ```
 
-It is emitted at `dist/spaces.css` and scoped to the `.sprout-workspace`
-class the workspace root renders, so it cannot style the host page outside
-the mounted workspace (no top-level `:root`/`html`/`body`/`*` selector). It
+It is emitted at `dist/spaces.css` and scoped to the `.sprout-spaces`
+class the spaces root renders, so it cannot style the host page outside
+the mounted spaces (no top-level `:root`/`html`/`body`/`*` selector). It
 styles surfaces through `var(--token)` design tokens; the host imports
 `@sprout-foundry/design` for the token values, or supplies them on the
-workspace root through the host theme.
+spaces root through the host theme.
 
 ## WASM assets
 

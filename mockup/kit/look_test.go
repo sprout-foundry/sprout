@@ -132,3 +132,27 @@ func TestSaveAndLoadLook(t *testing.T) {
 		t.Fatalf("nothing usable is not saved: %v %v", wrote, err)
 	}
 }
+
+// A look that names only its main colours has the rest derived from them,
+// not left to the default palette's.
+func TestLookVars_DerivesTheSlotsALookLeavesOut(t *testing.T) {
+	v := lookVars(Look{Colors: map[string]string{"primary": "#4f6f52", "bg": "#f6f3ec", "text": "#2c2a26"}})
+	for _, k := range []string{"--soft", "--surface", "--border", "--muted", "--accent", "--on-primary"} {
+		if v[k] == "" {
+			t.Errorf("%s not derived: %v", k, v)
+		}
+	}
+	if !strings.Contains(v["--soft"], "var(--primary)") {
+		t.Errorf("soft is not from the primary: %s", v["--soft"])
+	}
+	if v["--on-primary"] != "#fff" {
+		t.Errorf("text on a dark green = %s", v["--on-primary"])
+	}
+	if got := lookVars(Look{Colors: map[string]string{"primary": "#f5d90a"}})["--on-primary"]; got != "#1a1a1a" {
+		t.Errorf("text on a yellow = %s", got)
+	}
+	given := lookVars(Look{Colors: map[string]string{"primary": "#4f6f52", "soft": "#eef3ee"}})
+	if given["--soft"] != "#eef3ee" {
+		t.Errorf("a given slot was replaced: %s", given["--soft"])
+	}
+}

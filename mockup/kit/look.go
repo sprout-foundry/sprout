@@ -10,7 +10,9 @@ package kit
 
 import (
 	"encoding/json"
+	"fmt"
 	"html"
+	"math"
 	"regexp"
 	"strings"
 )
@@ -138,6 +140,11 @@ func lookVars(l Look) map[string]string {
 	for k, v := range l.Colors {
 		vars["--"+strings.ReplaceAll(k, "_", "-")] = v
 	}
+	for k, v := range derivedSlots(l) {
+		if _, ok := vars[k]; !ok {
+			vars[k] = v
+		}
+	}
 	if l.FontBody != "" {
 		vars["--font-body"] = l.FontBody
 	}
@@ -152,6 +159,72 @@ func lookVars(l Look) map[string]string {
 		vars["--radius-btn"] = scaledLength(m[1], m[3], 0.75)
 	}
 	return vars
+}
+
+// derivedSlots fills the palette slots a look leaves out from the ones it
+// gives, so a brand that names only its main colours is not finished in the
+// default palette's (a blue panel under a green brand).
+func derivedSlots(l Look) map[string]string {
+	has := func(k string) bool { return l.Colors[k] != "" }
+	out := map[string]string{}
+	paper := "#fff"
+	if l.Dark {
+		paper = "#000"
+	}
+	if has("primary") {
+		out["--soft"] = "color-mix(in srgb, var(--primary) 12%, var(--bg, " + paper + "))"
+		if !has("accent") {
+			out["--accent"] = "var(--primary)"
+		}
+	}
+	if has("bg") {
+		mix := "#fff"
+		if l.Dark {
+			mix = "#2a2a2a"
+		}
+		out["--surface"] = "color-mix(in srgb, var(--bg) 55%, " + mix + ")"
+	}
+	if has("text") {
+		out["--border"] = "color-mix(in srgb, var(--text) 14%, var(--bg, " + paper + "))"
+		out["--muted"] = "color-mix(in srgb, var(--text) 68%, var(--bg, " + paper + "))"
+	}
+	for _, slot := range []struct{ fill, on, cssVar string }{{"primary", "on_primary", "--on-primary"}, {"accent", "on_accent", "--on-accent"}} {
+		if c := l.Colors[slot.fill]; c != "" && !has(slot.on) {
+			if on, ok := contrastingText(c); ok {
+				out[slot.cssVar] = on
+			}
+		}
+	}
+	return out
+}
+
+// contrastingText is near-black or white, whichever reads on a hex colour.
+func contrastingText(hex string) (string, bool) {
+	h := strings.TrimPrefix(strings.TrimSpace(hex), "#")
+	if len(h) == 3 {
+		h = string([]byte{h[0], h[0], h[1], h[1], h[2], h[2]})
+	}
+	if len(h) != 6 && len(h) != 8 {
+		return "", false
+	}
+	var rgb [3]float64
+	for i := range rgb {
+		var v int
+		if _, err := fmt.Sscanf(h[i*2:i*2+2], "%02x", &v); err != nil {
+			return "", false
+		}
+		c := float64(v) / 255
+		if c <= 0.03928 {
+			rgb[i] = c / 12.92
+		} else {
+			rgb[i] = math.Pow((c+0.055)/1.055, 2.4)
+		}
+	}
+	lum := 0.2126*rgb[0] + 0.7152*rgb[1] + 0.0722*rgb[2]
+	if lum > 0.4 {
+		return "#1a1a1a", true
+	}
+	return "#fff", true
 }
 
 func scaledLength(num, unit string, f float64) string {

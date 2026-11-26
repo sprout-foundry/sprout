@@ -186,9 +186,12 @@ func wholeRequest(planJSON []byte, current, note string) string {
 
 // lookRequest tells the model the mockup is of an existing product, drawn
 // in its own look; "" for a new idea.
-func lookRequest(look *kit.Look, notes string, editing bool) string {
+func lookRequest(look *kit.Look, notes string, editing, brand bool) string {
 	if look == nil {
 		return ""
+	}
+	if brand {
+		return brandLookRequest(notes, editing)
 	}
 	var b strings.Builder
 	b.WriteString("\n\nThis is a screen of an existing product, and it must look like that product, not like a new site. ")
@@ -204,6 +207,24 @@ func lookRequest(look *kit.Look, notes string, editing bool) string {
 		"the way the product's existing screens are, with their kinds of section.")
 	if notes != "" {
 		b.WriteString(" How the product is laid out and styled: ")
+		b.WriteString(notes)
+	}
+	return b.String()
+}
+
+// brandLookRequest is lookRequest for a business's brand: the page is
+// designed for the idea, in the brand's colours, type and corners.
+func brandLookRequest(notes string, editing bool) string {
+	var b strings.Builder
+	if editing {
+		b.WriteString("\n\nKeep data-palette=\"" + kit.LookPalette + "\" on <html>: it is the business's brand.")
+	} else {
+		b.WriteString("\n\nDraw this in the business's brand. On <html> use data-palette=\"" + kit.LookPalette + "\": it is the brand's " +
+			"colours, type and corners. Choose the kit, first-screen composition and layout that suit the idea, as for any new idea. " +
+			"Name no data-font: the brand's own type applies.")
+	}
+	if notes != "" {
+		b.WriteString(" About the brand: ")
 		b.WriteString(notes)
 	}
 	return b.String()

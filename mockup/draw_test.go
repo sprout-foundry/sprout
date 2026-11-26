@@ -244,3 +244,25 @@ func TestDraw_FreshPicksAnew(t *testing.T) {
 		t.Fatalf("Fresh kept the old design: %+v", c)
 	}
 }
+
+// A business's brand is drawn as a new idea is, in the brand's colours, type
+// and corners: no existing product's screens to copy.
+func TestDraw_InABrand(t *testing.T) {
+	page := `<!doctype html><html data-kit="soft" data-palette="project"><head></head><body><section data-screen="home"><h1>Example Yoga</h1></section></body></html>`
+	stream, asked := replies(t, page)
+	look := &kit.Look{Colors: map[string]string{"primary": "#4f6f52"}, FontHead: "Georgia, serif"}
+	res, err := Draw(context.Background(), stream, Request{Plan: []byte(`{"brief":"a yoga class"}`), Look: look, LookNotes: "calm and earthy", LookIsBrand: true}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := (*asked)[0]
+	if !strings.Contains(q, "Draw this in the business's brand") || !strings.Contains(q, "calm and earthy") {
+		t.Fatalf("the model is not told about the brand: %s", q)
+	}
+	if strings.Contains(q, "existing product") || strings.Contains(q, "not as a marketing page") {
+		t.Fatalf("a brand was drawn as an existing product's screen: %s", q)
+	}
+	if !strings.Contains(res.HTML, "--primary:#4f6f52;") {
+		t.Fatal("the finished page carries the brand's colours")
+	}
+}

@@ -99,7 +99,7 @@ func getConfigDir() (string, error) {
 }
 
 // mcpConfigFileName is the standalone MCP config file, resolved per config
-// layer. It is separate from the layered config.json/workspace.json that
+// layer. It is separate from the layered config.json/project.json that
 // carries mcp.servers; both are merged at agent startup.
 const mcpConfigFileName = "mcp_config.json"
 

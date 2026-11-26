@@ -254,9 +254,9 @@ func TestProjectFolderLogPath2(t *testing.T) {
 		}
 	})
 
-	t.Run("ends with workspace.log", func(t *testing.T) {
-		if !strings.HasSuffix(path, "workspace.log") {
-			t.Errorf("projectFolderLogPath() should end with 'workspace.log', got %q", path)
+	t.Run("ends with project_folder.log", func(t *testing.T) {
+		if !strings.HasSuffix(path, "project_folder.log") {
+			t.Errorf("projectFolderLogPath() should end with 'project_folder.log', got %q", path)
 		}
 	})
 

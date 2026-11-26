@@ -1,17 +1,21 @@
 import { normalizePath } from './pathUtils';
 import {
-  RECENT_WORKSPACES_KEY,
-  REMOTE_RECENT_WORKSPACES_KEY,
-  SSH_FAVORITE_WORKSPACES_KEY,
-  MAX_RECENT_WORKSPACES,
+  RECENT_PROJECT_FOLDERS_KEY,
+  REMOTE_RECENT_PROJECT_FOLDERS_KEY,
+  SSH_FAVORITE_PROJECT_FOLDERS_KEY,
+  EARLIER_RECENT_PROJECT_FOLDERS_KEY,
+  EARLIER_REMOTE_RECENT_PROJECT_FOLDERS_KEY,
+  EARLIER_SSH_FAVORITE_PROJECT_FOLDERS_KEY,
+  MAX_RECENT_PROJECT_FOLDERS,
 } from './types';
+import { readMovedItem } from '../../services/movedStorageKey';
 
 export const readRecentProjectFolders = (): string[] => {
   if (typeof window === 'undefined') {
     return [];
   }
   try {
-    const raw = window.localStorage.getItem(RECENT_WORKSPACES_KEY);
+    const raw = readMovedItem(window.localStorage, RECENT_PROJECT_FOLDERS_KEY, EARLIER_RECENT_PROJECT_FOLDERS_KEY);
     if (!raw) {
       return [];
     }
@@ -22,7 +26,7 @@ export const readRecentProjectFolders = (): string[] => {
     return parsed
       .map((value) => (typeof value === 'string' ? normalizePath(value) : ''))
       .filter(Boolean)
-      .slice(0, MAX_RECENT_WORKSPACES);
+      .slice(0, MAX_RECENT_PROJECT_FOLDERS);
   } catch {
     return [];
   }
@@ -32,7 +36,7 @@ export const writeRecentProjectFolders = (paths: string[]) => {
   if (typeof window === 'undefined') {
     return;
   }
-  window.localStorage.setItem(RECENT_WORKSPACES_KEY, JSON.stringify(paths.slice(0, MAX_RECENT_WORKSPACES)));
+  window.localStorage.setItem(RECENT_PROJECT_FOLDERS_KEY, JSON.stringify(paths.slice(0, MAX_RECENT_PROJECT_FOLDERS)));
 };
 
 export const readRemoteRecentProjectFolders = (): Record<string, string[]> => {
@@ -40,7 +44,11 @@ export const readRemoteRecentProjectFolders = (): Record<string, string[]> => {
     return {};
   }
   try {
-    const raw = window.localStorage.getItem(REMOTE_RECENT_WORKSPACES_KEY);
+    const raw = readMovedItem(
+      window.localStorage,
+      REMOTE_RECENT_PROJECT_FOLDERS_KEY,
+      EARLIER_REMOTE_RECENT_PROJECT_FOLDERS_KEY,
+    );
     if (!raw) {
       return {};
     }
@@ -55,7 +63,7 @@ export const readRemoteRecentProjectFolders = (): Record<string, string[]> => {
           ? value
               .map((entry) => (typeof entry === 'string' ? normalizePath(entry) : ''))
               .filter(Boolean)
-              .slice(0, MAX_RECENT_WORKSPACES)
+              .slice(0, MAX_RECENT_PROJECT_FOLDERS)
           : [],
       ]),
     );
@@ -68,7 +76,7 @@ export const writeRemoteRecentProjectFolders = (value: Record<string, string[]>)
   if (typeof window === 'undefined') {
     return;
   }
-  window.localStorage.setItem(REMOTE_RECENT_WORKSPACES_KEY, JSON.stringify(value));
+  window.localStorage.setItem(REMOTE_RECENT_PROJECT_FOLDERS_KEY, JSON.stringify(value));
 };
 
 export const readSSHFavoriteProjectFolders = (): Record<string, string[]> => {
@@ -76,7 +84,11 @@ export const readSSHFavoriteProjectFolders = (): Record<string, string[]> => {
     return {};
   }
   try {
-    const raw = window.localStorage.getItem(SSH_FAVORITE_WORKSPACES_KEY);
+    const raw = readMovedItem(
+      window.localStorage,
+      SSH_FAVORITE_PROJECT_FOLDERS_KEY,
+      EARLIER_SSH_FAVORITE_PROJECT_FOLDERS_KEY,
+    );
     if (!raw) {
       return {};
     }
@@ -91,7 +103,7 @@ export const readSSHFavoriteProjectFolders = (): Record<string, string[]> => {
           ? value
               .map((entry) => (typeof entry === 'string' ? normalizePath(entry) : ''))
               .filter(Boolean)
-              .slice(0, MAX_RECENT_WORKSPACES)
+              .slice(0, MAX_RECENT_PROJECT_FOLDERS)
           : [],
       ]),
     );
@@ -105,7 +117,7 @@ export const writeSSHFavoriteProjectFolders = (value: Record<string, string[]>) 
     return;
   }
   try {
-    window.localStorage.setItem(SSH_FAVORITE_WORKSPACES_KEY, JSON.stringify(value));
+    window.localStorage.setItem(SSH_FAVORITE_PROJECT_FOLDERS_KEY, JSON.stringify(value));
   } catch {
     // QuotaExceededError: storage is full; the favorites won't persist this session
     // but shouldn't crash the UI.

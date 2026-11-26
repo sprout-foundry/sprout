@@ -21,7 +21,10 @@ const (
 	// ProjectFolderConfigFileName is the per-project-folder config file. Deliberately
 	// different from ConfigFileName to avoid a collision when the project folder
 	// root is $HOME (both layers would otherwise share the same directory).
-	ProjectFolderConfigFileName = "workspace.json"
+	ProjectFolderConfigFileName = "project.json"
+	// LegacyProjectFolderConfigFileName is its earlier name: still read, and
+	// still written where it is the file present.
+	LegacyProjectFolderConfigFileName = "workspace.json"
 
 	// ConfigLocalFileName is the user-scope machine-local override file.
 	// Same schema as ConfigFileName, higher precedence, never committed.
@@ -31,7 +34,9 @@ const (
 	// ProjectFolderLocalFileName is the project-folder-scope personal override file.
 	// Same schema as ProjectFolderConfigFileName, higher precedence within the
 	// project folder layer, gitignored.
-	ProjectFolderLocalFileName = "workspace.local.json"
+	ProjectFolderLocalFileName = "project.local.json"
+	// LegacyProjectFolderLocalFileName is its earlier name, still read.
+	LegacyProjectFolderLocalFileName = "workspace.local.json"
 
 	APIKeysFileName = "api_keys.json"
 

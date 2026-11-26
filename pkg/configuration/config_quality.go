@@ -20,7 +20,7 @@ type QualityConfig struct {
 
 	// FormatCommand is the explicit formatter command for the project's
 	// quality run. It is the "explicit project configuration" source: a
-	// human sets it in the project layer (.sprout/workspace.json) or in
+	// human sets it in the project layer (.sprout/project.json) or in
 	// global config for projects without a starter manifest (or one that
 	// declares no formatter). Model output never populates it — the
 	// quality runner ignores commands the model proposes.

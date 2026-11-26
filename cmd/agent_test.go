@@ -147,7 +147,7 @@ func TestDisplayVerboseLog_WithContent(t *testing.T) {
 	if !strings.Contains(out, "line three") {
 		t.Errorf("expected last line to be displayed, got: %s", out)
 	}
-	if !strings.Contains(out, "workspace.log") {
+	if !strings.Contains(out, "project.log") {
 		t.Errorf("expected log file path in output, got: %s", out)
 	}
 }
@@ -1547,9 +1547,9 @@ func TestRedirectGoLogToProjectFolder_Coverage(t *testing.T) {
 		_ = os.RemoveAll(".sprout")
 	}()
 
-	// Verify .sprout/workspace.log was created
-	if _, err := os.Stat(".sprout/workspace.log"); os.IsNotExist(err) {
-		t.Error("expected .sprout/workspace.log to exist after redirectGoLogToWorkspace")
+	// Verify .sprout/project.log was created
+	if _, err := os.Stat(".sprout/project.log"); os.IsNotExist(err) {
+		t.Error("expected .sprout/project.log to exist after redirectGoLogToProjectFolder")
 	}
 }
 

@@ -54,6 +54,11 @@ function SettingsPanel({
   /* ─── Collapsible section state (persisted across reopens) ── */
 
   const STORAGE_KEY = 'sprout.settingsPanel.state.v1';
+  // Subsection ids earlier versions saved, and their ids now.
+  const EARLIER_SUBSECTION_IDS: Record<string, SettingsSubsection> = {
+    'workspace-mcp': 'project-folder-mcp',
+    'workspace-lsp': 'project-folder-lsp',
+  };
   const restored = useMemo(() => {
     try {
       const raw = typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) : null;
@@ -72,7 +77,8 @@ function SettingsPanel({
   // A subsection saved by an older build may no longer exist; fall back to
   // none rather than rendering an empty panel.
   const [activeSubsection, setActiveSubsection] = useState<SettingsSubsection | null>(() => {
-    const saved = restored?.activeSubsection ?? null;
+    const raw = restored?.activeSubsection ?? null;
+    const saved = raw ? (EARLIER_SUBSECTION_IDS[raw] ?? raw) : null;
     return saved && getSectionForSubsection(saved) ? saved : null;
   });
   const [expandedSections, setExpandedSections] = useState<Set<SettingsSection>>(
@@ -142,11 +148,16 @@ function SettingsPanel({
     // own capability flags, so a host can serve one without the other.
     const hidden = new Set<SettingsSubsection>();
     if (!localTerminal) {
-      for (const id of ['workspace-lsp', 'experimental-computer-use', 'agent-skills', 'agent-subagents'] as const) {
+      for (const id of [
+        'project-folder-lsp',
+        'experimental-computer-use',
+        'agent-skills',
+        'agent-subagents',
+      ] as const) {
         hidden.add(id);
       }
     }
-    if (!mcp) hidden.add('workspace-mcp');
+    if (!mcp) hidden.add('project-folder-mcp');
     if (!localModels) hidden.add('env-local-llm');
 
     let groups = SECTION_GROUPS;
@@ -371,12 +382,12 @@ function SettingsPanel({
         return <SkillsSettingsTab settings={activeSettings ?? settings} toggleSkill={mutations.toggleSkill} />;
 
       /* ── Workspace section ─────────────────────────── */
-      case 'workspace-lsp':
+      case 'project-folder-lsp':
         return (
           <LanguageServersSettingsTab settings={activeSettings ?? settings} updateSetting={mutations.updateSetting} />
         );
 
-      case 'workspace-mcp':
+      case 'project-folder-mcp':
         return (
           <MCPSettingsTab
             settings={activeSettings ?? settings}

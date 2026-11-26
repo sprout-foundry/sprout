@@ -32,7 +32,7 @@ type AuditEntry struct {
 	Reasoning     string    `json:"reasoning,omitempty"`
 	Source        string    `json:"source,omitempty"`
 	SessionID     string    `json:"session_id,omitempty"`
-	ProjectFolder string    `json:"workspace,omitempty"`
+	ProjectFolder string    `json:"project_folder,omitempty"`
 }
 
 // ErrOutsideWorkingDirectory is returned when a path is outside the working directory

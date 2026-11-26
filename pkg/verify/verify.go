@@ -14,7 +14,7 @@
 // from (1) the project's starter manifest (.sprout/starter.json)
 // or (2) the project's explicit configuration
 // (configuration.VerificationConfig.BuildCommand / .TestCommand, set by a
-// human in the project layer .sprout/workspace.json or in global config) —
+// human in the project layer .sprout/project.json or in global config) —
 // never from model output. The Runner's API has no parameter or field that
 // accepts a command: an active plan's acceptance items are read only for
 // their ids and kinds, and their Check field (which may carry

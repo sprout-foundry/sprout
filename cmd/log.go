@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/sprout-foundry/sprout/pkg/history"
 	"github.com/sprout-foundry/sprout/pkg/secretdetect"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 var rawLog bool // Flag to indicate if raw verbose log should be displayed
@@ -46,7 +47,8 @@ func displayVerboseLog() {
 		return
 	}
 
-	logFilePath := ".sprout/workspace.log"
+	utils.AdoptProjectLog()
+	logFilePath := utils.ProjectLogPath
 
 	file, err := os.Open(logFilePath)
 	if os.IsNotExist(err) {

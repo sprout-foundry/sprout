@@ -17,7 +17,7 @@ func TestProjectFolderGitignoreKeepsMachineFilesOut(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, entry := range []string{"workspace.json", "config.json", "credentials/", "instances.json"} {
+	for _, entry := range []string{"project.json", "workspace.json", "config.json", "credentials/", "instances.json"} {
 		if !strings.Contains(string(got), "\n"+entry+"\n") {
 			t.Errorf(".gitignore is missing %q", entry)
 		}
@@ -66,7 +66,7 @@ func TestProjectFolderConfigDirLeavesTheRepositoryClean(t *testing.T) {
 	if err := EnsureProjectFolderConfigDir(root); err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range []string{"config.json", "workspace.json"} {
+	for _, f := range []string{"config.json", "project.json", "workspace.json"} {
 		if err := os.WriteFile(filepath.Join(root, ConfigDirName, f), []byte("{}"), 0o644); err != nil {
 			t.Fatal(err)
 		}

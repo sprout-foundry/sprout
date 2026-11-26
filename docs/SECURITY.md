@@ -259,7 +259,7 @@ mental models, easy to forget the wrapper on new handlers).
 | `~/.local/state/sprout/logs/` | Daemon logs, rotated (10MB, 5 backups) | Medium |
 | `~/Library/Logs/sprout/daemon.log` | macOS: launchd startup and crash output (0600) | Medium |
 | `~/.config/sprout/memories/` | Agent memory .md files | Medium |
-| `.sprout/workspace.log` | Per-workspace run log | Medium |
+| `.sprout/project.log` | Per-project-folder run log | Medium |
 | `~/.config/sprout/embeddings/` | Conversation turn embeddings | Medium |
 | `.sprout/changes/` | Change tracker revisions | Medium |
 
@@ -275,7 +275,7 @@ Agent memory files (`.sprout/memories/*.md`) are redacted via `pkg/redact` befor
 
 ### Run logs
 ```bash
-rm -rf .sprout/workspace.log
+rm -rf .sprout/project.log .sprout/workspace.log
 ```
 
 ### Embeddings

@@ -195,7 +195,7 @@ func (ws *ReactWebServer) handlePutProjectFolderSettings(w http.ResponseWriter, 
 	//
 	// Empty means this project folder has no config layer — currently only $HOME,
 	// which deliberately has none (see configuration.ProjectFolderConfigDir).
-	// Writing there would create ~/.sprout/workspace.json, which the next
+	// Writing there would create ~/.sprout/project.json, which the next
 	// startup reads back as a per-project-folder opt-in. Direct the caller at the
 	// global scope instead of silently writing nothing.
 	writePath := configuration.ProjectFolderConfigWritePath(projectFolder)

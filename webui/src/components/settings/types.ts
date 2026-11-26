@@ -74,9 +74,9 @@ export type SettingsSubsection =
   | 'agent-behavior'
   | 'agent-subagents'
   | 'agent-skills'
-  // Workspace (workspace scope)
-  | 'workspace-mcp'
-  | 'workspace-lsp'
+  // Project folder (project folder scope)
+  | 'project-folder-mcp'
+  | 'project-folder-lsp'
   // Environment (global scope)
   | 'env-providers'
   | 'env-local-llm'
@@ -111,12 +111,12 @@ export const SECTION_GROUPS: SectionDef[] = [
   },
   {
     id: 'project_folder',
-    label: 'Workspace',
+    label: 'Project folder',
     scope: 'project_folder',
     description: 'Settings for this project directory',
     subsections: [
-      { id: 'workspace-mcp', label: 'MCP Servers' },
-      { id: 'workspace-lsp', label: 'Language Servers' },
+      { id: 'project-folder-mcp', label: 'MCP Servers' },
+      { id: 'project-folder-lsp', label: 'Language Servers' },
     ],
   },
   {

@@ -97,7 +97,7 @@ func TestPolicyDump_DefaultFormat(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(out), &result))
 	assert.Contains(t, result, "user_safe_patterns")
 	assert.Contains(t, result, "user_dangerous_patterns")
-	assert.Contains(t, result, "workspace_overlay")
+	assert.Contains(t, result, "project_folder_overlay")
 }
 
 func TestPolicyDump_JSON(t *testing.T) {
@@ -129,7 +129,7 @@ func TestPolicyDump_YAML(t *testing.T) {
 	var result map[string]interface{}
 	require.NoError(t, yaml.Unmarshal([]byte(out), &result))
 	assert.Contains(t, result, "user_safe_patterns")
-	assert.Contains(t, result, "workspace_overlay")
+	assert.Contains(t, result, "project_folder_overlay")
 }
 
 // ---------------------------------------------------------------------------

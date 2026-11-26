@@ -203,7 +203,7 @@ func NewManagerWithLayers(globalDir, projectFolderDir string) (*Manager, error) 
 		}
 	}
 
-	// Compute file paths. The project folder layer reads workspace.json (falling
+	// Compute file paths. The project folder layer reads project.json or workspace.json (falling
 	// back to a legacy config.json), never the same filename the global layer
 	// uses — see ProjectFolderConfigFileName.
 	var globalPath, projectFolderPath string
@@ -213,7 +213,7 @@ func NewManagerWithLayers(globalDir, projectFolderDir string) (*Manager, error) 
 	saveFileName := ConfigFileName
 	if projectFolderDir != "" {
 		projectFolderPath = ResolveProjectFolderConfigFile(projectFolderDir, isHomeDir(filepath.Dir(projectFolderDir)))
-		saveFileName = ProjectFolderConfigFileName
+		saveFileName = filepath.Base(projectFolderConfigWriteFile(projectFolderDir))
 	}
 
 	// Load merged config (global + project folder, no session layer)

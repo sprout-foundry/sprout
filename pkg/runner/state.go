@@ -86,13 +86,23 @@ func Dir() (string, error) {
 
 // DevSpacesDir holds one clone per dev space; a runner never touches the
 // user's own working copies. It lives in sprout's state dir, outside the
-// config dir whose credential files native mode hides from dev spaces.
+// config dir whose credential files native mode hides from dev spaces. A
+// runner that already keeps its clones under the earlier runner/workspaces
+// goes on using it: running dev spaces hold paths inside it.
 func DevSpacesDir() (string, error) {
 	base, err := envutil.StateDir()
 	if err != nil {
 		return "", fmt.Errorf("locating state dir: %w", err)
 	}
-	return filepath.Join(base, "runner", "workspaces"), nil
+	if earlier := filepath.Join(base, "runner", "workspaces"); dirExists(earlier) {
+		return earlier, nil
+	}
+	return filepath.Join(base, "runner", "dev-spaces"), nil
+}
+
+func dirExists(path string) bool {
+	st, err := os.Stat(path)
+	return err == nil && st.IsDir()
 }
 
 func statePath() (string, error) {

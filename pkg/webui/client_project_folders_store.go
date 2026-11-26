@@ -2,7 +2,7 @@
 
 package webui
 
-// client_workspaces_store.go — the on-disk copy of ws.clientProjectFolders, so a
+// client_project_folders_store.go — the on-disk copy of ws.clientProjectFolders, so a
 // tab's project folder selection also survives a daemon restart (an auto-started
 // daemon reaps itself when idle and is respawned on demand).
 
@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	clientProjectFoldersFileName = "client_workspaces.json"
+	clientProjectFoldersFileName = "client_project_folders.json"
 	// maxPersistedClientProjectFolders bounds the file: one entry per browser
 	// tab identity, and tab identities churn.
 	maxPersistedClientProjectFolders = 64

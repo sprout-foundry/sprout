@@ -31,7 +31,7 @@ type ComputerUseConfig struct {
 	AuditLogDir string `json:"audit_log_dir,omitempty"`
 
 	// ProjectFolderAllowlist lists project folders where computer use is auto-approved.
-	ProjectFolderAllowlist []string `json:"workspace_allowlist,omitempty"`
+	ProjectFolderAllowlist []string `json:"project_folder_allowlist,omitempty"`
 
 	// PanicKeyChord is the key chord that triggers the panic key. Defaults to "ctrl+shift+escape".
 	PanicKeyChord string `json:"panic_key_chord,omitempty"`

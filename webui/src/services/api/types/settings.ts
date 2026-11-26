@@ -52,7 +52,7 @@ export interface SproutSettings {
     enabled: boolean;
     max_actions_per_minute: number;
     audit_log_dir: string;
-    workspace_allowlist: string[];
+    project_folder_allowlist: string[];
   };
   /** Wakeup / auto-resume configuration (SP-108). */
   wakeup?: {

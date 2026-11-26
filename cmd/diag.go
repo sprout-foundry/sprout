@@ -37,7 +37,7 @@ func runDiag() {
 	globalDir, _ := configuration.GetConfigDir()
 	globalConfigPath := filepath.Join(globalDir, configuration.ConfigFileName)
 	// Resolve rather than hard-code the filename: the project folder layer is
-	// workspace.json, with a legacy config.json fallback. Reporting a fixed
+	// project.json, with workspace.json and legacy config.json fallbacks. Reporting a fixed
 	// name would tell the user "does not exist" about a config that is in fact
 	// being loaded.
 	projectConfigPath := configuration.GetProjectFolderConfigPath(".")

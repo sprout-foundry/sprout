@@ -35,7 +35,7 @@ const SECTION_TITLES: Record<string, string> = {
 
 function basename(path: string | undefined): string {
   const trimmed = (path ?? '').replace(/\/+$/, '');
-  return trimmed.split('/').pop() || trimmed || 'Workspace';
+  return trimmed.split('/').pop() || trimmed || 'Project folder';
 }
 
 export interface LayeredSidebarProps {

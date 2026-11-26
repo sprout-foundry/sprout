@@ -2,10 +2,10 @@
 
 package webui
 
-// client_workspaces.go — per-client project folder bookkeeping: the project root a
+// client_project_folders.go — per-client project folder bookkeeping: the project root a
 // client selected, the server-level mirror for the default client, and the
 // remembered selection that outlives an evicted context. Its on-disk copy
-// lives in client_workspaces_store.go.
+// lives in client_project_folders_store.go.
 
 import (
 	"strings"

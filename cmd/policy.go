@@ -84,7 +84,7 @@ var policyListCmd = &cobra.Command{
 type policyDumpOutput struct {
 	UserSafePatterns      []policyPatternSource `json:"user_safe_patterns" yaml:"user_safe_patterns"`
 	UserDangerousPatterns []policyPatternSource `json:"user_dangerous_patterns" yaml:"user_dangerous_patterns"`
-	ProjectFolderOverlay  policyOverlaySource   `json:"workspace_overlay" yaml:"workspace_overlay"`
+	ProjectFolderOverlay  policyOverlaySource   `json:"project_folder_overlay" yaml:"project_folder_overlay"`
 }
 
 type policyPatternSource struct {

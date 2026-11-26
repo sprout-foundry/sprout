@@ -40,8 +40,9 @@ func GetLogger(skipPrompts bool) *Logger {
 		if wd, err := os.Getwd(); err == nil {
 			EnsureRuntimeStateExcluded(wd)
 		}
+		AdoptProjectLog()
 		logFile := &lumberjack.Logger{
-			Filename:   ".sprout/workspace.log",
+			Filename:   ProjectLogPath,
 			MaxSize:    15, // megabytes
 			MaxBackups: 3,
 			MaxAge:     28,   // days

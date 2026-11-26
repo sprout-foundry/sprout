@@ -24,7 +24,7 @@ the global config stopped applying in that workspace.
 prune-workspace removes every workspace setting whose value the global
 config already gives. A setting you deliberately set to the same value as
 the global one is removed as well; it keeps its value until the global
-setting changes. The original file is kept as workspace.json.bak.
+setting changes. The original file is kept beside it with a .bak extension.
 
 With no arguments, prunes the workspace in the current directory.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -50,7 +50,7 @@ With no arguments, prunes the workspace in the current directory.`,
 				cmd.Printf("%s: skipped (the home directory has no project folder layer)\n", abs)
 				continue
 			}
-			file := filepath.Join(dir, configuration.ProjectFolderConfigFileName)
+			file := configuration.ProjectFolderConfigWritePath(abs)
 			if _, err := os.Stat(file); os.IsNotExist(err) {
 				cmd.Printf("%s: no project folder config\n", abs)
 				continue

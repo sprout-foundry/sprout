@@ -172,6 +172,7 @@ func initializeSystem() error {
 	if configuration.NeedsMigration() {
 		_ = configuration.RunMigration()
 	}
+	configuration.RenameProjectFolderState()
 	isCI := os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != ""
 
 	if isCI {

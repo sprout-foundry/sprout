@@ -2,12 +2,14 @@ import { getActiveHost } from '../host/accessor';
 import { backendURLs } from '../host/agentBackend';
 import { debugLog } from '../utils/log';
 import { getAdapter } from './apiAdapter';
+import { readMovedItem } from './movedStorageKey';
 import { publishProjectFolderResponse } from './projectFolderResponses';
 
 export const WEBUI_CLIENT_ID_HEADER = 'X-Sprout-Client-ID';
 export const WEBUI_CLIENT_ID_QUERY_PARAM = 'client_id';
 const WEBUI_CLIENT_ID_STORAGE_KEY = 'sprout.webuiClientId';
-const WEBUI_WORKSPACE_PATH_STORAGE_KEY = 'sprout.workspaceTabPath';
+const WEBUI_PROJECT_FOLDER_PATH_STORAGE_KEY = 'sprout.projectFolderTabPath';
+const EARLIER_WEBUI_PROJECT_FOLDER_PATH_STORAGE_KEY = 'sprout.workspaceTabPath';
 const WINDOW_NAME_PREFIX = 'sproutClientId:';
 
 // Cookie name used by the server for cross-origin session persistence.
@@ -65,7 +67,7 @@ export function getProxyBase(): string {
  * SSH host/path sessions do not bleed into each other or into the local UI.
  *
  * The key is ALSO scoped per browsing context (window): the un-suffixed
- * `sprout.workspaceTabPath` is shared by every window of this origin, so two
+ * `sprout.projectFolderTabPath` is shared by every window of this origin, so two
  * windows pointed at different project folders kept overwriting each other's
  * path — on next startup, whichever window booted last would silently
  * restore the other's project folder. We suffix with the browsing-context token
@@ -74,7 +76,7 @@ export function getProxyBase(): string {
  * has no usable marker (first-party popups that reuse window.name for their
  * own data, SSR, tests).
  */
-function projectFolderPathStorageKey(): string {
+function projectFolderPathStorageKey(base: string = WEBUI_PROJECT_FOLDER_PATH_STORAGE_KEY): string {
   const proxyBase = getProxyBase();
   const suffixes: string[] = [];
   if (proxyBase) {
@@ -85,9 +87,9 @@ function projectFolderPathStorageKey(): string {
     suffixes.push(browsingContextToken);
   }
   if (suffixes.length === 0) {
-    return WEBUI_WORKSPACE_PATH_STORAGE_KEY;
+    return base;
   }
-  return `${WEBUI_WORKSPACE_PATH_STORAGE_KEY}:${suffixes.join(':')}`;
+  return `${base}:${suffixes.join(':')}`;
 }
 
 // ── Live-window ownership oracle (BroadcastChannel) ────────────────
@@ -515,7 +517,7 @@ export function persistTabProjectFolderPath(projectFolderPath: string): void {
   try {
     window.localStorage.setItem(projectFolderPathStorageKey(), projectFolderPath);
   } catch (err) {
-    debugLog('[persistTabProjectFolderPath] failed to persist workspace path:', err);
+    debugLog('[persistTabProjectFolderPath] failed to persist the project folder path:', err);
   }
 }
 
@@ -529,9 +531,15 @@ export function getTabProjectFolderPath(): string {
     return '';
   }
   try {
-    return window.localStorage.getItem(projectFolderPathStorageKey()) || '';
+    return (
+      readMovedItem(
+        window.localStorage,
+        projectFolderPathStorageKey(),
+        projectFolderPathStorageKey(EARLIER_WEBUI_PROJECT_FOLDER_PATH_STORAGE_KEY),
+      ) || ''
+    );
   } catch (err) {
-    debugLog('[getTabProjectFolderPath] failed to read workspace path:', err);
+    debugLog('[getTabProjectFolderPath] failed to read the project folder path:', err);
     return '';
   }
 }

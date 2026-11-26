@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // shellSkipDirsFilename is the on-disk name within the sprout config
@@ -49,7 +50,7 @@ const maxPersistedProjectFolders = 50
 // entries are treated as epoch (oldest) so they evict first.
 type shellSkipDirsFileSchema struct {
 	Version        int                 `json:"version"`
-	ProjectFolders map[string][]string `json:"workspaces"`
+	ProjectFolders map[string][]string `json:"project_folders"`
 	LastUsed       map[string]int64    `json:"last_used,omitempty"`
 }
 
@@ -235,4 +236,13 @@ func shellSkipDirsFilePath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(dir, shellSkipDirsFilename), nil
+}
+
+// UnmarshalJSON reads a file saved before "workspaces" was renamed.
+func (s *shellSkipDirsFileSchema) UnmarshalJSON(data []byte) error {
+	type plain shellSkipDirsFileSchema
+	if err := json.Unmarshal(data, (*plain)(s)); err != nil {
+		return err
+	}
+	return utils.AdoptEarlierJSONKey(data, "project_folders", "workspaces", &s.ProjectFolders)
 }

@@ -12,6 +12,9 @@ import (
 // machine state, not project files: a commit that picks them up adds a log
 // and a pid record to the person's repository.
 var RuntimeStatePatterns = []string{
+	".sprout/project.log",
+	".sprout/project-*.log",
+	".sprout/project.log.*",
 	".sprout/workspace.log",
 	".sprout/workspace-*.log",
 	".sprout/workspace.log.*",

@@ -240,7 +240,7 @@ async function clickSubsectionTab(testidKey: string) {
  *  section on retry. Returns null for unknown prefixes. */
 function tabSectionLabel(testidKey: string): string | null {
   if (testidKey.startsWith("settings-agent-")) return "Agent";
-  if (testidKey.startsWith("settings-workspace-")) return "Workspace";
+  if (testidKey.startsWith("settings-project-folder-")) return "Project folder";
   if (testidKey.startsWith("settings-env-")) return "Environment";
   if (testidKey.startsWith("settings-editor-")) return "Editor";
   if (testidKey.startsWith("settings-experimental-")) return "Experimental";
@@ -269,11 +269,11 @@ test.describe("Settings panel open/close", () => {
   test("filter narrows visible sections", async () => {
     await openSettings();
     const input = page.locator(".settings-filter-input");
-    await input.fill("workspace");
+    await input.fill("project");
     await page.waitForTimeout(500);
 
-    // "Workspace" section should match
-    await expect(sectionByLabel("Workspace")).toBeVisible({ timeout: 5_000 });
+    // "Project folder" section should match
+    await expect(sectionByLabel("Project folder")).toBeVisible({ timeout: 5_000 });
 
     // "Agent" section should be filtered out
     await expect(sectionByLabel("Agent")).toHaveCount(0);
@@ -298,7 +298,7 @@ test.describe("Section structure", () => {
   // Array of [label, expectedScopeBadge] pairs
   const sections: Array<[string, string]> = [
     ["Agent", "session"],
-    ["Workspace", "project folder"],
+    ["Project folder", "project folder"],
     ["Environment", "global"],
     ["Editor", "runtime"],
     ["Experimental", "global"],
@@ -338,9 +338,9 @@ test.describe("Section expand/collapse and subsection tabs", () => {
     ]);
   });
 
-  test("Workspace section expands to show 2 subsection tabs", async () => {
-    await expandSection("Workspace");
-    const section = sectionByLabel("Workspace");
+  test("Project folder section expands to show 2 subsection tabs", async () => {
+    await expandSection("Project folder");
+    const section = sectionByLabel("Project folder");
     const tabs = section.locator(".settings-subsection-btn");
     await expect(tabs).toHaveCount(2);
 
@@ -451,19 +451,19 @@ test.describe("Subsection content", () => {
     await expect(content.locator(".section")).toBeVisible({ timeout: 10_000 });
   });
 
-  // --- Workspace section ---
+  // --- Project folder section ---
 
-  test("Workspace > MCP Servers renders server list", async () => {
-    await expandSection("Workspace");
-    await clickSubsectionTab("settings-workspace-mcp-tab");
+  test("Project folder > MCP Servers renders server list", async () => {
+    await expandSection("Project folder");
+    await clickSubsectionTab("settings-project-folder-mcp-tab");
     const content = page.locator(".settings-subsection-content");
     // MCPSettingsTab renders either server rows or an add-server form
     await expect(content.locator(".section")).toBeVisible({ timeout: 15_000 });
   });
 
-  test("Workspace > Language Servers renders LSP list", async () => {
-    await expandSection("Workspace");
-    await clickSubsectionTab("settings-workspace-lsp-tab");
+  test("Project folder > Language Servers renders LSP list", async () => {
+    await expandSection("Project folder");
+    await clickSubsectionTab("settings-project-folder-lsp-tab");
     const content = page.locator(".settings-subsection-content");
     await expect(content.locator(".section")).toBeVisible({ timeout: 15_000 });
   });
@@ -585,9 +585,9 @@ test.describe("State persistence", () => {
   test("expanded section persists across page reload", async () => {
     await openSettings();
 
-    // Expand Workspace
-    await expandSection("Workspace");
-    await expect(sectionByLabel("Workspace")).toHaveClass(/expanded/);
+    // Expand Project folder
+    await expandSection("Project folder");
+    await expect(sectionByLabel("Project folder")).toHaveClass(/expanded/);
 
     // Reload
     await page.reload({ waitUntil: "domcontentloaded" });
@@ -601,8 +601,8 @@ test.describe("State persistence", () => {
       timeout: 15_000,
     });
 
-    // Workspace should still be expanded
-    await expect(sectionByLabel("Workspace")).toHaveClass(/expanded/, {
+    // Project folder should still be expanded
+    await expect(sectionByLabel("Project folder")).toHaveClass(/expanded/, {
       timeout: 10_000,
     });
   });

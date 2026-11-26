@@ -35,10 +35,10 @@ func (m *Manager) GetConfigDir() string {
 // Each layer is optional; missing layers are skipped.
 // globalDir is the directory for global providers (used when globalPath is empty but custom providers need loading).
 //
-// Local override files (config.local.json / workspace.local.json) are
+// Local override files (config.local.json / project.local.json) are
 // automatically loaded as a higher-precedence sibling within their
 // scope: global config.json is overridden by global config.local.json,
-// project folder workspace.json by workspace.local.json. The session layer
+// project folder project.json by project.local.json. The session layer
 // (highest) remains unchanged.
 func LoadConfigWithLayers(globalPath, projectFolderPath, sessionPath, globalDir string) (*Config, error) {
 	// The project persona scope is <project folder>/.sprout/personas. Callers that
@@ -100,13 +100,13 @@ func loadConfigWithLayers(globalPath, projectFolderPath, sessionPath, globalDir,
 				result = MergeConfig(result, &projectFolderCfg)
 			}
 		}
-		// 2b. Merge project-folder-local override (workspace.local.json) if present
-		localWsPath := filepath.Join(filepath.Dir(projectFolderPath), ProjectFolderLocalFileName)
+		// 2b. Merge project-folder-local override (project.local.json) if present
+		localWsPath := ProjectFolderLocalFile(filepath.Dir(projectFolderPath))
 		if localWsPath != projectFolderPath {
 			if data, err := os.ReadFile(localWsPath); err == nil {
 				var localWsCfg Config
 				if err := unmarshalLayer(data, &localWsCfg); err != nil {
-					log.Printf("[config] warning: failed to parse workspace-local config %s: %v", localWsPath, err)
+					log.Printf("[config] warning: failed to parse project-folder-local config %s: %v", localWsPath, err)
 				} else {
 					result = MergeConfig(result, &localWsCfg)
 				}
@@ -239,7 +239,7 @@ func (m *Manager) saveConfigLocked() error {
 
 // saveConfigDirectLocked performs the actual config write without retry logic.
 func (m *Manager) saveConfigDirectLocked() error {
-	if m.configDir != "" && m.configFileName == ProjectFolderConfigFileName {
+	if m.configDir != "" && IsProjectFolderConfigFile(m.configFileName) {
 		if err := m.config.SaveProjectFolderOverlay(m.configDir, m.configFileName, m.lastSaved); err != nil {
 			return fmt.Errorf("save project folder config: %w", err)
 		}

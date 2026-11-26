@@ -37,7 +37,7 @@ export default function ComputerUseSettingsTab({
   const auditLogDir = String(getNestedValue(settings ?? {}, 'computer_use.audit_log_dir') ?? '');
 
   // ── Project folder allowlist (textarea, newline-separated) ──────
-  const rawAllowlist = settings ? (getNestedValue(settings, 'computer_use.workspace_allowlist') as unknown) : [];
+  const rawAllowlist = settings ? (getNestedValue(settings, 'computer_use.project_folder_allowlist') as unknown) : [];
   const persistedAllowlist: string[] = Array.isArray(rawAllowlist) ? rawAllowlist : [];
   const [allowlistDraft, setAllowlistDraft] = useState<string>(persistedAllowlist.join('\n'));
   const allowlistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -60,7 +60,7 @@ export default function ComputerUseSettingsTab({
         .map((s) => s.trim())
         .filter((s) => s.length > 0);
       lastPersistedAllowlist.current = list.join('\n');
-      void updateSetting('computer_use.workspace_allowlist', list);
+      void updateSetting('computer_use.project_folder_allowlist', list);
     },
     [updateSetting],
   );

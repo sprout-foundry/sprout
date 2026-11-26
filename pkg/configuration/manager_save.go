@@ -144,7 +144,7 @@ func (m *Manager) RefreshAPIKeys() error {
 // subsequent queries will see the new configuration.
 //
 // The re-read mirrors how the manager was constructed: a layered manager
-// (projectFolderDir set, configFileName = workspace.json) re-reads global +
+// (projectFolderDir set, configFileName = project.json or workspace.json) re-reads global +
 // project folder layers; a single-dir or env-based manager re-reads its own file.
 // Reloading a layered manager from its save file alone would silently drop
 // every global-layer value from memory, so the layer paths are recomputed
@@ -156,7 +156,7 @@ func (m *Manager) Reload() error {
 	var cfg *Config
 	var err error
 	switch {
-	case m.configFileName == ProjectFolderConfigFileName:
+	case IsProjectFolderConfigFile(m.configFileName):
 		// Layered manager: save target is the project folder layer. Recompute both
 		// layer paths the same way NewManagerWithLayers did. ProjectFolderConfigDir
 		// is stored in configDir; its parent is the project folder.

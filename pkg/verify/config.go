@@ -10,7 +10,7 @@ import (
 // merged *configuration.Config — the "explicit project configuration"
 // source of the explicit project configuration: verification.build_command and
 // verification.test_command, set by a human in the project layer
-// (.sprout/workspace.json) or in global config. The provider ignores
+// (.sprout/project.json) or in global config. The provider ignores
 // root: the config is already the merged result for the project.
 func ConfigurationCommands(cfg *configuration.Config) ConfigCommandsProvider {
 	return func(string) (Commands, error) {
@@ -25,7 +25,7 @@ func ConfigurationCommands(cfg *configuration.Config) ConfigCommandsProvider {
 // by a merged *configuration.Config — the "explicit project configuration"
 // source of the quality-after-edits step: quality.format_command and
 // quality.lint_command, set by a human in the project layer
-// (.sprout/workspace.json) or in global config. The provider ignores root:
+// (.sprout/project.json) or in global config. The provider ignores root:
 // the config is already the merged result for the project.
 func QualityConfigurationCommands(cfg *configuration.Config) QualityConfigCommandsProvider {
 	return func(string) (QualityCommands, error) {

@@ -23,7 +23,7 @@ type ProjectFolderOverlayConfig struct {
 type ShellConfig struct {
 	UserSafePatterns      []ShellPattern             `json:"user_safe_patterns,omitempty"`
 	UserDangerousPatterns []ShellPattern             `json:"user_dangerous_patterns,omitempty"`
-	ProjectFolderOverlay  ProjectFolderOverlayConfig `json:"workspace_overlay,omitempty"`
+	ProjectFolderOverlay  ProjectFolderOverlayConfig `json:"project_folder_overlay,omitempty"`
 }
 
 // Validate checks the ShellConfig values and normalizes invalid ones.

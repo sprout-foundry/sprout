@@ -12,7 +12,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { INSTANCE_PID_STORAGE_KEY, WORKSPACE_MODE_STORAGE_KEY } from '../constants/app';
+import { EARLIER_SPACE_STORAGE_KEY, INSTANCE_PID_STORAGE_KEY, SPACE_STORAGE_KEY } from '../constants/app';
+import { readMovedItem } from '../services/movedStorageKey';
 import { repoScopedKey } from '../services/repoScope';
 import {
   BUILTIN_DEFAULT_WORKSPACE_MODE,
@@ -32,19 +33,19 @@ export function uiContextScope(): string {
 }
 
 /** Storage key for the current instance + UI context. */
-export function spaceStorageKey(): string {
+export function spaceStorageKey(prefix: string = SPACE_STORAGE_KEY): string {
   if (typeof window === 'undefined' || !window.localStorage) {
-    return `${WORKSPACE_MODE_STORAGE_KEY}:default:local`;
+    return `${prefix}:default:local`;
   }
   const pid = window.localStorage.getItem(INSTANCE_PID_STORAGE_KEY) || 'default';
-  return repoScopedKey(`${WORKSPACE_MODE_STORAGE_KEY}:${pid}:${uiContextScope()}`);
+  return repoScopedKey(`${prefix}:${pid}:${uiContextScope()}`);
 }
 
 /** The persisted mode id for this instance, or null when unset/unreadable. */
 export function readPersistedSpace(): SpaceId | null {
   if (typeof window === 'undefined' || !window.localStorage) return null;
   try {
-    const raw = window.localStorage.getItem(spaceStorageKey());
+    const raw = readMovedItem(window.localStorage, spaceStorageKey(), spaceStorageKey(EARLIER_SPACE_STORAGE_KEY));
     return raw ? (JSON.parse(raw) as SpaceId) : null;
   } catch {
     return null;

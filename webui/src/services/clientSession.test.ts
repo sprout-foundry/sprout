@@ -127,7 +127,7 @@ describe('clientSession tab isolation', () => {
     expect(getTabProjectFolderPath()).toBe('');
 
     persistTabProjectFolderPath('/home/user/project-a');
-    expect(win.localStorage.setItem).toHaveBeenCalledWith('sprout.workspaceTabPath', '/home/user/project-a');
+    expect(win.localStorage.setItem).toHaveBeenCalledWith('sprout.projectFolderTabPath', '/home/user/project-a');
 
     const retrieved = getTabProjectFolderPath();
     expect(retrieved).toBe('/home/user/project-a');

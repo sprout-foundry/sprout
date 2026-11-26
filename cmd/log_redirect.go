@@ -5,6 +5,8 @@ package cmd
 import (
 	"log"
 	"os"
+
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // redirectGoLogToProjectFolder points Go's default `log` package output at
@@ -23,7 +25,8 @@ func redirectGoLogToProjectFolder() (restore func(), err error) {
 	if err := os.MkdirAll(".sprout", 0o755); err != nil {
 		return func() {}, err
 	}
-	f, err := os.OpenFile(".sprout/workspace.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	utils.AdoptProjectLog()
+	f, err := os.OpenFile(utils.ProjectLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return func() {}, err
 	}

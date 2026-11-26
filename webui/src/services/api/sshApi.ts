@@ -112,7 +112,8 @@ export async function openSSHProjectFolder(
   }
 
   throw new SSHProjectFolderOpenError({
-    error: 'The SSH project folder timed out. Check SSH connectivity and ~/.config/sprout/workspace.log for details.',
+    error:
+      'The SSH project folder timed out. Check SSH connectivity and ~/.local/state/sprout/project_folder.log for details.',
     step: 'launch-timeout',
     details: `Launch did not complete within ${Math.round(SSH_POLL_TIMEOUT_MS / 60_000)} minutes.`,
   });

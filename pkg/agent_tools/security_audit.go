@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // AuditAction values for the Action field on AuditEntry.
@@ -34,7 +36,7 @@ type AuditEntry struct {
 	Reasoning     string    `json:"reasoning,omitempty"`
 	Source        string    `json:"source,omitempty"` // "classifier", "policy", "user_override"
 	SessionID     string    `json:"session_id,omitempty"`
-	ProjectFolder string    `json:"workspace,omitempty"`
+	ProjectFolder string    `json:"project_folder,omitempty"`
 
 	// PathTier is the filesystem path-tier when the tool operates on a file
 	// (e.g. "project_folder", "external", "sensitive"). Empty for non-file tools.
@@ -133,4 +135,14 @@ func (l *AuditLogger) Close() error {
 	err := l.file.Close()
 	l.file = nil
 	return err
+}
+
+// UnmarshalJSON reads entries logged before the project folder field was
+// renamed from "workspace".
+func (e *AuditEntry) UnmarshalJSON(data []byte) error {
+	type plain AuditEntry
+	if err := json.Unmarshal(data, (*plain)(e)); err != nil {
+		return err
+	}
+	return utils.AdoptEarlierJSONKey(data, "project_folder", "workspace", &e.ProjectFolder)
 }

@@ -148,7 +148,7 @@ Located in the project root, contains workspace-specific metadata:
 | `memories/` | Persistent memory storage (markdown files) |
 | `revisions/` | Per-session directories with instructions and LLM responses |
 | `runlogs/` | JSONL workflow traces |
-| `workspace.log` | Verbose execution log |
+| `project.log` | Verbose execution log |
 
 ### Global `~/.config/sprout/` Directory
 

@@ -39,9 +39,13 @@ export interface SSHBrowseQuery {
 }
 
 // localStorage keys
-export const RECENT_WORKSPACES_KEY = 'sprout.recentWorkspaces';
-export const REMOTE_RECENT_WORKSPACES_KEY = 'sprout.remoteRecentWorkspaces';
-export const SSH_FAVORITE_WORKSPACES_KEY = 'sprout.sshFavoriteWorkspaces';
+export const RECENT_PROJECT_FOLDERS_KEY = 'sprout.recentProjectFolders';
+export const REMOTE_RECENT_PROJECT_FOLDERS_KEY = 'sprout.remoteRecentProjectFolders';
+export const SSH_FAVORITE_PROJECT_FOLDERS_KEY = 'sprout.sshFavoriteProjectFolders';
+// The same keys as earlier versions spelled them; read once, then moved.
+export const EARLIER_RECENT_PROJECT_FOLDERS_KEY = 'sprout.recentWorkspaces';
+export const EARLIER_REMOTE_RECENT_PROJECT_FOLDERS_KEY = 'sprout.remoteRecentWorkspaces';
+export const EARLIER_SSH_FAVORITE_PROJECT_FOLDERS_KEY = 'sprout.sshFavoriteWorkspaces';
 
-export const MAX_RECENT_WORKSPACES = 15;
+export const MAX_RECENT_PROJECT_FOLDERS = 15;
 export const MAX_SUGGESTIONS = 8;

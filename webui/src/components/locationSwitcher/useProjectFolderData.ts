@@ -5,7 +5,7 @@ import { applyProjectFolder, refreshProjectFolder, useProjectFolderState } from 
 import { showThemedConfirm } from '../ThemedDialog';
 import { normalizePath } from './pathUtils';
 import type { SwitchingState, SSHFailureState, RemoteProjectFolderContext } from './types';
-import { MAX_RECENT_WORKSPACES } from './types';
+import { MAX_RECENT_PROJECT_FOLDERS } from './types';
 import {
   readRecentProjectFolders,
   writeRecentProjectFolders,
@@ -79,7 +79,7 @@ export function useProjectFolderData({ isConnected }: UseProjectFolderDataProps)
       const next = updater(current)
         .map((v) => normalizePath(v))
         .filter(Boolean)
-        .slice(0, MAX_RECENT_WORKSPACES);
+        .slice(0, MAX_RECENT_PROJECT_FOLDERS);
       writeRecentProjectFolders(next);
       return next;
     });
@@ -102,7 +102,7 @@ export function useProjectFolderData({ isConnected }: UseProjectFolderDataProps)
         ...current,
         [hostAlias]: [normalized, ...(current[hostAlias] || []).filter((e) => e !== normalized)].slice(
           0,
-          MAX_RECENT_WORKSPACES,
+          MAX_RECENT_PROJECT_FOLDERS,
         ),
       };
       writeRemoteRecentProjectFolders(next);
@@ -118,7 +118,7 @@ export function useProjectFolderData({ isConnected }: UseProjectFolderDataProps)
         ...current,
         [hostAlias]: [normalized, ...(current[hostAlias] || []).filter((e) => e !== normalized)].slice(
           0,
-          MAX_RECENT_WORKSPACES,
+          MAX_RECENT_PROJECT_FOLDERS,
         ),
       };
       writeSSHFavoriteProjectFolders(next);

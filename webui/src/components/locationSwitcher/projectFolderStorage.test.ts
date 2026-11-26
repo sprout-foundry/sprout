@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
-  RECENT_WORKSPACES_KEY,
-  REMOTE_RECENT_WORKSPACES_KEY,
-  SSH_FAVORITE_WORKSPACES_KEY,
-  MAX_RECENT_WORKSPACES,
+  RECENT_PROJECT_FOLDERS_KEY,
+  REMOTE_RECENT_PROJECT_FOLDERS_KEY,
+  SSH_FAVORITE_PROJECT_FOLDERS_KEY,
+  MAX_RECENT_PROJECT_FOLDERS,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -113,13 +113,13 @@ describe('readRecentProjectFolders', () => {
     expect(result).toEqual(['/valid']);
   });
 
-  it('enforces MAX_RECENT_WORKSPACES cap', () => {
-    const paths = Array.from({ length: MAX_RECENT_WORKSPACES + 5 }, (_, i) => `/path${i}`);
+  it('enforces MAX_RECENT_PROJECT_FOLDERS cap', () => {
+    const paths = Array.from({ length: MAX_RECENT_PROJECT_FOLDERS + 5 }, (_, i) => `/path${i}`);
     mock.getItem.mockReturnValue(JSON.stringify(paths));
     const result = readRecentProjectFolders();
-    expect(result).toHaveLength(MAX_RECENT_WORKSPACES);
+    expect(result).toHaveLength(MAX_RECENT_PROJECT_FOLDERS);
     expect(result[0]).toBe('/path0');
-    expect(result[result.length - 1]).toBe(`/path${MAX_RECENT_WORKSPACES - 1}`);
+    expect(result[result.length - 1]).toBe(`/path${MAX_RECENT_PROJECT_FOLDERS - 1}`);
   });
 
   it('handles empty array in storage', () => {
@@ -138,7 +138,7 @@ describe('readRecentProjectFolders', () => {
 
   it('uses correct localStorage key', () => {
     readRecentProjectFolders();
-    expect(mock.getItem).toHaveBeenCalledWith(RECENT_WORKSPACES_KEY);
+    expect(mock.getItem).toHaveBeenCalledWith(RECENT_PROJECT_FOLDERS_KEY);
   });
 
   it('handles storage throwing (SSS-friendly: no crash)', () => {
@@ -167,27 +167,27 @@ describe('writeRecentProjectFolders', () => {
 
   it('saves paths to correct localStorage key', () => {
     writeRecentProjectFolders(['/project', '/home']);
-    expect(mock.setItem).toHaveBeenCalledWith(RECENT_WORKSPACES_KEY, JSON.stringify(['/project', '/home']));
+    expect(mock.setItem).toHaveBeenCalledWith(RECENT_PROJECT_FOLDERS_KEY, JSON.stringify(['/project', '/home']));
   });
 
   it('saves empty array', () => {
     writeRecentProjectFolders([]);
-    expect(mock.setItem).toHaveBeenCalledWith(RECENT_WORKSPACES_KEY, JSON.stringify([]));
+    expect(mock.setItem).toHaveBeenCalledWith(RECENT_PROJECT_FOLDERS_KEY, JSON.stringify([]));
   });
 
-  it('slices to MAX_RECENT_WORKSPACES before saving', () => {
-    const paths = Array.from({ length: MAX_RECENT_WORKSPACES + 5 }, (_, i) => `/path${i}`);
+  it('slices to MAX_RECENT_PROJECT_FOLDERS before saving', () => {
+    const paths = Array.from({ length: MAX_RECENT_PROJECT_FOLDERS + 5 }, (_, i) => `/path${i}`);
     writeRecentProjectFolders(paths);
     const callArgs = mock.setItem.mock.calls[0];
     const saved = JSON.parse(callArgs[1] as string);
-    expect(saved).toHaveLength(MAX_RECENT_WORKSPACES);
+    expect(saved).toHaveLength(MAX_RECENT_PROJECT_FOLDERS);
     expect(saved[0]).toBe('/path0');
   });
 
   it('does not normalize before saving (caller responsibility)', () => {
     writeRecentProjectFolders(['/raw/path']);
     const callArgs = mock.setItem.mock.calls[0];
-    expect(callArgs[0]).toBe(RECENT_WORKSPACES_KEY);
+    expect(callArgs[0]).toBe(RECENT_PROJECT_FOLDERS_KEY);
     expect(JSON.parse(callArgs[1] as string)).toEqual(['/raw/path']);
   });
 });
@@ -258,14 +258,14 @@ describe('readRemoteRecentProjectFolders', () => {
     });
   });
 
-  it('enforces MAX_RECENT_WORKSPACES per host', () => {
-    const longList = Array.from({ length: MAX_RECENT_WORKSPACES + 5 }, (_, i) => `/path${i}`);
+  it('enforces MAX_RECENT_PROJECT_FOLDERS per host', () => {
+    const longList = Array.from({ length: MAX_RECENT_PROJECT_FOLDERS + 5 }, (_, i) => `/path${i}`);
     mock.getItem.mockReturnValue({
       host: longList,
     });
     mock.getItem.mockReturnValue(JSON.stringify({ host: longList }));
     const result = readRemoteRecentProjectFolders();
-    expect(result.host).toHaveLength(MAX_RECENT_WORKSPACES);
+    expect(result.host).toHaveLength(MAX_RECENT_PROJECT_FOLDERS);
     expect(result.host?.[0]).toBe('/path0');
   });
 
@@ -281,7 +281,7 @@ describe('readRemoteRecentProjectFolders', () => {
 
   it('uses correct localStorage key', () => {
     readRemoteRecentProjectFolders();
-    expect(mock.getItem).toHaveBeenCalledWith(REMOTE_RECENT_WORKSPACES_KEY);
+    expect(mock.getItem).toHaveBeenCalledWith(REMOTE_RECENT_PROJECT_FOLDERS_KEY);
   });
 
   it('handles storage throwing (SSS-friendly)', () => {
@@ -320,12 +320,12 @@ describe('writeRemoteRecentProjectFolders', () => {
 
   it('saves to correct localStorage key', () => {
     writeRemoteRecentProjectFolders({ host: ['/path'] });
-    expect(mock.setItem).toHaveBeenCalledWith(REMOTE_RECENT_WORKSPACES_KEY, JSON.stringify({ host: ['/path'] }));
+    expect(mock.setItem).toHaveBeenCalledWith(REMOTE_RECENT_PROJECT_FOLDERS_KEY, JSON.stringify({ host: ['/path'] }));
   });
 
   it('saves empty object', () => {
     writeRemoteRecentProjectFolders({});
-    expect(mock.setItem).toHaveBeenCalledWith(REMOTE_RECENT_WORKSPACES_KEY, JSON.stringify({}));
+    expect(mock.setItem).toHaveBeenCalledWith(REMOTE_RECENT_PROJECT_FOLDERS_KEY, JSON.stringify({}));
   });
 
   it('saves multiple hosts', () => {
@@ -334,7 +334,7 @@ describe('writeRemoteRecentProjectFolders', () => {
       'host-b': ['/path3'],
     };
     writeRemoteRecentProjectFolders(value);
-    expect(mock.setItem).toHaveBeenCalledWith(REMOTE_RECENT_WORKSPACES_KEY, JSON.stringify(value));
+    expect(mock.setItem).toHaveBeenCalledWith(REMOTE_RECENT_PROJECT_FOLDERS_KEY, JSON.stringify(value));
   });
 });
 
@@ -402,11 +402,11 @@ describe('readSSHFavoriteProjectFolders', () => {
     expect(result).toEqual({ host: ['/valid'] });
   });
 
-  it('enforces MAX_RECENT_WORKSPACES per host', () => {
-    const longList = Array.from({ length: MAX_RECENT_WORKSPACES + 5 }, (_, i) => `/path${i}`);
+  it('enforces MAX_RECENT_PROJECT_FOLDERS per host', () => {
+    const longList = Array.from({ length: MAX_RECENT_PROJECT_FOLDERS + 5 }, (_, i) => `/path${i}`);
     mock.getItem.mockReturnValue(JSON.stringify({ host: longList }));
     const result = readSSHFavoriteProjectFolders();
-    expect(result.host).toHaveLength(MAX_RECENT_WORKSPACES);
+    expect(result.host).toHaveLength(MAX_RECENT_PROJECT_FOLDERS);
   });
 
   it('handles non-array values for a host key gracefully', () => {
@@ -421,7 +421,7 @@ describe('readSSHFavoriteProjectFolders', () => {
 
   it('uses correct localStorage key', () => {
     readSSHFavoriteProjectFolders();
-    expect(mock.getItem).toHaveBeenCalledWith(SSH_FAVORITE_WORKSPACES_KEY);
+    expect(mock.getItem).toHaveBeenCalledWith(SSH_FAVORITE_PROJECT_FOLDERS_KEY);
   });
 
   it('handles storage throwing (SSS-friendly)', () => {
@@ -460,12 +460,12 @@ describe('writeSSHFavoriteProjectFolders', () => {
 
   it('saves to correct localStorage key', () => {
     writeSSHFavoriteProjectFolders({ host: ['/path'] });
-    expect(mock.setItem).toHaveBeenCalledWith(SSH_FAVORITE_WORKSPACES_KEY, JSON.stringify({ host: ['/path'] }));
+    expect(mock.setItem).toHaveBeenCalledWith(SSH_FAVORITE_PROJECT_FOLDERS_KEY, JSON.stringify({ host: ['/path'] }));
   });
 
   it('saves empty object', () => {
     writeSSHFavoriteProjectFolders({});
-    expect(mock.setItem).toHaveBeenCalledWith(SSH_FAVORITE_WORKSPACES_KEY, JSON.stringify({}));
+    expect(mock.setItem).toHaveBeenCalledWith(SSH_FAVORITE_PROJECT_FOLDERS_KEY, JSON.stringify({}));
   });
 
   it('saves multiple hosts', () => {
@@ -474,7 +474,7 @@ describe('writeSSHFavoriteProjectFolders', () => {
       'host-b': ['/path3'],
     };
     writeSSHFavoriteProjectFolders(value);
-    expect(mock.setItem).toHaveBeenCalledWith(SSH_FAVORITE_WORKSPACES_KEY, JSON.stringify(value));
+    expect(mock.setItem).toHaveBeenCalledWith(SSH_FAVORITE_PROJECT_FOLDERS_KEY, JSON.stringify(value));
   });
 
   it('does not throw on storage error (SSS-friendly)', () => {

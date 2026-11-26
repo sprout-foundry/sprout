@@ -93,7 +93,7 @@ func GetConfigLocalPath() (string, error) {
 // second layer there adds no expressiveness and one large footgun:
 // NewManagerWithLayers makes the project folder dir the SAVE target, so a daemon
 // running with project folder=$HOME (which is exactly what `sprout service install`
-// produces) writes the full merged config to ~/.sprout/workspace.json on the
+// produces) writes the full merged config to ~/.sprout/project.json on the
 // first settings save. On the next start that machine-written file is read
 // back as a deliberate per-project-folder opt-in — which is how a global
 // preference turned into a per-home-directory project folder override.
@@ -119,6 +119,7 @@ const projectFolderGitignoreContent = projectFolderGitignoreHeader + `
 # Settings sprout writes here for this machine — they carry command history
 # from other projects, approved commands and MCP servers
 config.json
+project.json
 workspace.json
 # Machine state
 credentials/
@@ -168,21 +169,50 @@ func EnsureProjectFolderConfigDir(projectFolder string) error {
 
 // ProjectFolderConfigWritePath returns where project-folder-level config is written,
 // or "" when there is no project folder layer (empty root, or $HOME — see
-// ProjectFolderConfigDir). Always the new filename — legacy files are read but
-// never written back to.
+// ProjectFolderConfigDir): an existing workspace.json keeps being written,
+// otherwise project.json. A legacy config.json is read but never written.
 func ProjectFolderConfigWritePath(projectFolder string) string {
 	dir := ProjectFolderConfigDir(projectFolder)
 	if dir == "" {
 		return ""
 	}
-	return filepath.Join(dir, ProjectFolderConfigFileName)
+	return projectFolderConfigWriteFile(dir)
+}
+
+func projectFolderConfigWriteFile(dir string) string {
+	current := filepath.Join(dir, ProjectFolderConfigFileName)
+	if earlier := filepath.Join(dir, LegacyProjectFolderConfigFileName); !fileExists(current) && fileExists(earlier) {
+		return earlier
+	}
+	return current
+}
+
+// ProjectFolderLocalFile is the personal override file to read in a project
+// folder config dir: project.local.json, else an existing workspace.local.json.
+func ProjectFolderLocalFile(dir string) string {
+	current := filepath.Join(dir, ProjectFolderLocalFileName)
+	if earlier := filepath.Join(dir, LegacyProjectFolderLocalFileName); !fileExists(current) && fileExists(earlier) {
+		return earlier
+	}
+	return current
+}
+
+// IsProjectFolderConfigFile reports whether name is the project folder config
+// file under its current or earlier name.
+func IsProjectFolderConfigFile(name string) bool {
+	return name == ProjectFolderConfigFileName || name == LegacyProjectFolderConfigFileName
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // GetProjectFolderConfigPath returns the project-folder-level config file to READ, or
 // "" when there is no project folder layer (empty root, or $HOME).
 //
-// Resolution: workspace.json if present, else the legacy config.json, else the
-// workspace.json path (so callers can stat it and find nothing). Existing
+// Resolution: project.json, else workspace.json, else the legacy config.json,
+// else the project.json path (so callers can stat it and find nothing). Existing
 // project folders keep working untouched; nothing is moved or rewritten.
 func GetProjectFolderConfigPath(projectFolder string) string {
 	dir := ProjectFolderConfigDir(projectFolder)
@@ -202,15 +232,16 @@ func GetProjectFolderConfigPath(projectFolder string) string {
 // without this guard the split would fix nothing for current users.
 //
 // A user who deliberately runs with $HOME as the project folder still gets a real
-// project folder layer; it just has to be an explicit ~/.sprout/workspace.json.
+// project folder layer; it just has to be an explicit ~/.sprout/project.json.
 func ResolveProjectFolderConfigFile(dir string, dirIsHome bool) string {
 	if dir == "" {
 		return ""
 	}
-	current := filepath.Join(dir, ProjectFolderConfigFileName)
-	if _, err := os.Stat(current); err == nil {
+	current := projectFolderConfigWriteFile(dir)
+	if fileExists(current) {
 		return current
 	}
+	current = filepath.Join(dir, ProjectFolderConfigFileName)
 	if dirIsHome {
 		return current
 	}

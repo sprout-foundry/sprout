@@ -251,7 +251,7 @@ func useTestProjectFolderConsent(t *testing.T, home string, consented bool) {
 	if err != nil {
 		t.Fatalf("resolve state dir: %v", err)
 	}
-	path := filepath.Join(stateDir, "workspace_consent.json")
+	path := filepath.Join(stateDir, "project_folder_consent.json")
 	if !consented {
 		_ = os.Remove(path)
 		return

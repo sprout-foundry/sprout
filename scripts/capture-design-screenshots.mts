@@ -31,12 +31,12 @@ const workspaceDir = seedDesignWorkspace();
 // allowlist excludes the design_* tools — the fallback parser then refuses
 // to recover the scripted design_validate call (unknown tool) and the chat
 // shows narration only. The DesignView PR shots must show the design loop,
-// so the design tools must be registered. The workspace layer reads
-// workspace.json (config.json is the GLOBAL layer's filename).
+// so the design tools must be registered. The project folder layer reads
+// project.json (config.json is the GLOBAL layer's filename).
 const wsConfigDir = path.join(workspaceDir, '.sprout');
 fs.mkdirSync(wsConfigDir, { recursive: true });
 fs.writeFileSync(
-  path.join(wsConfigDir, 'workspace.json'),
+  path.join(wsConfigDir, 'project.json'),
   JSON.stringify({ context_mode: 'full' }, null, 2) + '\n',
   'utf8',
 );

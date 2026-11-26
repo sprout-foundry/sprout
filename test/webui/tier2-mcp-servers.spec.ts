@@ -65,8 +65,8 @@ test.describe("MCP Servers", () => {
       timeout: 15_000,
     });
 
-    // Navigate to MCP tab (workspace-mcp subsection)
-    const mcpTab = page.getByTestId(TESTIDS["settings-workspace-mcp-tab"]);
+    // Navigate to MCP tab (project-folder-mcp subsection)
+    const mcpTab = page.getByTestId(TESTIDS["settings-project-folder-mcp-tab"]);
     const isMcpTabVisible = await mcpTab
       .isVisible({ timeout: 10_000 })
       .catch(() => false);
@@ -75,7 +75,7 @@ test.describe("MCP Servers", () => {
       // MCP tab may be nested under a collapsible section — try clicking workspace section
       const workspaceSection = page
         .locator(".settings-section")
-        .filter({ hasText: "Workspace" });
+        .filter({ hasText: "Project folder" });
       if (
         await workspaceSection.isVisible({ timeout: 5_000 }).catch(() => false)
       ) {
@@ -171,7 +171,7 @@ test.describe("MCP Servers", () => {
       timeout: 15_000,
     });
 
-    const mcpTab = page.getByTestId(TESTIDS["settings-workspace-mcp-tab"]);
+    const mcpTab = page.getByTestId(TESTIDS["settings-project-folder-mcp-tab"]);
     if (!(await mcpTab.isVisible({ timeout: 10_000 }).catch(() => false))) {
       await expect(page.getByTestId(TESTIDS["settings-panel"])).toBeVisible({
         timeout: 10_000,
@@ -239,7 +239,7 @@ test.describe("MCP Servers", () => {
     });
 
     // Navigate to MCP tab
-    const mcpTab = page.getByTestId(TESTIDS["settings-workspace-mcp-tab"]);
+    const mcpTab = page.getByTestId(TESTIDS["settings-project-folder-mcp-tab"]);
     const isMcpTabVisible = await mcpTab
       .isVisible({ timeout: 10_000 })
       .catch(() => false);
@@ -248,7 +248,7 @@ test.describe("MCP Servers", () => {
       // Try expanding workspace section
       const workspaceSection = page
         .locator(".settings-section")
-        .filter({ hasText: "Workspace" });
+        .filter({ hasText: "Project folder" });
       if (
         await workspaceSection.isVisible({ timeout: 5_000 }).catch(() => false)
       ) {

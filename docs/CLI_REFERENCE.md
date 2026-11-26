@@ -110,7 +110,7 @@ sprout log [flags]
 **Examples:**
 ```bash
 sprout log  # Summary
-sprout log --raw-log  # Verbose .sprout/workspace.log
+sprout log --raw-log  # Verbose .sprout/project.log
 ```
 
 ### `sprout mcp`
@@ -795,7 +795,7 @@ The `.sprout/` directory is automatically created when you first run `sprout` co
 - `memories/` — Persistent memory storage (markdown files)
 - `revisions/` — Per-session directories with instructions and LLM responses
 - `runlogs/` — JSONL workflow traces
-- `workspace.log` — Verbose execution log
+- `project.log` — Verbose execution log
 - `workspace_index/` — Workspace context index
 
 The index is automatically updated on commands for fresh context.

@@ -34,9 +34,9 @@ func TestDottedSettingKeysAreApplied(t *testing.T) {
 				t.Errorf("computer_use.max_actions_per_minute did not persist: %+v", c.ComputerUse)
 			}
 		}},
-		{`{"computer_use.workspace_allowlist":["/a","/b"]}`, func(t *testing.T, c *configuration.Config) {
+		{`{"computer_use.project_folder_allowlist":["/a","/b"]}`, func(t *testing.T, c *configuration.Config) {
 			if c.ComputerUse == nil || len(c.ComputerUse.ProjectFolderAllowlist) != 2 {
-				t.Errorf("computer_use.workspace_allowlist did not persist: %+v", c.ComputerUse)
+				t.Errorf("computer_use.project_folder_allowlist did not persist: %+v", c.ComputerUse)
 			}
 		}},
 		{`{"mcp.enabled":true}`, func(t *testing.T, c *configuration.Config) {

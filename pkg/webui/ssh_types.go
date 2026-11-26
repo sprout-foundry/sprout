@@ -178,9 +178,9 @@ var errNoReleaseTagForArtifact = errors.New("no release tag available for curren
 func projectFolderLogPath() string {
 	stateDir, err := envutil.StateDir()
 	if err != nil {
-		return "workspace.log"
+		return "project_folder.log"
 	}
-	return filepath.Join(stateDir, "workspace.log")
+	return filepath.Join(stateDir, "project_folder.log")
 }
 
 func newSSHLaunchFailure(step, message, details string, logger *sshLaunchLogger) error {

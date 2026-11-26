@@ -45,7 +45,7 @@ func initRecentProjectFolders() {
 	if recentProjectFolders.filePath == "" {
 		stateDir, err := envutil.StateDir()
 		if err == nil {
-			recentProjectFolders.filePath = filepath.Join(stateDir, "recent_workspaces.json")
+			recentProjectFolders.filePath = filepath.Join(stateDir, "recent_project_folders.json")
 		}
 	}
 	recentProjectFolders.mu.Unlock()

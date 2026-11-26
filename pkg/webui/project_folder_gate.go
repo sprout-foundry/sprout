@@ -68,7 +68,7 @@ func isHomeProjectFolder(projectFolder string) bool {
 }
 
 // homeProjectFolderConsentFile is the on-disk JSON shape for home-as-project-folder
-// consent, stored at ~/.sprout/workspace_consent.json.
+// consent, stored at ~/.sprout/project_folder_consent.json.
 type homeProjectFolderConsentFile struct {
 	HomeProjectFolder struct {
 		ConsentedAt time.Time `json:"consented_at"`
@@ -83,7 +83,7 @@ func homeConsentPath() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(stateDir, "workspace_consent.json")
+	return filepath.Join(stateDir, "project_folder_consent.json")
 }
 
 // hasHomeProjectFolderConsent reports whether the user has previously granted

@@ -172,8 +172,9 @@ storybook-static
 code_review_output.json
 .claude/
 
-# sprout runtime per-workspace config, written when a sprout binary runs
+# sprout runtime project folder config, written when a sprout binary runs
 # from the repo root (last-used provider, per-role model picks).
+project.json
 workspace.json
 
 # Tree-sitter grammar blobs copied from the gotreesitter module cache by

@@ -3,7 +3,7 @@ import { useHostCapabilities } from '../../host';
 import { clientFetch } from '../../services/clientSession';
 import { getBrowseTarget, normalizePath } from './pathUtils';
 import type { ProjectFolderDirectory, SwitchingState, SSHFailureState, RemoteProjectFolderContext } from './types';
-import { MAX_RECENT_WORKSPACES, MAX_SUGGESTIONS } from './types';
+import { MAX_RECENT_PROJECT_FOLDERS, MAX_SUGGESTIONS } from './types';
 
 export interface UseProjectFolderSuggestionsProps {
   isConnected: boolean;
@@ -93,7 +93,7 @@ export function useProjectFolderSuggestions({
     const source = remoteContext?.hostAlias
       ? remoteRecentProjectFolders[remoteContext.hostAlias] || []
       : recentProjectFolders;
-    return source.filter((p) => p !== projectFolder).slice(0, MAX_RECENT_WORKSPACES);
+    return source.filter((p) => p !== projectFolder).slice(0, MAX_RECENT_PROJECT_FOLDERS);
   }, [recentProjectFolders, remoteContext?.hostAlias, remoteRecentProjectFolders, projectFolder]);
 
   // Derived: remote host favorites

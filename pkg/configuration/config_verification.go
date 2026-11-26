@@ -31,7 +31,7 @@ type VerificationConfig struct {
 	// BuildCommand is the explicit build command for the project's
 	// verification run. It is the "explicit project
 	// configuration" source: a human sets it in the project layer
-	// (.sprout/workspace.json) or in global config for projects without a
+	// (.sprout/project.json) or in global config for projects without a
 	// starter manifest (or one that declares no build command). Model
 	// output never populates it — the verification runner ignores
 	// commands the model proposes.

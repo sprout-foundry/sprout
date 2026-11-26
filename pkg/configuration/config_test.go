@@ -817,19 +817,19 @@ func TestGetProjectFolderConfigPath(t *testing.T) {
 		// With no file on disk the resolver reports the current-format path —
 		// the one a write would create.
 		{
-			name:     "joins workspace root with .sprout/workspace.json",
+			name:     "joins the project folder with .sprout/project.json",
 			root:     "/home/user/project",
-			expected: filepath.Join("/home/user/project", ".sprout", "workspace.json"),
+			expected: filepath.Join("/home/user/project", ".sprout", "project.json"),
 		},
 		{
 			name:     "handles nested paths",
 			root:     "/a/b/c/d",
-			expected: filepath.Join("/a/b/c/d", ".sprout", "workspace.json"),
+			expected: filepath.Join("/a/b/c/d", ".sprout", "project.json"),
 		},
 		{
 			name:     "handles relative paths",
 			root:     "myproject",
-			expected: filepath.Join("myproject", ".sprout", "workspace.json"),
+			expected: filepath.Join("myproject", ".sprout", "project.json"),
 		},
 	}
 

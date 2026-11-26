@@ -87,7 +87,7 @@ type ReactWebServer struct {
 	// in the wrong cwd while the UI still displayed the chosen project folder.
 	clientProjectFolders map[string]string
 	// clientProjectFoldersUpdatedAt and clientProjectFoldersPath back the on-disk
-	// copy of clientProjectFolders (client_workspaces.go), so a selection also
+	// copy of clientProjectFolders (client_project_folders.go), so a selection also
 	// survives a daemon restart. An empty path disables persistence.
 	clientProjectFoldersUpdatedAt map[string]time.Time
 	clientProjectFoldersPath      string

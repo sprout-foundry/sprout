@@ -182,7 +182,7 @@ func showConfigOrigin(key string) error {
 	// 4. Project-folder-local override
 	wsDir := configuration.ProjectFolderConfigDir(".")
 	if wsDir != "" {
-		layers = append(layers, layer{"workspace-local", filepath.Join(wsDir, configuration.ProjectFolderLocalFileName)})
+		layers = append(layers, layer{"project folder local", configuration.ProjectFolderLocalFile(wsDir)})
 	}
 
 	var winner *layer

@@ -225,7 +225,7 @@ func (a *Agent) checkComputerUseSessionOptIn(toolName string) error {
 		return a.applyComputerUseOptInDecision(security.ApprovalApproveOnce, ws)
 	}
 
-	return errors.NewPermission("computer use requires interactive opt-in consent — no approval mechanism available (re-run interactively or add the workspace to computer_use.workspace_allowlist in settings)", nil)
+	return errors.NewPermission("computer use requires interactive opt-in consent — no approval mechanism available (re-run interactively or add the project folder to computer_use.project_folder_allowlist in settings)", nil)
 }
 
 // applyComputerUseOptInDecision records the user's consent choice and persists "always" approvals.

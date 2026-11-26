@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/envutil"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // Task records are persisted so a restart can report what happened to a task
@@ -44,7 +45,7 @@ type persistedTask struct {
 	Status        string    `json:"status"`
 	Commit        string    `json:"commit,omitempty"`
 	Summary       string    `json:"summary,omitempty"`
-	ProjectFolder string    `json:"workspace"`
+	ProjectFolder string    `json:"project_folder"`
 }
 
 // taskStatePath returns the task-state file for a project folder.
@@ -253,4 +254,14 @@ func taskInterruptedNote(t TaskInfo) string {
 	}
 	return fmt.Sprintf("Task %s was running when sprout stopped; its worktree is at %s (branch %s). "+
 		"Any uncommitted work there is still on disk.", t.ID, t.Worktree, t.Branch)
+}
+
+// UnmarshalJSON reads tasks saved before the project folder field was renamed
+// from "workspace".
+func (t *persistedTask) UnmarshalJSON(data []byte) error {
+	type plain persistedTask
+	if err := json.Unmarshal(data, (*plain)(t)); err != nil {
+		return err
+	}
+	return utils.AdoptEarlierJSONKey(data, "project_folder", "workspace", &t.ProjectFolder)
 }

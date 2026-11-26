@@ -155,18 +155,18 @@ const (
 	// patch conflicts with unsynced browser edits. The container writes its
 	// version as <path>.theirs instead of overwriting. The payload carries
 	// path, theirs_path, hash_container, hash_browser, and modified_at.
-	EventTypeProjectFolderConflict = "workspace.conflict_detected"
+	EventTypeProjectFolderConflict = "project_folder.conflict_detected"
 	// EventTypeProjectFolderHeartbeatLost (SP-046-4) is published when a session's
 	// heartbeat has been missed for >60s, indicating the browser tab may have
 	// been closed or the connection lost. The container will terminate the
 	// running job after this event. The payload carries session_id and
 	// last_heartbeat (time.RFC3339).
-	EventTypeProjectFolderHeartbeatLost = "workspace.heartbeat_lost"
+	EventTypeProjectFolderHeartbeatLost = "project_folder.heartbeat_lost"
 	// EventTypeProjectFolderSessionMoved (SP-046-5) is published when a user
 	// takes over a session on a new device, causing the previous device's
 	// WebSocket to be closed. The payload carries session_id and new_device_id.
 	// The displaced browser surfaces "This session moved to another device."
-	EventTypeProjectFolderSessionMoved = "workspace.session_moved"
+	EventTypeProjectFolderSessionMoved = "project_folder.session_moved"
 	// EventTypeRateLimited is published when a tool or API call hits a
 	// rate-limit response from the provider. The payload is a
 	// *RateLimitedEvent. WebUI consumes this to show "rate-limited,

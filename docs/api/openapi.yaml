@@ -1175,7 +1175,7 @@ paths:
           description: Error
       summary: List live Sprout instances.
       tags:
-        - workspace/instances
+        - project-folder/instances
   /api/instances/select:
     post:
       description: Sets the desired Sprout instance to the `pid` in the body so the client attaches to that instance on the next load.
@@ -1191,7 +1191,7 @@ paths:
           description: Error
       summary: Select the active instance.
       tags:
-        - workspace/instances
+        - project-folder/instances
   /api/instances/ssh-browse:
     post:
       description: Lists the directories on the remote host over the SSH session so the client can pick a remote project folder.
@@ -1207,7 +1207,7 @@ paths:
           description: Error
       summary: Browse the remote host's directories over SSH.
       tags:
-        - workspace/instances
+        - project-folder/instances
   /api/instances/ssh-close:
     post:
       description: Closes the SSH session for the `session_id` in the body.
@@ -1223,7 +1223,7 @@ paths:
           description: Error
       summary: Close an SSH session.
       tags:
-        - workspace/instances
+        - project-folder/instances
   /api/instances/ssh-hosts:
     get:
       description: Lists the known SSH hosts available for remote instance attachment.
@@ -1239,7 +1239,7 @@ paths:
           description: Error
       summary: List known SSH hosts.
       tags:
-        - workspace/instances
+        - project-folder/instances
   /api/instances/ssh-launch-status:
     get:
       description: Reports the status and logs of a remote instance launch started through ssh-open.
@@ -1255,7 +1255,7 @@ paths:
           description: Error
       summary: Report the status of an SSH instance launch.
       tags:
-        - workspace/instances
+        - project-folder/instances
   /api/instances/ssh-open:
     post:
       description: Opens an SSH connection to a remote host and launches a Sprout instance there.
@@ -1271,7 +1271,7 @@ paths:
           description: Error
       summary: Open an SSH connection to a remote instance.
       tags:
-        - workspace/instances
+        - project-folder/instances
   /api/instances/ssh-sessions:
     get:
       description: Lists the active SSH sessions with their host and state.
@@ -1287,7 +1287,7 @@ paths:
           description: Error
       summary: List active SSH sessions.
       tags:
-        - workspace/instances
+        - project-folder/instances
   /api/lifecycle/activity:
     get:
       description: Returns busy (any in-flight query, running automation or background task, or a prepare-stop checkpoint in progress), the busy reasons, the active query count, the last user and agent activity timestamps (RFC 3339 UTC, null when none since start) and whether the daemon still accepts work. Read-only; authenticated like GET /api/sync.
@@ -1543,7 +1543,7 @@ paths:
           description: Error
       summary: Report the client's active project folder.
       tags:
-        - workspace/instances
+        - project-folder/instances
     post:
       description: Sets the requesting client's active project folder to the `path` in the body. The path must resolve within the daemon root.
       operationId: projectFolderSet
@@ -1558,7 +1558,7 @@ paths:
           description: Error
       summary: Set the client's active project folder.
       tags:
-        - workspace/instances
+        - project-folder/instances
   /api/project-folder/browse:
     get:
       description: Lists the directories under the daemon root (the parent of the active project folder) so the client can pick a new project folder. Defaults to the daemon root when `path` is omitted.
@@ -1574,7 +1574,7 @@ paths:
           description: Error
       summary: Browse directories under the daemon root.
       tags:
-        - workspace/instances
+        - project-folder/instances
   /api/project-folder/projects:
     get:
       description: Lists the recent projects known to the client (the project folder picker) with their last-used ordering.
@@ -1590,7 +1590,7 @@ paths:
           description: Error
       summary: List known projects.
       tags:
-        - workspace/instances
+        - project-folder/instances
   /api/project-folder/sync:
     post:
       description: Applies the pending file-sync operations for the project folder (the SP-046 project folder sync surface).
@@ -1606,7 +1606,7 @@ paths:
           description: Error
       summary: Synchronize the project folder tree.
       tags:
-        - workspace/instances
+        - project-folder/instances
   /api/project-folder/takeover:
     post:
       description: Marks the requesting client as the active owner of the project folder, superseding the previous owner.
@@ -1622,7 +1622,7 @@ paths:
           description: Error
       summary: Take over a project folder from another device.
       tags:
-        - workspace/instances
+        - project-folder/instances
   /api/providers:
     get:
       description: Lists the LLM providers available to the agent, with their connection status and configuration.
@@ -2730,7 +2730,7 @@ paths:
           description: Error
       summary: List project folder symbols.
       tags:
-        - workspace/instances
+        - project-folder/instances
   /api/ws-metrics:
     get:
       description: Reports the live WebSocket connection and message metrics for the server.
@@ -2759,7 +2759,7 @@ tags:
   - description: Terminal, agent-session, and language-server (LSP) surfaces.
     name: terminal
   - description: Workspace metadata and remote instance/SSH management.
-    name: workspace/instances
+    name: project-folder/instances
   - description: File sync operations and container-side git transactions.
     name: sync/txn
   - description: Chat sessions and worktree session mappings.

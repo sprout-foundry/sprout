@@ -11,16 +11,16 @@ package tools
 const (
 	// EnvelopeTypePatchIn is the type for browser→container patches (user edits).
 	// The browser sends this when the user makes an edit in the OPFS-backed editor.
-	EnvelopeTypePatchIn = "workspace.patch_in"
+	EnvelopeTypePatchIn = "project_folder.patch_in"
 
 	// EnvelopeTypePatchOut is the type for container→browser patches (agent writes).
 	// The container sends this after every tool-call file write to keep the browser
 	// in sync.
-	EnvelopeTypePatchOut = "workspace.patch_out"
+	EnvelopeTypePatchOut = "project_folder.patch_out"
 
 	// EnvelopeTypeHeartbeat is the bidirectional keep-alive ping. Sent by the
 	// browser every 15 seconds; the container responds with its own heartbeat.
-	EnvelopeTypeHeartbeat = "workspace.heartbeat"
+	EnvelopeTypeHeartbeat = "project_folder.heartbeat"
 )
 
 // SyncEnvelope wraps a project folder sync message for transport over WebSocket.

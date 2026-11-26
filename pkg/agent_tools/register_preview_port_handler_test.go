@@ -20,9 +20,9 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
-// newPlatformStub stands in for the platform's /internal/workspace/{id}/ports
+// newPlatformStub stands in for the platform's /internal/dev-space/{id}/ports
 // endpoint, returning status with body. The path the handler hits is
-// /internal/workspace/ws1/ports (WORKSPACE_ID is "ws1" in these tests).
+// /internal/dev-space/ws1/ports (WORKSPACE_ID is "ws1" in these tests).
 func newPlatformStub(t *testing.T, status int, body string) *httptest.Server {
 	t.Helper()
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -103,20 +103,21 @@ func TestRegisterPreviewPort_PublishesOnSuccess(t *testing.T) {
 	}
 }
 
-func TestRegisterPreviewPort_NoEventWhenProjectFolderIDUnset(t *testing.T) {
+func TestRegisterPreviewPort_NoEventWhenDevSpaceIDUnset(t *testing.T) {
 	// A platform stub is present but must never be reached.
 	stub := newPlatformStub(t, http.StatusCreated, `{"preview_url":"https://preview.example/ws1/8080"}`)
 	setPlatformEnv(t, stub.URL)
 	t.Setenv("WORKSPACE_ID", "")
+	t.Setenv("DEV_SPACE_ID", "")
 
 	env := ToolEnv{EventBus: events.NewEventBus()}
 	result, got, _ := runRegister(t, env, map[string]any{"port": 8080}, 500*time.Millisecond)
 
-	if !strings.Contains(result.Output, "WORKSPACE_ID not set") {
+	if !strings.Contains(result.Output, "DEV_SPACE_ID not set") {
 		t.Fatalf("expected the missing-project-folder error, got %q", result.Output)
 	}
 	if !result.IsError {
-		t.Error("a missing WORKSPACE_ID must be an error result")
+		t.Error("a missing DEV_SPACE_ID must be an error result")
 	}
 	if got {
 		t.Fatal("no event must be published when registration cannot happen")

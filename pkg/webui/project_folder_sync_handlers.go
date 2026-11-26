@@ -116,7 +116,7 @@ type takeoverRequest struct {
 //
 // A new device requests to take over an existing session. If the session is
 // already active on another device, the old device is swapped out and a
-// workspace.session_moved event is published so the displaced browser can
+// project_folder.session_moved event is published so the displaced browser can
 // surface the overlay.
 func (ws *ReactWebServer) handleAPIProjectFolderTakeover(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodPost) {

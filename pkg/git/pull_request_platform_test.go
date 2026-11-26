@@ -36,11 +36,11 @@ func TestCreatePullRequest_ViaPlatform_AnyHost(t *testing.T) {
 
 	var got platformPullRequest
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/internal/workspace/ws-1/pulls" {
+		if r.Method != http.MethodPost || r.URL.Path != "/internal/dev-space/ws-1/pulls" {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
-		if r.Header.Get("X-Workspace-Token") != "ws-secret" {
-			t.Errorf("project folder token = %q", r.Header.Get("X-Workspace-Token"))
+		if r.Header.Get("X-Dev-Space-Token") != "ws-secret" {
+			t.Errorf("dev space token = %q", r.Header.Get("X-Dev-Space-Token"))
 		}
 		_ = json.NewDecoder(r.Body).Decode(&got)
 		w.WriteHeader(http.StatusCreated)

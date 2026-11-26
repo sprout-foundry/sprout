@@ -13,7 +13,7 @@ var familyOrder = []string{
 	"git",
 	"settings",
 	"terminal",
-	"workspace/instances",
+	"project-folder/instances",
 	"sync/txn",
 	"sessions",
 	"search",
@@ -62,7 +62,7 @@ var familyRules = []struct {
 			p == "/terminal" ||
 			strings.HasPrefix(p, "/api/lsp/")
 	}},
-	{"workspace/instances", func(p string) bool {
+	{"project-folder/instances", func(p string) bool {
 		return strings.HasPrefix(p, "/api/project-folder") || strings.HasPrefix(p, "/api/instances")
 	}},
 	{"sync/txn", func(p string) bool {

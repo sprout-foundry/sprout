@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// TestHumaRemainingFamiliesDispatch proves the workspace/instances, terminal,
+// TestHumaRemainingFamiliesDispatch proves the project-folder/instances, terminal,
 // sync/txn, command, proxy, cross-family-misc, and design/starters Huma
 // operations dispatch through the live ServeMux and emit the same responses
 // the plain handlers did. The operations are thin wrappers over the existing
@@ -56,7 +56,7 @@ func TestHumaRemainingFamiliesDispatch(t *testing.T) {
 		return b
 	}
 
-	// --- workspace/instances: GET /api/project-folder (projectFolderGet) ---
+	// --- project-folder/instances: GET /api/project-folder (projectFolderGet) ---
 	resp := do(t, http.MethodGet, "/api/project-folder", "")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /api/workspace: status = %d, want %d (body: %s)", resp.StatusCode, http.StatusOK, readAll(t, resp))

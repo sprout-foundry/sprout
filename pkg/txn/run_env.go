@@ -9,6 +9,7 @@ import "strings"
 // push can reach them through git anyway.
 var daemonOnlyEnv = map[string]bool{
 	"SPROUT_AUTH_TOKEN":           true,
+	"SPROUT_DEV_SPACE_TXN_SECRET": true,
 	"SPROUT_WORKSPACE_TXN_SECRET": true,
 	"CODING_ENV_JWT_SECRET":       true,
 }

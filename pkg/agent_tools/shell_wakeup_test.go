@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -142,10 +143,10 @@ func (n *fakeWakeupNotifier) all() []wakeupNotification {
 // CompletionGate the way the agent does, with a mutable generation.
 type gatedWakeupNotifier struct {
 	fakeWakeupNotifier
-	gen uint64
+	gen atomic.Uint64
 }
 
-func (g *gatedWakeupNotifier) BackgroundGeneration() uint64 { return g.gen }
+func (g *gatedWakeupNotifier) BackgroundGeneration() uint64 { return g.gen.Load() }
 
 // startGatedWakeupWatcherForTest is startWakeupWatcherForTest with a
 // gate-capable notifier; the tests bump gen to simulate a session
@@ -155,7 +156,8 @@ func startGatedWakeupWatcherForTest(t *testing.T, sessionID string, timeoutSec i
 	watchCtx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	tm := newFakeWakeupTerminal(sessionID)
-	notifier := &gatedWakeupNotifier{gen: initialGen}
+	notifier := &gatedWakeupNotifier{}
+	notifier.gen.Store(initialGen)
 	env := ToolEnv{Notifier: notifier, LifetimeCtx: watchCtx}
 	resultJSON := fmt.Sprintf(`{"session_id":%q,"status":"running"}`, sessionID)
 	new(shellCommandHandler).startWakeupWatcher(WithTerminalManager(watchCtx, tm), env, resultJSON, timeoutSec, "make build")
@@ -380,7 +382,7 @@ func TestWakeupWatcher_RotationGateSuppressesCompletion(t *testing.T) {
 	defer cancel()
 
 	// Rotate before the command completes.
-	notifier.gen = 1
+	notifier.gen.Store(1)
 
 	go func() {
 		time.Sleep(200 * time.Millisecond)
@@ -400,7 +402,7 @@ func TestWakeupWatcher_RotationGateSuppressesTimeout(t *testing.T) {
 	defer cancel()
 
 	// Rotate before the deadline fires.
-	notifier.gen = 1
+	notifier.gen.Store(1)
 
 	requireNoMoreNotifications(t, &notifier.fakeWakeupNotifier, 2*time.Second)
 	require.Empty(t, notifier.all(),

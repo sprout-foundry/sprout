@@ -76,7 +76,7 @@ func TestCrossTurnTimestampStability(t *testing.T) {
 		}
 	}
 	// The conversation's first message also carries the workspace block (workspace_context.go).
-	if !strings.HasPrefix(user1, "<current-time>") || !strings.Contains(user1, "</current-time>\n\n<workspace-context>") ||
+	if !strings.HasPrefix(user1, "<current-time>") || !strings.Contains(user1, "</current-time>\n\n<project-folder-context>") ||
 		StripUserMessageEnvelope(user1) != "first question" {
 		t.Fatalf("turn 1 request user message = %q, want a <current-time> envelope and the workspace block around \"first question\"", user1)
 	}

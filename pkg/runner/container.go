@@ -145,6 +145,7 @@ func (l *ContainerLauncher) Start(ctx context.Context, task DevSpaceTask) (*DevS
 	if task.DevSpaceDir != "" {
 		// Inside the container the directory is the /workspace mount;
 		// the host path means nothing there and would only leak it.
+		env["DEV_SPACE_DIR"] = "/workspace"
 		env["WORKSPACE_DIR"] = "/workspace"
 	}
 	envFile, err := writeEnvFile(dir, env)

@@ -95,7 +95,7 @@ function loadFreshWindows() {
     if (id === './backend' || id.endsWith('/backend') || id.endsWith('/backend.js')) {
       return {
         generateSecret: () => TEST_TOKEN,
-        startBackendForWorkspace: async () => ({ child: { kill: () => {} }, port: 9999 }),
+        startBackendForProjectFolder: async () => ({ child: { kill: () => {} }, port: 9999 }),
         registerExitHandler: () => {},
         resolveBackendBinary: () => '/fake/sprout',
         findFreePort: () => Promise.resolve(9999),
@@ -107,14 +107,14 @@ function loadFreshWindows() {
       return {
         launcherWindow: null,
         instanceRegistry: new Map(),
-        workspaceWindowMap: new Map(),
+        projectFolderWindowMap: new Map(),
         sshWindowMap: new Map(),
         windowStateWriteTimers: new Map(),
       };
     }
 
     if (id === './utils' || id.endsWith('/utils') || id.endsWith('/utils.js')) {
-      return { getWorkspaceKey: (e) => `ws:${e.workspacePath}` };
+      return { getProjectFolderKey: (e) => `ws:${e.projectFolderPath}` };
     }
 
     const stubFn = () => {};
@@ -127,7 +127,7 @@ function loadFreshWindows() {
         writeWindowBounds: stubFn,
         scheduleWindowBoundsPersist: stubFn,
         addRecentWorktree: stubFn,
-        persistOpenWorkspaces: stubFn,
+        persistOpenProjectFolders: stubFn,
         getRecentWorktrees: () => [],
         openBackendLogStream: () => ({ write: stubFn, end: stubFn }),
       };
@@ -148,8 +148,8 @@ function loadFreshWindows() {
 
     if (id === './workspace' || id.endsWith('/workspace') || id.endsWith('/workspace.js')) {
       return {
-        resolveWorkspaceDirectory: (p) => p,
-        promptForWorkspace: async () => '/fake/workspace',
+        resolveProjectFolderDirectory: (p) => p,
+        promptForProjectFolder: async () => '/fake/workspace',
       };
     }
 
@@ -302,20 +302,20 @@ describe('injectAuthHeaders integration (source inspection)', () => {
   /**
    * Verify that injectAuthHeaders is called in the window-creation flows
    * via source inspection (similar approach to backend_test.js).
-   * Full behavioral testing of createWorkspaceWindow / createSSHWorkspaceWindow
+   * Full behavioral testing of createProjectFolderWindow / createSSHProjectFolderWindow
    * would require a compiled backend binary and Electron runtime.
    */
   const sourcePath = path.join(__dirname, 'windows.js');
   const source = fs.readFileSync(sourcePath, 'utf8');
 
-  test('createWorkspaceWindow calls injectAuthHeaders', () => {
+  test('createProjectFolderWindow calls injectAuthHeaders', () => {
     assert.ok(
       source.includes('injectAuthHeaders(browserWindow)'),
-      'expected injectAuthHeaders(browserWindow) call in createWorkspaceWindow',
+      'expected injectAuthHeaders(browserWindow) call in createProjectFolderWindow',
     );
   });
 
-  test('createSSHWorkspaceWindow calls injectAuthHeaders', () => {
+  test('createSSHProjectFolderWindow calls injectAuthHeaders', () => {
     // Both functions call it, so there should be at least 2 occurrences
     // (plus the function definition itself).
     const count = (source.match(/injectAuthHeaders\(browserWindow\)/g) || []).length;

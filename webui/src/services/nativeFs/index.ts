@@ -15,8 +15,8 @@
  *
  * Exports:
  *   - a narrow structural type + detector for the `window.SproutStudio`
- *     bridge subset the webui uses (getCapabilities / readWorkspaceFile /
- *     writeWorkspaceFile / listWorkspace),
+ *     bridge subset the webui uses (getCapabilities / readProjectFolderFile /
+ *     writeProjectFolderFile / listProjectFolder),
  *   - a PURE gate-decision function (`resolveNativeFsGate`) plus a cached
  *     async resolver (`nativeFsGate`),
  *   - PURE path normalization (webui path → workspace-relative),
@@ -53,7 +53,7 @@ export interface SproutStudioCapabilities {
   servable: boolean;
 }
 
-/** One entry in a `listWorkspace` result. */
+/** One entry in a `listProjectFolder` result. */
 export interface ProjectFolderFileEntry {
   path: string;
   size: number;
@@ -67,14 +67,14 @@ export interface ProjectFolderFileEntry {
  */
 export type SproutStudioFsBridge = {
   getCapabilities(): Promise<SproutStudioCapabilities>;
-  readWorkspaceFile(
+  readProjectFolderFile(
     path: string,
   ): Promise<{ ok: true; path: string; content?: string; contentBase64?: string } | { ok: false; error: string }>;
-  writeWorkspaceFile(
+  writeProjectFolderFile(
     path: string,
     payload: string | { content?: string; contentBase64?: string },
   ): Promise<{ ok: true; path: string } | { ok: false; error: string }>;
-  listWorkspace(
+  listProjectFolder(
     maxDepth?: number,
   ): Promise<{ ok: true; files: ProjectFolderFileEntry[] } | { ok: false; error: string }>;
 };
@@ -86,9 +86,9 @@ export type SproutStudioFsBridge = {
  */
 export type SproutStudioProjectFolderBridge = {
   /** Presents the system folder picker; persists the chosen root. */
-  pickWorkspace(): Promise<{ ok: true; rootName: string } | { ok: false; error: string }>;
+  pickProjectFolder(): Promise<{ ok: true; rootName: string } | { ok: false; error: string }>;
   /** Creates a fresh project folder and makes it the project folder. */
-  createWorkspace(
+  createProjectFolder(
     name: string,
   ): Promise<{ ok: true; rootName: string } | { ok: false; error: 'invalidName' | 'alreadyExists' | string }>;
 };
@@ -104,9 +104,55 @@ export type NativeProjectFolderResult = { ok: true; rootName: string } | { ok: f
  * against a bridge that only implements the file ops.
  */
 export function hasSproutStudioProjectFolderBridge(obj: unknown): obj is SproutStudioProjectFolderBridge {
-  if (!obj || typeof obj !== 'object') return false;
-  const c = obj as Record<string, unknown>;
-  return typeof c.pickWorkspace === 'function' && typeof c.createWorkspace === 'function';
+  const c = currentStudioBridge(obj);
+  if (!c) return false;
+  return typeof c.pickProjectFolder === 'function' && typeof c.createProjectFolder === 'function';
+}
+
+// ── Method and error names across shell versions ──────────────────────────────
+
+/** The bridge methods under their current names, and the names shells built before the rename give them. */
+const EARLIER_STUDIO_METHODS: Readonly<Record<string, string>> = {
+  readProjectFolderFile: 'readWorkspaceFile',
+  writeProjectFolderFile: 'writeWorkspaceFile',
+  listProjectFolder: 'listWorkspace',
+  pickProjectFolder: 'pickWorkspace',
+  createProjectFolder: 'createWorkspace',
+  clearProjectFolder: 'clearWorkspace',
+};
+
+/** Error codes shells built before the rename answer with, and their names now. */
+export const EARLIER_PROJECT_FOLDER_ERRORS: Readonly<Record<string, string>> = {
+  notInWorkspace: 'notInProjectFolder',
+  workspaceNotSet: 'projectFolderNotSet',
+};
+
+/** A bridge result with an earlier error code rewritten to its current name. */
+export function withCurrentErrorCode<T>(result: T): T {
+  const r = result as { ok?: unknown; error?: unknown } | null;
+  if (r && typeof r === 'object' && typeof r.error === 'string' && r.error in EARLIER_PROJECT_FOLDER_ERRORS) {
+    return { ...(result as object), error: EARLIER_PROJECT_FOLDER_ERRORS[r.error] } as T;
+  }
+  return result;
+}
+
+/**
+ * `window.SproutStudio` under the current method names. A shell that
+ * predates them is called through the earlier names; either way its results
+ * carry the current error codes. Every other member passes through.
+ */
+export function currentStudioBridge(raw: unknown): Record<string, unknown> | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const shell = raw as Record<string, unknown>;
+  const view = Object.create(shell) as Record<string, unknown>;
+  for (const [current, earlier] of Object.entries(EARLIER_STUDIO_METHODS)) {
+    const fn = typeof shell[current] === 'function' ? shell[current] : shell[earlier];
+    if (typeof fn === 'function') {
+      view[current] = (...args: unknown[]) =>
+        Promise.resolve((fn as (...a: unknown[]) => unknown).apply(shell, args)).then(withCurrentErrorCode);
+    }
+  }
+  return view;
 }
 
 // ── Structural detector ───────────────────────────────────────────────────────
@@ -117,13 +163,13 @@ export function hasSproutStudioProjectFolderBridge(obj: unknown): obj is SproutS
  * `undefined`, or a plain object.
  */
 export function hasSproutStudioFsBridge(obj: unknown): obj is SproutStudioFsBridge {
-  if (!obj || typeof obj !== 'object') return false;
-  const c = obj as Record<string, unknown>;
+  const c = currentStudioBridge(obj);
+  if (!c) return false;
   return (
     typeof c.getCapabilities === 'function' &&
-    typeof c.readWorkspaceFile === 'function' &&
-    typeof c.writeWorkspaceFile === 'function' &&
-    typeof c.listWorkspace === 'function'
+    typeof c.readProjectFolderFile === 'function' &&
+    typeof c.writeProjectFolderFile === 'function' &&
+    typeof c.listProjectFolder === 'function'
   );
 }
 
@@ -134,7 +180,7 @@ export function hasSproutStudioFsBridge(obj: unknown): obj is SproutStudioFsBrid
  */
 export function detectSproutStudio(): SproutStudioFsBridge | null {
   if (typeof window === 'undefined') return null;
-  const candidate = (window as unknown as { SproutStudio?: unknown }).SproutStudio;
+  const candidate = currentStudioBridge((window as unknown as { SproutStudio?: unknown }).SproutStudio);
   return hasSproutStudioFsBridge(candidate) ? (candidate as SproutStudioFsBridge) : null;
 }
 
@@ -271,28 +317,28 @@ export function normalizeProjectFolderPath(input: string): string {
  *
  *   - notFound        → 404  (target or a parent does not exist)
  *   - invalidParams   → 400  (missing/empty path, bad payload)
- *   - notInWorkspace  → 400  (path fails the project folder safety rules)
+ *   - notInProjectFolder → 400  (path fails the project folder safety rules)
  *   - isDirectory     → 400  (the op targeted a directory)
  *   - userCancelled   → 409  (the pending native op was cancelled by the user;
  *                              not a hard error, but we must still return a
  *                              non-2xx so callers see it failed)
- *   - workspaceNotSet → 503  (no project folder picked/restored)
+ *   - projectFolderNotSet → 503  (no project folder picked/restored)
  *   - ioFailed / unknown → 500
  */
-export const WORKSPACE_ERROR_STATUS: Readonly<Record<string, number>> = {
+export const PROJECT_FOLDER_ERROR_STATUS: Readonly<Record<string, number>> = {
   notFound: 404,
   invalidParams: 400,
-  notInWorkspace: 400,
+  notInProjectFolder: 400,
   isDirectory: 400,
   userCancelled: 409,
-  workspaceNotSet: 503,
+  projectFolderNotSet: 503,
   ioFailed: 500,
 };
 
 /** Pure lookup: error code → HTTP status. Unknown/`ioFailed` → 500. */
 export function projectFolderErrorStatus(error: string | undefined): number {
   if (error !== undefined && error !== '') {
-    const mapped = WORKSPACE_ERROR_STATUS[error];
+    const mapped = PROJECT_FOLDER_ERROR_STATUS[EARLIER_PROJECT_FOLDER_ERRORS[error] ?? error];
     if (mapped !== undefined) return mapped;
   }
   return 500;
@@ -328,7 +374,7 @@ function errorJsonResponse(error: string, status: number): Response {
 }
 
 /**
- * Map a `readWorkspaceFile` result to a synthesized `Response`.
+ * Map a `readProjectFolderFile` result to a synthesized `Response`.
  *   - `{ ok: false, error }`            → mapped status + JSON error body
  *   - `{ ok, contentBase64 }`          → 200, application/octet-stream bytes
  *   - `{ ok, content }` (utf-8 text)   → 200, text/plain; charset=utf-8
@@ -369,9 +415,9 @@ export function readProjectFolderResponse(result: unknown): Response {
   });
 }
 
-// ── listWorkspace → file-tree mapping (pure) ─────────────────────────────────
+// ── listProjectFolder → file-tree mapping (pure) ─────────────────────────────────
 //
-// The `files` channel's `listWorkspace(maxDepth)` lists the project folder ROOT
+// The `files` channel's `listProjectFolder(maxDepth)` lists the project folder ROOT
 // only (no sub-directory arg) and returns `{path, size, isDir}` per entry
 // (no `modified`, no `gitStatus`). To list the direct children of an
 // arbitrary requested directory, we (a) request a depth deep enough to reach
@@ -383,7 +429,7 @@ function segmentCount(p: string): number {
 }
 
 /**
- * The `maxDepth` to pass to `listWorkspace` so that the direct children of
+ * The `maxDepth` to pass to `listProjectFolder` so that the direct children of
  * `requestedPath` are visible. "maxDepth = 1 relative to the requested path":
  * root (`.`/`''`) → 1; a depth-N directory → N + 1. Pure.
  */
@@ -427,7 +473,7 @@ export function sortNativeFileInfo(items: NativeFileInfo[]): NativeFileInfo[] {
 }
 
 /**
- * Pure: turn a `listWorkspace` result into the sorted file-tree listing for
+ * Pure: turn a `listProjectFolder` result into the sorted file-tree listing for
  * the direct children of `requestedPath`.
  *
  *   - validates the result (must be `{ ok: true, files }`); an error /
@@ -435,7 +481,7 @@ export function sortNativeFileInfo(items: NativeFileInfo[]): NativeFileInfo[] {
  *     how a failed fetch degrades),
  *   - filters the flat root listing down to the direct children of
  *     `requestedPath` (depth + prefix),
- *   - maps each entry to the file-tree shape. `listWorkspace` carries no
+ *   - maps each entry to the file-tree shape. `listProjectFolder` carries no
  *     `modified`/`gitStatus`, so `modified` is `0` and `gitStatus` is
  *     `undefined`; `name` is the last path segment and `ext` is derived from
  *     it exactly as the `clientFetch` path does.
@@ -482,7 +528,7 @@ export function mapProjectFolderListing(result: unknown, requestedPath: string):
   return sortNativeFileInfo(items);
 }
 
-/** Map a `writeWorkspaceFile` result to a synthesized `Response`. */
+/** Map a `writeProjectFolderFile` result to a synthesized `Response`. */
 export function writeProjectFolderResponse(result: unknown): Response {
   const r = result as { ok: true; path: string } | { ok: false; error: string };
   if (r && (r as { ok?: boolean }).ok === false) {
@@ -506,11 +552,11 @@ export function writeProjectFolderResponse(result: unknown): Response {
 export async function nativeReadProjectFolderFile(path: string): Promise<Response> {
   const bridge = detectSproutStudio();
   if (!bridge) {
-    throw new Error('nativeReadWorkspaceFile: no SproutStudio bridge available (Track R --native-fs)');
+    throw new Error('nativeReadProjectFolderFile: no SproutStudio bridge available (Track R --native-fs)');
   }
   let result: unknown;
   try {
-    result = await bridge.readWorkspaceFile(path);
+    result = await bridge.readProjectFolderFile(path);
   } catch {
     // The bridge helpers are "never-reject"; a hard throw means the transport
     // itself is broken. Surface as ioFailed (500) rather than crashing.
@@ -526,11 +572,11 @@ export async function nativeReadProjectFolderFile(path: string): Promise<Respons
 export async function nativeWriteProjectFolderFile(path: string, content: string): Promise<Response> {
   const bridge = detectSproutStudio();
   if (!bridge) {
-    throw new Error('nativeWriteWorkspaceFile: no SproutStudio bridge available (Track R --native-fs)');
+    throw new Error('nativeWriteProjectFolderFile: no SproutStudio bridge available (Track R --native-fs)');
   }
   let result: unknown;
   try {
-    result = await bridge.writeWorkspaceFile(path, content);
+    result = await bridge.writeProjectFolderFile(path, content);
   } catch {
     return errorJsonResponse('ioFailed', 500);
   }
@@ -566,7 +612,7 @@ export async function pickProjectFolderNative(): Promise<NativeProjectFolderResu
     return { ok: false, error: 'ioFailed' };
   }
   try {
-    return projectFolderResult(await projectFolderBridge.pickWorkspace());
+    return projectFolderResult(await projectFolderBridge.pickProjectFolder());
   } catch {
     return { ok: false, error: 'ioFailed' };
   }
@@ -588,7 +634,7 @@ export async function createProjectFolderNative(name: string): Promise<NativePro
     return { ok: false, error: 'invalidName' };
   }
   try {
-    return projectFolderResult(await projectFolderBridge.createWorkspace(trimmed));
+    return projectFolderResult(await projectFolderBridge.createProjectFolder(trimmed));
   } catch {
     return { ok: false, error: 'ioFailed' };
   }

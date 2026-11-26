@@ -18,7 +18,7 @@ function parseJSON<T>(raw: string, fallback: T): T {
 const SKIPPED_DIRS = new Set(['.git', 'node_modules']);
 
 export function projectFolderOf(bridge: SproutWasmBridge): string {
-  return bridge.getWorkspaceRoot?.() || '/workspace';
+  return bridge.getProjectFolderRoot?.() || bridge.getWorkspaceRoot?.() || '/workspace';
 }
 
 export function readProjectFolderFile(bridge: SproutWasmBridge, absPath: string): string | null {

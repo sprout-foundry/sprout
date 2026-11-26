@@ -12,14 +12,14 @@ function htmlEscape(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function renderLoadingPage(workspacePath) {
+function renderLoadingPage(projectFolderPath) {
   return `data:text/html;charset=UTF-8,${encodeURIComponent(`
     <!doctype html>
     <html>
       <body style="margin:0;font-family:sans-serif;background:#1f242d;color:#d6deeb;display:flex;align-items:center;justify-content:center;height:100vh;">
         <div style="text-align:center;">
           <div style="font-size:18px;font-weight:600;margin-bottom:8px;">Starting Sprout…</div>
-          <div style="font-size:13px;opacity:.75;">${htmlEscape(workspacePath)}</div>
+          <div style="font-size:13px;opacity:.75;">${htmlEscape(projectFolderPath)}</div>
         </div>
       </body>
     </html>
@@ -54,10 +54,10 @@ function likelyCause(exitCode, signal) {
   return 'The backend stopped unexpectedly.';
 }
 
-function renderErrorPage(workspacePath, exitCode, signal, retriesExhausted = false) {
+function renderErrorPage(projectFolderPath, exitCode, signal, retriesExhausted = false) {
   const { lines: logLines, logPath } = getRecentLogLines(40);
   const logDir = logPath ? path.dirname(logPath) : getLogDirectory();
-  const safeWorkspacePath = htmlEscape(workspacePath);
+  const safeProjectFolderPath = htmlEscape(projectFolderPath);
 
   const exitInfo = [];
   if (exitCode !== null && exitCode !== undefined) exitInfo.push(`Exit code: ${exitCode}`);
@@ -84,7 +84,7 @@ function renderErrorPage(workspacePath, exitCode, signal, retriesExhausted = fal
     exitCode,
     signal,
     cause,
-    workspace: workspacePath,
+    projectFolder: projectFolderPath,
     recentLog: logLines,
   }, null, 2);
 
@@ -117,7 +117,7 @@ function renderErrorPage(workspacePath, exitCode, signal, retriesExhausted = fal
           <h2>${heading}</h2>
           <p class="cause">${cause}</p>
           ${exitDetails}
-          <div class="meta">Workspace: ${safeWorkspacePath}</div>
+          <div class="meta">Workspace: ${safeProjectFolderPath}</div>
           ${logHtml}
           <div class="actions">
             ${reloadButton}

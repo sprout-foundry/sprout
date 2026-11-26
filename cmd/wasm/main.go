@@ -35,20 +35,22 @@ func main() {
 		"executeCommand": js.FuncOf(executeCommandFunc),
 		// Async variant for the interactive terminal: commands backed by JS
 		// Promises (git via isomorphic-git) must not block the event loop.
-		"executeCommandAsync": js.FuncOf(executeCommandAsyncFunc),
-		"autoComplete":        js.FuncOf(autoCompleteFunc),
-		"getCwd":              js.FuncOf(getCwdFunc),
-		"getWorkspaceRoot":    js.FuncOf(getProjectFolderFunc),
-		"changeDir":           js.FuncOf(changeDirFunc),
-		"writeFile":           js.FuncOf(writeFileFunc),
-		"writeFileBytes":      js.FuncOf(writeFileBytesFunc),
-		"readFile":            js.FuncOf(readFileFunc),
-		"listDir":             js.FuncOf(listDirFunc),
-		"walkFiles":           js.FuncOf(walkFilesFunc),
-		"deleteFile":          js.FuncOf(deleteFileFunc),
-		"getHistory":          js.FuncOf(getHistoryFunc),
-		"getEnv":              js.FuncOf(getEnvFunc),
-		"getBuildInfo":        js.FuncOf(getBuildInfoFunc),
+		"executeCommandAsync":  js.FuncOf(executeCommandAsyncFunc),
+		"autoComplete":         js.FuncOf(autoCompleteFunc),
+		"getCwd":               js.FuncOf(getCwdFunc),
+		"getProjectFolderRoot": js.FuncOf(getProjectFolderFunc),
+		// Agent modules built before the rename call it by this name.
+		"getWorkspaceRoot": js.FuncOf(getProjectFolderFunc),
+		"changeDir":        js.FuncOf(changeDirFunc),
+		"writeFile":        js.FuncOf(writeFileFunc),
+		"writeFileBytes":   js.FuncOf(writeFileBytesFunc),
+		"readFile":         js.FuncOf(readFileFunc),
+		"listDir":          js.FuncOf(listDirFunc),
+		"walkFiles":        js.FuncOf(walkFilesFunc),
+		"deleteFile":       js.FuncOf(deleteFileFunc),
+		"getHistory":       js.FuncOf(getHistoryFunc),
+		"getEnv":           js.FuncOf(getEnvFunc),
+		"getBuildInfo":     js.FuncOf(getBuildInfoFunc),
 	}
 	for name, fn := range configJSFuncs() {
 		apiSurface[name] = fn

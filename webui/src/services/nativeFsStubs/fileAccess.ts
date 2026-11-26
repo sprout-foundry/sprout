@@ -16,7 +16,7 @@
  * the compile-time `NATIVE_FS_ENABLED` flag is on, the shell bridge is
  * present, `capabilities.fs === true`, and the served manifest carries a
  * ratified `fs` exclusion — reads and writes are routed through the
- * bridge's files channel (`readWorkspaceFile` / `writeWorkspaceFile`)
+ * bridge's files channel (`readProjectFolderFile` / `writeProjectFolderFile`)
  * and returned as synthesized `Response`s (see the leaf module in
  * services/nativeFs/). When the gate does NOT pass (no bridge, no
  * manifest, seam-only, shell doesn't declare fs, or getCapabilities

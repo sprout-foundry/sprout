@@ -10,7 +10,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const ctx = require('./context');
-const { getWorkspaceKey } = require('./utils');
+const { getProjectFolderKey } = require('./utils');
 const {
   getLogDirectory,
   getRecentWorktreeEntries,
@@ -20,21 +20,21 @@ const {
 const { listWslDistros, installWslFromDesktop, installGitForWindowsFromDesktop } = require('./wsl');
 const { listSshHosts } = require('./ssh');
 const {
-  resolveWorkspaceDirectory,
-  promptForWorkspace,
+  resolveProjectFolderDirectory,
+  promptForProjectFolder,
   promptForRepository,
   promptForWorktreeParent,
   createWorktree,
-} = require('./workspace');
+} = require('./projectFolder');
 const {
   createLauncherWindow,
   buildMenu,
-  createWorkspaceWindow,
-  createSSHWorkspaceWindow,
+  createProjectFolderWindow,
+  createSSHProjectFolderWindow,
 } = require('./windows');
 const { initAutoUpdater, isUpdatePending } = require('./updater');
 const { autoUpdater } = require('electron-updater');
-const { registerDesktopProtocol, extractWorkspacePathFromOpenTarget } = require('./protocol');
+const { registerDesktopProtocol, extractProjectFolderPathFromOpenTarget } = require('./protocol');
 
 function isSmokeTestMode() {
   return process.env.SPROUT_SMOKE_TEST === '1';
@@ -86,7 +86,7 @@ async function openInitialWindow() {
   createLauncherWindow();
 }
 
-async function openMostRecentWorkspace() {
+async function openMostRecentProjectFolder() {
   const recent = getRecentWorktrees();
   if (recent.length === 0) {
     return false;
@@ -94,12 +94,12 @@ async function openMostRecentWorkspace() {
 
   for (const entry of recent) {
     try {
-      const result = await createWorkspaceWindow({ ...entry, forceNewWindow: true });
+      const result = await createProjectFolderWindow({ ...entry, forceNewWindow: true });
       if (result) {
         return true;
       }
     } catch (error) {
-      console.error(`Failed to open recent workspace ${entry.workspacePath}:`, error);
+      console.error(`Failed to open recent workspace ${entry.projectFolderPath}:`, error);
     }
   }
 
@@ -115,19 +115,19 @@ async function restorePreviousSession() {
   let opened = 0;
   for (const entry of restorable) {
     try {
-      const result = await createWorkspaceWindow({ ...entry, forceNewWindow: true });
+      const result = await createProjectFolderWindow({ ...entry, forceNewWindow: true });
       if (result) {
         opened += 1;
       }
     } catch (error) {
-      console.error(`Failed to restore worktree ${entry.workspacePath}:`, error);
+      console.error(`Failed to restore worktree ${entry.projectFolderPath}:`, error);
     }
   }
 
   return opened > 0;
 }
 
-function resolveWorkspaceArg(argv) {
+function resolveProjectFolderArg(argv) {
   for (const arg of argv) {
     if (!arg || arg.startsWith('-')) {
       continue;
@@ -135,31 +135,31 @@ function resolveWorkspaceArg(argv) {
     if (isAppEntryArgument(arg)) {
       continue;
     }
-    const candidate = extractWorkspacePathFromOpenTarget(arg);
+    const candidate = extractProjectFolderPathFromOpenTarget(arg);
     if (!candidate) {
       continue;
     }
-    const workspacePath = resolveWorkspaceDirectory(candidate);
-    if (workspacePath) {
-      return workspacePath;
+    const projectFolderPath = resolveProjectFolderDirectory(candidate);
+    if (projectFolderPath) {
+      return projectFolderPath;
     }
   }
   return null;
 }
 
-async function openWorkspaceFromTarget(candidate, options = {}) {
-  const workspacePath = extractWorkspacePathFromOpenTarget(candidate);
-  if (!workspacePath) {
+async function openProjectFolderFromTarget(candidate, options = {}) {
+  const projectFolderPath = extractProjectFolderPathFromOpenTarget(candidate);
+  if (!projectFolderPath) {
     return null;
   }
 
-  const resolvedWorkspace = resolveWorkspaceDirectory(workspacePath);
-  if (!resolvedWorkspace) {
+  const resolvedProjectFolder = resolveProjectFolderDirectory(projectFolderPath);
+  if (!resolvedProjectFolder) {
     return null;
   }
 
-  return createWorkspaceWindow({
-    workspacePath: resolvedWorkspace,
+  return createProjectFolderWindow({
+    projectFolderPath: resolvedProjectFolder,
     forceNewWindow: Boolean(options.forceNewWindow),
   });
 }
@@ -174,7 +174,7 @@ async function handleOpenTarget(candidate, options = {}) {
     return;
   }
 
-  const browserWindow = await openWorkspaceFromTarget(candidate, options);
+  const browserWindow = await openProjectFolderFromTarget(candidate, options);
   if (!browserWindow && !BrowserWindow.getAllWindows().length) {
     await openInitialWindow();
   }
@@ -182,9 +182,9 @@ async function handleOpenTarget(candidate, options = {}) {
 
 // ── Multi-instance / OS open events ──────────────────────────────────────────
 app.on('second-instance', async (_event, argv) => {
-  const workspacePath = resolveWorkspaceArg(argv);
-  if (workspacePath) {
-    await createWorkspaceWindow({ workspacePath, forceNewWindow: true });
+  const projectFolderPath = resolveProjectFolderArg(argv);
+  if (projectFolderPath) {
+    await createProjectFolderWindow({ projectFolderPath, forceNewWindow: true });
     return;
   }
   await openInitialWindow();
@@ -210,21 +210,21 @@ ipcMain.handle('desktop:listSshHosts', async () => listSshHosts());
 ipcMain.handle('desktop:listWslDistros', async () => listWslDistros());
 ipcMain.handle('desktop:pickRepository', async () =>
   promptForRepository(BrowserWindow.getFocusedWindow() || ctx.launcherWindow || null));
-ipcMain.handle('desktop:pickWorkspace', async () =>
-  promptForWorkspace(BrowserWindow.getFocusedWindow() || ctx.launcherWindow || null));
+ipcMain.handle('desktop:pickProjectFolder', async () =>
+  promptForProjectFolder(BrowserWindow.getFocusedWindow() || ctx.launcherWindow || null));
 ipcMain.handle('desktop:pickWorktree', async () =>
-  promptForWorkspace(BrowserWindow.getFocusedWindow() || ctx.launcherWindow || null));
+  promptForProjectFolder(BrowserWindow.getFocusedWindow() || ctx.launcherWindow || null));
 ipcMain.handle('desktop:pickWorktreeParent', async () =>
   promptForWorktreeParent(BrowserWindow.getFocusedWindow() || ctx.launcherWindow || null));
 
-ipcMain.handle('desktop:openWorkspace', async (_event, options = {}) => {
-  const workspacePath = options.workspacePath
-    || await promptForWorkspace(BrowserWindow.getFocusedWindow() || ctx.launcherWindow || null);
-  if (!workspacePath) {
+ipcMain.handle('desktop:openProjectFolder', async (_event, options = {}) => {
+  const projectFolderPath = options.projectFolderPath || options.workspacePath
+    || await promptForProjectFolder(BrowserWindow.getFocusedWindow() || ctx.launcherWindow || null);
+  if (!projectFolderPath) {
     return null;
   }
-  const browserWindow = await createWorkspaceWindow({
-    workspacePath,
+  const browserWindow = await createProjectFolderWindow({
+    projectFolderPath,
     forceNewWindow: Boolean(options.forceNewWindow),
     backendMode: options.backendMode,
     wslDistro: options.wslDistro,
@@ -233,13 +233,13 @@ ipcMain.handle('desktop:openWorkspace', async (_event, options = {}) => {
 });
 
 ipcMain.handle('desktop:openWorktree', async (_event, options = {}) => {
-  const workspacePath = options.workspacePath
-    || await promptForWorkspace(BrowserWindow.getFocusedWindow() || ctx.launcherWindow || null);
-  if (!workspacePath) {
+  const projectFolderPath = options.projectFolderPath || options.workspacePath
+    || await promptForProjectFolder(BrowserWindow.getFocusedWindow() || ctx.launcherWindow || null);
+  if (!projectFolderPath) {
     return null;
   }
-  const browserWindow = await createWorkspaceWindow({
-    workspacePath,
+  const browserWindow = await createProjectFolderWindow({
+    projectFolderPath,
     forceNewWindow: Boolean(options.forceNewWindow),
   });
   return browserWindow ? { ok: true } : null;
@@ -247,22 +247,22 @@ ipcMain.handle('desktop:openWorktree', async (_event, options = {}) => {
 
 ipcMain.handle('desktop:appVersion', async () => app.getVersion());
 
-ipcMain.handle('desktop:openSshWorkspace', async (_event, options = {}) => {
-  const browserWindow = await createSSHWorkspaceWindow({
+ipcMain.handle('desktop:openSshProjectFolder', async (_event, options = {}) => {
+  const browserWindow = await createSSHProjectFolderWindow({
     hostAlias: options.hostAlias,
-    remoteWorkspacePath: options.remoteWorkspacePath,
+    remoteProjectFolderPath: options.remoteProjectFolderPath || options.remoteWorkspacePath,
     forceNewWindow: Boolean(options.forceNewWindow),
   });
   return browserWindow ? { ok: true } : null;
 });
 
 ipcMain.handle('desktop:createWorktree', async (_event, options = {}) => {
-  const workspacePath = createWorktree(options);
-  const browserWindow = await createWorkspaceWindow({
-    workspacePath,
+  const projectFolderPath = createWorktree(options);
+  const browserWindow = await createProjectFolderWindow({
+    projectFolderPath,
     forceNewWindow: true,
   });
-  return browserWindow ? { ok: true, workspacePath } : null;
+  return browserWindow ? { ok: true, projectFolderPath } : null;
 });
 
 ipcMain.handle('desktop:installWsl', async () => installWslFromDesktop());
@@ -281,11 +281,11 @@ app.whenReady().then(async () => {
   }
 
   if (isSmokeTestMode()) {
-    const smokeWorkspace = process.env.SPROUT_SMOKE_WORKSPACE;
-    if (smokeWorkspace) {
-      const resolvedWorkspace = resolveWorkspaceDirectory(smokeWorkspace);
-      if (resolvedWorkspace) {
-        await createWorkspaceWindow({ workspacePath: resolvedWorkspace });
+    const smokeProjectFolder = process.env.SPROUT_SMOKE_PROJECT_FOLDER;
+    if (smokeProjectFolder) {
+      const resolvedProjectFolder = resolveProjectFolderDirectory(smokeProjectFolder);
+      if (resolvedProjectFolder) {
+        await createProjectFolderWindow({ projectFolderPath: resolvedProjectFolder });
         return;
       }
     }
@@ -293,9 +293,9 @@ app.whenReady().then(async () => {
     return;
   }
 
-  const launchWorkspace = resolveWorkspaceArg(process.argv.slice(1));
-  if (launchWorkspace) {
-    await createWorkspaceWindow({ workspacePath: launchWorkspace });
+  const launchProjectFolder = resolveProjectFolderArg(process.argv.slice(1));
+  if (launchProjectFolder) {
+    await createProjectFolderWindow({ projectFolderPath: launchProjectFolder });
   } else {
     let restored = false;
     let openedRecent = false;
@@ -303,7 +303,7 @@ app.whenReady().then(async () => {
     if (!shouldSkipRestore()) {
       restored = await restorePreviousSession();
       if (!restored) {
-        openedRecent = await openMostRecentWorkspace();
+        openedRecent = await openMostRecentProjectFolder();
       }
     }
 

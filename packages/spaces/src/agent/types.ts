@@ -425,6 +425,8 @@ export interface HeadlessAgent {
 export interface SproutWasmBridge {
   init(config?: unknown): string;
   getEnv?(): string;
+  getProjectFolderRoot?(): string;
+  /** The same, as WASM modules built before the rename name it. */
   getWorkspaceRoot?(): string;
   writeFile(path: string, content: string): string;
   /** Writes binary content as it is (images sent with a message). */

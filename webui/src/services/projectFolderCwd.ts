@@ -19,7 +19,7 @@
  *   - gitApi / useGitProjectFolder / useGitHandlers → target the repo at cwd.
  *   - Chat send path → appends a one-line working-directory context note.
  *
- * Persistence: localStorage key `sprout-workspace-cwd:<project folder>`
+ * Persistence: localStorage key `sprout-project-folder-cwd:<project folder>`
  * (plain string, not JSON — the value is already an unambiguous path or '').
  * The cwd is relative to one project folder, so it is stored per project folder:
  * a single shared key carried a repo subdirectory chosen in one project into
@@ -33,13 +33,16 @@
 
 import { useSyncExternalStore } from 'react';
 import { debugLog } from '../utils/log';
+import { readMovedItem } from './movedStorageKey';
 
-/** localStorage key prefix holding the workspace-relative cwd ('' = project folder). */
-export const WORKSPACE_CWD_STORAGE_KEY = 'sprout-workspace-cwd';
+/** localStorage key prefix holding the project-folder-relative cwd ('' = project folder). */
+export const PROJECT_FOLDER_CWD_STORAGE_KEY = 'sprout-project-folder-cwd';
+/** The same prefix as earlier versions, and Sprout Studio builds before the rename, spell it. */
+const EARLIER_PROJECT_FOLDER_CWD_STORAGE_KEY = 'sprout-workspace-cwd';
 
 /** The storage key for the cwd within `projectFolder` ('' = root not known yet). */
-export function projectFolderCwdStorageKey(projectFolder: string): string {
-  return projectFolder ? `${WORKSPACE_CWD_STORAGE_KEY}:${projectFolder}` : WORKSPACE_CWD_STORAGE_KEY;
+export function projectFolderCwdStorageKey(projectFolder: string, prefix = PROJECT_FOLDER_CWD_STORAGE_KEY): string {
+  return projectFolder ? `${prefix}:${projectFolder}` : prefix;
 }
 
 /** The store's state. Kept as an object so future fields can be added. */
@@ -81,7 +84,11 @@ let scope = '';
 function readPersistedCwd(): string {
   try {
     if (typeof window === 'undefined' || !window.localStorage) return '';
-    const raw = window.localStorage.getItem(projectFolderCwdStorageKey(scope));
+    const raw = readMovedItem(
+      window.localStorage,
+      projectFolderCwdStorageKey(scope),
+      projectFolderCwdStorageKey(scope, EARLIER_PROJECT_FOLDER_CWD_STORAGE_KEY),
+    );
     if (!raw) return '';
     const normalized = normalizeProjectFolderCwd(raw);
     return normalized ?? '';
@@ -96,6 +103,10 @@ function persistCwd(cwd: string): void {
   try {
     if (typeof window === 'undefined' || !window.localStorage) return;
     window.localStorage.setItem(projectFolderCwdStorageKey(scope), cwd);
+    // A native shell (Sprout Studio) scopes its agent tools to the active
+    // folder's cwd, read from the unscoped key; older shells read the earlier name.
+    window.localStorage.setItem(PROJECT_FOLDER_CWD_STORAGE_KEY, cwd);
+    window.localStorage.setItem(EARLIER_PROJECT_FOLDER_CWD_STORAGE_KEY, cwd);
   } catch (err) {
     // Private mode / quota: the session still works, just not across reloads.
     debugLog('[projectFolderCwd] failed to persist cwd:', err);
@@ -278,7 +289,8 @@ export function __resetProjectFolderCwdForTests(): void {
   listeners.clear();
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.removeItem(WORKSPACE_CWD_STORAGE_KEY);
+      window.localStorage.removeItem(PROJECT_FOLDER_CWD_STORAGE_KEY);
+      window.localStorage.removeItem(EARLIER_PROJECT_FOLDER_CWD_STORAGE_KEY);
       if (persistedScope) window.localStorage.removeItem(projectFolderCwdStorageKey(persistedScope));
     }
   } catch {

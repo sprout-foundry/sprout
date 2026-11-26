@@ -6,20 +6,20 @@ const { app, BrowserWindow, dialog, Menu, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const ctx = require('./context');
-const { getWorkspaceKey } = require('./utils');
+const { getProjectFolderKey } = require('./utils');
 const {
   getLogDirectory,
   getSavedWindowBounds,
   writeWindowBounds,
   scheduleWindowBoundsPersist,
   addRecentWorktree,
-  persistOpenWorkspaces,
+  persistOpenProjectFolders,
   getRecentWorktrees,
 } = require('./state-manager');
 const { renderLoadingPage, renderErrorPage } = require('./error-pages');
-const { startBackendForWorkspace, registerExitHandler, generateSecret, closeSocketProxy } = require('./backend');
+const { startBackendForProjectFolder, registerExitHandler, generateSecret, closeSocketProxy } = require('./backend');
 const { startSSHBackendForHost } = require('./ssh');
-const { resolveWorkspaceDirectory, promptForWorkspace } = require('./workspace');
+const { resolveProjectFolderDirectory, promptForProjectFolder } = require('./projectFolder');
 
 function isSmokeTestMode() {
   return process.env.SPROUT_SMOKE_TEST === '1';
@@ -112,10 +112,10 @@ function createLauncherWindow() {
 function buildMenu() {
   const recentItems = getRecentWorktrees().map((worktreePath) => ({
     label: worktreePath.backendMode === 'wsl'
-      ? `${worktreePath.workspacePath} (${worktreePath.wslDistro || 'WSL'})`
-      : worktreePath.workspacePath,
+      ? `${worktreePath.projectFolderPath} (${worktreePath.wslDistro || 'WSL'})`
+      : worktreePath.projectFolderPath,
     click: () => {
-      createWorkspaceWindow({ ...worktreePath }).catch((error) => {
+      createProjectFolderWindow({ ...worktreePath }).catch((error) => {
         dialog.showErrorBox('Failed to Open Folder', String(error?.message || error));
       });
     },
@@ -128,14 +128,14 @@ function buildMenu() {
         {
           label: 'Open Folder…',
           accelerator: 'CmdOrCtrl+O',
-          click: () => createWorkspaceWindow().catch((error) => {
+          click: () => createProjectFolderWindow().catch((error) => {
             dialog.showErrorBox('Failed to Open Folder', String(error?.message || error));
           }),
         },
         {
           label: 'Open Folder in New Window',
           accelerator: 'CmdOrCtrl+Shift+O',
-          click: () => createWorkspaceWindow({ forceNewWindow: true }).catch((error) => {
+          click: () => createProjectFolderWindow({ forceNewWindow: true }).catch((error) => {
             dialog.showErrorBox('Failed to Open Folder', String(error?.message || error));
           }),
         },
@@ -265,31 +265,31 @@ function injectAuthHeaders(browserWindow) {
   );
 }
 
-async function createWorkspaceWindow(options = {}) {
+async function createProjectFolderWindow(options = {}) {
   const backendMode = options.backendMode === 'wsl' ? 'wsl' : 'native';
   const wslDistro = options.wslDistro || null;
-  let workspacePath = options.workspacePath || null;
+  let projectFolderPath = options.projectFolderPath || null;
 
-  if (!workspacePath && backendMode === 'native') {
-    workspacePath = await promptForWorkspace(BrowserWindow.getFocusedWindow() || null);
+  if (!projectFolderPath && backendMode === 'native') {
+    projectFolderPath = await promptForProjectFolder(BrowserWindow.getFocusedWindow() || null);
   }
 
-  if (!workspacePath) {
+  if (!projectFolderPath) {
     return null;
   }
 
   if (backendMode === 'native') {
-    workspacePath = resolveWorkspaceDirectory(workspacePath);
+    projectFolderPath = resolveProjectFolderDirectory(projectFolderPath);
   }
 
-  if (!workspacePath) {
+  if (!projectFolderPath) {
     throw new Error('Selected working directory does not exist.');
   }
 
-  const workspaceEntry = { workspacePath, backendMode, wslDistro };
-  const workspaceKey = getWorkspaceKey(workspaceEntry);
+  const projectFolderEntry = { projectFolderPath, backendMode, wslDistro };
+  const projectFolderKey = getProjectFolderKey(projectFolderEntry);
 
-  const existingWindowId = ctx.workspaceWindowMap.get(workspaceKey);
+  const existingWindowId = ctx.projectFolderWindowMap.get(projectFolderKey);
   if (existingWindowId && !options.forceNewWindow) {
     const existing = BrowserWindow.fromId(existingWindowId);
     if (existing) {
@@ -299,7 +299,7 @@ async function createWorkspaceWindow(options = {}) {
     }
   }
 
-  const savedBounds = getSavedWindowBounds(workspaceKey);
+  const savedBounds = getSavedWindowBounds(projectFolderKey);
 
   const browserWindow = new BrowserWindow({
     width: savedBounds?.width || 1600,
@@ -312,8 +312,8 @@ async function createWorkspaceWindow(options = {}) {
     show: false,
     backgroundColor: '#1f242d',
     title: backendMode === 'wsl'
-      ? `Sprout · ${path.basename(workspacePath)} (${wslDistro || 'WSL'})`
-      : `Sprout · ${path.basename(workspacePath)}`,
+      ? `Sprout · ${path.basename(projectFolderPath)} (${wslDistro || 'WSL'})`
+      : `Sprout · ${path.basename(projectFolderPath)}`,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -322,7 +322,7 @@ async function createWorkspaceWindow(options = {}) {
     },
   });
 
-  browserWindow.loadURL(renderLoadingPage(workspacePath));
+  browserWindow.loadURL(renderLoadingPage(projectFolderPath));
   browserWindow.once('ready-to-show', () => browserWindow.show());
   browserWindow.once('ready-to-show', () => {
     if (savedBounds?.isMaximized && !browserWindow.isDestroyed()) {
@@ -332,8 +332,8 @@ async function createWorkspaceWindow(options = {}) {
   attachNavigationHandlers(browserWindow);
   injectAuthHeaders(browserWindow);
 
-  const backend = await startBackendForWorkspace(workspaceEntry);
-  ctx.instanceRegistry.set(browserWindow.id, { ...backend, ...workspaceEntry });
+  const backend = await startBackendForProjectFolder(projectFolderEntry);
+  ctx.instanceRegistry.set(browserWindow.id, { ...backend, ...projectFolderEntry });
 
   let crashCount = 0;
 
@@ -344,46 +344,46 @@ async function createWorkspaceWindow(options = {}) {
       if (oldRecord?.proxyServer) {
         closeSocketProxy(oldRecord.proxyServer);
       }
-      const newBackend = await startBackendForWorkspace(workspaceEntry);
+      const newBackend = await startBackendForProjectFolder(projectFolderEntry);
       crashCount = 0;
-      ctx.instanceRegistry.set(browserWindow.id, { ...newBackend, ...workspaceEntry });
-      registerExitHandler(browserWindow, newBackend.port, workspaceEntry, performReload);
+      ctx.instanceRegistry.set(browserWindow.id, { ...newBackend, ...projectFolderEntry });
+      registerExitHandler(browserWindow, newBackend.port, projectFolderEntry, performReload);
       await browserWindow.loadURL(`http://127.0.0.1:${newBackend.port}`);
     } catch (error) {
       crashCount++;
       if (crashCount >= 3) {
         console.error('Backend failed to restart after 3 attempts');
-        browserWindow.loadURL(renderErrorPage(workspaceEntry.workspacePath, null, null, true));
+        browserWindow.loadURL(renderErrorPage(projectFolderEntry.projectFolderPath, null, null, true));
         return;
       }
       console.error('Failed to restart backend:', error);
-      browserWindow.loadURL(renderErrorPage(workspaceEntry.workspacePath, null, null));
+      browserWindow.loadURL(renderErrorPage(projectFolderEntry.projectFolderPath, null, null));
     }
   };
 
-  registerExitHandler(browserWindow, backend.port, workspaceEntry, performReload);
+  registerExitHandler(browserWindow, backend.port, projectFolderEntry, performReload);
 
-  ctx.workspaceWindowMap.set(workspaceKey, browserWindow.id);
-  addRecentWorktree(workspaceEntry);
-  persistOpenWorkspaces();
+  ctx.projectFolderWindowMap.set(projectFolderKey, browserWindow.id);
+  addRecentWorktree(projectFolderEntry);
+  persistOpenProjectFolders();
   buildMenu();
   if (ctx.launcherWindow && !ctx.launcherWindow.isDestroyed()) {
     ctx.launcherWindow.close();
   }
 
-  browserWindow.on('move', () => scheduleWindowBoundsPersist(workspaceKey, browserWindow));
-  browserWindow.on('resize', () => scheduleWindowBoundsPersist(workspaceKey, browserWindow));
-  browserWindow.on('maximize', () => scheduleWindowBoundsPersist(workspaceKey, browserWindow));
-  browserWindow.on('unmaximize', () => scheduleWindowBoundsPersist(workspaceKey, browserWindow));
+  browserWindow.on('move', () => scheduleWindowBoundsPersist(projectFolderKey, browserWindow));
+  browserWindow.on('resize', () => scheduleWindowBoundsPersist(projectFolderKey, browserWindow));
+  browserWindow.on('maximize', () => scheduleWindowBoundsPersist(projectFolderKey, browserWindow));
+  browserWindow.on('unmaximize', () => scheduleWindowBoundsPersist(projectFolderKey, browserWindow));
   browserWindow.on('close', () => {
-    writeWindowBounds(workspaceKey, browserWindow);
+    writeWindowBounds(projectFolderKey, browserWindow);
   });
 
   browserWindow.on('closed', () => {
-    const timer = ctx.windowStateWriteTimers.get(workspaceKey);
+    const timer = ctx.windowStateWriteTimers.get(projectFolderKey);
     if (timer) {
       clearTimeout(timer);
-      ctx.windowStateWriteTimers.delete(workspaceKey);
+      ctx.windowStateWriteTimers.delete(projectFolderKey);
     }
     const record = ctx.instanceRegistry.get(browserWindow.id);
     if (record) {
@@ -398,19 +398,19 @@ async function createWorkspaceWindow(options = {}) {
       }, 3000);
       child.once('exit', () => clearTimeout(killTimer));
       ctx.instanceRegistry.delete(browserWindow.id);
-      if (ctx.workspaceWindowMap.get(workspaceKey) === browserWindow.id) {
-        ctx.workspaceWindowMap.delete(workspaceKey);
+      if (ctx.projectFolderWindowMap.get(projectFolderKey) === browserWindow.id) {
+        ctx.projectFolderWindowMap.delete(projectFolderKey);
       }
-      persistOpenWorkspaces();
+      persistOpenProjectFolders();
       buildMenu();
     }
   });
 
   if (isSmokeTestMode()) {
     writeSmokeStatus({
-      event: 'workspace-opened',
+      event: 'project-folder-opened',
       port: backend.port,
-      workspacePath,
+      projectFolderPath,
       url: `http://127.0.0.1:${backend.port}`,
     });
   }
@@ -419,14 +419,14 @@ async function createWorkspaceWindow(options = {}) {
   return browserWindow;
 }
 
-async function createSSHWorkspaceWindow(options = {}) {
+async function createSSHProjectFolderWindow(options = {}) {
   const hostAlias = String(options.hostAlias || '').trim();
   if (!hostAlias) {
     throw new Error('SSH host alias is required.');
   }
 
-  const remoteWorkspacePath = String(options.remoteWorkspacePath || '$HOME').trim() || '$HOME';
-  const remoteKey = `ssh:${hostAlias}:${remoteWorkspacePath}`;
+  const remoteProjectFolderPath = String(options.remoteProjectFolderPath || '$HOME').trim() || '$HOME';
+  const remoteKey = `ssh:${hostAlias}:${remoteProjectFolderPath}`;
   const existingWindowId = ctx.sshWindowMap.get(remoteKey);
   if (existingWindowId && !options.forceNewWindow) {
     const existing = BrowserWindow.fromId(existingWindowId);
@@ -458,11 +458,11 @@ async function createSSHWorkspaceWindow(options = {}) {
   attachNavigationHandlers(browserWindow);
   injectAuthHeaders(browserWindow);
 
-  const backend = await startSSHBackendForHost({ hostAlias, remoteWorkspacePath });
+  const backend = await startSSHBackendForHost({ hostAlias, remoteProjectFolderPath });
   ctx.instanceRegistry.set(browserWindow.id, {
     ...backend,
-    workspacePath: `ssh://${hostAlias}`,
-    remoteWorkspacePath,
+    projectFolderPath: `ssh://${hostAlias}`,
+    remoteProjectFolderPath,
   });
 
   const performReload = async () => {
@@ -471,13 +471,13 @@ async function createSSHWorkspaceWindow(options = {}) {
       if (record?.child) {
         try { record.child.kill(); } catch (_) { /* noop */ }
       }
-      const newBackend = await startSSHBackendForHost({ hostAlias, remoteWorkspacePath });
+      const newBackend = await startSSHBackendForHost({ hostAlias, remoteProjectFolderPath });
       ctx.instanceRegistry.set(browserWindow.id, {
         ...newBackend,
-        workspacePath: `ssh://${hostAlias}`,
-        remoteWorkspacePath,
+        projectFolderPath: `ssh://${hostAlias}`,
+        remoteProjectFolderPath,
       });
-      registerExitHandler(browserWindow, newBackend.port, { workspacePath: `ssh://${hostAlias}` }, performReload);
+      registerExitHandler(browserWindow, newBackend.port, { projectFolderPath: `ssh://${hostAlias}` }, performReload);
       await browserWindow.loadURL(`http://127.0.0.1:${newBackend.port}`);
     } catch (error) {
       console.error('Failed to restart SSH backend:', error);
@@ -485,7 +485,7 @@ async function createSSHWorkspaceWindow(options = {}) {
     }
   };
 
-  registerExitHandler(browserWindow, backend.port, { workspacePath: `ssh://${hostAlias}` }, performReload);
+  registerExitHandler(browserWindow, backend.port, { projectFolderPath: `ssh://${hostAlias}` }, performReload);
   ctx.sshWindowMap.set(remoteKey, browserWindow.id);
 
   browserWindow.on('closed', () => {
@@ -509,7 +509,7 @@ module.exports = {
   getLauncherPath,
   createLauncherWindow,
   buildMenu,
-  createWorkspaceWindow,
-  createSSHWorkspaceWindow,
+  createProjectFolderWindow,
+  createSSHProjectFolderWindow,
   injectAuthHeaders,
 };

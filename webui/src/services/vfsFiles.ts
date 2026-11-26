@@ -27,9 +27,11 @@ const vfsManifest = new Set<string>();
 
 /** The project directory. Binaries built before the bridge exposed it kept
  * everything at the (unmovable) cwd. */
-export function projectFolderOf(wasm: { getCwd(): string; getWorkspaceRoot?(): string } | undefined): string {
+export function projectFolderOf(
+  wasm: { getCwd(): string; getProjectFolderRoot?(): string; getWorkspaceRoot?(): string } | undefined,
+): string {
   if (!wasm) return '/workspace';
-  return wasm.getWorkspaceRoot ? wasm.getWorkspaceRoot() : wasm.getCwd();
+  return wasm.getProjectFolderRoot?.() ?? wasm.getWorkspaceRoot?.() ?? wasm.getCwd();
 }
 
 /** Normalize a path to absolute form; relative paths are relative to the

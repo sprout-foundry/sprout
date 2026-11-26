@@ -147,7 +147,7 @@ describe('generateSecret()', () => {
 describe('SPROUT_AUTH_TOKEN integration', () => {
   /**
    * NOTE: We verify SPROUT_AUTH_TOKEN integration via source inspection
-   * because startBackendForWorkspace() cannot run in plain Node.js
+   * because startBackendForProjectFolder() cannot run in plain Node.js
    * (it requires the Electron runtime and a compiled backend binary).
    * Consider replacing with a behavioral test once an integration
    * harness is available.
@@ -175,11 +175,11 @@ describe('SPROUT_AUTH_TOKEN integration', () => {
     );
   });
 
-  test('generateSecret() is called in startBackendForWorkspace()', () => {
+  test('generateSecret() is called in startBackendForProjectFolder()', () => {
     // Ensure the function is invoked at the start of the spawn flow.
     assert.ok(
       source.includes('generateSecret();'),
-      'expected generateSecret() to be called inside startBackendForWorkspace',
+      'expected generateSecret() to be called inside startBackendForProjectFolder',
     );
   });
 
@@ -296,12 +296,12 @@ describe('Unix socket proxy (SP-060-B2)', () => {
     // The macOS/Linux native block (between its section header comment and
     // the Windows native section header) should NOT contain SPROUT_AUTH_TOKEN.
     // We pass the secret via --secret flag instead of an env variable.
-    // Find the macOS/Linux marker *inside* startBackendForWorkspace, not the
+    // Find the macOS/Linux marker *inside* startBackendForProjectFolder, not the
     // section header above the helper functions.
-    const funcStart = source.indexOf('startBackendForWorkspace');
+    const funcStart = source.indexOf('startBackendForProjectFolder');
     const startIdx = source.indexOf('macOS / Linux native', funcStart);
     const endIdx = source.indexOf('Windows native', startIdx);
-    assert.ok(startIdx >= 0, 'expected macOS/Linux native section marker inside startBackendForWorkspace');
+    assert.ok(startIdx >= 0, 'expected macOS/Linux native section marker inside startBackendForProjectFolder');
     assert.ok(endIdx > startIdx, 'expected Windows native section after macOS/Linux');
 
     const nativeBlock = source.slice(startIdx, endIdx);

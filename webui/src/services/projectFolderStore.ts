@@ -16,7 +16,7 @@
  *     state.
  *   - The last known project folder survives errors and disconnects; failures are
  *     retried with backoff.
- *   - Refreshes on `sprout:workspace-changed`, on window focus when stale, and
+ *   - Refreshes on `sprout:project-folder-changed`, on window focus when stale, and
  *     whenever a caller asks.
  */
 
@@ -25,6 +25,7 @@ import { debugLog } from '../utils/log';
 import { ApiService } from './api';
 import type { ProjectFolderResponse } from './api/types';
 import { setProjectFolderCwdScope } from './projectFolderCwd';
+import { dispatchProjectFolderChanged, onProjectFolderChanged } from './projectFolderEvents';
 
 export interface ProjectFolderStoreState {
   /** Last successfully fetched project folder; kept across errors and disconnects. */
@@ -205,24 +206,21 @@ export function applyProjectFolder(projectFolder: string, daemonRoot?: string): 
  */
 export function announceProjectFolderChanged(projectFolder: string, daemonRoot = ''): void {
   if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent('sprout:workspace-changed', { detail: { projectFolder, daemonRoot } }));
+  dispatchProjectFolderChanged({ projectFolder, daemonRoot });
 }
+
+let unsubscribeProjectFolderChanged: () => void = () => {};
 
 function installWindowListeners(): void {
   if (windowListenersInstalled || typeof window === 'undefined') return;
   windowListenersInstalled = true;
-  window.addEventListener('sprout:workspace-changed', onProjectFolderChangedEvent);
+  unsubscribeProjectFolderChanged = onProjectFolderChanged(({ projectFolder, daemonRoot }) => {
+    void applyProjectFolder(projectFolder, daemonRoot);
+  });
   window.addEventListener('focus', refreshIfStale);
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', onVisibilityChange);
   }
-}
-
-function onProjectFolderChangedEvent(event: Event): void {
-  const detail = (event as CustomEvent<{ projectFolder?: string; daemonRoot?: string }>).detail;
-  const root = typeof detail?.projectFolder === 'string' ? detail.projectFolder : '';
-  const daemonRoot = typeof detail?.daemonRoot === 'string' ? detail.daemonRoot : '';
-  void applyProjectFolder(root, daemonRoot);
 }
 
 function onVisibilityChange(): void {
@@ -263,7 +261,8 @@ export function __resetProjectFolderStoreForTests(): void {
   lastApplySeq = -1;
   listeners.clear();
   if (windowListenersInstalled && typeof window !== 'undefined') {
-    window.removeEventListener('sprout:workspace-changed', onProjectFolderChangedEvent);
+    unsubscribeProjectFolderChanged();
+    unsubscribeProjectFolderChanged = () => {};
     window.removeEventListener('focus', refreshIfStale);
     if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisibilityChange);
   }

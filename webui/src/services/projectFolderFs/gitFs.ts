@@ -142,7 +142,7 @@ export function createGitFs(fs: ProjectFolderFs): GitFs {
       if (!r.ok) {
         const err = new Error(r.error) as Error & { code?: string };
         if (r.error === 'notFound' || r.error === 'isDirectory') err.code = 'ENOENT';
-        else if (r.error === 'notInWorkspace') err.code = 'EACCES';
+        else if (r.error === 'notInProjectFolder') err.code = 'EACCES';
         throw err;
       }
       const bytes = r.contentBase64 !== undefined ? base64ToBytes(r.contentBase64) : textToBytes(r.content ?? '');

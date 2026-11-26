@@ -31,7 +31,7 @@ function registerDesktopProtocol() {
  * @param {string} candidate - Path or URL to extract workspace from
  * @returns {string|null} Resolved workspace path or null if invalid
  */
-function extractWorkspacePathFromOpenTarget(candidate) {
+function extractProjectFolderPathFromOpenTarget(candidate) {
   if (!candidate) {
     return null;
   }
@@ -55,5 +55,5 @@ function extractWorkspacePathFromOpenTarget(candidate) {
 
 module.exports = {
   registerDesktopProtocol,
-  extractWorkspacePathFromOpenTarget,
+  extractProjectFolderPathFromOpenTarget,
 };

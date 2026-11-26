@@ -214,7 +214,7 @@ function launchElectron(workspaceDir, statusFile) {
       ELECTRON_DISABLE_SECURITY_WARNINGS: '1',
       SPROUT_SMOKE_TEST: '1',
       SPROUT_SKIP_RESTORE: '1',
-      SPROUT_SMOKE_WORKSPACE: workspaceDir,
+      SPROUT_SMOKE_PROJECT_FOLDER: workspaceDir,
       SPROUT_SMOKE_STATUS_FILE: statusFile,
     },
     stdio: ['ignore', 'pipe', 'pipe'],

@@ -941,7 +941,7 @@ describe('error cause surfacing', () => {
 // (home) after the reload destroyed in-memory React state.
 //
 // Fix: the handler now does an in-place refresh — LSP teardown, cache
-// clearing, and a `sprout:workspace-changed` DOM event dispatch — instead
+// clearing, and a `sprout:project-folder-changed` DOM event dispatch — instead
 // of a hard reload.
 // ---------------------------------------------------------------------------
 
@@ -964,15 +964,15 @@ describe('project_folder_changed', () => {
       root.render(createElement(HookWrapper, { stateHolder, setStateMock, activeChatIdRef }));
     });
 
-    // Track sprout:workspace-changed DOM events.
+    // Track sprout:project-folder-changed DOM events.
     const events: Array<{ projectFolder: string; daemonRoot: string }> = [];
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       events.push({ projectFolder: detail?.projectFolder, daemonRoot: detail?.daemonRoot });
     };
-    window.addEventListener('sprout:workspace-changed', handler);
+    window.addEventListener('sprout:project-folder-changed', handler);
 
-    return { stateHolder, events, cleanup: () => window.removeEventListener('sprout:workspace-changed', handler) };
+    return { stateHolder, events, cleanup: () => window.removeEventListener('sprout:project-folder-changed', handler) };
   }
 
   afterEach(() => {
@@ -998,7 +998,7 @@ describe('project_folder_changed', () => {
     expect(reloadSpy).not.toHaveBeenCalled();
   });
 
-  it('dispatches sprout:workspace-changed DOM event with the new workspace root', () => {
+  it('dispatches sprout:project-folder-changed DOM event with the new workspace root', () => {
     const { events, cleanup } = setup();
     act(() => {
       hookHandleEvent!({

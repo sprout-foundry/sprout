@@ -20,7 +20,7 @@ function getGitResolutionPath(candidatePath) {
   }
 }
 
-function resolveWorkspaceDirectory(candidatePath) {
+function resolveProjectFolderDirectory(candidatePath) {
   return getGitResolutionPath(candidatePath);
 }
 
@@ -69,7 +69,7 @@ function resolveGitRoot(candidatePath) {
   return { ok: true, root: rootCheck.stdout.trim() };
 }
 
-async function promptForWorkspace(browserWindow) {
+async function promptForProjectFolder(browserWindow) {
   const selection = await dialog.showOpenDialog(browserWindow ?? null, {
     title: 'Open Folder',
     properties: ['openDirectory', 'createDirectory'],
@@ -183,10 +183,10 @@ function createWorktree(options = {}) {
 
 module.exports = {
   getGitResolutionPath,
-  resolveWorkspaceDirectory,
+  resolveProjectFolderDirectory,
   validateGitWorktree,
   resolveGitRoot,
-  promptForWorkspace,
+  promptForProjectFolder,
   promptForRepository,
   promptForWorktreeParent,
   createWorktree,

@@ -251,23 +251,23 @@ function closeSocketProxy(proxyServer) {
 /*  Spawn helpers                                                            */
 /* -------------------------------------------------------------------------- */
 
-async function startBackendForWorkspace(workspaceEntry) {
+async function startBackendForProjectFolder(projectFolderEntry) {
   generateSecret();
-  const backendMode = workspaceEntry.backendMode === 'wsl' ? 'wsl' : 'native';
+  const backendMode = projectFolderEntry.backendMode === 'wsl' ? 'wsl' : 'native';
 
   /* ------------------------------------------------------------------ */
   /*  WSL mode — unchanged, spawns inside WSL via TCP                    */
   /* ------------------------------------------------------------------ */
   if (backendMode === 'wsl') {
-    const distro = workspaceEntry.wslDistro;
+    const distro = projectFolderEntry.wslDistro;
     if (!distro) {
-      throw new Error('A WSL distro is required for WSL-backed workspaces.');
+      throw new Error('A WSL distro is required for WSL-backed project folders.');
     }
 
     const port = await findFreePort();
     const backendBinary = ensureWslBackendBinary(distro, resolveBackendBinary);
-    const workspaceWslPath = toWslPath(workspaceEntry.workspacePath, distro);
-    const command = `cd ${shellEscape(workspaceWslPath)} && SPROUT_DESKTOP=1 SPROUT_HOST_PLATFORM=windows SPROUT_DESKTOP_BACKEND_MODE=wsl BROWSER=none ${shellEscape(backendBinary)} --isolated-config agent --daemon --web-port ${shellEscape(String(port))}`;
+    const projectFolderWslPath = toWslPath(projectFolderEntry.projectFolderPath, distro);
+    const command = `cd ${shellEscape(projectFolderWslPath)} && SPROUT_DESKTOP=1 SPROUT_HOST_PLATFORM=windows SPROUT_DESKTOP_BACKEND_MODE=wsl BROWSER=none ${shellEscape(backendBinary)} --isolated-config agent --daemon --web-port ${shellEscape(String(port))}`;
     const child = spawn('wsl.exe', ['-d', distro, '--', 'bash', '-lc', command], {
       env: { ...process.env, SPROUT_AUTH_TOKEN: authToken },
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -309,7 +309,7 @@ async function startBackendForWorkspace(workspaceEntry) {
       '--secret',
       authToken,
     ], {
-      cwd: workspaceEntry.workspacePath,
+      cwd: projectFolderEntry.projectFolderPath,
       env: {
         ...process.env,
         SPROUT_DESKTOP: '1',
@@ -360,7 +360,7 @@ async function startBackendForWorkspace(workspaceEntry) {
   }
 
   const child = spawn(binaryPath, ['--isolated-config', 'agent', '--daemon', '--web-port', String(port)], {
-    cwd: workspaceEntry.workspacePath,
+    cwd: projectFolderEntry.projectFolderPath,
     env: {
       ...process.env,
       SPROUT_DESKTOP: '1',
@@ -388,7 +388,7 @@ async function startBackendForWorkspace(workspaceEntry) {
   return { child, port };
 }
 
-function registerExitHandler(browserWindow, port, workspaceEntry, reloadCallback) {
+function registerExitHandler(browserWindow, port, projectFolderEntry, reloadCallback) {
   const ctx = require('./context');
   const record = ctx.instanceRegistry.get(browserWindow.id);
   if (!record || !record.child) {
@@ -406,7 +406,7 @@ function registerExitHandler(browserWindow, port, workspaceEntry, reloadCallback
     }
 
     console.error(`Backend daemon crashed on port ${port}: exitCode=${exitCode}, signal=${signal}`);
-    browserWindow.loadURL(renderErrorPage(workspaceEntry.workspacePath, exitCode, signal));
+    browserWindow.loadURL(renderErrorPage(projectFolderEntry.projectFolderPath, exitCode, signal));
   });
 }
 
@@ -414,7 +414,7 @@ module.exports = {
   resolveBackendBinary,
   findFreePort,
   waitForHealth,
-  startBackendForWorkspace,
+  startBackendForProjectFolder,
   registerExitHandler,
   generateSecret,
   generateSocketPath,

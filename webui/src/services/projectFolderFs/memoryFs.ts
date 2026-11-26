@@ -102,7 +102,7 @@ export function createMemoryFs(seed: Record<string, string | Uint8Array> = {}): 
     async write(path, payload) {
       const entry: WriteEntry = typeof payload === 'string' ? { path, content: payload } : { ...payload };
       const p = normalizeFsPath(entry.path || path);
-      if (p === '' || unsafe(p)) return { ok: false, error: 'notInWorkspace' };
+      if (p === '' || unsafe(p)) return { ok: false, error: 'notInProjectFolder' };
       const bytes = encodeBytes(entry);
       if (bytes === null) return { ok: false, error: 'invalidParams' };
       const existing = entries.get(p);
@@ -154,7 +154,7 @@ export function createMemoryFs(seed: Record<string, string | Uint8Array> = {}): 
 
     async mkdir(path) {
       const p = normalizeFsPath(path);
-      if (p === '' || unsafe(p)) return { ok: false, error: 'notInWorkspace' };
+      if (p === '' || unsafe(p)) return { ok: false, error: 'notInProjectFolder' };
       const existing = entries.get(p);
       if (existing && !existing.isDir) return { ok: false, error: 'exists' };
       if (!ensureDir(p)) return { ok: false, error: 'ioFailed' };
@@ -163,7 +163,7 @@ export function createMemoryFs(seed: Record<string, string | Uint8Array> = {}): 
 
     async remove(path) {
       const p = normalizeFsPath(path);
-      if (p === '') return { ok: false, error: 'notInWorkspace' };
+      if (p === '') return { ok: false, error: 'notInProjectFolder' };
       if (!exists(p)) return { ok: false, error: 'notFound' };
       // Delete the subtree: every entry under p.
       const prefix = p + '/';
@@ -176,7 +176,7 @@ export function createMemoryFs(seed: Record<string, string | Uint8Array> = {}): 
     async rename(from, to) {
       const src = normalizeFsPath(from);
       const dst = normalizeFsPath(to);
-      if (src === '' || unsafe(dst) || dst === '') return { ok: false, error: 'notInWorkspace' };
+      if (src === '' || unsafe(dst) || dst === '') return { ok: false, error: 'notInProjectFolder' };
       if (!exists(src)) return { ok: false, error: 'notFound' };
       if (exists(dst)) return { ok: false, error: 'exists' };
       if (dst === src || dst.startsWith(src + '/')) return { ok: false, error: 'ioFailed' };

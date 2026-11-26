@@ -6,7 +6,7 @@ const { app } = require('electron');
 const { createWriteStream } = require('node:fs');
 const fs = require('node:fs');
 const path = require('node:path');
-const { normalizeWorkspaceEntry, getWorkspaceKey } = require('./utils');
+const { normalizeProjectFolderEntry, getProjectFolderKey } = require('./utils');
 const ctx = require('./context');
 
 function getUserStatePath() {
@@ -48,43 +48,43 @@ function writeDesktopState(state) {
 }
 
 function addRecentWorktree(worktreePath) {
-  const normalizedEntry = normalizeWorkspaceEntry(worktreePath);
+  const normalizedEntry = normalizeProjectFolderEntry(worktreePath);
   if (!normalizedEntry) {
     return;
   }
 
   const state = readDesktopState();
-  const normalizedKey = getWorkspaceKey(normalizedEntry);
+  const normalizedKey = getProjectFolderKey(normalizedEntry);
   const recent = [
     normalizedEntry,
     ...(state.recentWorktrees || [])
-      .map((item) => normalizeWorkspaceEntry(item))
-      .filter((item) => item && getWorkspaceKey(item) !== normalizedKey),
+      .map((item) => normalizeProjectFolderEntry(item))
+      .filter((item) => item && getProjectFolderKey(item) !== normalizedKey),
   ].slice(0, 10);
   writeDesktopState({ ...state, recentWorktrees: recent });
 }
 
-function persistOpenWorkspaces() {
+function persistOpenProjectFolders() {
   const state = readDesktopState();
-  const openWorkspaces = Array.from(ctx.instanceRegistry.values())
-    .map((entry) => normalizeWorkspaceEntry(entry))
+  const openProjectFolders = Array.from(ctx.instanceRegistry.values())
+    .map((entry) => normalizeProjectFolderEntry(entry))
     .filter(Boolean);
   writeDesktopState({
     ...state,
-    openWorktrees: openWorkspaces,
+    openWorktrees: openProjectFolders,
   });
 }
 
 function getRecentWorktrees() {
   return (readDesktopState().recentWorktrees || [])
-    .map((entry) => normalizeWorkspaceEntry(entry))
+    .map((entry) => normalizeProjectFolderEntry(entry))
     .filter(Boolean);
 }
 
 function getRecentWorktreeEntries() {
   return getRecentWorktrees().map((entry) => ({
-    path: entry.workspacePath,
-    name: path.basename(entry.workspacePath),
+    path: entry.projectFolderPath,
+    name: path.basename(entry.projectFolderPath),
     backendMode: entry.backendMode,
     wslDistro: entry.wslDistro,
   }));
@@ -92,7 +92,7 @@ function getRecentWorktreeEntries() {
 
 function getRestorableWorktrees() {
   return (readDesktopState().openWorktrees || [])
-    .map((entry) => normalizeWorkspaceEntry(entry))
+    .map((entry) => normalizeProjectFolderEntry(entry))
     .filter(Boolean);
 }
 
@@ -177,7 +177,7 @@ module.exports = {
   readDesktopState,
   writeDesktopState,
   addRecentWorktree,
-  persistOpenWorkspaces,
+  persistOpenProjectFolders,
   getRecentWorktrees,
   getRecentWorktreeEntries,
   getRestorableWorktrees,

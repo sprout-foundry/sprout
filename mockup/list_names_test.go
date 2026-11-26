@@ -121,3 +121,39 @@ func TestKeyed_NamedListWithoutTextIsNotAList(t *testing.T) {
 		t.Fatalf("lists = %+v: a named list element without text is not a list", c.Lists)
 	}
 }
+
+// The kit's facts strip is facts however its cards are labelled; an unnamed
+// row of distinct-labelled courses is still a menu to edit as a list.
+func TestKeyed_FactsStripIsNotAListButAMenuIs(t *testing.T) {
+	_, c := Keyed(`<section data-screen="home"><div class="facts card">
+<div><strong data-label="Party date">Saturday 14 March</strong><span>2pm – 4pm</span></div>
+<div><strong data-label="Party place">12 Example Lane</strong><span>Our house</span></div>
+<div><strong data-label="Reply by">Wed 11 March</strong><span>Don't be late!</span></div>
+</div></section>`, nil)
+	if len(c.Lists) != 0 {
+		t.Fatalf("lists = %+v: the facts strip is not a list", c.Lists)
+	}
+	lists := listsOf(t, `<section data-screen="home"><h2>Menu</h2><div class="grid">
+<div class="card"><span data-label="Starter">Soup of the day</span><span>£5</span></div>
+<div class="card"><span data-label="Main">Roast chicken</span><span>£14</span></div>
+<div class="card"><span data-label="Pudding">Sticky toffee</span><span>£6</span></div>
+</div></section>`)
+	if len(lists) != 1 {
+		t.Fatalf("lists = %+v: an unnamed menu stays a list", lists)
+	}
+}
+
+// A named list with nothing to edit inside is no list, and no crash.
+func TestKeyed_EmptyNamedListIsNoList(t *testing.T) {
+	for _, page := range []string{
+		`<div data-list="Facts"></div>`,
+		`<div data-list="Facts"><div></div><div></div></div>`,
+		`<div data-list="Facts">Hello</div>`,
+		`<div data-list="Facts"><img><img></div>`,
+	} {
+		_, c := Keyed(`<section data-screen="home">`+page+`</section>`, nil)
+		if len(c.Lists) != 0 {
+			t.Fatalf("%s: lists = %+v", page, c.Lists)
+		}
+	}
+}

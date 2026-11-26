@@ -96,15 +96,15 @@ func markList(f *frame, fields []Field, heading string, nav bool, ids *listIDs) 
 			items = append(items, c)
 		}
 	}
-	if named == "" && !looksLikeList(f.children, items, fields) {
+	if len(items) == 0 {
+		return List{}, false
+	}
+	if named == "" && (hasClass(f, "facts") || !looksLikeList(f.children, items, fields)) {
 		return List{}, false
 	}
 	// Cards each naming a different fact are facts even where the drawing
 	// called them a list.
 	if named != "" && distinctFacts(items, fields) {
-		return List{}, false
-	}
-	if len(items) == 0 {
 		return List{}, false
 	}
 	// A list holding a list is read by its inner one.
@@ -152,11 +152,6 @@ func looksLikeList(children, items []*frame, fields []Field) bool {
 	if parts == 1 && len(items) < minOneColumnItems {
 		return false
 	}
-	// Cards each naming a different fact ("Party date", "Party place") are
-	// the page's facts side by side, not repeated items.
-	if distinctFacts(items, fields) {
-		return false
-	}
 	// A first item shaped unlike the rest (a hero card beside smaller cards)
 	// makes the row a layout, not a list.
 	if len(items) > 2 && shapeOf(fields, items[0]) != shapeOf(fields, items[1]) && shapeOf(fields, items[1]) == shapeOf(fields, items[2]) {
@@ -199,7 +194,7 @@ func listItemTag(c *frame) bool {
 // specific label, all different and sharing no ending, the way a row of fact
 // cards does; repeated items share their labels or an ending of them.
 func distinctFacts(items []*frame, fields []Field) bool {
-	if len(items) == 0 {
+	if len(items) < 2 {
 		return false
 	}
 	labels := make([]string, 0, len(items))
@@ -217,6 +212,16 @@ func distinctFacts(items []*frame, fields []Field) bool {
 		labels = append(labels, l)
 	}
 	return sharedTail(labels) == ""
+}
+
+// hasClass reports whether f's class attribute holds class.
+func hasClass(f *frame, class string) bool {
+	for _, cl := range strings.Fields(attr(f.token, "class")) {
+		if cl == class {
+			return true
+		}
+	}
+	return false
 }
 
 // shapeOf is an item's parts by the kind of element each is, so two items of

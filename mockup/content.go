@@ -34,6 +34,9 @@ type Field struct {
 	Col  int    `json:"col,omitempty"`
 
 	pos int
+	// fresh marks a text the person set this pass (ApplyContent): it goes
+	// onto the element the key is on now, the kind guard aside.
+	fresh bool
 }
 
 // Content is the first look's text, in page order.
@@ -97,7 +100,11 @@ type frame struct {
 // Keyed gives every element with text of its own a key and returns the page
 // with its keys and the page's content. Keys already on the page are kept;
 // saved's fields marked as the person's replace the page's text for their
-// keys. A picture spot a redraw renamed gets its old key back, so the
+// keys, while the key is still on the kind of element the text was saved
+// from. A redraw that put it on another kind of element keeps the page's
+// words there, and the person's field, with its text, is kept in the
+// content beside the element's, so it comes back when the key is on its kind
+// again. A picture spot a redraw renamed gets its old key back, so the
 // person's picture stays in it (keepPictureKeys). The page is otherwise left
 // as written.
 func Keyed(doc string, saved *Content) (string, Content) {
@@ -131,6 +138,10 @@ func Keyed(doc string, saved *Content) (string, Content) {
 	var pieces []string
 	var stack []*frame
 	var fields []Field
+	// held are the person's fields a redraw put on another kind of element:
+	// kept in the content beside the element's own field, so the text is not
+	// discarded (Keyed appends them last).
+	var held []Field
 	var lists []List
 	var pictures []Picture
 	listIDs := existingListIDs(doc)
@@ -159,13 +170,13 @@ func Keyed(doc string, saved *Content) (string, Content) {
 	var emit func(f *frame)
 	emit = func(f *frame) {
 		text := strings.Join(strings.Fields(f.full.String()), " ")
-		key := newKey(f.key)
 		kind := elementLabel(f.tag, attr(f.token, "class"))
-		m, keep := mine[key]
-		keep = keep && sameKind(m, kind)
-		if keep {
+		key := newKey(f.key)
+		m, ok := mine[key]
+		keep := ok && (m.fresh || sameKind(m, kind, text))
+		if keep && text != m.Text {
+			replaceText(pieces, f, html.EscapeString(m.Text))
 			text = m.Text
-			replaceText(pieces, f, html.EscapeString(text))
 		}
 		setAttr(&f.token, keyAttr, key)
 		pieces[f.tagPiece] = renderTag(f.token, false)
@@ -179,6 +190,15 @@ func Keyed(doc string, saved *Content) (string, Content) {
 		// A heading starts its own section rather than ending the one before.
 		if f.tag == "h1" || f.tag == "h2" || f.tag == "h3" {
 			heading = text
+		}
+		if ok && !keep {
+			// A redraw put this key on another kind of element (a field's
+			// label where its placeholder was): the element keeps its own
+			// words, and the person's field is kept whole — its text, not
+			// discarded — so it comes back when the key is on its kind again.
+			m.pos, m.List = f.tagPiece+1, ""
+			m.Item, m.Col = 0, 0
+			held = append(held, m)
 		}
 		fields = append(fields, Field{Key: key, Label: label, Section: section(), Text: text, Mine: keep, Kind: kind, pos: f.tagPiece})
 	}
@@ -222,13 +242,21 @@ func Keyed(doc string, saved *Content) (string, Content) {
 				if (tag == "input" || tag == "textarea") && attr(tok, "placeholder") != "" && !skipping() {
 					key := newKey(attr(tok, placeholderAttr))
 					text := attr(tok, "placeholder")
-					m, keep := mine[key]
-					keep = keep && sameKind(m, "Placeholder")
-					if keep {
+					m, ok := mine[key]
+					keep := ok && (m.fresh || sameKind(m, "Placeholder", text))
+					if keep && text != m.Text {
 						text = m.Text
 					}
 					setAttr(&tok, "placeholder", text)
 					setAttr(&tok, placeholderAttr, key)
+					if ok && !keep {
+						// A redraw put this key on another kind of element:
+						// the element keeps its own words, and the person's
+						// field is kept whole — its text, not discarded.
+						m.pos, m.List = len(pieces)+1, ""
+						m.Item, m.Col = 0, 0
+						held = append(held, m)
+					}
 					fields = append(fields, Field{Key: key, Label: placeholderLabel(tok), Section: section(), Text: text, Mine: keep, Kind: "Placeholder", pos: len(pieces)})
 					pieces = append(pieces, renderTag(tok, tt == nethtml.SelfClosingTagToken))
 					continue
@@ -295,6 +323,7 @@ func Keyed(doc string, saved *Content) (string, Content) {
 		}
 	}
 	renameRepeatedLists(lists, fields)
+	fields = append(fields, held...)
 	return strings.Join(pieces, ""), Content{Version: ContentVersion, Fields: orderByPage(fields), Lists: lists, Pictures: pictures}
 }
 
@@ -328,12 +357,14 @@ func orderByPage(fields []Field) []Field {
 }
 
 // ApplyContent sets fields' text on a page as the person's, and returns the
-// page and its content. Keys not on the page are ignored.
+// page and its content. A changed text goes onto the element its key is on
+// now, the kind guard aside: the person set it on that element. Keys not on
+// the page are ignored.
 func ApplyContent(doc string, current Content, changes map[string]string) (string, Content) {
 	saved := Content{Version: ContentVersion, Pictures: current.Pictures}
 	for _, f := range current.Fields {
 		if text, ok := changes[f.Key]; ok {
-			f.Text, f.Mine = text, true
+			f.Text, f.Mine, f.fresh = text, true, true
 		}
 		saved.Fields = append(saved.Fields, f)
 	}

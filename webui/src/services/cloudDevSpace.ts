@@ -79,11 +79,26 @@ export type StartDevSpaceResult =
   | { kind: 'error'; message: string }
   | { kind: 'status'; status: string };
 
+/** How long startDevSpace keeps asking while the dev space is still starting. */
+const START_WAIT_MS = 60_000;
+const START_POLL_MS = 4_000;
+
 /**
  * Create (or resume) the repo's dev space and enter it through the
- * dev space's auth exchange. Rejects only on network failure.
+ * dev space's auth exchange. A dev space that is still starting answers
+ * without an address to open; the create (which resumes, never duplicates)
+ * is asked again until it has one. Rejects only on network failure.
  */
 export async function startDevSpace(repoURL: string): Promise<StartDevSpaceResult> {
+  const deadline = Date.now() + START_WAIT_MS;
+  for (;;) {
+    const result = await startDevSpaceOnce(repoURL);
+    if (result.kind !== 'status' || Date.now() + START_POLL_MS > deadline) return result;
+    await new Promise<void>((resolve) => setTimeout(resolve, START_POLL_MS));
+  }
+}
+
+async function startDevSpaceOnce(repoURL: string): Promise<StartDevSpaceResult> {
   // The host-agnostic cloud create, not the legacy /dev-space/fly start route:
   // host=cloud places on the platform's cloud hosts (the fleet, Fly as
   // overflow) and never the caller's runner — the full-dev-space start is a

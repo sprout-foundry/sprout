@@ -301,6 +301,51 @@ export async function gitLog(count = 50) {
   return commits;
 }
 
+/** The commit HEAD points at, or null before the first commit. */
+export async function gitHeadOid(): Promise<string | null> {
+  await ensureInitialized();
+  return git.resolveRef({ fs: getFs().promises, dir: REPO_DIR, ref: 'HEAD' }).catch(() => null);
+}
+
+/** The commit the current branch's origin copy points at, or null when there is none. */
+export async function gitRemoteTrackingOid(): Promise<string | null> {
+  await ensureInitialized();
+  const fs = getFs().promises;
+  const branch = await git.currentBranch({ fs, dir: REPO_DIR, fullname: false }).catch(() => null);
+  if (!branch) return null;
+  return git.resolveRef({ fs, dir: REPO_DIR, ref: `refs/remotes/origin/${branch}` }).catch(() => null);
+}
+
+/** Files whose content differs between two commits: changed or added, and removed. */
+export async function gitChangedFilesBetween(
+  fromOid: string,
+  toOid: string,
+): Promise<{ changed: string[]; removed: string[] }> {
+  await ensureInitialized();
+  const changed: string[] = [];
+  const removed: string[] = [];
+  await git.walk({
+    fs: getFs().promises,
+    dir: REPO_DIR,
+    trees: [git.TREE({ ref: fromOid }), git.TREE({ ref: toOid })],
+    map: async (filepath, [from, to]) => {
+      if (filepath === '.') return true;
+      const [fromType, toType] = await Promise.all([from?.type(), to?.type()]);
+      const [fromOidAt, toOidAt] = await Promise.all([from?.oid(), to?.oid()]);
+      if (fromOidAt === toOidAt) return null; // identical file or subtree
+      if (fromType === 'tree' || toType === 'tree') {
+        if (fromType === 'blob') removed.push(filepath);
+        if (toType === 'blob') changed.push(filepath);
+        return true;
+      }
+      if (toType === 'blob') changed.push(filepath);
+      else removed.push(filepath);
+      return true;
+    },
+  });
+  return { changed, removed };
+}
+
 export async function gitBranch() {
   await ensureInitialized();
   const branches: Array<{ name: string; current: boolean }> = [];

@@ -134,7 +134,15 @@ describe('startDevSpace', () => {
   });
 
   it('POSTs the host-agnostic cloud create, not the legacy /dev-space/fly start', async () => {
-    fetchMock.mockResolvedValue(createResponse({ dev_space_id: 'ws-1', backend: 'fly', created: true }));
+    fetchMock.mockResolvedValue(
+      createResponse({
+        dev_space_id: 'ws-1',
+        backend: 'fly',
+        created: true,
+        url: 'https://ws-1.fly.dev',
+        session_token: 't',
+      }),
+    );
     await startDevSpace('https://github.com/o/r');
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -177,11 +185,31 @@ describe('startDevSpace', () => {
     expect(window.location.href).toBe('https://ws-2.ws.example.com/auth/exchange?token=tok-fc');
   });
 
+  it('asks again while the dev space starts, then opens it', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockResolvedValueOnce(createResponse({ dev_space_id: 'ws-3', status: 'starting' })).mockResolvedValueOnce(
+      createResponse({
+        dev_space_id: 'ws-3',
+        status: 'running',
+        gateway_url: 'https://gw.example',
+        gateway_access_token: 'g',
+      }),
+    );
+    const started = startDevSpace('https://github.com/o/r');
+    await vi.advanceTimersByTimeAsync(5_000);
+    await expect(started).resolves.toEqual({ kind: 'redirecting' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
   it('a create without open fields reports its status instead of navigating', async () => {
+    vi.useFakeTimers();
     fetchMock.mockResolvedValue(createResponse({ dev_space_id: 'ws-3', status: 'starting' }));
-    const result = await startDevSpace('https://github.com/o/r');
-    expect(result).toEqual({ kind: 'status', status: 'starting' });
+    const started = startDevSpace('https://github.com/o/r');
+    await vi.advanceTimersByTimeAsync(70_000);
+    expect(await started).toEqual({ kind: 'status', status: 'starting' });
     expect(window.location.href).toBe('http://localhost/');
+    vi.useRealTimers();
   });
 
   it('a 503 "not available on this deployment" flips the option to unavailable', async () => {

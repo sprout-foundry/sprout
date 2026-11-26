@@ -107,15 +107,16 @@ var elementLabels = map[string]bool{
 
 // sameKind reports whether saved text belongs on an element of kind now.
 // A key is a position on the page, so a redraw can put it on another kind
-// of element (a field's label where its placeholder was). An element that
-// already holds the person's words is the one the text was saved from.
-// Text saved with its kind goes back only onto that kind; text saved before
-// kinds were kept goes back only when its label names the kind — a name the
-// drawing gave a text (data-label) names no kind, so its text is kept, not
-// moved onto another kind of element.
+// of element (a field's label where its placeholder was). Text saved with
+// its kind goes back only onto that kind; text saved before kinds were kept
+// goes back only when its label names the kind — a name the drawing gave a
+// text (data-label) names no kind, so its text is kept, not moved onto
+// another kind of element. An element that already holds the person's words
+// is the one the text was saved from — unless it is another kind of element
+// that happens to hold them; that key then keeps looking for the words.
 func sameKind(saved Field, now, nowText string) bool {
 	if nowText == saved.Text {
-		return true
+		return saved.Kind == "" || saved.Kind == now
 	}
 	if saved.Kind != "" {
 		return saved.Kind == now

@@ -251,9 +251,10 @@ func TestApplyContent_OldFieldTextIsSetOnItsElement(t *testing.T) {
 	}
 }
 
-// The person's text a guard kept (its key is on another kind of element)
-// comes back when a redraw puts the key on its kind again.
-func TestKeyed_KeptTextComesBackWhenTheKeyIsOnItsKind(t *testing.T) {
+// The person's text a guard kept (its key is on another kind of element) is
+// not discarded: an element that still holds their words takes the field, so
+// the person's words stay protected on that element through the next draw.
+func TestKeyed_KeptTextReHomesToTheElementThatHoldsIt(t *testing.T) {
 	form := `<section data-screen="book"><form>
 <div class="field"><label for="e">Email</label><input id="e" data-label="Your email" placeholder="you@example.com"></div>
 </form></section>`
@@ -263,17 +264,61 @@ func TestKeyed_KeptTextComesBackWhenTheKeyIsOnItsKind(t *testing.T) {
 			first.Fields[i].Mine = true
 		}
 	}
-	_, c := Keyed(`<section data-screen="book"><p>Fill in your details.</p>`+form[len(`<section data-screen="book">`):], &first)
-	home := `<section data-screen="book"><p>Fill in your details.</p><form>
-<div class="field"><label for="e">Email</label><input id="e" data-c-ph="c2" data-label="Your email" placeholder="email address"></div>
-</form></section>`
-	out, after := Keyed(home, &c)
-	if !strings.Contains(out, `placeholder="you@example.com"`) {
-		t.Fatalf("the kept text is not back on the placeholder:\n%s", out)
+	// A redraw adds a paragraph and renumbers the page: the placeholder's
+	// key is now on a paragraph, not the placeholder.
+	shifted := `<section data-screen="book"><p>Fill in your details.</p>` + form[len(`<section data-screen="book">`):]
+	_, c := Keyed(shifted, &first)
+	// The person's text re-homed to the placeholder (a same-kind element that
+	// still holds it), not the paragraph its key landed on.
+	ph, ok := fieldByText(c, "you@example.com")
+	if !ok || ph.Kind != "Placeholder" || !ph.Mine {
+		t.Fatalf("the person's text is not re-homed onto its placeholder: %+v", c.Fields)
 	}
-	for _, f := range after.Fields {
-		if f.Text == "you@example.com" && !f.Mine {
-			t.Errorf("the kept text is not marked as theirs: %+v", after.Fields)
+	para, _ := fieldByText(c, "Fill in your details.")
+	// A stable draw keeps the keys and the model rewrites the placeholder's
+	// words. The person's text, protected on that key and kind, wins.
+	stable := `<section data-screen="book"><p data-c="` + para.Key + `">Fill in your details.</p><form>
+<div class="field"><label for="e">Email</label><input id="e" data-c-ph="` + ph.Key + `" data-label="Your email" placeholder="email address"></div>
+</form></section>`
+	_, after := Keyed(stable, &c)
+	if f, _ := fieldByText(after, "you@example.com"); f.Kind != "Placeholder" || !f.Mine {
+		t.Errorf("the person's text is not kept on its placeholder through a stable redraw: %+v", after.Fields)
+	}
+}
+
+// A text no element holds (the model rewrote it) is kept in the content
+// under the key it was saved with, not discarded, and the guard keeps it off
+// the element that key now sits on.
+func TestKeyed_KeptTextNoElementHoldsIsKeptNotDiscarded(t *testing.T) {
+	form := `<section data-screen="book"><form>
+<div class="field"><label for="e">Email</label><input id="e" data-label="Your email" placeholder="you@example.com"></div>
+</form></section>`
+	_, first := Keyed(form, nil)
+	for i := range first.Fields {
+		if first.Fields[i].Kind == "Placeholder" {
+			first.Fields[i].Mine = true
+		}
+	}
+	// A redraw renumbers and the model rewrote the placeholder's words, so
+	// no element holds the person's text.
+	shifted := `<section data-screen="book"><p>Fill in your details.</p><form>
+<div class="field"><label for="e">Email</label><input id="e" data-label="Your email" placeholder="type it here"></div>
+</form></section>`
+	_, c := Keyed(shifted, &first)
+	// It is not discarded.
+	kept := false
+	for _, f := range c.Fields {
+		if f.Text == "you@example.com" && f.Mine {
+			kept = true
+		}
+	}
+	if !kept {
+		t.Fatalf("the person's text is not kept in the content: %+v", c.Fields)
+	}
+	// And the guard keeps it off the label its key landed on.
+	for _, f := range c.Fields {
+		if f.Kind == "Field label" && f.Text != "Email" {
+			t.Fatalf("the label reads %q: %+v", f.Text, c.Fields)
 		}
 	}
 }

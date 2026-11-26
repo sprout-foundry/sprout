@@ -274,7 +274,7 @@ export function useLayoutPersistence({
         }
       })
       .catch((err) => {
-        debugLog('[LayoutPersistence] Failed to fetch workspace root:', err);
+        debugLog('[LayoutPersistence] Failed to fetch the project folder:', err);
       })
       .finally(() => {
         if (!cancelled) {

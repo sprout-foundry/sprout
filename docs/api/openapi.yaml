@@ -1593,7 +1593,7 @@ paths:
         - workspace/instances
   /api/project-folder/sync:
     post:
-      description: Applies the pending file-sync operations for the project folder (the SP-046 workspace-sync surface).
+      description: Applies the pending file-sync operations for the project folder (the SP-046 project folder sync surface).
       operationId: projectFolderSync
       responses:
         "200":

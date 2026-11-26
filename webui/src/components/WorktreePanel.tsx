@@ -150,7 +150,7 @@ export default function WorktreePanel({ onClose: _onClose }: WorktreePanelProps)
 
   const handleCheckout = async (path: string) => {
     const confirmed = await showThemedConfirm(
-      `Switch the project folder to this worktree?\n\nPath: ${path}\n\nThis changes the working directory, closes terminals, and rebinds chats to the new workspace.`,
+      `Switch the project folder to this worktree?\n\nPath: ${path}\n\nThis changes the working directory, closes terminals, and rebinds chats to the new project folder.`,
       { title: 'Switch worktree?', confirmLabel: 'Switch', cancelLabel: 'Cancel' },
     );
     if (!confirmed) {

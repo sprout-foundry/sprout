@@ -49,7 +49,7 @@ describe('AgentChangesPanel capability gating', () => {
       </HostProvider>,
     );
 
-    expect(screen.getByText(/aren.t available in this workspace/)).toBeInTheDocument();
+    expect(screen.getByText(/aren.t available in this project folder/)).toBeInTheDocument();
     expect(screen.getByTestId('context-panel-changes')).toHaveAttribute('data-unavailable', 'true');
     expect(screen.queryByText(/Failed to load/)).not.toBeInTheDocument();
     expect(api.getAgentSessionSummary).not.toHaveBeenCalled();

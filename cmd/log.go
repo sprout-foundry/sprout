@@ -34,7 +34,7 @@ To prune stored revisions, use 'sprout history clear'.`,
 }
 
 func init() {
-	logCmd.Flags().BoolVar(&rawLog, "raw-log", false, "Display the raw verbose internal log file (.sprout/workspace.log)")
+	logCmd.Flags().BoolVar(&rawLog, "raw-log", false, "Display the raw verbose internal log file (.sprout/project.log)")
 }
 
 // displayVerboseLog reads and displays the verbose log to a buffer for seamless console experience

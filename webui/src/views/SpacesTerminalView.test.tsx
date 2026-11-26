@@ -199,7 +199,7 @@ describe('SpacesTerminalView', () => {
   it('shows the unavailable state when the host offers no terminal', () => {
     renderView(makeTestHost({ localTerminal: false }));
     expect(screen.getByTestId('spaces-terminal-unavailable')).toHaveTextContent(
-      'Terminal not available in this workspace.',
+      'Terminal not available in this project folder.',
     );
     expect(screen.queryByTestId('spaces-terminal')).not.toBeInTheDocument();
     expect(xterm.instances).toHaveLength(0);

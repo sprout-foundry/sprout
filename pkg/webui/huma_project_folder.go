@@ -72,7 +72,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		Method:      http.MethodPost,
 		Path:        "/api/project-folder/sync",
 		Summary:     "Synchronize the project folder tree.",
-		Description: "Applies the pending file-sync operations for the project folder (the SP-046 workspace-sync surface).",
+		Description: "Applies the pending file-sync operations for the project folder (the SP-046 project folder sync surface).",
 		Tags:        []string{"workspace/instances"},
 	}, ws.projectFolderSyncHumaHandler)
 

@@ -131,7 +131,7 @@ function AgentChangesPanel(props: AgentChangesPanelProps): JSX.Element {
       <div className="agent-changes-panel" data-testid="context-panel-changes" data-unavailable="true">
         <div className="changes-empty">
           <Inbox size={32} />
-          <p>Agent changes aren&apos;t available in this workspace.</p>
+          <p>Agent changes aren&apos;t available in this project folder.</p>
         </div>
       </div>
     );

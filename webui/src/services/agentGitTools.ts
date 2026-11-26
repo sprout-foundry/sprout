@@ -469,7 +469,7 @@ export const AGENT_GIT_TOOLS: AgentGitToolDefinition[] = [
   {
     name: 'git_clone',
     description:
-      'Clone a public GitHub/GitLab/Bitbucket/Codeberg repository into the workspace. Args: { url } where url is like https://github.com/owner/name (or owner/name shorthand). Clones all branches at a bounded depth (default 50) so remote branches (e.g. PR branches) are reachable for checkout. After cloning, refer to the repo as "owner/name" in other git tools and read its files under repos/owner/name/. A small repo like octocat/Hello-World is a good smoke test.',
+      'Clone a public GitHub/GitLab/Bitbucket/Codeberg repository into the project folder. Args: { url } where url is like https://github.com/owner/name (or owner/name shorthand). Clones all branches at a bounded depth (default 50) so remote branches (e.g. PR branches) are reachable for checkout. After cloning, refer to the repo as "owner/name" in other git tools and read its files under repos/owner/name/. A small repo like octocat/Hello-World is a good smoke test.',
     parameters: {
       type: 'object',
       properties: {

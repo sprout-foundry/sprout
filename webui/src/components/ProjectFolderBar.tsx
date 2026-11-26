@@ -31,7 +31,7 @@ const ProjectFolderBar: React.FC<ProjectFolderBarProps> = ({
   useEffect(() => {
     if (!isConnected) return;
     refreshProjectFolder().catch((err) => {
-      debugLog('[ProjectFolderBar] Failed to fetch workspace:', err);
+      debugLog('[ProjectFolderBar] Failed to fetch the project folder:', err);
     });
   }, [isConnected]);
 

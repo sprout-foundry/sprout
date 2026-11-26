@@ -15,18 +15,19 @@ import (
 var configPruneDryRun bool
 
 var configPruneProjectFolderCmd = &cobra.Command{
-	Use:   "prune-workspace [project folder...]",
-	Short: "Remove settings copied from the global config into project folder config",
-	Long: `Earlier versions saved the whole merged configuration into a workspace's
-.sprout/workspace.json whenever a setting changed there, so later changes to
-the global config stopped applying in that workspace.
+	Use:     "prune-project-folder [project folder...]",
+	Aliases: []string{"prune-workspace"},
+	Short:   "Remove settings copied from the global config into project folder config",
+	Long: `Earlier versions saved the whole merged configuration into a project
+folder's .sprout/workspace.json whenever a setting changed there, so later
+changes to the global config stopped applying in that project folder.
 
-prune-workspace removes every workspace setting whose value the global
-config already gives. A setting you deliberately set to the same value as
-the global one is removed as well; it keeps its value until the global
+prune-project-folder removes every project folder setting whose value the
+global config already gives. A setting you deliberately set to the same value
+as the global one is removed as well; it keeps its value until the global
 setting changes. The original file is kept beside it with a .bak extension.
 
-With no arguments, prunes the workspace in the current directory.`,
+With no arguments, prunes the project folder in the current directory.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		roots := args
 		if len(roots) == 0 {

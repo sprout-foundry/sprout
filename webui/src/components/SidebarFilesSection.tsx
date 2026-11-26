@@ -225,7 +225,7 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
 
       const input = await showThemedPrompt(
         gitCorsProxy()
-          ? 'GitHub repository to clone (URL or owner/name). It replaces the repository in this workspace.'
+          ? 'GitHub repository to clone (URL or owner/name). It replaces the repository in this project folder.'
           : 'GitHub repository to clone (URL or owner/name):',
         {
           title: 'Add repository',

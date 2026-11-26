@@ -1452,7 +1452,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
         </div>
 
         {/* Overflow menu for header actions that don't earn inline space:
-            toggle-ignored, refresh, and (cloud/local webui) "Add workspace",
+            toggle-ignored, refresh, and (cloud/local webui) "Add project folder",
             which lives here instead of a GitHub-branded header button —
             cloning creates a new workspace entry rather than acting on the
             loaded tree, and stays provider-neutral in its labeling. */}

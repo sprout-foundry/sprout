@@ -368,7 +368,7 @@ export function useAppInitialization({
             window.dispatchEvent(new CustomEvent('sprout:open-project-folder-switcher'));
           }
         } catch (error) {
-          debugLog('[startup] workspace check failed:', error);
+          debugLog('[startup] project folder check failed:', error);
         }
 
         // Settle the chat list + backend active chat BEFORE the

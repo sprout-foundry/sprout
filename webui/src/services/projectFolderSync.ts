@@ -58,7 +58,7 @@ export async function reconcileTabProjectFolder(
       announceProjectFolderChanged(restoredRoot, response.daemon_root);
       return 'restored';
     } catch (err) {
-      debugLog('[projectFolderSync] failed to restore the tab workspace:', err);
+      debugLog('[projectFolderSync] failed to restore the tab project folder:', err);
       return 'unresolved';
     }
   }
@@ -114,7 +114,7 @@ export function installProjectFolderReconnectSync(source: ReconnectSource, canSw
       const projectFolder = await refreshProjectFolder({ force: true });
       await reconcileTabProjectFolder(projectFolder, canSwitch);
     } catch (err) {
-      debugLog('[projectFolderSync] reconnect workspace sync failed:', err);
+      debugLog('[projectFolderSync] reconnect project folder sync failed:', err);
     } finally {
       syncing = false;
     }

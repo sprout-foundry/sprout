@@ -205,7 +205,7 @@ function createOverlayElement(
 export function triggerRename(view: EditorView, options: RenameOptions): void {
   const filePath = options.getFilePath();
   if (!filePath || filePath.startsWith('__workspace/')) {
-    debugLog('[rename] No file path or workspace file, skipping rename');
+    debugLog('[rename] No file path or project folder file, skipping rename');
     return;
   }
 

@@ -109,7 +109,7 @@ function toResult(outcome: TxnCommandOutcome, host: EscalationHost): EscalationR
   if (r.timed_out) stderr += `\n[sprout] The command timed out ${whereFor(host)}.`;
   if (r.truncated) stderr += '\n[sprout] Output was truncated.';
   if (outcome.skippedFiles > 0) {
-    stderr += `\n[sprout] ${outcome.skippedFiles} changed file(s) weren't copied back to the browser workspace.`;
+    stderr += `\n[sprout] ${outcome.skippedFiles} changed file(s) weren't copied back to the browser project folder.`;
   }
   return { ran: true, stdout: r.stdout, stderr, exitCode: r.timed_out ? 124 : r.exit_code };
 }

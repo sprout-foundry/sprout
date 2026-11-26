@@ -19,7 +19,7 @@ const LOADING_MESSAGES = [
   'Initializing virtual filesystem...',
   'Compiling WebAssembly module...',
   'Setting up agent tools...',
-  'Preparing workspace...',
+  'Preparing the project folder...',
 ];
 
 export function WasmLoadingOverlay({ isLoading, error }: WasmLoadingOverlayProps) {

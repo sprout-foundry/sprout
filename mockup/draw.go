@@ -57,6 +57,10 @@ type Request struct {
 	// for a new idea, which is drawn in a palette of the kit's.
 	Look      *kit.Look
 	LookNotes string
+	// LookIsBrand says Look is a business's brand for a new idea rather than
+	// an existing product's: the page is designed for the idea, as any new
+	// idea is, in the brand's colours, type and corners.
+	LookIsBrand bool
 	// Root is the project's folder and Files its files. When Root is set and
 	// Look is nil, the draw reads the project's saved look — generating it
 	// first when the project has none, or when its styling has changed since
@@ -127,6 +131,7 @@ func Draw(ctx context.Context, stream StreamText, req Request, publish func(even
 	if req.Look != nil {
 		if l, ok := req.Look.Clean(); ok {
 			d.look, d.lookNotes = &l, strings.TrimSpace(req.LookNotes)
+			d.lookIsBrand = req.LookIsBrand
 		}
 	} else if req.Root != "" {
 		// The project's look is a pre-step: read the saved one, and when the
@@ -230,12 +235,13 @@ func ensureLook(ctx context.Context, stream StreamText, root string, files Files
 }
 
 type draw struct {
-	saved     *Content
-	stream    StreamText
-	publish   func(string, map[string]any)
-	started   bool
-	look      *kit.Look
-	lookNotes string
+	saved       *Content
+	stream      StreamText
+	publish     func(string, map[string]any)
+	started     bool
+	look        *kit.Look
+	lookNotes   string
+	lookIsBrand bool
 	// steer is what the draw steers away from (steerRequest).
 	steer string
 	// shortlist is the palette shortlist offered in the charter (nil when
@@ -260,7 +266,7 @@ func (d *draw) start(mode string) {
 // false when the change could not be made that way.
 func (d *draw) edit(ctx context.Context, current, note string) (string, bool) {
 	d.start("edit")
-	reply, err := d.stream(ctx, editCharter(), editRequest(current, note)+lookRequest(d.look, d.lookNotes, true), nil)
+	reply, err := d.stream(ctx, editCharter(), editRequest(current, note)+lookRequest(d.look, d.lookNotes, true, d.lookIsBrand), nil)
 	if err != nil {
 		return "", false
 	}
@@ -277,7 +283,7 @@ func (d *draw) whole(ctx context.Context, plan []byte, current, note string, kee
 	d.start("whole")
 	var seq int
 	streamer := kit.Streamer{Look: d.look}
-	text, err := d.stream(ctx, charter(d.shortlist), wholeRequest(plan, current, note)+lookRequest(d.look, d.lookNotes, false)+d.steer, func(chunk string) {
+	text, err := d.stream(ctx, charter(d.shortlist), wholeRequest(plan, current, note)+lookRequest(d.look, d.lookNotes, false, d.lookIsBrand)+d.steer, func(chunk string) {
 		seq++
 		d.emit(EventChunk, map[string]any{"seq": seq, "chunk": streamer.Feed(chunk)})
 	})

@@ -96,10 +96,15 @@ func markList(f *frame, fields []Field, heading string, nav bool, ids *listIDs) 
 			items = append(items, c)
 		}
 	}
-	if named == "" && !looksLikeList(f.children, items, fields) {
+	if len(items) == 0 {
 		return List{}, false
 	}
-	if len(items) == 0 {
+	if named == "" && (hasClass(f, "facts") || !looksLikeList(f.children, items, fields)) {
+		return List{}, false
+	}
+	// Cards each naming a different fact are facts even where the drawing
+	// called them a list.
+	if named != "" && distinctFacts(items, fields) {
 		return List{}, false
 	}
 	// A list holding a list is read by its inner one.
@@ -183,6 +188,40 @@ func listItemTag(c *frame) bool {
 		}
 	}
 	return true
+}
+
+// distinctFacts reports whether every item's first part carries its own
+// specific label, all different and sharing no ending, the way a row of fact
+// cards does; repeated items share their labels or an ending of them.
+func distinctFacts(items []*frame, fields []Field) bool {
+	if len(items) < 2 {
+		return false
+	}
+	labels := make([]string, 0, len(items))
+	seen := map[string]bool{}
+	for _, it := range items {
+		if it.fieldsEnd <= it.fieldsAt {
+			return false
+		}
+		l := strings.TrimSpace(fields[it.fieldsAt].Label)
+		key := strings.ToLower(l)
+		if l == "" || genericColumns[l] || textLabel(fields[it.fieldsAt].Text, "") == l || seen[key] {
+			return false
+		}
+		seen[key] = true
+		labels = append(labels, l)
+	}
+	return sharedTail(labels) == ""
+}
+
+// hasClass reports whether f's class attribute holds class.
+func hasClass(f *frame, class string) bool {
+	for _, cl := range strings.Fields(attr(f.token, "class")) {
+		if cl == class {
+			return true
+		}
+	}
+	return false
 }
 
 // shapeOf is an item's parts by the kind of element each is, so two items of

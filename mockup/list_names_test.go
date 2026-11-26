@@ -83,3 +83,77 @@ func TestTextLabel_BareNumberIsANumber(t *testing.T) {
 		t.Fatalf("textLabel(9:30am) = %q, want Time", got)
 	}
 }
+
+// A row of cards each naming a different fact is the page's facts, not a
+// list, even where the drawing named it one; cards sharing labels still are.
+func TestKeyed_FactCardsAreNotAList(t *testing.T) {
+	_, c := Keyed(`<section data-screen="home"><div class="grid" data-list="Party facts">
+<div class="card"><span data-label="Party date">Saturday 14 March</span><span>2pm – 4pm</span></div>
+<div class="card"><span data-label="Party place">12 Example Lane</span><span>Our house</span></div>
+<div class="card"><span data-label="Reply by">Wed 11 March</span><span>Don't be late!</span></div>
+</div></section>`, nil)
+	if len(c.Lists) != 0 {
+		t.Fatalf("lists = %+v: distinct fact cards are not a list", c.Lists)
+	}
+	for _, f := range c.Fields {
+		if f.Label == "Party date" && f.List != "" {
+			t.Fatalf("the party date is in a list: %+v", f)
+		}
+	}
+	lists := listsOf(t, `<section data-screen="home"><h2>Breads</h2><div class="grid">
+<div class="card"><h3>Sourdough</h3><span data-label="Sourdough price">£4.50</span></div>
+<div class="card"><h3>Rye</h3><span data-label="Rye price">£5.00</span></div>
+</div></section>`)
+	if len(lists) != 1 {
+		t.Fatalf("lists = %+v: cards of one kind stay a list", lists)
+	}
+}
+
+// A named list element whose items carry no text is not a list, and reading
+// the page must not crash on it.
+func TestKeyed_NamedListWithoutTextIsNotAList(t *testing.T) {
+	_, c := Keyed(`<section data-screen="home"><h2>Party</h2>
+<div class="grid" data-list="Party facts">
+<div class="card"><img src="a.png"></div>
+<div class="card"><img src="b.png"></div>
+</div></section>`, nil)
+	if len(c.Lists) != 0 {
+		t.Fatalf("lists = %+v: a named list element without text is not a list", c.Lists)
+	}
+}
+
+// The kit's facts strip is facts however its cards are labelled; an unnamed
+// row of distinct-labelled courses is still a menu to edit as a list.
+func TestKeyed_FactsStripIsNotAListButAMenuIs(t *testing.T) {
+	_, c := Keyed(`<section data-screen="home"><div class="facts card">
+<div><strong data-label="Party date">Saturday 14 March</strong><span>2pm – 4pm</span></div>
+<div><strong data-label="Party place">12 Example Lane</strong><span>Our house</span></div>
+<div><strong data-label="Reply by">Wed 11 March</strong><span>Don't be late!</span></div>
+</div></section>`, nil)
+	if len(c.Lists) != 0 {
+		t.Fatalf("lists = %+v: the facts strip is not a list", c.Lists)
+	}
+	lists := listsOf(t, `<section data-screen="home"><h2>Menu</h2><div class="grid">
+<div class="card"><span data-label="Starter">Soup of the day</span><span>£5</span></div>
+<div class="card"><span data-label="Main">Roast chicken</span><span>£14</span></div>
+<div class="card"><span data-label="Pudding">Sticky toffee</span><span>£6</span></div>
+</div></section>`)
+	if len(lists) != 1 {
+		t.Fatalf("lists = %+v: an unnamed menu stays a list", lists)
+	}
+}
+
+// A named list with nothing to edit inside is no list, and no crash.
+func TestKeyed_EmptyNamedListIsNoList(t *testing.T) {
+	for _, page := range []string{
+		`<div data-list="Facts"></div>`,
+		`<div data-list="Facts"><div></div><div></div></div>`,
+		`<div data-list="Facts">Hello</div>`,
+		`<div data-list="Facts"><img><img></div>`,
+	} {
+		_, c := Keyed(`<section data-screen="home">`+page+`</section>`, nil)
+		if len(c.Lists) != 0 {
+			t.Fatalf("%s: lists = %+v", page, c.Lists)
+		}
+	}
+}

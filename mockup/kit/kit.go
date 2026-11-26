@@ -207,6 +207,35 @@ func FontLicense() string {
 	return string(b)
 }
 
+// KitInfo is a kit as a picker shows it: its name, what it suits, and the
+// compositions and heading fonts that suit it.
+type KitInfo struct {
+	ID           string   `json:"id"`
+	About        string   `json:"about"`
+	Compositions []string `json:"compositions"`
+	Fonts        []string `json:"fonts"`
+}
+
+// Kits lists the kits, by name.
+func Kits() []KitInfo {
+	out := make([]KitInfo, 0, len(kitNames))
+	for _, k := range kitNames {
+		kt := kits[k]
+		out = append(out, KitInfo{ID: k, About: kt.About, Compositions: append([]string(nil), kt.Compositions...), Fonts: append([]string(nil), kt.Fonts...)})
+	}
+	return out
+}
+
+// Fonts lists the heading fonts, without their files.
+func Fonts() []Font {
+	out := make([]Font, len(fonts))
+	copy(out, fonts)
+	for i := range out {
+		out[i].File = ""
+	}
+	return out
+}
+
 // CompositionIDs lists the first-screen compositions.
 func CompositionIDs() []string {
 	ids := make([]string, len(comps))

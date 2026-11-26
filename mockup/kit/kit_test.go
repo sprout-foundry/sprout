@@ -208,3 +208,25 @@ func TestWithChoice(t *testing.T) {
 		t.Errorf("no html tag: document changed: %s", out)
 	}
 }
+
+// A picker lists every kit and heading font, each one a choice ChoiceOf reads.
+func TestKitsAndFontsList(t *testing.T) {
+	ks, fs := Kits(), Fonts()
+	if len(ks) == 0 || len(fs) == 0 {
+		t.Fatalf("kits %d, fonts %d", len(ks), len(fs))
+	}
+	p := BasePalettes()[0].ID
+	for _, k := range ks {
+		if c := ChoiceOf(`<html data-kit="` + k.ID + `" data-palette="` + p + `"></html>`); c.Kit != k.ID {
+			t.Errorf("kit %q reads back as %q", k.ID, c.Kit)
+		}
+	}
+	for _, f := range fs {
+		if f.File != "" {
+			t.Errorf("font %q lists its file", f.ID)
+		}
+		if c := ChoiceOf(`<html data-kit="` + ks[0].ID + `" data-palette="` + p + `" data-font="` + f.ID + `"></html>`); c.Font != f.ID {
+			t.Errorf("font %q reads back as %q", f.ID, c.Font)
+		}
+	}
+}

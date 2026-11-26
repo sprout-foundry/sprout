@@ -107,40 +107,72 @@ function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+const SYNCED_COMMIT_KEY = 'sprout.txnSyncedCommit:';
+
+/** The browser commit a dev space last received from this browser, if any. */
+function readSyncedCommit(devSpaceId: string): string | null {
+  try {
+    return window.localStorage.getItem(SYNCED_COMMIT_KEY + devSpaceId);
+  } catch {
+    return null;
+  }
+}
+
+function writeSyncedCommit(devSpaceId: string, oid: string): void {
+  try {
+    window.localStorage.setItem(SYNCED_COMMIT_KEY + devSpaceId, oid);
+  } catch {
+    // Storage unavailable: the next push measures from the remote's copy.
+  }
+}
+
 /**
- * Enumerate what the push phase should carry:
- *
- *   - dirty/untracked files (plus deleted paths) when browser git sees
- *     changes — the container's clone already holds everything else;
- *   - ALL VFS files when git has no commits (never cloned/pushed — nothing
- *     else can tell the container what the browser holds);
- *   - nothing when the repo is clean (the clone matches HEAD).
- *
- * A broken git state falls back to "push everything" rather than silently
- * pushing nothing.
+ * Enumerate what the push phase should carry: the browser's uncommitted
+ * changes, plus every file its commits changed since the dev space last
+ * received them. That base is the commit this browser last pushed to the
+ * dev space, else the branch's origin copy (what a fresh dev space clones).
+ * With no base at all (never pushed, no origin copy) everything is sent, and
+ * a broken git state also falls back to everything rather than nothing.
  */
-export async function collectTxnPushFiles(): Promise<{ inputs: TxnPushInput[]; deletes: string[] }> {
-  const { getBrowserGitVfsBridge, gitLog, gitStatus } = await import('./browserGit');
+export async function collectTxnPushFiles(
+  devSpaceId?: string,
+): Promise<{ inputs: TxnPushInput[]; deletes: string[]; headOid: string | null }> {
+  const { getBrowserGitVfsBridge, gitChangedFilesBetween, gitHeadOid, gitRemoteTrackingOid, gitStatus } =
+    await import('./browserGit');
   const bridge = getBrowserGitVfsBridge();
-  if (!bridge) return { inputs: [], deletes: [] };
+  if (!bridge) return { inputs: [], deletes: [], headOid: null };
 
   const all = await bridge.readVfsFiles();
   try {
+    const headOid = await gitHeadOid();
+    const send = new Set<string>();
+    const removed = new Set<string>();
+    if (headOid) {
+      const base = (devSpaceId ? readSyncedCommit(devSpaceId) : null) ?? (await gitRemoteTrackingOid());
+      if (!base) return { inputs: all, deletes: [], headOid };
+      if (base !== headOid) {
+        const committed = await gitChangedFilesBetween(base, headOid);
+        committed.changed.forEach((p) => send.add(p));
+        committed.removed.forEach((p) => removed.add(p));
+      }
+    } else {
+      // No commits: nothing else can tell the dev space what the browser holds.
+      return { inputs: all, deletes: [], headOid };
+    }
     const status = await gitStatus();
-    const dirty = new Set<string>();
-    const deletes: string[] = [];
     for (const file of [...status.staged, ...status.unstaged]) {
-      if (file.status === 'deleted') deletes.push(file.path);
-      else dirty.add(file.path);
+      if (file.status === 'deleted') removed.add(file.path);
+      else send.add(file.path);
     }
-    if (dirty.size > 0 || deletes.length > 0) {
-      return { inputs: all.filter((f) => dirty.has(f.path)), deletes };
-    }
-    const commits = await gitLog(1);
-    return { inputs: commits.length > 0 ? [] : all, deletes: [] };
+    const present = new Set(all.map((f) => f.path));
+    return {
+      inputs: all.filter((f) => send.has(f.path)),
+      deletes: [...removed].filter((p) => !present.has(p)),
+      headOid,
+    };
   } catch {
-    // best-effort: when status can't be read, send everything.
-    return { inputs: all, deletes: [] };
+    // best-effort: when git can't be read, send everything.
+    return { inputs: all, deletes: [], headOid: null };
   }
 }
 
@@ -208,7 +240,7 @@ export async function runTxnCommand(
 
     phase = 'pushing';
     onPhase?.(phase);
-    const { inputs, deletes } = await collectTxnPushFiles();
+    const { inputs, deletes, headOid } = await collectTxnPushFiles(devSpaceId);
     const manifest = await buildPushManifest(() => inputs, { deletes });
     const pushedFiles = manifest.files.length;
     await txnPush(devSpaceId, txnId, manifest);
@@ -221,6 +253,7 @@ export async function runTxnCommand(
     onPhase?.(phase);
     const pulled = await txnPull(devSpaceId, txnId);
     const applied = await applyPullManifest(pulled, await txnPullIO());
+    if (headOid) writeSyncedCommit(devSpaceId, headOid);
 
     let warning: string | undefined;
     try {

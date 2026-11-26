@@ -254,7 +254,7 @@ export function normalizeProjectFolderPath(input: string): string {
     if (segment === '..') {
       throw new Error(
         `normalizeWorkspacePath: '${input}' contains a '..' segment ` +
-          '(paths must be workspace-relative, no parent traversal)',
+          '(paths must be project-folder-relative, no parent traversal)',
       );
     }
   }

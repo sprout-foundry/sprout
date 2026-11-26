@@ -60,7 +60,7 @@ func (h *registerPreviewPortHandler) Execute(ctx context.Context, env ToolEnv, a
 	projectFolderID := os.Getenv("WORKSPACE_ID")
 	if projectFolderID == "" {
 		return ToolResult{
-			Output:  "WORKSPACE_ID not set — preview port registration is only available in platform workspaces.",
+			Output:  "WORKSPACE_ID not set — preview port registration is only available in a platform dev space.",
 			IsError: true,
 		}, nil
 	}

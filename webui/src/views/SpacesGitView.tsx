@@ -69,7 +69,7 @@ export function SpacesGitView({ className, onOpenFile, gitPanel }: SpacesGitView
   if (!git) {
     return (
       <div className={rootClass} data-testid="spaces-git">
-        <GitEmptyState title="Source control isn't available" detail="This workspace has no git backend." />
+        <GitEmptyState title="Source control isn't available" detail="This project folder has no git backend." />
       </div>
     );
   }
@@ -183,7 +183,7 @@ function MissingRepositoryState({ projectFolder }: { projectFolder: UseGitProjec
   return (
     <GitEmptyState
       title="No git repository"
-      detail={projectFolder.gitActionError ?? 'This workspace is not a git repository.'}
+      detail={projectFolder.gitActionError ?? 'This project folder is not a git repository.'}
       onRefresh={() => void projectFolder.refreshGitStatus()}
     />
   );

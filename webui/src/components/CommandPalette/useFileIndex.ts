@@ -133,7 +133,7 @@ function useFileIndex(options: UseFileIndexOptions): UseFileIndexResult {
         // Index against the last known root rather than none.
         resolvedRoot = getProjectFolder();
         if (!cancelled) setProjectFolder(resolvedRoot);
-        debugLog('[FileIndex] Failed to fetch workspace root:', err);
+        debugLog('[FileIndex] Failed to fetch the project folder:', err);
       }
 
       // Workspace gate: when the daemon's resolved project folder is the home

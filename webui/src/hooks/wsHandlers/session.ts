@@ -74,7 +74,7 @@ function endStepParagraph(messages: Message[]): Message[] {
 export const handleProjectFolderChanged = (ctx: EventHandlerContext): void => {
   const { event, setState } = ctx;
   const data = (event.data ?? {}) as ProjectFolderChangedData;
-  debugLog('[workspace] Workspace changed:', data);
+  debugLog('[projectFolder] Project folder changed:', data);
 
   // Only react to events targeting this client (or broadcasts without a
   // client_id).
@@ -90,7 +90,7 @@ export const handleProjectFolderChanged = (ctx: EventHandlerContext): void => {
   try {
     LSPClientService.getInstance().cleanup();
   } catch (err) {
-    debugLog('[workspace] LSP cleanup failed:', err);
+    debugLog('[projectFolder] LSP cleanup failed:', err);
   }
 
   // Clear workspace-derived caches so they re-fetch from the new root.
@@ -237,5 +237,5 @@ export const handleProjectFolderPatch = (ctx: EventHandlerContext): void => {
   logEntry.category = 'file';
   logEntry.level = 'info';
   setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
-  debugLog('[workspace] Patch:', String(raw.path ?? ''));
+  debugLog('[projectFolder] Patch:', String(raw.path ?? ''));
 };

@@ -189,7 +189,7 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		`esac`,
 		// Validate the project folder path is accessible without cd-ing into it.
 		// The daemon runs host-level from $HOME to support multi-project-folder.
-		`test -d "$WORKSPACE_PATH" || { echo "remote workspace path is not accessible: $WORKSPACE_RAW" >&2; exit 1; }`,
+		`test -d "$WORKSPACE_PATH" || { echo "remote project folder path is not accessible: $WORKSPACE_RAW" >&2; exit 1; }`,
 		fmt.Sprintf(`LOG_FILE="$HOME/.cache/sprout-webui/logs/%s.log"`, sanitizeRemoteLogName(hostAlias)),
 		// Launch the daemon from $HOME (not the project folder) using
 		// the user's main config.  No --isolated-config — this is a host-level

@@ -51,7 +51,7 @@ export interface SpacesTerminalViewProps {
   unavailableMessage?: ReactNode;
 }
 
-const DEFAULT_UNAVAILABLE_MESSAGE = 'Terminal not available in this workspace.';
+const DEFAULT_UNAVAILABLE_MESSAGE = 'Terminal not available in this project folder.';
 
 /**
  * The terminal as an arrangeable view: the same terminal surface the app docks

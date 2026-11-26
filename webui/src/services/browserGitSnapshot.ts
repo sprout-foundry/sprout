@@ -39,7 +39,7 @@ export async function snapshotSource(): Promise<string | null> {
 export function snapshotNote(): string {
   return (
     'Imported without git history: changes are tracked against the imported files. ' +
-    "Remote history, pull and push aren't available in this in-browser workspace."
+    "Remote history, pull and push aren't available in this in-browser project folder."
   );
 }
 

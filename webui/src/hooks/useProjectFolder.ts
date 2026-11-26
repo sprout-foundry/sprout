@@ -127,7 +127,7 @@ export function useProjectFolder(): UseProjectFolderResult {
       window.setTimeout(() => window.location.reload(), 300);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error('[useProjectFolder] failed to set workspace:', msg);
+      console.error('[useProjectFolder] failed to set the project folder:', msg);
       throw err;
     }
   }, []);

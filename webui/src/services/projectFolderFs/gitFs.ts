@@ -104,7 +104,7 @@ export function createGitFs(fs: ProjectFolderFs): GitFs {
       // "commit <hash> is not available locally" during clone checkout —
       // isomorphic-git believed its objects were written when they were
       // not. Fail loudly with the transport-level error.
-      throw new Error(`workspace writeBatch failed: ${r.error ?? 'unknown error'}`);
+      throw new Error(`project folder writeBatch failed: ${r.error ?? 'unknown error'}`);
     }
     if (r.errors.length > 0) {
       const failed = r.errors
@@ -112,7 +112,7 @@ export function createGitFs(fs: ProjectFolderFs): GitFs {
         .slice(0, 5)
         .join(', ');
       const detail = r.errors.length > 5 ? ` (+${r.errors.length - 5} more)` : '';
-      throw new Error(`workspace writeBatch: ${r.errors.length} write(s) failed: ${failed}${detail}`);
+      throw new Error(`project folder writeBatch: ${r.errors.length} write(s) failed: ${failed}${detail}`);
     }
   }
 

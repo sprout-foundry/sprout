@@ -375,7 +375,7 @@ class LSPClientService {
       this.projectFolderPath = projectFolder.project_folder;
       return this.projectFolderPath;
     } catch (err) {
-      console.error('[LSPClientService] Failed to get workspace:', err);
+      console.error('[LSPClientService] Failed to get the project folder:', err);
       return getProjectFolder() || this.projectFolderPath;
     }
   }

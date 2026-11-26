@@ -90,7 +90,7 @@ export default function AdvancedSettingsTab({
               'resource_directory',
               'Resource directory',
               '.sprout/resources',
-              'Where captured web pages and vision artifacts are stored, relative to the workspace. Leave blank for the default. Override at runtime with --resource-directory.',
+              'Where captured web pages and vision artifacts are stored, relative to the project folder. Leave blank for the default. Override at runtime with --resource-directory.',
             )}
           </div>
         </div>

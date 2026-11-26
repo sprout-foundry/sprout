@@ -488,7 +488,7 @@ export default function GitHubRepoPicker({
             {showRepoList && onSelect
               ? 'Opens it as a project here. Any public repository works too — type owner/name.'
               : showRepoList
-                ? 'Shallow clone (depth 1) of the default branch into your workspace.'
+                ? 'Shallow clone (depth 1) of the default branch into your project folder.'
                 : 'Or close this dialog and paste a public repository URL instead.'}
           </span>
         </div>

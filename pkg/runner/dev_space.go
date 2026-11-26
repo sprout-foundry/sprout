@@ -72,6 +72,7 @@ func devSpaceEnv(task DevSpaceTask) map[string]string {
 		// the clone when workspace_dir is set; a task naming both is
 		// refused before it reaches a launcher). The daemon learns
 		// where its files live instead.
+		env["DEV_SPACE_DIR"] = task.DevSpaceDir
 		env["WORKSPACE_DIR"] = task.DevSpaceDir
 	} else {
 		env["REPO_URL"] = task.RepoURL

@@ -199,6 +199,9 @@ func listItemTag(c *frame) bool {
 // specific label, all different and sharing no ending, the way a row of fact
 // cards does; repeated items share their labels or an ending of them.
 func distinctFacts(items []*frame, fields []Field) bool {
+	if len(items) == 0 {
+		return false
+	}
 	labels := make([]string, 0, len(items))
 	seen := map[string]bool{}
 	for _, it := range items {

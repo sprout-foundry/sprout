@@ -108,3 +108,16 @@ func TestKeyed_FactCardsAreNotAList(t *testing.T) {
 		t.Fatalf("lists = %+v: cards of one kind stay a list", lists)
 	}
 }
+
+// A named list element whose items carry no text is not a list, and reading
+// the page must not crash on it.
+func TestKeyed_NamedListWithoutTextIsNotAList(t *testing.T) {
+	_, c := Keyed(`<section data-screen="home"><h2>Party</h2>
+<div class="grid" data-list="Party facts">
+<div class="card"><img src="a.png"></div>
+<div class="card"><img src="b.png"></div>
+</div></section>`, nil)
+	if len(c.Lists) != 0 {
+		t.Fatalf("lists = %+v: a named list element without text is not a list", c.Lists)
+	}
+}

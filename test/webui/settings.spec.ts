@@ -269,7 +269,7 @@ test.describe("Settings panel open/close", () => {
   test("filter narrows visible sections", async () => {
     await openSettings();
     const input = page.locator(".settings-filter-input");
-    await input.fill("workspace");
+    await input.fill("project");
     await page.waitForTimeout(500);
 
     // "Project folder" section should match

@@ -104,11 +104,11 @@ type frame struct {
 // from. A redraw that put it on another kind of element keeps the page's
 // words there; the element that still holds the person's words (a same-kind
 // one first) takes the field, and a text no element holds is kept in the
-// content under its key, so it is neither written onto the other element
-// nor discarded. A key not on the page is ignored, as on a deleted element.
-// A picture spot a redraw renamed gets its old key back, so the person's
-// picture stays in it (keepPictureKeys). The page is otherwise left as
-// written.
+// content under a new key of its own, off the page, so it is neither written
+// onto the other element nor discarded. A key not on the page is ignored, as
+// on a deleted element. A picture spot a redraw renamed gets its old key
+// back, so the person's picture stays in it (keepPictureKeys). The page is
+// otherwise left as written.
 func Keyed(doc string, saved *Content) (string, Content) {
 	doc = keepPictureKeys(doc, saved)
 	mine := map[string]Field{}
@@ -143,7 +143,8 @@ func Keyed(doc string, saved *Content) (string, Content) {
 	// rejected are the person's fields a key was kept off: the key is on
 	// another kind of element. The element that still holds the person's
 	// words takes the field (re-homed, below); a text no element holds is
-	// kept under its key, so it is not discarded.
+	// kept off the page under a new key, so it is not discarded and the
+	// fields' keys stay unique.
 	var rejected []Field
 	var lists []List
 	var pictures []Picture
@@ -320,12 +321,13 @@ func Keyed(doc string, saved *Content) (string, Content) {
 	renameRepeatedLists(lists, fields)
 	// A text the guard kept off its key is not discarded. An element that
 	// still holds the person's words takes the field (a same-kind one first,
-	// so a word two elements share goes to its kind); a text no element
-	// holds is kept under the key it was saved with, and the guard keeps it
-	// off the element the key is on now.
-	home := map[int]bool{}
+	// so a word two elements share goes to its kind). A text no element
+	// holds is kept in the content, off the page, under a key of its own:
+	// its old key is now on another kind of element, and the fields' keys
+	// must stay unique, so a person or the agent who sets it there writes
+	// it onto the element the key is on now.
 	taken := map[int]bool{}
-	for i, r := range rejected {
+	for _, r := range rejected {
 		j := -1
 		for pass := 0; pass < 2 && j == -1; pass++ {
 			for k := range fields {
@@ -342,11 +344,8 @@ func Keyed(doc string, saved *Content) (string, Content) {
 		if j >= 0 {
 			fields[j].Mine = true
 			taken[j] = true
-			home[i] = true
-		}
-	}
-	for i, r := range rejected {
-		if !home[i] {
+		} else {
+			r.Key = newKey("")
 			fields = append(fields, r)
 		}
 	}

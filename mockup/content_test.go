@@ -286,9 +286,11 @@ func TestKeyed_KeptTextReHomesToTheElementThatHoldsIt(t *testing.T) {
 	}
 }
 
-// A text no element holds (the model rewrote it) is kept in the content
-// under the key it was saved with, not discarded, and the guard keeps it off
-// the element that key now sits on.
+// A text no element holds (the model rewrote it) is kept in the content,
+// not discarded, and the guard keeps it off the element its key now sits on.
+// The kept field takes a key of its own, so the content's keys stay unique
+// (two fields must never share a key: key-addressed edits go where the key
+// is).
 func TestKeyed_KeptTextNoElementHoldsIsKeptNotDiscarded(t *testing.T) {
 	form := `<section data-screen="book"><form>
 <div class="field"><label for="e">Email</label><input id="e" data-label="Your email" placeholder="you@example.com"></div>
@@ -314,6 +316,15 @@ func TestKeyed_KeptTextNoElementHoldsIsKeptNotDiscarded(t *testing.T) {
 	}
 	if !kept {
 		t.Fatalf("the person's text is not kept in the content: %+v", c.Fields)
+	}
+	// The keys stay unique: the kept text is not filed under the key its
+	// element now uses.
+	seen := map[string]bool{}
+	for _, f := range c.Fields {
+		if seen[f.Key] {
+			t.Fatalf("two fields share the key %q: %+v", f.Key, c.Fields)
+		}
+		seen[f.Key] = true
 	}
 	// And the guard keeps it off the label its key landed on.
 	for _, f := range c.Fields {

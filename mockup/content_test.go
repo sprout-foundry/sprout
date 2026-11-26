@@ -159,3 +159,28 @@ func TestKeyed_HeadingDoesNotJoinThePreviousSection(t *testing.T) {
 		t.Fatalf("text after a heading has section %q, want %q", got, "Seeded wholemeal")
 	}
 }
+
+// A redraw that numbers the page afresh can put a saved key on another kind
+// of element; the saved text stays off it rather than turning a field's label
+// into its placeholder.
+func TestKeyed_SavedTextStaysOnItsKindOfElement(t *testing.T) {
+	form := `<section data-screen="book"><form>
+<div class="field"><label for="n">Your name</label><input id="n" placeholder="Your name"></div>
+<div class="field"><label for="e">Email</label><input id="e" type="email" placeholder="you@example.com"></div>
+</form></section>`
+	_, first := Keyed(form, nil)
+	for i := range first.Fields {
+		first.Fields[i].Mine = true
+	}
+	shifted := `<section data-screen="book"><p>Fill in your details.</p>` + form[len(`<section data-screen="book">`):]
+	_, c := Keyed(shifted, &first)
+	got := map[string]string{}
+	for _, f := range c.Fields {
+		got[f.Label+"|"+f.Text] = f.Key
+	}
+	for _, want := range []string{"Field label|Your name", "Placeholder|Your name", "Field label|Email", "Placeholder|you@example.com"} {
+		if _, ok := got[want]; !ok {
+			t.Fatalf("missing %q in %+v", want, c.Fields)
+		}
+	}
+}

@@ -97,6 +97,23 @@ func elementLabel(tag, class string) string {
 	return "Text"
 }
 
+// elementLabels are the labels elementLabel and placeholderLabel give by the
+// kind of element alone.
+var elementLabels = map[string]bool{
+	"Page title": true, "Main heading": true, "Heading": true, "Button": true, "Link": true,
+	"Field label": true, "List item": true, "Table cell": true, "Choice": true, "Quote": true,
+	"Text": true, "Placeholder": true,
+}
+
+// sameKind reports whether saved text labelled saved belongs on an element of
+// kind now. A key is a position on the page, so a redraw can put it on another
+// kind of element (a field's label where its placeholder was); a label that
+// names a kind of element must match. A label the drawing or the words gave
+// ("Party date", "Price") cannot be checked and keeps its text.
+func sameKind(saved, now string) bool {
+	return !elementLabels[saved] || saved == now
+}
+
 func placeholderLabel(t nethtml.Token) string {
 	if l := attr(t, labelAttr); l != "" {
 		return l

@@ -156,7 +156,9 @@ func Keyed(doc string, saved *Content) (string, Content) {
 	emit = func(f *frame) {
 		text := strings.Join(strings.Fields(f.full.String()), " ")
 		key := newKey(f.key)
-		if m, ok := mine[key]; ok {
+		m, keep := mine[key]
+		keep = keep && sameKind(m.Label, elementLabel(f.tag, attr(f.token, "class")))
+		if keep {
 			text = m.Text
 			replaceText(pieces, f, html.EscapeString(text))
 		}
@@ -173,7 +175,7 @@ func Keyed(doc string, saved *Content) (string, Content) {
 		if f.tag == "h1" || f.tag == "h2" || f.tag == "h3" {
 			heading = text
 		}
-		fields = append(fields, Field{Key: key, Label: label, Section: section(), Text: text, Mine: mine[key].Mine, pos: f.tagPiece})
+		fields = append(fields, Field{Key: key, Label: label, Section: section(), Text: text, Mine: keep, pos: f.tagPiece})
 	}
 
 	// closeFrame settles an element as it closes, while it is still on the
@@ -215,12 +217,14 @@ func Keyed(doc string, saved *Content) (string, Content) {
 				if (tag == "input" || tag == "textarea") && attr(tok, "placeholder") != "" && !skipping() {
 					key := newKey(attr(tok, placeholderAttr))
 					text := attr(tok, "placeholder")
-					if f, ok := mine[key]; ok {
-						text = f.Text
+					m, keep := mine[key]
+					keep = keep && sameKind(m.Label, "Placeholder")
+					if keep {
+						text = m.Text
 					}
 					setAttr(&tok, "placeholder", text)
 					setAttr(&tok, placeholderAttr, key)
-					fields = append(fields, Field{Key: key, Label: placeholderLabel(tok), Section: section(), Text: text, Mine: mine[key].Mine, pos: len(pieces)})
+					fields = append(fields, Field{Key: key, Label: placeholderLabel(tok), Section: section(), Text: text, Mine: keep, pos: len(pieces)})
 					pieces = append(pieces, renderTag(tok, tt == nethtml.SelfClosingTagToken))
 					continue
 				}

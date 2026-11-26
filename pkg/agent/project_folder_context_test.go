@@ -13,8 +13,8 @@ import (
 
 func TestWithWorkspaceContext(t *testing.T) {
 	ag := newTestAgent(t)
-	first := ag.withWorkspaceContext("fix the bug")
-	if !strings.HasPrefix(first, "<workspace-context>\n") || !strings.HasSuffix(first, "</workspace-context>\n\nfix the bug") {
+	first := ag.withProjectFolderContext("fix the bug")
+	if !strings.HasPrefix(first, "<project-folder-context>\n") || !strings.HasSuffix(first, "</project-folder-context>\n\nfix the bug") {
 		t.Fatalf("first message lacks the workspace block:\n%s", first)
 	}
 	if !strings.Contains(first, "## Current Working Directory") {
@@ -22,10 +22,10 @@ func TestWithWorkspaceContext(t *testing.T) {
 	}
 
 	ag.AddMessage(api.Message{Role: "user", Content: first})
-	if got := ag.withWorkspaceContext("and the next one"); got != "and the next one" {
+	if got := ag.withProjectFolderContext("and the next one"); got != "and the next one" {
 		t.Fatalf("a later turn got the block again: %q", got)
 	}
-	if got := ag.withWorkspaceContext("   "); got != "   " {
+	if got := ag.withProjectFolderContext("   "); got != "   " {
 		t.Fatalf("an empty query changed: %q", got)
 	}
 }
@@ -40,17 +40,17 @@ func TestWithWorkspaceContextReplacedPrompt(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("configure: %v", err)
 	}
-	if got := ag.withWorkspaceContext("fix the bug"); got != "fix the bug" {
+	if got := ag.withProjectFolderContext("fix the bug"); got != "fix the bug" {
 		t.Fatalf("system_prompt_text override got the block: %q", got)
 	}
 
 	persona := newTestAgent(t)
 	persona.personaReplacedPrompt = true
-	if got := persona.withWorkspaceContext("fix the bug"); got != "fix the bug" {
+	if got := persona.withProjectFolderContext("fix the bug"); got != "fix the bug" {
 		t.Fatalf("a persona's own prompt got the block: %q", got)
 	}
 	persona.ClearActivePersona()
-	if got := persona.withWorkspaceContext("fix the bug"); !strings.HasPrefix(got, "<workspace-context>") {
+	if got := persona.withProjectFolderContext("fix the bug"); !strings.HasPrefix(got, "<project-folder-context>") {
 		t.Fatalf("clearing the persona did not restore the block: %q", got)
 	}
 }
@@ -79,11 +79,11 @@ func TestSystemPromptOmitsWorkspaceContext(t *testing.T) {
 }
 
 func TestStripUserMessageEnvelope(t *testing.T) {
-	stamped := InjectUserMessageTimestamp("<workspace-context>\n## Current Working Directory\n\n`/w`\n</workspace-context>\n\nhola, arregla el error")
+	stamped := InjectUserMessageTimestamp("<project-folder-context>\n## Current Working Directory\n\n`/w`\n</project-folder-context>\n\nhola, arregla el error")
 	if got := StripUserMessageEnvelope(stamped); got != "hola, arregla el error" {
 		t.Fatalf("StripUserMessageEnvelope = %q", got)
 	}
-	if got := StripUserMessageTimestamp(stamped); !strings.HasPrefix(got, "<workspace-context>") {
+	if got := StripUserMessageTimestamp(stamped); !strings.HasPrefix(got, "<project-folder-context>") {
 		t.Fatalf("StripUserMessageTimestamp dropped the block persisted state keeps: %q", got)
 	}
 	if got := StripUserMessageEnvelope(InjectUserMessageTimestamp("plain")); got != "plain" {
@@ -100,7 +100,7 @@ func TestMemoryBlockInFirstUserMessage(t *testing.T) {
 	if err := SaveMemory("alpha", "# Alpha\nPrefer table-driven tests."); err != nil {
 		t.Fatalf("SaveMemory: %v", err)
 	}
-	firstFirst := first.withWorkspaceContext("fix the bug")
+	firstFirst := first.withProjectFolderContext("fix the bug")
 	if !strings.Contains(firstFirst, "## Memories") || !strings.Contains(firstFirst, "`alpha`") {
 		t.Fatalf("first user message lacks the memory block:\n%s", firstFirst)
 	}
@@ -108,7 +108,7 @@ func TestMemoryBlockInFirstUserMessage(t *testing.T) {
 	if err := SaveMemory("beta", "# Beta\nUse merge, never rebase."); err != nil {
 		t.Fatalf("SaveMemory beta: %v", err)
 	}
-	secondFirst := second.withWorkspaceContext("fix the bug")
+	secondFirst := second.withProjectFolderContext("fix the bug")
 	if !strings.Contains(secondFirst, "`beta`") {
 		t.Fatalf("second session's first message lacks beta:\n%s", secondFirst)
 	}
@@ -152,7 +152,7 @@ func TestMemoryBlockStableAcrossAgentStart(t *testing.T) {
 	if err := SaveMemory("alpha", "# Alpha\nAlpha body."); err != nil {
 		t.Fatalf("SaveMemory: %v", err)
 	}
-	stamped := ag.withWorkspaceContext("fix the bug")
+	stamped := ag.withProjectFolderContext("fix the bug")
 	if err := SaveMemory("beta", "# Beta\nBeta body."); err != nil {
 		t.Fatalf("SaveMemory beta: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestMemoryBlockStableAcrossAgentStart(t *testing.T) {
 	}
 	// A later turn must not re-add the block.
 	ag.AddMessage(api.Message{Role: "user", Content: stamped})
-	if got := ag.withWorkspaceContext("and the next one"); got != "and the next one" {
+	if got := ag.withProjectFolderContext("and the next one"); got != "and the next one" {
 		t.Fatalf("a later turn re-prefixed the message: %q", got)
 	}
 }
@@ -170,11 +170,11 @@ func TestMemoryBlockStableAcrossAgentStart(t *testing.T) {
 // "## Memories" heading in the first user message.
 func TestNoMemoriesNoBlock(t *testing.T) {
 	ag := newTestAgent(t)
-	first := ag.withWorkspaceContext("fix the bug")
+	first := ag.withProjectFolderContext("fix the bug")
 	if strings.Contains(first, "## Memories") {
 		t.Fatalf("first user message carries a stray memory block:\n%s", first)
 	}
-	if !strings.HasSuffix(first, "</workspace-context>\n\nfix the bug") {
+	if !strings.HasSuffix(first, "</project-folder-context>\n\nfix the bug") {
 		t.Fatalf("workspace block should still be stamped:\n%s", first)
 	}
 }
@@ -238,7 +238,7 @@ func TestCrossSessionPromptPrefixStable(t *testing.T) {
 		return requestPrefix{
 			systemHash: fmt.Sprintf("%x", sha256.Sum256(sysJSON)),
 			toolsHash:  fmt.Sprintf("%x", sha256.Sum256(toolsJSON)),
-			firstMsg:   ag.withWorkspaceContext("fix the bug"),
+			firstMsg:   ag.withProjectFolderContext("fix the bug"),
 		}
 	}
 
@@ -274,5 +274,12 @@ func TestCrossSessionPromptPrefixStable(t *testing.T) {
 	}
 	if req1.toolsHash != req2.toolsHash {
 		t.Errorf("tools array differs across sessions:\nfirst:  %s\nsecond: %s", req1.toolsHash, req2.toolsHash)
+	}
+}
+
+func TestStripUserMessageEnvelopeReadsEarlierContextTags(t *testing.T) {
+	saved := "<workspace-context>\n## Current Working Directory\n\n`/w`\n</workspace-context>\n\nfix the bug"
+	if got := StripUserMessageEnvelope(saved); got != "fix the bug" {
+		t.Fatalf("StripUserMessageEnvelope(saved) = %q", got)
 	}
 }

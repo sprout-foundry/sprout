@@ -39,7 +39,7 @@ tags:
     description: Settings, providers, onboarding, hotkeys, skills, and config.
   - name: terminal
     description: Terminal, agent-session, and language-server (LSP) surfaces.
-  - name: workspace/instances
+  - name: project-folder/instances
     description: Workspace metadata and remote instance/SSH management.
   - name: sync/txn
     description: File sync operations and container-side git transactions.

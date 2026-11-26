@@ -184,7 +184,7 @@ func CreatePullRequest(ctx context.Context, repoDir string, req PullRequestReque
 	// An HTTP answer from the platform is final; only an unreachable
 	// platform falls through to the GitHub paths below.
 	var platformErr error
-	if apiURL, projectFolderID, wsToken, ok := platformProjectFolder(); ok {
+	if apiURL, projectFolderID, wsToken, ok := platformDevSpace(); ok {
 		result, err := createPRViaPlatform(ctx, apiURL, projectFolderID, wsToken, head, base, req.Title, body, req.Draft)
 		if err == nil {
 			return result, nil

@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -57,15 +58,15 @@ func (h *registerPreviewPortHandler) Execute(ctx context.Context, env ToolEnv, a
 		label = "dev server"
 	}
 
-	projectFolderID := os.Getenv("WORKSPACE_ID")
-	if projectFolderID == "" {
+	devSpaceID := envutil.DevSpaceID()
+	if devSpaceID == "" {
 		return ToolResult{
-			Output:  "WORKSPACE_ID not set — preview port registration is only available in a platform dev space.",
+			Output:  "DEV_SPACE_ID not set — preview port registration is only available in a platform dev space.",
 			IsError: true,
 		}, nil
 	}
 
-	projectFolderToken := os.Getenv("WORKSPACE_TOKEN")
+	devSpaceToken := envutil.DevSpaceToken()
 	platformURL := os.Getenv("PLATFORM_API_URL")
 	if platformURL == "" {
 		platformURL = "http://172.17.0.1:8080" // Default Docker bridge gateway
@@ -77,15 +78,15 @@ func (h *registerPreviewPortHandler) Execute(ctx context.Context, env ToolEnv, a
 	})
 
 	client := &http.Client{Timeout: 5 * time.Second}
-	url := fmt.Sprintf("%s/internal/workspace/%s/ports", platformURL, projectFolderID)
+	url := fmt.Sprintf("%s/internal/dev-space/%s/ports", platformURL, devSpaceID)
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("Failed to create request: %v", err), IsError: true}, nil
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if projectFolderToken != "" {
-		req.Header.Set("X-Workspace-Token", projectFolderToken)
+	if devSpaceToken != "" {
+		req.Header.Set("X-Dev-Space-Token", devSpaceToken)
 	}
 
 	resp, err := client.Do(req)

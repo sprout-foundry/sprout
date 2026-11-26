@@ -62,6 +62,8 @@ func reservedEnv(name string) bool {
 func devSpaceEnv(task DevSpaceTask) map[string]string {
 	env := map[string]string{
 		"SPROUT_MODE":  "daemon",
+		"DEV_SPACE_ID": task.DevSpaceID,
+		// Sprout builds from before the dev space rename read these names.
 		"WORKSPACE_ID": task.DevSpaceID,
 	}
 	if task.DevSpaceDir != "" {
@@ -78,8 +80,10 @@ func devSpaceEnv(task DevSpaceTask) map[string]string {
 		}
 	}
 	if task.TxnSecret != "" {
+		env["DEV_SPACE_TOKEN"] = task.TxnSecret
 		env["WORKSPACE_TOKEN"] = task.TxnSecret
 		env["SPROUT_AUTH_TOKEN"] = task.TxnSecret
+		env["SPROUT_DEV_SPACE_TXN_SECRET"] = task.TxnSecret
 		env["SPROUT_WORKSPACE_TXN_SECRET"] = task.TxnSecret
 	}
 	if task.PlatformAPIURL != "" {

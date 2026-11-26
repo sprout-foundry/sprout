@@ -1,7 +1,7 @@
 //go:build !js
 
 // huma_workspace.go holds the Huma operations and their thin handlers for the
-// workspace/instances family: the /api/workspace* and /api/instances* routes
+// project-folder/instances family: the /api/workspace* and /api/instances* routes
 // (registered via registerProjectFolderHumaOperations from registerHumaOperations
 // in huma_routes.go).
 //
@@ -19,7 +19,7 @@ import (
 	huma "github.com/danielgtaylor/huma/v2"
 )
 
-// registerProjectFolderHumaOperations registers the workspace/instances-family
+// registerProjectFolderHumaOperations registers the project-folder/instances-family
 // Huma operations.
 func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 	huma.Register(api, huma.Operation{
@@ -28,7 +28,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		Path:        "/api/project-folder",
 		Summary:     "Report the client's active project folder.",
 		Description: "Reports the requesting client's active project folder, whether it is a recognized project directory, and recent-project-folder metadata.",
-		Tags:        []string{"workspace/instances"},
+		Tags:        []string{"project-folder/instances"},
 	}, ws.projectFolderGetHumaHandler)
 
 	huma.Register(api, huma.Operation{
@@ -37,7 +37,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		Path:        "/api/project-folder",
 		Summary:     "Set the client's active project folder.",
 		Description: "Sets the requesting client's active project folder to the `path` in the body. The path must resolve within the daemon root.",
-		Tags:        []string{"workspace/instances"},
+		Tags:        []string{"project-folder/instances"},
 	}, ws.projectFolderSetHumaHandler)
 
 	huma.Register(api, huma.Operation{
@@ -46,7 +46,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		Path:        "/api/project-folder/browse",
 		Summary:     "Browse directories under the daemon root.",
 		Description: "Lists the directories under the daemon root (the parent of the active project folder) so the client can pick a new project folder. Defaults to the daemon root when `path` is omitted.",
-		Tags:        []string{"workspace/instances"},
+		Tags:        []string{"project-folder/instances"},
 	}, ws.projectFolderBrowseHumaHandler)
 
 	huma.Register(api, huma.Operation{
@@ -55,7 +55,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		Path:        "/api/workspace/symbols",
 		Summary:     "List project folder symbols.",
 		Description: "Returns the project folder's indexed symbols, optionally filtered by `query`. Falls back to building the index on a cache miss.",
-		Tags:        []string{"workspace/instances"},
+		Tags:        []string{"project-folder/instances"},
 	}, ws.workspaceSymbolsHumaHandler)
 
 	huma.Register(api, huma.Operation{
@@ -64,7 +64,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		Path:        "/api/project-folder/projects",
 		Summary:     "List known projects.",
 		Description: "Lists the recent projects known to the client (the project folder picker) with their last-used ordering.",
-		Tags:        []string{"workspace/instances"},
+		Tags:        []string{"project-folder/instances"},
 	}, ws.projectFolderProjectsHumaHandler)
 
 	huma.Register(api, huma.Operation{
@@ -73,7 +73,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		Path:        "/api/project-folder/sync",
 		Summary:     "Synchronize the project folder tree.",
 		Description: "Applies the pending file-sync operations for the project folder (the SP-046 project folder sync surface).",
-		Tags:        []string{"workspace/instances"},
+		Tags:        []string{"project-folder/instances"},
 	}, ws.projectFolderSyncHumaHandler)
 
 	huma.Register(api, huma.Operation{
@@ -82,7 +82,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		Path:        "/api/project-folder/takeover",
 		Summary:     "Take over a project folder from another device.",
 		Description: "Marks the requesting client as the active owner of the project folder, superseding the previous owner.",
-		Tags:        []string{"workspace/instances"},
+		Tags:        []string{"project-folder/instances"},
 	}, ws.projectFolderTakeoverHumaHandler)
 
 	huma.Register(api, huma.Operation{
@@ -91,7 +91,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		Path:        "/api/instances",
 		Summary:     "List live Sprout instances.",
 		Description: "Lists the live Sprout instances with their PID, port, working directory, and host/current flags.",
-		Tags:        []string{"workspace/instances"},
+		Tags:        []string{"project-folder/instances"},
 	}, ws.instancesListHumaHandler)
 
 	huma.Register(api, huma.Operation{
@@ -100,7 +100,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		Path:        "/api/instances/select",
 		Summary:     "Select the active instance.",
 		Description: "Sets the desired Sprout instance to the `pid` in the body so the client attaches to that instance on the next load.",
-		Tags:        []string{"workspace/instances"},
+		Tags:        []string{"project-folder/instances"},
 	}, ws.instanceSelectHumaHandler)
 
 	huma.Register(api, huma.Operation{
@@ -109,7 +109,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		Path:        "/api/instances/ssh-hosts",
 		Summary:     "List known SSH hosts.",
 		Description: "Lists the known SSH hosts available for remote instance attachment.",
-		Tags:        []string{"workspace/instances"},
+		Tags:        []string{"project-folder/instances"},
 	}, ws.sshHostsHumaHandler)
 
 	huma.Register(api, huma.Operation{
@@ -118,7 +118,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		Path:        "/api/instances/ssh-open",
 		Summary:     "Open an SSH connection to a remote instance.",
 		Description: "Opens an SSH connection to a remote host and launches a Sprout instance there.",
-		Tags:        []string{"workspace/instances"},
+		Tags:        []string{"project-folder/instances"},
 	}, ws.sshOpenHumaHandler)
 
 	huma.Register(api, huma.Operation{
@@ -127,7 +127,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		Path:        "/api/instances/ssh-launch-status",
 		Summary:     "Report the status of an SSH instance launch.",
 		Description: "Reports the status and logs of a remote instance launch started through ssh-open.",
-		Tags:        []string{"workspace/instances"},
+		Tags:        []string{"project-folder/instances"},
 	}, ws.sshLaunchStatusHumaHandler)
 
 	huma.Register(api, huma.Operation{
@@ -136,7 +136,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		Path:        "/api/instances/ssh-browse",
 		Summary:     "Browse the remote host's directories over SSH.",
 		Description: "Lists the directories on the remote host over the SSH session so the client can pick a remote project folder.",
-		Tags:        []string{"workspace/instances"},
+		Tags:        []string{"project-folder/instances"},
 	}, ws.sshBrowseHumaHandler)
 
 	huma.Register(api, huma.Operation{
@@ -145,7 +145,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		Path:        "/api/instances/ssh-sessions",
 		Summary:     "List active SSH sessions.",
 		Description: "Lists the active SSH sessions with their host and state.",
-		Tags:        []string{"workspace/instances"},
+		Tags:        []string{"project-folder/instances"},
 	}, ws.sshSessionsHumaHandler)
 
 	huma.Register(api, huma.Operation{
@@ -154,7 +154,7 @@ func registerProjectFolderHumaOperations(api huma.API, ws *ReactWebServer) {
 		Path:        "/api/instances/ssh-close",
 		Summary:     "Close an SSH session.",
 		Description: "Closes the SSH session for the `session_id` in the body.",
-		Tags:        []string{"workspace/instances"},
+		Tags:        []string{"project-folder/instances"},
 	}, ws.sshCloseHumaHandler)
 }
 

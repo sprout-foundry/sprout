@@ -213,7 +213,7 @@ type EventPublisher interface {
 
 // eventProjectFolderConflict mirrors events.EventTypeProjectFolderConflict.
 // Defined locally to avoid an import-cycle dependency.
-const eventProjectFolderConflict = "workspace.conflict_detected"
+const eventProjectFolderConflict = "project_folder.conflict_detected"
 
 // HandleContainerPatchWithConflictDetection applies a container→browser patch
 // with full conflict detection (SP-046-3).

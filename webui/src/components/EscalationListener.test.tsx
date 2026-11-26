@@ -54,16 +54,23 @@ vi.mock('../services/cloudTxn', async () => {
   };
 });
 
-const { getBrowserGitVfsBridge, gitLog, gitStatus } = vi.hoisted(() => ({
-  getBrowserGitVfsBridge: vi.fn(),
-  gitLog: vi.fn(),
-  gitStatus: vi.fn(),
-}));
+const { getBrowserGitVfsBridge, gitLog, gitStatus, gitHeadOid, gitRemoteTrackingOid, gitChangedFilesBetween } =
+  vi.hoisted(() => ({
+    getBrowserGitVfsBridge: vi.fn(),
+    gitLog: vi.fn(),
+    gitStatus: vi.fn(),
+    gitHeadOid: vi.fn(),
+    gitRemoteTrackingOid: vi.fn(),
+    gitChangedFilesBetween: vi.fn(),
+  }));
 
 vi.mock('../services/browserGit', () => ({
   getBrowserGitVfsBridge,
   gitLog,
   gitStatus,
+  gitHeadOid,
+  gitRemoteTrackingOid,
+  gitChangedFilesBetween,
 }));
 
 const writtenVfs: Array<{ path: string; content: string }> = [];
@@ -164,6 +171,11 @@ function mockHappyTxn() {
     untracked: [],
   });
   gitLog.mockResolvedValue([{ hash: 'h', message: 'm', author: 'a', date: 'd' }]);
+  // The dev space's clone (origin) is at the browser's HEAD unless a test says otherwise.
+  gitHeadOid.mockResolvedValue('h');
+  gitRemoteTrackingOid.mockResolvedValue('h');
+  gitChangedFilesBetween.mockResolvedValue({ changed: [], removed: [] });
+  window.localStorage.clear();
 }
 
 /** Flush pending promise chains. */
@@ -333,6 +345,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
   it('falls back to pushing every VFS file when git has no commits', async () => {
     gitStatus.mockResolvedValue({ staged: [], unstaged: [], untracked: [] });
     gitLog.mockResolvedValue([]);
+    gitHeadOid.mockResolvedValue(null);
     renderListener();
     fireTrigger();
     await clickRunTxn();
@@ -350,6 +363,21 @@ describe('EscalationListener — ETH-2 txn action', () => {
     await flush();
 
     expect(vi.mocked(txnPush).mock.calls[0][2].files).toEqual([]);
+  });
+
+  it('pushes what the browser committed since the dev space last received its work', async () => {
+    gitStatus.mockResolvedValue({ staged: [], unstaged: [], untracked: [] });
+    gitRemoteTrackingOid.mockResolvedValue('origin-commit');
+    gitChangedFilesBetween.mockResolvedValue({ changed: ['other.go'], removed: ['gone.go'] });
+    renderListener();
+    fireTrigger();
+    await clickRunTxn();
+    await flush();
+
+    expect(gitChangedFilesBetween).toHaveBeenCalledWith('origin-commit', 'h');
+    const manifest = vi.mocked(txnPush).mock.calls[0][2];
+    expect(manifest.files.map((f) => f.path)).toEqual(['other.go']);
+    expect(manifest.deletes).toEqual(['gone.go']);
   });
 
   it('still finishes when the run phase fails, and names the failing side', async () => {

@@ -157,3 +157,15 @@ func TestKeyed_EmptyNamedListIsNoList(t *testing.T) {
 		}
 	}
 }
+
+// A facts strip the drawing named a list is still facts, whatever its labels.
+func TestKeyed_NamedFactsStripIsNotAList(t *testing.T) {
+	_, c := Keyed(`<section data-screen="home"><div class="facts" data-list="Class facts">
+<div><strong data-label="Class day">Saturdays</strong><span>every week</span></div>
+<div><strong data-label="Class time">9:00–10:00am</strong><span>one hour</span></div>
+<div><strong data-label="Price">£10 per person</strong><span>pay on the day</span></div>
+</div></section>`, nil)
+	if len(c.Lists) != 0 {
+		t.Fatalf("lists = %+v: a named facts strip is not a list", c.Lists)
+	}
+}

@@ -99,7 +99,11 @@ func markList(f *frame, fields []Field, heading string, nav bool, ids *listIDs) 
 	if len(items) == 0 {
 		return List{}, false
 	}
-	if named == "" && (hasClass(f, "facts") || !looksLikeList(f.children, items, fields)) {
+	// The kit's facts strip is facts, named or not.
+	if hasClass(f, "facts") {
+		return List{}, false
+	}
+	if named == "" && !looksLikeList(f.children, items, fields) {
 		return List{}, false
 	}
 	// Cards each naming a different fact are facts even where the drawing

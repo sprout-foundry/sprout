@@ -559,7 +559,7 @@ describe('txn lifecycle client', () => {
   it('runs a command with the timeout and returns the run result', async () => {
     const fetchMock = routeFetch({
       'POST /dev-space/fly/ws-1/txn/txn-9/run': (body) => {
-        expect(body).toEqual({ command: 'go build ./...', timeout_seconds: 600 });
+        expect(body).toEqual({ command: 'go build ./...', timeout_seconds: 600, async: true });
         return jsonResponse({
           stdout: 'ok',
           stderr: '',
@@ -575,9 +575,83 @@ describe('txn lifecycle client', () => {
     expect(await txnRun('ws-1', 'txn-9', 'go build ./...', 600)).toMatchObject({ exit_code: 0, duration_ms: 1200 });
   });
 
-  it('requires a non-empty command for run', () => {
-    // Synchronous validation, so assert on the call rather than a rejection.
-    expect(() => txnRun('ws-1', 'txn-9', '   ')).toThrow(TypeError);
+  it('polls a background run until its result arrives', async () => {
+    vi.useFakeTimers();
+    let polls = 0;
+    vi.stubGlobal(
+      'fetch',
+      routeFetch({
+        'POST /dev-space/fly/ws-1/txn/txn-9/run': () =>
+          jsonResponse({ txn_id: 'txn-9', status: 'running' }, { status: 202 }),
+        'GET /dev-space/fly/ws-1/txn/txn-9': () => {
+          polls += 1;
+          const run_result =
+            polls < 3
+              ? { command: 'make', state: 'running' }
+              : { command: 'make', state: 'done', stdout: 'built', stderr: '', exit_code: 0, duration_ms: 90000 };
+          return jsonResponse({ txn_id: 'txn-9', status: 'run', run_result });
+        },
+      }),
+    );
+    const run = txnRun('ws-1', 'txn-9', 'make', 600);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await run).toMatchObject({ stdout: 'built', exit_code: 0 });
+    expect(polls).toBe(3);
+    vi.useRealTimers();
+  });
+
+  it('reports a background run that failed with its status and reason', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      routeFetch({
+        'POST /dev-space/fly/ws-1/txn/txn-9/run': () => jsonResponse({ status: 'running' }, { status: 202 }),
+        'GET /dev-space/fly/ws-1/txn/txn-9': () =>
+          jsonResponse({
+            txn_id: 'txn-9',
+            status: 'run',
+            run_result: {
+              command: 'make',
+              state: 'failed',
+              error: 'dev space txn daemon unreachable',
+              http_status: 502,
+            },
+          }),
+      }),
+    );
+    const run = txnRun('ws-1', 'txn-9', 'make', 600).catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(5_000);
+    const err = await run;
+    expect(err).toBeInstanceOf(CloudTxnError);
+    expect((err as CloudTxnError).status).toBe(502);
+    expect((err as Error).message).toBe('dev space txn daemon unreachable');
+    vi.useRealTimers();
+  });
+
+  it('repeats a push the dev space answers 502 while it starts', async () => {
+    vi.useFakeTimers();
+    let attempts = 0;
+    vi.stubGlobal(
+      'fetch',
+      routeFetch({
+        'POST /dev-space/fly/ws-1/txn/txn-9/push': () => {
+          attempts += 1;
+          return attempts < 3
+            ? jsonResponse({ error: 'dev space txn daemon unreachable' }, { status: 502 })
+            : jsonResponse({ applied: 1, deleted: 0, skipped: [], status: 'ok' });
+        },
+      }),
+    );
+    const manifest = await buildPushManifest(() => [{ path: 'a.txt', content: 'a' }]);
+    const push = txnPush('ws-1', 'txn-9', manifest);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect((await push).applied).toBe(1);
+    expect(attempts).toBe(3);
+    vi.useRealTimers();
+  });
+
+  it('requires a non-empty command for run', async () => {
+    await expect(txnRun('ws-1', 'txn-9', '   ')).rejects.toThrow(TypeError);
   });
 
   it('pulls a manifest and normalizes missing arrays', async () => {

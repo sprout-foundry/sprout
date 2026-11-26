@@ -93,7 +93,12 @@ describe('platform clients route through the host transport', () => {
     expect(fetchMock.mock.calls[0][0]).toBe(`${HOST_API}/dev-space/availability`);
     // Launch POSTs the host-agnostic cloud create (host=cloud), not the
     // legacy /dev-space/fly start route.
-    await startDevSpace('https://github.com/o/r');
+    // A "starting" answer is asked again for up to a minute; run that out.
+    vi.useFakeTimers();
+    const started = startDevSpace('https://github.com/o/r');
+    await vi.advanceTimersByTimeAsync(70_000);
+    await started;
+    vi.useRealTimers();
     const [url, init] = lastCall();
     expect(url).toBe(`${HOST_API}/dev-space/txn`);
     expect(init.method).toBe('POST');

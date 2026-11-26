@@ -108,14 +108,14 @@ describe('projectFolderStore', () => {
     expect(getProjectFolderState().error).toBeNull();
   });
 
-  it('follows sprout:workspace-changed and notifies subscribers', async () => {
+  it('follows the event a Sprout Studio build before the rename fires, and notifies subscribers', async () => {
     api.getProjectFolder.mockResolvedValueOnce(ws('/home/u/a')).mockResolvedValue(ws('/home/u/b'));
     await refreshProjectFolder();
     const listener = vi.fn();
     const unsubscribe = subscribeProjectFolder(listener);
 
     window.dispatchEvent(
-      new CustomEvent('sprout:workspace-changed', { detail: { projectFolder: '/home/u/b', daemonRoot: '/home/u' } }),
+      new CustomEvent('sprout:workspace-changed', { detail: { workspaceRoot: '/home/u/b', daemonRoot: '/home/u' } }),
     );
     expect(getProjectFolder()).toBe('/home/u/b');
     await vi.waitFor(() => expect(api.getProjectFolder).toHaveBeenCalledTimes(2));

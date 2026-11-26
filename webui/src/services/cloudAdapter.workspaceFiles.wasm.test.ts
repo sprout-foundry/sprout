@@ -115,7 +115,7 @@ describe.skipIf(!haveBinary)('workspace file routes on the WASM binary', () => {
   };
 
   it('reports the root the binary uses', async () => {
-    expect(shell.getWorkspaceRoot()).toBe('/workspace');
+    expect(shell.getProjectFolderRoot()).toBe('/workspace');
     expect(await (await adapter.fetch('/api/project-folder')).json()).toMatchObject({ project_folder: '/workspace' });
   });
 

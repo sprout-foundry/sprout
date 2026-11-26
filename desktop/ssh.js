@@ -239,7 +239,7 @@ function startSSHBackendForHost(options = {}) {
   const hostAlias = String(options.hostAlias || '').trim();
   if (!hostAlias) throw new Error('SSH host alias is required.');
 
-  const remoteWorkspacePath = String(options.remoteWorkspacePath || '$HOME').trim() || '$HOME';
+  const remoteProjectFolderPath = String(options.remoteProjectFolderPath || '$HOME').trim() || '$HOME';
   const appVersion = app.getVersion();
   const remoteInfo = inspectRemoteSSHHost(hostAlias);
   const remoteBinary = ensureRemoteBackendBinary(hostAlias, appVersion, remoteInfo.platform, remoteInfo.arch);
@@ -284,7 +284,7 @@ function startSSHBackendForHost(options = {}) {
         '  exit 1',
         '}',
         `mkdir -p "$HOME/.cache/sprout-desktop/logs"`,
-        `cd ${remoteWorkspacePath === '$HOME' ? '"$HOME"' : shellEscape(remoteWorkspacePath)}`,
+        `cd ${remoteProjectFolderPath === '$HOME' ? '"$HOME"' : shellEscape(remoteProjectFolderPath)}`,
         'REMOTE_PORT="$(choose_port)"',
         `LOG_FILE="$HOME/.cache/sprout-desktop/logs/${hostAlias.replace(/[^a-zA-Z0-9_.-]/g, '_')}.log"`,
         `nohup env BROWSER=none SPROUT_DESKTOP=1 SPROUT_DESKTOP_BACKEND_MODE=ssh ${shellEscape(remoteBinary)} --isolated-config agent --daemon --web-port "$REMOTE_PORT" >"$LOG_FILE" 2>&1 < /dev/null &`,
@@ -317,7 +317,7 @@ function startSSHBackendForHost(options = {}) {
       throw error;
     }
 
-    return { child: tunnel, port: localPort, remotePort, remotePID, hostAlias, workspacePath: `ssh://${hostAlias}`, backendMode: 'ssh' };
+    return { child: tunnel, port: localPort, remotePort, remotePID, hostAlias, projectFolderPath: `ssh://${hostAlias}`, backendMode: 'ssh' };
   });
 }
 

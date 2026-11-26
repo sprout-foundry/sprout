@@ -4,9 +4,9 @@ const createWorktreeButton = document.getElementById('create-worktree');
 const openWorktreeNewButton = document.getElementById('open-worktree-new');
 const wslPanel = document.getElementById('wsl-launcher-panel');
 const wslDistroSelect = document.getElementById('wsl-distro-select');
-const wslWorkspacePathInput = document.getElementById('wsl-workspace-path');
-const openWslWorkspaceButton = document.getElementById('open-wsl-workspace');
-const openWslWorkspaceNewButton = document.getElementById('open-wsl-workspace-new');
+const wslProjectFolderPathInput = document.getElementById('wsl-workspace-path');
+const openWslProjectFolderButton = document.getElementById('open-wsl-workspace');
+const openWslProjectFolderNewButton = document.getElementById('open-wsl-workspace-new');
 const wslLauncherErrorNode = document.getElementById('wsl-launcher-error');
 const versionNode = document.getElementById('app-version');
 const createModal = document.getElementById('create-worktree-modal');
@@ -104,7 +104,7 @@ function renderRecentWorktrees(entries) {
   if (!entries.length) {
     recentContainer.innerHTML = `
       <div class="recent-worktree-empty">
-        No recent folders yet. Open any folder here, or create a git worktree if you want branch-isolated workspaces.
+        No recent folders yet. Open any folder here, or create a git worktree if you want branch-isolated project folders.
       </div>
     `;
     return;
@@ -136,8 +136,8 @@ function renderRecentWorktrees(entries) {
 
   recentContainer.querySelectorAll('[data-open]').forEach((button) => {
     button.addEventListener('click', async () => {
-      await window.sproutDesktop.openWorkspace({
-        workspacePath: button.getAttribute('data-open'),
+      await window.sproutDesktop.openProjectFolder({
+        projectFolderPath: button.getAttribute('data-open'),
         forceNewWindow: false,
         backendMode: entry.backendMode,
         wslDistro: entry.wslDistro,
@@ -147,8 +147,8 @@ function renderRecentWorktrees(entries) {
 
   recentContainer.querySelectorAll('[data-open-new]').forEach((button) => {
     button.addEventListener('click', async () => {
-      await window.sproutDesktop.openWorkspace({
-        workspacePath: button.getAttribute('data-open-new'),
+      await window.sproutDesktop.openProjectFolder({
+        projectFolderPath: button.getAttribute('data-open-new'),
         forceNewWindow: true,
         backendMode: entry.backendMode,
         wslDistro: entry.wslDistro,
@@ -158,11 +158,11 @@ function renderRecentWorktrees(entries) {
 }
 
 async function openViaPicker(forceNewWindow) {
-  const workspacePath = await window.sproutDesktop.pickWorkspace();
-  if (!workspacePath) {
+  const projectFolderPath = await window.sproutDesktop.pickProjectFolder();
+  if (!projectFolderPath) {
     return;
   }
-  await window.sproutDesktop.openWorkspace({ workspacePath, forceNewWindow });
+  await window.sproutDesktop.openProjectFolder({ projectFolderPath, forceNewWindow });
 }
 
 async function setupWslLauncher() {
@@ -181,12 +181,12 @@ async function setupWslLauncher() {
   wslPanel.classList.remove('hidden');
 }
 
-async function openWslWorkspace(forceNewWindow) {
+async function openWslProjectFolder(forceNewWindow) {
   clearWslError();
-  const workspacePath = wslWorkspacePathInput.value.trim();
+  const projectFolderPath = wslProjectFolderPathInput.value.trim();
   const wslDistro = wslDistroSelect.value.trim();
 
-  if (!workspacePath) {
+  if (!projectFolderPath) {
     showWslError('A WSL workspace path is required.');
     return;
   }
@@ -196,8 +196,8 @@ async function openWslWorkspace(forceNewWindow) {
   }
 
   try {
-    await window.sproutDesktop.openWorkspace({
-      workspacePath,
+    await window.sproutDesktop.openProjectFolder({
+      projectFolderPath,
       forceNewWindow,
       backendMode: 'wsl',
       wslDistro,
@@ -234,8 +234,8 @@ async function browseWorktreeParent() {
 openWorktreeButton.addEventListener('click', () => openViaPicker(false));
 createWorktreeButton.addEventListener('click', () => openCreateModal());
 openWorktreeNewButton.addEventListener('click', () => openViaPicker(true));
-openWslWorkspaceButton.addEventListener('click', () => openWslWorkspace(false));
-openWslWorkspaceNewButton.addEventListener('click', () => openWslWorkspace(true));
+openWslProjectFolderButton.addEventListener('click', () => openWslProjectFolder(false));
+openWslProjectFolderNewButton.addEventListener('click', () => openWslProjectFolder(true));
 browseRepositoryButton.addEventListener('click', () => browseRepository());
 browseWorktreeParentButton.addEventListener('click', () => browseWorktreeParent());
 closeCreateWorktreeButton.addEventListener('click', () => closeCreateModal());

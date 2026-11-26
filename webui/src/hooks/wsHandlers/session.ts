@@ -15,6 +15,7 @@ import { notificationBus } from '../../services/notificationBus';
 import { debugLog } from '../../utils/log';
 import { appendCappedLog } from '../../utils/logCap';
 import { createLogEntry, type EventHandlerContext } from '../webSocketEventHelpers';
+import { dispatchProjectFolderChanged } from '../../services/projectFolderEvents';
 
 // Handle metrics_update event
 export const handleMetricsUpdate = (ctx: EventHandlerContext): void => {
@@ -68,7 +69,7 @@ function endStepParagraph(messages: Message[]): Message[] {
 //      old project folder).
 //   2. Clears the recentLogs cache in React state so stale data
 //      from the previous project folder doesn't linger.
-//   3. Dispatches a `sprout:workspace-changed` DOM event so other components
+//   3. Dispatches a `sprout:project-folder-changed` DOM event so other components
 //      (ProjectFolderBar, FileBrowser, editor tabs, etc.) can re-fetch fresh data
 //      from the server's new project folder.
 export const handleProjectFolderChanged = (ctx: EventHandlerContext): void => {
@@ -105,14 +106,10 @@ export const handleProjectFolderChanged = (ctx: EventHandlerContext): void => {
   // Notify other components to refresh their workspace-dependent data.
   const projectFolder = (data as Record<string, unknown>).project_folder;
   const daemonRoot = (data as Record<string, unknown>).daemon_root;
-  window.dispatchEvent(
-    new CustomEvent('sprout:workspace-changed', {
-      detail: {
-        projectFolder: typeof projectFolder === 'string' ? projectFolder : '',
-        daemonRoot: typeof daemonRoot === 'string' ? daemonRoot : '',
-      },
-    }),
-  );
+  dispatchProjectFolderChanged({
+    projectFolder: typeof projectFolder === 'string' ? projectFolder : '',
+    daemonRoot: typeof daemonRoot === 'string' ? daemonRoot : '',
+  });
 };
 
 /**

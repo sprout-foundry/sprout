@@ -64,7 +64,7 @@ describe('useLayoutPersistence — workspace-changed buffer survival', () => {
 
   function fireProjectFolderChanged() {
     projectFolderHandler?.(
-      new CustomEvent('sprout:workspace-changed', {
+      new CustomEvent('sprout:project-folder-changed', {
         detail: { projectFolder: '/other' },
       }),
     );
@@ -75,7 +75,7 @@ describe('useLayoutPersistence — workspace-changed buffer survival', () => {
   beforeEach(() => {
     projectFolderHandler = null;
     vi.spyOn(window, 'addEventListener').mockImplementation((type, fn) => {
-      if (type === 'sprout:workspace-changed') projectFolderHandler = fn as EventListener;
+      if (type === 'sprout:project-folder-changed') projectFolderHandler = fn as EventListener;
     });
     vi.spyOn(window, 'removeEventListener').mockImplementation(() => {});
     vi.spyOn(Date, 'now').mockReturnValue(1_000_000);

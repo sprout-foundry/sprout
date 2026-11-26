@@ -77,7 +77,7 @@ export interface WasmShell {
   /** Get the current working directory (the terminal's; `cd` moves it). */
   getCwd(): string;
   /** The project directory: relative paths given to the shell resolve here. */
-  getWorkspaceRoot(): string;
+  getProjectFolderRoot(): string;
   /** Make a directory the project folder. */
   changeDir(dir: string): WasmChangeDirResult;
   /** Write content to a file (synced to IndexedDB). */
@@ -330,7 +330,8 @@ export interface SproutWasmAPI {
   executeCommandAsync?(input: string): Promise<string>;
   autoComplete(input: string): string;
   getCwd(): string;
-  /** Absent in binaries built before the project folder existed. */
+  getProjectFolderRoot?(): string;
+  /** The same under its earlier name; absent in binaries built before the project folder existed. */
   getWorkspaceRoot?(): string;
   changeDir(dir: string): string;
   writeFile(path: string, content: string): string;
@@ -604,8 +605,8 @@ export function createWasmShellBridge(wasm: SproutWasmAPI): WasmShell {
       return wasm.getCwd();
     },
 
-    getWorkspaceRoot(): string {
-      return wasm.getWorkspaceRoot ? wasm.getWorkspaceRoot() : wasm.getCwd();
+    getProjectFolderRoot(): string {
+      return wasm.getProjectFolderRoot?.() ?? wasm.getWorkspaceRoot?.() ?? wasm.getCwd();
     },
 
     changeDir(dir: string): WasmChangeDirResult {

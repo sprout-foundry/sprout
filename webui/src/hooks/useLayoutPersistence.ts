@@ -28,6 +28,7 @@ import { ensureProjectFolder } from '../services/projectFolderStore';
 import type { EditorBuffer, EditorPane, PaneLayout, PaneSize } from '../types/editor';
 import { resolveEditorFilePath, getLSPClientService } from '../services/lspClientService';
 import { debugLog } from '../utils/log';
+import { onProjectFolderChanged, type ProjectFolderChangedDetail } from '../services/projectFolderEvents';
 
 interface UseLayoutPersistenceParams {
   buffersRef: MutableRefObject<Map<string, EditorBuffer>>;
@@ -446,9 +447,7 @@ export function useLayoutPersistence({
   // Chat/welcome/diff buffers are preserved (non-default chat sessions are cleaned up
   // to avoid stale workspace-specific chats). Pinned buffers are also preserved.
   useEffect(() => {
-    const handleProjectFolderChanged = (event: Event) => {
-      const detail = (event as CustomEvent).detail;
-      const nextRoot = typeof detail?.projectFolder === 'string' ? detail.projectFolder : '';
+    const handleProjectFolderChanged = ({ projectFolder: nextRoot }: ProjectFolderChangedDetail) => {
       if (nextRoot) {
         getLSPClientService().setProjectFolder(nextRoot);
         // The server returning to the project folder this tab already shows (a
@@ -495,8 +494,7 @@ export function useLayoutPersistence({
       clearLayoutSnapshot();
     };
 
-    window.addEventListener('sprout:workspace-changed', handleProjectFolderChanged);
-    return () => window.removeEventListener('sprout:workspace-changed', handleProjectFolderChanged);
+    return onProjectFolderChanged(handleProjectFolderChanged);
   }, [buffersRef, setBuffers, setPanes]);
 
   return { restoreLayout };

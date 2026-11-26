@@ -21,7 +21,7 @@
  *     never absolute, never containing `..`. Backends reject unsafe paths.
  *   - Operations never throw for expected failures — they resolve
  *     `{ ok: false, error: <code> }`. Error codes are the §10.1 set:
- *     `invalidParams`, `workspaceNotSet`, `notInWorkspace`, `notFound`,
+ *     `invalidParams`, `projectFolderNotSet`, `notInProjectFolder`, `notFound`,
  *     `exists`, `isDirectory`, `ioFailed`, `unsupported`.
  *   - `write` creates missing parent directories (mkdir -p semantics).
  *   - Text content is UTF-8; binary goes through `contentBase64`.

@@ -163,10 +163,17 @@ export function useSSHData({
       }, 1000);
       void pollLaunchStatus();
       try {
-        if (desktopBridge?.openSshWorkspace) {
-          await desktopBridge.openSshWorkspace({
+        if (desktopBridge?.openSshProjectFolder) {
+          await desktopBridge.openSshProjectFolder({
             hostAlias,
             remoteProjectFolderPath: targetRemotePath,
+            forceNewWindow: true,
+          });
+        } else if (desktopBridge?.openSshWorkspace) {
+          // A desktop app built before the rename takes the earlier names.
+          await desktopBridge.openSshWorkspace({
+            hostAlias,
+            remoteWorkspacePath: targetRemotePath,
             forceNewWindow: true,
           });
         } else {

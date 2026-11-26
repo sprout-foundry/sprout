@@ -187,13 +187,13 @@ describe('gitFs adapter', () => {
     expect(names).toEqual(['pack-abc.pack']);
   });
 
-  it('nativeBridgeFs forwards the subtree path to the bridge listWorkspace op', async () => {
+  it('nativeBridgeFs forwards the subtree path to the bridge listProjectFolder op', async () => {
     const { createNativeBridgeFs } = await import('./nativeBridgeFs');
     const calls: Array<Record<string, unknown>> = [];
     const call = async (_channel: string, payload: Record<string, unknown>) => {
       calls.push(payload);
       const path = String(payload.path ?? '');
-      if (payload.op === 'listWorkspace') {
+      if (payload.op === 'listProjectFolder') {
         const files =
           path === 'repos/o/r/.git/objects/pack'
             ? [{ path: 'repos/o/r/.git/objects/pack/pack-abc.pack', size: 1, isDir: false }]
@@ -206,7 +206,20 @@ describe('gitFs adapter', () => {
     const r = await nfs.list('repos/o/r/.git/objects/pack', 1);
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.files.map((f) => f.path)).toEqual(['repos/o/r/.git/objects/pack/pack-abc.pack']);
-    expect(calls[0]).toMatchObject({ op: 'listWorkspace', path: 'repos/o/r/.git/objects/pack' });
+    expect(calls[0]).toMatchObject({ op: 'listProjectFolder', path: 'repos/o/r/.git/objects/pack' });
+  });
+
+  it('nativeBridgeFs falls back to the earlier op name on a shell that predates it', async () => {
+    const { createNativeBridgeFs } = await import('./nativeBridgeFs');
+    const ops: string[] = [];
+    const call = async (_channel: string, payload: Record<string, unknown>) => {
+      ops.push(String(payload.op));
+      if (payload.op === 'readWorkspaceFile') return { ok: false, error: 'workspaceNotSet' };
+      return { error: `unknown files operation: ${String(payload.op)}` };
+    };
+    const r = await createNativeBridgeFs(call as never).read('a.txt');
+    expect(ops).toEqual(['readProjectFolderFile', 'readWorkspaceFile']);
+    expect(r).toEqual({ ok: false, error: 'projectFolderNotSet' });
   });
 
   it('stat distinguishes files and dirs', async () => {

@@ -100,7 +100,7 @@ function isJson(str) {
 }
 
 /**
- * Wait for the smoke status file to be written with workspace-opened event.
+ * Wait for the smoke status file to be written with the project-folder-opened event.
  */
 async function waitForWorkspaceReady(statusFile, timeoutMs = 45000) {
   const startedAt = Date.now();
@@ -110,7 +110,7 @@ async function waitForWorkspaceReady(statusFile, timeoutMs = 45000) {
         const raw = fs.readFileSync(statusFile, 'utf8').trim();
         if (raw && isJson(raw)) {
           const data = JSON.parse(raw);
-          if (data.event === 'workspace-opened' && data.port) {
+          if (data.event === 'project-folder-opened' && data.port) {
             return data;
           }
         }
@@ -193,7 +193,7 @@ function launchElectron(workspaceDir, statusFile) {
       ELECTRON_DISABLE_SECURITY_WARNINGS: '1',
       SPROUT_SMOKE_TEST: '1',
       SPROUT_SKIP_RESTORE: '1',
-      SPROUT_SMOKE_WORKSPACE: workspaceDir,
+      SPROUT_SMOKE_PROJECT_FOLDER: workspaceDir,
       SPROUT_SMOKE_STATUS_FILE: statusFile,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -373,7 +373,7 @@ test.describe('Desktop E2E smoke', () => {
       expect(rawStatus).toBeTruthy();
 
       const statusData = JSON.parse(rawStatus);
-      expect(statusData.event).toBe('workspace-opened');
+      expect(statusData.event).toBe('project-folder-opened');
       expect(typeof statusData.port).toBe('number');
       expect(statusData.port).toBeGreaterThan(0);
       expect(typeof statusData.workspacePath).toBe('string');

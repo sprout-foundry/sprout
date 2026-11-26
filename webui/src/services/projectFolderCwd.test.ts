@@ -9,7 +9,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 
 import {
-  WORKSPACE_CWD_STORAGE_KEY,
+  PROJECT_FOLDER_CWD_STORAGE_KEY,
   normalizeProjectFolderCwd,
   getProjectFolderCwd,
   setProjectFolderCwd,
@@ -74,18 +74,30 @@ describe('store get/set', () => {
 
   it('writes through to localStorage on set', () => {
     setProjectFolderCwd('repos/acme/api');
-    expect(window.localStorage.getItem(WORKSPACE_CWD_STORAGE_KEY)).toBe('repos/acme/api');
+    expect(window.localStorage.getItem(PROJECT_FOLDER_CWD_STORAGE_KEY)).toBe('repos/acme/api');
   });
 
   it('lazily re-reads the persisted value after a full reset', () => {
     __resetProjectFolderCwdForTests(); // wipes memory AND the persisted key
-    window.localStorage.setItem(WORKSPACE_CWD_STORAGE_KEY, 'repos/x/y');
+    window.localStorage.setItem(PROJECT_FOLDER_CWD_STORAGE_KEY, 'repos/x/y');
     expect(getProjectFolderCwd()).toBe('repos/x/y');
+  });
+
+  it('reads a cwd saved under the earlier key', () => {
+    __resetProjectFolderCwdForTests();
+    window.localStorage.setItem('sprout-workspace-cwd', 'repos/old/name');
+    expect(getProjectFolderCwd()).toBe('repos/old/name');
+  });
+
+  it('writes the active cwd where a native shell reads it, under both names', () => {
+    setProjectFolderCwd('repos/acme/web');
+    expect(window.localStorage.getItem(PROJECT_FOLDER_CWD_STORAGE_KEY)).toBe('repos/acme/web');
+    expect(window.localStorage.getItem('sprout-workspace-cwd')).toBe('repos/acme/web');
   });
 
   it('falls back to root when the persisted value is invalid', () => {
     __resetProjectFolderCwdForTests();
-    window.localStorage.setItem(WORKSPACE_CWD_STORAGE_KEY, '../evil');
+    window.localStorage.setItem(PROJECT_FOLDER_CWD_STORAGE_KEY, '../evil');
     expect(getProjectFolderCwd()).toBe('');
   });
 });
@@ -231,10 +243,10 @@ describe('workspace cwd scoping', () => {
   });
 
   it('does not carry the unscoped value into a known workspace', () => {
-    window.localStorage.setItem(WORKSPACE_CWD_STORAGE_KEY, 'repos/x/y');
+    window.localStorage.setItem(PROJECT_FOLDER_CWD_STORAGE_KEY, 'repos/x/y');
     expect(getProjectFolderCwd()).toBe('repos/x/y');
     setProjectFolderCwdScope('/work/gamma');
     expect(getProjectFolderCwd()).toBe('');
-    window.localStorage.removeItem(WORKSPACE_CWD_STORAGE_KEY);
+    window.localStorage.removeItem(PROJECT_FOLDER_CWD_STORAGE_KEY);
   });
 });

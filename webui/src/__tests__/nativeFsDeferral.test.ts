@@ -12,7 +12,7 @@ import {
   resolveNativeFsGate,
   normalizeProjectFolderPath,
   projectFolderErrorStatus,
-  WORKSPACE_ERROR_STATUS,
+  PROJECT_FOLDER_ERROR_STATUS,
   hasSproutStudioFsBridge,
   detectSproutStudio,
   mapProjectFolderListing,
@@ -109,15 +109,20 @@ describe('normalizeProjectFolderPath (pure)', () => {
   });
 });
 
-describe('workspace error → status mapping (pure)', () => {
+describe('project folder error → status mapping (pure)', () => {
+  it('maps the codes shells built before the rename answer with', () => {
+    expect(projectFolderErrorStatus('notInWorkspace')).toBe(400);
+    expect(projectFolderErrorStatus('workspaceNotSet')).toBe(503);
+  });
+
   it('maps the documented codes', () => {
-    expect(WORKSPACE_ERROR_STATUS.notFound).toBe(404);
-    expect(WORKSPACE_ERROR_STATUS.invalidParams).toBe(400);
-    expect(WORKSPACE_ERROR_STATUS.notInWorkspace).toBe(400);
-    expect(WORKSPACE_ERROR_STATUS.isDirectory).toBe(400);
-    expect(WORKSPACE_ERROR_STATUS.userCancelled).toBe(409);
-    expect(WORKSPACE_ERROR_STATUS.workspaceNotSet).toBe(503);
-    expect(WORKSPACE_ERROR_STATUS.ioFailed).toBe(500);
+    expect(PROJECT_FOLDER_ERROR_STATUS.notFound).toBe(404);
+    expect(PROJECT_FOLDER_ERROR_STATUS.invalidParams).toBe(400);
+    expect(PROJECT_FOLDER_ERROR_STATUS.notInProjectFolder).toBe(400);
+    expect(PROJECT_FOLDER_ERROR_STATUS.isDirectory).toBe(400);
+    expect(PROJECT_FOLDER_ERROR_STATUS.userCancelled).toBe(409);
+    expect(PROJECT_FOLDER_ERROR_STATUS.projectFolderNotSet).toBe(503);
+    expect(PROJECT_FOLDER_ERROR_STATUS.ioFailed).toBe(500);
   });
 
   it('falls back to 500 for unknown / missing codes', () => {

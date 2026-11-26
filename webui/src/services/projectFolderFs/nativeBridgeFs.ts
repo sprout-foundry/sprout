@@ -14,6 +14,14 @@
 
 import type { BatchResult, FsOk, ListResult, ReadResult, StatResult, ProjectFolderFs, WriteEntry } from './types';
 import { normalizeFsPath, WRITE_BATCH_CAP } from './types';
+import { withCurrentErrorCode } from '../nativeFs';
+
+/** Op names a shell built before the project folder rename knows instead. */
+const EARLIER_OPS: Readonly<Record<string, string>> = {
+  readProjectFolderFile: 'readWorkspaceFile',
+  writeProjectFolderFile: 'writeWorkspaceFile',
+  listProjectFolder: 'listWorkspace',
+};
 
 /** Minimal shape of the bridge the shell injects (studio-bridge.js). */
 export type BridgeCall = (
@@ -33,7 +41,7 @@ export function detectBridgeCall(): BridgeCall | null {
 }
 
 /** Internal: run one files-channel op, normalizing transport failure. */
-async function filesOp(call: BridgeCall, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+async function sendFilesOp(call: BridgeCall, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
   try {
     // 60s: batched git-clone writes (base64 packfiles) can take a while
     // to land natively; the old 30s default made big batches time out and
@@ -47,10 +55,24 @@ async function filesOp(call: BridgeCall, payload: Record<string, unknown>): Prom
   }
 }
 
+/**
+ * Run one files-channel op. A shell that predates an op's current name
+ * answers "unknown files operation"; the op is then sent once more under its
+ * earlier name. Results carry the current error codes.
+ */
+async function filesOp(call: BridgeCall, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+  let r = await sendFilesOp(call, payload);
+  const earlier = EARLIER_OPS[String(payload.op)];
+  if (earlier && !r.ok && String(r.error ?? '').startsWith('unknown files operation')) {
+    r = await sendFilesOp(call, { ...payload, op: earlier });
+  }
+  return withCurrentErrorCode(r);
+}
+
 export function createNativeBridgeFs(call: BridgeCall = requiredCall()): ProjectFolderFs {
   return {
     async read(path) {
-      const r = await filesOp(call, { op: 'readWorkspaceFile', path: normalizeFsPath(path) });
+      const r = await filesOp(call, { op: 'readProjectFolderFile', path: normalizeFsPath(path) });
       return (
         r.ok
           ? {
@@ -65,7 +87,7 @@ export function createNativeBridgeFs(call: BridgeCall = requiredCall()): Project
 
     async write(path, payload) {
       const entry: WriteEntry = typeof payload === 'string' ? { path, content: payload } : { ...payload, path };
-      const body: Record<string, unknown> = { op: 'writeWorkspaceFile', path: normalizeFsPath(entry.path) };
+      const body: Record<string, unknown> = { op: 'writeProjectFolderFile', path: normalizeFsPath(entry.path) };
       if (entry.contentBase64 !== undefined) body.contentBase64 = entry.contentBase64;
       else body.content = entry.content ?? '';
       const r = await filesOp(call, body);
@@ -74,7 +96,7 @@ export function createNativeBridgeFs(call: BridgeCall = requiredCall()): Project
 
     async list(path = '', maxDepth = 3) {
       const r = await filesOp(call, {
-        op: 'listWorkspace',
+        op: 'listProjectFolder',
         path: normalizeFsPath(path),
         maxDepth,
       });

@@ -48,11 +48,11 @@ describe('reconcileTabProjectFolder', () => {
     tab.persist.mockReset();
     tab.path = '';
     changed.mockReset();
-    window.addEventListener('sprout:workspace-changed', changed);
+    window.addEventListener('sprout:project-folder-changed', changed);
   });
 
   afterEach(() => {
-    window.removeEventListener('sprout:workspace-changed', changed);
+    window.removeEventListener('sprout:project-folder-changed', changed);
     __resetProjectFolderStoreForTests();
   });
 

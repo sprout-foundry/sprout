@@ -6,41 +6,43 @@ function shellEscape(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
-function normalizeWorkspaceEntry(entry) {
+function normalizeProjectFolderEntry(entry) {
   if (!entry) {
     return null;
   }
 
   if (typeof entry === 'string') {
     return {
-      workspacePath: entry,
+      projectFolderPath: entry,
       backendMode: 'native',
       wslDistro: null,
     };
   }
 
-  if (typeof entry.workspacePath !== 'string' || !entry.workspacePath.trim()) {
+  // Entries saved before the rename carry the path as workspacePath.
+  const projectFolderPath = entry.projectFolderPath ?? entry.workspacePath;
+  if (typeof projectFolderPath !== 'string' || !projectFolderPath.trim()) {
     return null;
   }
 
   return {
-    workspacePath: entry.workspacePath,
+    projectFolderPath,
     backendMode: entry.backendMode === 'wsl' ? 'wsl' : 'native',
     wslDistro: typeof entry.wslDistro === 'string' && entry.wslDistro.trim() ? entry.wslDistro.trim() : null,
   };
 }
 
-function getWorkspaceKey(entry) {
-  const normalized = normalizeWorkspaceEntry(entry);
+function getProjectFolderKey(entry) {
+  const normalized = normalizeProjectFolderEntry(entry);
   if (!normalized) {
     return '';
   }
 
   return JSON.stringify({
-    workspacePath: normalized.workspacePath,
+    projectFolderPath: normalized.projectFolderPath,
     backendMode: normalized.backendMode,
     wslDistro: normalized.wslDistro || '',
   });
 }
 
-module.exports = { shellEscape, normalizeWorkspaceEntry, getWorkspaceKey };
+module.exports = { shellEscape, normalizeProjectFolderEntry, getProjectFolderKey };

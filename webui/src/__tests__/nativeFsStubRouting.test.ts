@@ -23,6 +23,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { EARLIER_PROJECT_FOLDER_ERRORS } from '../services/nativeFs';
 
 // ── Shared helpers ──────────────────────────────────────────────────────────
 
@@ -260,9 +261,11 @@ describe('error-code → Response status mapping (read + write)', () => {
   const codes: Array<[string, number]> = [
     ['notFound', 404],
     ['invalidParams', 400],
+    ['notInProjectFolder', 400],
     ['notInWorkspace', 400],
     ['isDirectory', 400],
     ['userCancelled', 409],
+    ['projectFolderNotSet', 503],
     ['workspaceNotSet', 503],
     ['ioFailed', 500],
   ];
@@ -279,7 +282,7 @@ describe('error-code → Response status mapping (read + write)', () => {
       const res = await readFileWithConsent('a.txt');
       expect(res.status).toBe(status);
       expect(res.ok).toBe(status < 300);
-      expect(await res.json()).toEqual({ ok: false, error: code });
+      expect(await res.json()).toEqual({ ok: false, error: EARLIER_PROJECT_FOLDER_ERRORS[code] ?? code });
     });
   }
 
@@ -295,7 +298,7 @@ describe('error-code → Response status mapping (read + write)', () => {
       const res = await writeFileWithConsent('a.txt', 'x');
       expect(res.status).toBe(status);
       expect(res.ok).toBe(status < 300);
-      expect(await res.json()).toEqual({ ok: false, error: code });
+      expect(await res.json()).toEqual({ ok: false, error: EARLIER_PROJECT_FOLDER_ERRORS[code] ?? code });
     });
   }
 });

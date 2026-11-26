@@ -421,7 +421,7 @@ func TestOpenAPISpecCoversAllRegisteredRoutes(t *testing.T) {
 func TestOpenAPIContractTagsMirrorInventoryFamilies(t *testing.T) {
 	want := []string{
 		"conversation/query", "files", "git", "settings", "terminal",
-		"workspace/instances", "sync/txn", "sessions", "search",
+		"project-folder/instances", "sync/txn", "sessions", "search",
 		"diagnostics", "design", "starters", "misc/static",
 	}
 	root := repoRootFromWorkingDir(t)

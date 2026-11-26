@@ -181,7 +181,7 @@ Notes:
 | GET | `/api/terminal/shells` | terminalShells | daemon, in-browser WASM agent |
 | any | `/terminal` | handleTerminalWebSocket | daemon |
 
-## workspace/instances
+## project-folder/instances
 
 | Method | Path | Handler | Served by |
 |---|---|---|---|

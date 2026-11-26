@@ -4,7 +4,7 @@
 # the runner publishes that port on the host's loopback only.
 #
 # Two kinds of workspace:
-#   - WORKSPACE_DIR set: /workspace is the user's own directory, bind-mounted
+#   - DEV_SPACE_DIR (or WORKSPACE_DIR) set: /workspace is the user's own directory, bind-mounted
 #     by the runner. It is served in place; nothing is cloned into it or
 #     removed from it.
 #   - otherwise /workspace is a runner-managed volume. When it holds no
@@ -118,7 +118,7 @@ clone_repo() {
 
 prepare_workspace() {
     [ -d "$root" ] || fatal "$root does not exist; the workspace must be mounted there"
-    if [ -n "${WORKSPACE_DIR:-}" ]; then
+    if [ -n "${DEV_SPACE_DIR:-${WORKSPACE_DIR:-}}" ]; then
         log "serving the local directory in place"
         return 0
     fi

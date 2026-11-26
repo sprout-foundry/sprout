@@ -16,16 +16,18 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
-// platformProjectFolder is the platform project folder this process runs in, read from
-// the environment the platform sets (WORKSPACE_ID, WORKSPACE_TOKEN,
-// PLATFORM_API_URL). ok is false outside a platform project folder.
-func platformProjectFolder() (apiURL, projectFolderID, token string, ok bool) {
+// platformDevSpace is the platform dev space this process runs in, read from
+// the environment the platform sets (DEV_SPACE_ID, DEV_SPACE_TOKEN,
+// PLATFORM_API_URL). ok is false outside a platform dev space.
+func platformDevSpace() (apiURL, devSpaceID, token string, ok bool) {
 	apiURL = strings.TrimRight(os.Getenv("PLATFORM_API_URL"), "/")
-	projectFolderID = os.Getenv("WORKSPACE_ID")
-	token = os.Getenv("WORKSPACE_TOKEN")
-	return apiURL, projectFolderID, token, apiURL != "" && projectFolderID != "" && token != ""
+	devSpaceID = envutil.DevSpaceID()
+	token = envutil.DevSpaceToken()
+	return apiURL, devSpaceID, token, apiURL != "" && devSpaceID != "" && token != ""
 }
 
 type platformPullRequest struct {
@@ -48,20 +50,20 @@ type platformPullResponse struct {
 }
 
 // createPRViaPlatform asks the platform to open the change request
-// (POST {PLATFORM_API_URL}/internal/workspace/{id}/pulls). The head branch
+// (POST {PLATFORM_API_URL}/internal/dev-space/{id}/pulls). The head branch
 // must already be pushed.
-func createPRViaPlatform(ctx context.Context, apiURL, projectFolderID, token, head, base, title, body string, draft bool) (*PullRequestResult, error) {
+func createPRViaPlatform(ctx context.Context, apiURL, devSpaceID, token, head, base, title, body string, draft bool) (*PullRequestResult, error) {
 	payload, err := json.Marshal(platformPullRequest{Title: title, Body: body, HeadBranch: head, BaseBranch: base, Draft: draft})
 	if err != nil {
 		return nil, fmt.Errorf("marshal pull request: %w", err)
 	}
-	endpoint := apiURL + "/internal/workspace/" + projectFolderID + "/pulls"
+	endpoint := apiURL + "/internal/dev-space/" + devSpaceID + "/pulls"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Workspace-Token", token)
+	req.Header.Set("X-Dev-Space-Token", token)
 	resp, err := prHTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("reach the platform: %w", err)

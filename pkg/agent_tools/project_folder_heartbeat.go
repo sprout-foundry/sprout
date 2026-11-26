@@ -15,7 +15,7 @@ import (
 
 // eventProjectFolderHeartbeatLost mirrors events.EventTypeProjectFolderHeartbeatLost.
 // Defined locally to avoid an import-cycle dependency.
-const eventProjectFolderHeartbeatLost = "workspace.heartbeat_lost"
+const eventProjectFolderHeartbeatLost = "project_folder.heartbeat_lost"
 
 // SessionHeartbeat tracks the heartbeat state for a single session.
 type SessionHeartbeat struct {

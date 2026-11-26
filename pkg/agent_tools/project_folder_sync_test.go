@@ -346,14 +346,14 @@ func TestProjectFolder_NewHeartbeatEnvelope(t *testing.T) {
 }
 
 func TestProjectFolder_EnvelopeTypeConstants(t *testing.T) {
-	if EnvelopeTypePatchIn != "workspace.patch_in" {
-		t.Errorf("EnvelopeTypePatchIn = %q; want %q", EnvelopeTypePatchIn, "workspace.patch_in")
+	if EnvelopeTypePatchIn != "project_folder.patch_in" {
+		t.Errorf("EnvelopeTypePatchIn = %q; want %q", EnvelopeTypePatchIn, "project_folder.patch_in")
 	}
-	if EnvelopeTypePatchOut != "workspace.patch_out" {
-		t.Errorf("EnvelopeTypePatchOut = %q; want %q", EnvelopeTypePatchOut, "workspace.patch_out")
+	if EnvelopeTypePatchOut != "project_folder.patch_out" {
+		t.Errorf("EnvelopeTypePatchOut = %q; want %q", EnvelopeTypePatchOut, "project_folder.patch_out")
 	}
-	if EnvelopeTypeHeartbeat != "workspace.heartbeat" {
-		t.Errorf("EnvelopeTypeHeartbeat = %q; want %q", EnvelopeTypeHeartbeat, "workspace.heartbeat")
+	if EnvelopeTypeHeartbeat != "project_folder.heartbeat" {
+		t.Errorf("EnvelopeTypeHeartbeat = %q; want %q", EnvelopeTypeHeartbeat, "project_folder.heartbeat")
 	}
 }
 
@@ -676,8 +676,8 @@ func TestProjectFolder_HandleContainerPatchWithConflictDetection_EventEmission(t
 
 	// Read the event from the channel.
 	ev := <-sub
-	if ev.Type != "workspace.conflict_detected" {
-		t.Errorf("event type = %q; want %q", ev.Type, "workspace.conflict_detected")
+	if ev.Type != "project_folder.conflict_detected" {
+		t.Errorf("event type = %q; want %q", ev.Type, "project_folder.conflict_detected")
 	}
 	data, ok := ev.Data.(map[string]interface{})
 	if !ok {

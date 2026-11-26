@@ -28,10 +28,10 @@ func (a *Agent) ownsWorkspaceContext() bool {
 	return true
 }
 
-// withWorkspaceContext prefixes the conversation's first user message with the workspace block:
+// withProjectFolderContext prefixes the conversation's first user message with the project folder block:
 // the project context file, the working directory and the memory block. The system prompt and
 // the tools stay byte-identical across sessions whatever the memory store holds.
-func (a *Agent) withWorkspaceContext(query string) string {
+func (a *Agent) withProjectFolderContext(query string) string {
 	if !a.ownsWorkspaceContext() || strings.TrimSpace(query) == "" ||
 		hasUserMessage(a.GetMessages()) {
 		return query
@@ -82,27 +82,35 @@ func workspaceContextBlock(workspaceRoot, memories string) string {
 	if body == "" {
 		return ""
 	}
-	return workspaceContextOpenTag + "\n" + body + "\n" + workspaceContextCloseTag
+	return projectFolderContextOpenTag + "\n" + body + "\n" + projectFolderContextCloseTag
 }
 
 const (
-	workspaceContextOpenTag  = "<workspace-context>"
-	workspaceContextCloseTag = "</workspace-context>"
+	projectFolderContextOpenTag  = "<project-folder-context>"
+	projectFolderContextCloseTag = "</project-folder-context>"
+	// Conversations saved before the rename carry the block under these tags.
+	earlierContextOpenTag  = "<workspace-context>"
+	earlierContextCloseTag = "</workspace-context>"
 )
 
 // StripUserMessageEnvelope is the text the user wrote: the message without its turn timestamp and
-// without the workspace block the conversation's first message carries. Persisted state keeps
+// without the project folder block the conversation's first message carries. Persisted state keeps
 // the block (StripUserMessageTimestamp alone), since the system prompt does not repeat it.
 func StripUserMessageEnvelope(userMessage string) string {
 	body := StripUserMessageTimestamp(userMessage)
-	if !strings.HasPrefix(body, workspaceContextOpenTag) {
+	closeTag := projectFolderContextCloseTag
+	switch {
+	case strings.HasPrefix(body, projectFolderContextOpenTag):
+	case strings.HasPrefix(body, earlierContextOpenTag):
+		closeTag = earlierContextCloseTag
+	default:
 		return body
 	}
-	end := strings.Index(body, workspaceContextCloseTag)
+	end := strings.Index(body, closeTag)
 	if end < 0 {
 		return body
 	}
-	body = body[end+len(workspaceContextCloseTag):]
+	body = body[end+len(closeTag):]
 	body = strings.TrimPrefix(body, "\r\n\r\n")
 	return strings.TrimPrefix(body, "\n\n")
 }

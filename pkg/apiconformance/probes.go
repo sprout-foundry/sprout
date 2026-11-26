@@ -84,11 +84,11 @@ func DefaultProbes() []Probe {
 		// diagnostics
 		makeProbe("get-stats", "diagnostics", "/api/stats", nil),
 
-		// workspace/instances
-		makeProbe("projectFolderGet", "workspace/instances", "/api/project-folder", nil),
-		makeProbe("projectFolderProjects", "workspace/instances", "/api/project-folder/projects", nil),
-		makeProbe("projectFolderBrowse", "workspace/instances", "/api/project-folder/browse", nil),
-		makeProbe("instancesList", "workspace/instances", "/api/instances", nil),
+		// project-folder/instances
+		makeProbe("projectFolderGet", "project-folder/instances", "/api/project-folder", nil),
+		makeProbe("projectFolderProjects", "project-folder/instances", "/api/project-folder/projects", nil),
+		makeProbe("projectFolderBrowse", "project-folder/instances", "/api/project-folder/browse", nil),
+		makeProbe("instancesList", "project-folder/instances", "/api/instances", nil),
 
 		// files
 		makeProbe("filesList", "files", "/api/files", nil),

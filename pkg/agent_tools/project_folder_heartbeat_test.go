@@ -139,7 +139,7 @@ func TestHeartbeat_MissedHeartbeatTriggersTermination(t *testing.T) {
 
 	evts := publisher.getEvents()
 	if len(evts) == 0 {
-		t.Fatal("expected at least one workspace.heartbeat_lost event; got none")
+		t.Fatal("expected at least one project_folder.heartbeat_lost event; got none")
 	}
 
 	found := false
@@ -160,7 +160,7 @@ func TestHeartbeat_MissedHeartbeatTriggersTermination(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("expected workspace.heartbeat_lost event; got event types: %v", func() []string {
+		t.Errorf("expected project_folder.heartbeat_lost event; got event types: %v", func() []string {
 			var types []string
 			for _, e := range evts {
 				types = append(types, e.eventType)
@@ -237,6 +237,6 @@ func TestHeartbeat_TransientBlipTolerated(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("expected workspace.heartbeat_lost event after sustained gap; got %d events total", len(evts))
+		t.Errorf("expected project_folder.heartbeat_lost event after sustained gap; got %d events total", len(evts))
 	}
 }

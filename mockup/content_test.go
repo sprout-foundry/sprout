@@ -184,3 +184,21 @@ func TestKeyed_SavedTextStaysOnItsKindOfElement(t *testing.T) {
 		}
 	}
 }
+
+// A placeholder the drawing named is still a placeholder: its saved text does
+// not move onto a field label when a redraw shifts the keys.
+func TestKeyed_NamedPlaceholderStaysAPlaceholder(t *testing.T) {
+	form := `<section data-screen="book"><form>
+<div class="field"><label for="e">Email</label><input id="e" data-label="Your email" placeholder="you@example.com"></div>
+</form></section>`
+	_, first := Keyed(form, nil)
+	for i := range first.Fields {
+		first.Fields[i].Mine = true
+	}
+	_, c := Keyed(`<section data-screen="book"><p>Fill in your details.</p>`+form[len(`<section data-screen="book">`):], &first)
+	for _, f := range c.Fields {
+		if f.Kind == "Field label" && f.Text != "Email" {
+			t.Fatalf("the label reads %q: %+v", f.Text, c.Fields)
+		}
+	}
+}

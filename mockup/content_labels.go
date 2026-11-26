@@ -105,13 +105,16 @@ var elementLabels = map[string]bool{
 	"Text": true, "Placeholder": true,
 }
 
-// sameKind reports whether saved text labelled saved belongs on an element of
-// kind now. A key is a position on the page, so a redraw can put it on another
-// kind of element (a field's label where its placeholder was); a label that
-// names a kind of element must match. A label the drawing or the words gave
-// ("Party date", "Price") cannot be checked and keeps its text.
-func sameKind(saved, now string) bool {
-	return !elementLabels[saved] || saved == now
+// sameKind reports whether saved text belongs on an element of kind now. A
+// key is a position on the page, so a redraw can put it on another kind of
+// element (a field's label where its placeholder was). Text saved with its
+// kind goes back only onto that kind; text saved before kinds were kept is
+// checked by its label when the label names a kind, and otherwise kept.
+func sameKind(saved Field, now string) bool {
+	if saved.Kind != "" {
+		return saved.Kind == now
+	}
+	return !elementLabels[saved.Label] || saved.Label == now
 }
 
 func placeholderLabel(t nethtml.Token) string {

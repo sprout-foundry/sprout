@@ -23,6 +23,10 @@ type Field struct {
 	// Mine marks text the person set: a later draw keeps it while its key is
 	// on the page.
 	Mine bool `json:"mine,omitempty"`
+	// Kind is the kind of element the text is on (elementLabel's names, or
+	// Placeholder), whatever its label says: saved text goes back only onto
+	// the same kind.
+	Kind string `json:"kind,omitempty"`
 	// List, Item and Col place a field in a list of repeated items
 	// (lists.go): the list's id, the item and the column it is in.
 	List string `json:"list,omitempty"`
@@ -156,8 +160,9 @@ func Keyed(doc string, saved *Content) (string, Content) {
 	emit = func(f *frame) {
 		text := strings.Join(strings.Fields(f.full.String()), " ")
 		key := newKey(f.key)
+		kind := elementLabel(f.tag, attr(f.token, "class"))
 		m, keep := mine[key]
-		keep = keep && sameKind(m.Label, elementLabel(f.tag, attr(f.token, "class")))
+		keep = keep && sameKind(m, kind)
 		if keep {
 			text = m.Text
 			replaceText(pieces, f, html.EscapeString(text))
@@ -175,7 +180,7 @@ func Keyed(doc string, saved *Content) (string, Content) {
 		if f.tag == "h1" || f.tag == "h2" || f.tag == "h3" {
 			heading = text
 		}
-		fields = append(fields, Field{Key: key, Label: label, Section: section(), Text: text, Mine: keep, pos: f.tagPiece})
+		fields = append(fields, Field{Key: key, Label: label, Section: section(), Text: text, Mine: keep, Kind: kind, pos: f.tagPiece})
 	}
 
 	// closeFrame settles an element as it closes, while it is still on the
@@ -218,13 +223,13 @@ func Keyed(doc string, saved *Content) (string, Content) {
 					key := newKey(attr(tok, placeholderAttr))
 					text := attr(tok, "placeholder")
 					m, keep := mine[key]
-					keep = keep && sameKind(m.Label, "Placeholder")
+					keep = keep && sameKind(m, "Placeholder")
 					if keep {
 						text = m.Text
 					}
 					setAttr(&tok, "placeholder", text)
 					setAttr(&tok, placeholderAttr, key)
-					fields = append(fields, Field{Key: key, Label: placeholderLabel(tok), Section: section(), Text: text, Mine: keep, pos: len(pieces)})
+					fields = append(fields, Field{Key: key, Label: placeholderLabel(tok), Section: section(), Text: text, Mine: keep, Kind: "Placeholder", pos: len(pieces)})
 					pieces = append(pieces, renderTag(tok, tt == nethtml.SelfClosingTagToken))
 					continue
 				}

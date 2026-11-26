@@ -96,7 +96,7 @@ export interface TxnStatus {
   status: string;
   created_at?: string;
   expires_at?: string;
-  run_result?: TxnRunResult | null;
+  run_result?: (TxnRunResult & { state?: string; error?: string; http_status?: number }) | null;
 }
 
 export interface TxnFinishResult {
@@ -300,21 +300,75 @@ export async function createTxn(devSpaceId: string): Promise<{ txn_id: string; s
   return { txn_id: res.txn_id, status: res.status ?? 'push', expires_at: res.expires_at };
 }
 
-export function txnPush(devSpaceId: string, txnId: string, manifest: TxnManifest): Promise<TxnPushResult> {
-  return postJSON<TxnPushResult>(txnURL(devSpaceId, txnId, '/push'), 'Cloud txn push', manifest);
+/** How long a push keeps retrying a dev space whose daemon is still coming up. */
+const TXN_PUSH_RETRY_MS = 30_000;
+const TXN_PUSH_RETRY_EVERY_MS = 3_000;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Push the browser's deltas. A dev space that has just started may not
+ * answer for a few seconds (502/503); the push is repeated until it does
+ * (applying the same manifest twice writes the same files).
+ */
+export async function txnPush(devSpaceId: string, txnId: string, manifest: TxnManifest): Promise<TxnPushResult> {
+  const deadline = Date.now() + TXN_PUSH_RETRY_MS;
+  for (;;) {
+    try {
+      return await postJSON<TxnPushResult>(txnURL(devSpaceId, txnId, '/push'), 'Cloud txn push', manifest);
+    } catch (err) {
+      const booting = err instanceof CloudTxnError && (err.status === 502 || err.status === 503);
+      if (!booting || Date.now() + TXN_PUSH_RETRY_EVERY_MS > deadline) throw err;
+      await sleep(TXN_PUSH_RETRY_EVERY_MS);
+    }
+  }
 }
 
-export function txnRun(
+/** How often a background run is polled, and how long past its timeout it may take. */
+const TXN_RUN_POLL_MS = 1_500;
+const TXN_RUN_GRACE_MS = 120_000;
+
+/**
+ * Run the command. The run is started in the background ("async") and its
+ * result polled from the txn's status: a request held open for the whole
+ * command would be cut off by the platform's proxy after about 100 seconds.
+ * A platform that answers the run directly (200) is used as is.
+ */
+export async function txnRun(
   devSpaceId: string,
   txnId: string,
   command: string,
   timeoutSeconds = TXN_RUN_TIMEOUT_SECONDS,
 ): Promise<TxnRunResult> {
   if (typeof command !== 'string' || command.trim() === '') throw new TypeError('command is required');
-  return postJSON<TxnRunResult>(txnURL(devSpaceId, txnId, '/run'), 'Cloud txn run', {
-    command,
-    timeout_seconds: timeoutSeconds,
+  const res = await clientFetch(txnURL(devSpaceId, txnId, '/run'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ command, timeout_seconds: timeoutSeconds, async: true }),
   });
+  if (!res.ok) throw await toTxnError(res, 'Cloud txn run');
+  if (res.status !== 202) return (await res.json()) as TxnRunResult;
+
+  const deadline = Date.now() + timeoutSeconds * 1000 + TXN_RUN_GRACE_MS;
+  for (;;) {
+    await sleep(TXN_RUN_POLL_MS);
+    let status: TxnStatus;
+    try {
+      status = await txnStatus(devSpaceId, txnId);
+    } catch (err) {
+      // A missed poll (a network blip) is retried; a closed or unknown txn is not.
+      if (err instanceof CloudTxnError && (err.status === 404 || err.status === 410)) throw err;
+      if (Date.now() > deadline) throw err;
+      continue;
+    }
+    const run = status.run_result;
+    if (run?.state === 'failed') {
+      throw new CloudTxnError(run.error || 'Cloud txn run failed', run.http_status || 502);
+    }
+    if (run && run.state !== 'running') return run;
+    if (Date.now() > deadline) throw new Error(`no result after ${Math.round(timeoutSeconds / 60)} minutes`);
+  }
 }
 
 export async function txnPull(devSpaceId: string, txnId: string): Promise<TxnManifest> {

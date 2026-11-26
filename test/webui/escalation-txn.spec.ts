@@ -303,6 +303,7 @@ test.describe("Escalation — Run in cloud container (ETH-2)", () => {
     expect(run?.body).toEqual({
       command: "go build ./...",
       timeout_seconds: 600,
+      async: true,
     });
 
     // finish is the machine-stop guarantee — exactly once on the happy path.

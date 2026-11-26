@@ -13,7 +13,9 @@
 
 export const TXN_MAX_FILE_BYTES = 5 * 1024 * 1024;
 export const TXN_MAX_FILES = 2000;
-export const TXN_MAX_TOTAL_BYTES = 100 * 1024 * 1024;
+// Raw bytes; base64 adds a third, so the encoded push stays under the
+// 100 MB the platform (and the proxy in front of it) accepts.
+export const TXN_MAX_TOTAL_BYTES = 70 * 1024 * 1024;
 
 // ── Contract shapes ─────────────────────────────────────────────────────────
 

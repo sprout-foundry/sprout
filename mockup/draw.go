@@ -75,6 +75,9 @@ type Request struct {
 	// picks a different kit, composition and font unless the idea clearly
 	// calls for one of them.
 	Avoid []kit.Choice
+	// Locale is the people the page is for, as a language tag ("en-US"): their
+	// currency, date format, spelling and places. Empty leaves it to the plan.
+	Locale string
 	// Fresh redraws the current mockup in a different look on purpose (a
 	// different kit, palette, composition and font), keeping its text,
 	// screens and behaviour.
@@ -127,7 +130,7 @@ func Draw(ctx context.Context, stream StreamText, req Request, publish func(even
 	if stream == nil {
 		return Result{}, errors.New("no model is available to draw the mockup")
 	}
-	d := &draw{stream: stream, publish: publish}
+	d := &draw{stream: stream, publish: publish, locale: strings.TrimSpace(req.Locale)}
 	if req.Look != nil {
 		if l, ok := req.Look.Clean(); ok {
 			d.look, d.lookNotes = &l, strings.TrimSpace(req.LookNotes)
@@ -248,7 +251,8 @@ type draw struct {
 	// the current design is kept exactly).
 	shortlist []kit.Palette
 	// named is the colour families the person named in their words.
-	named []string
+	named  []string
+	locale string
 }
 
 func (d *draw) emit(event string, data map[string]any) {
@@ -266,7 +270,7 @@ func (d *draw) start(mode string) {
 // false when the change could not be made that way.
 func (d *draw) edit(ctx context.Context, current, note string) (string, bool) {
 	d.start("edit")
-	reply, err := d.stream(ctx, editCharter(), editRequest(current, note)+lookRequest(d.look, d.lookNotes, true, d.lookIsBrand), nil)
+	reply, err := d.stream(ctx, editCharter(), editRequest(current, note)+localeLine(d.locale)+lookRequest(d.look, d.lookNotes, true, d.lookIsBrand), nil)
 	if err != nil {
 		return "", false
 	}
@@ -283,7 +287,7 @@ func (d *draw) whole(ctx context.Context, plan []byte, current, note string, kee
 	d.start("whole")
 	var seq int
 	streamer := kit.Streamer{Look: d.look}
-	text, err := d.stream(ctx, charter(d.shortlist), wholeRequest(plan, current, note)+lookRequest(d.look, d.lookNotes, false, d.lookIsBrand)+d.steer, func(chunk string) {
+	text, err := d.stream(ctx, charter(d.shortlist), wholeRequest(plan, current, note)+localeLine(d.locale)+lookRequest(d.look, d.lookNotes, false, d.lookIsBrand)+d.steer, func(chunk string) {
 		seq++
 		d.emit(EventChunk, map[string]any{"seq": seq, "chunk": streamer.Feed(chunk)})
 	})

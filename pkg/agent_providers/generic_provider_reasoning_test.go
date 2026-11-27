@@ -160,6 +160,33 @@ func toString(v interface{}) string {
 	}
 }
 
+// A self-hosted endpoint serving Inkling 2 has no catalog entry: the family's
+// own knob still applies, at medium by default, and a level it accepts
+// passes through.
+func TestApplyReasoningEffortInkling2Family(t *testing.T) {
+	p, err := NewGenericProvider(&ProviderConfig{
+		Name:     "self-hosted",
+		Endpoint: "https://inference.example/v1/chat/completions",
+		Auth:     AuthConfig{Type: "bearer", EnvVar: "SELF_HOSTED_API_KEY"},
+		Models:   ModelConfig{DefaultContextLimit: 262144},
+	})
+	if err != nil {
+		t.Fatalf("provider: %v", err)
+	}
+	for _, c := range []struct{ configured, want string }{
+		{"", "medium"},
+		{"low", "low"},
+		{"high", "high"},
+		{"xhigh", "xhigh"},
+	} {
+		request := map[string]interface{}{}
+		p.applyReasoningEffort("inkling-2-mini", c.configured, request)
+		if got := request["reasoning_effort"]; got != c.want {
+			t.Errorf("configured %q: reasoning_effort = %v, want %q", c.configured, got, c.want)
+		}
+	}
+}
+
 // A self-hosted endpoint serving Qwen 3.8 has no catalog entry: the family's
 // own knob still applies, at medium unless a level it accepts is configured,
 // and a level it would refuse ("high") gets medium instead.

@@ -14,7 +14,6 @@
 import {
   test,
   expect,
-  chromium,
   type Browser,
   type Page,
 } from "@playwright/test";
@@ -25,6 +24,7 @@ import {
 } from "./fixtures/sprout";
 import { startViteDevServer, type ViteHandle } from "./fixtures/vite";
 import { newWebuiPage, type WebUIPageHandle } from "./fixtures/page";
+import { launchBrowser } from "./fixtures/browser";
 import TESTIDS from "./testids";
 import fs from "node:fs";
 import os from "node:os";
@@ -37,13 +37,7 @@ let handle: WebUIPageHandle;
 let page: Page;
 
 test.beforeAll(async () => {
-  // System Chrome fallback for dev machines without the Playwright download
-  // (AGENTS.md e2e convention).
-  try {
-    browser = await chromium.launch({ channel: "chrome" });
-  } catch {
-    browser = await chromium.launch();
-  }
+  browser = await launchBrowser();
   sprout = await startSprout();
   vite = await startViteDevServer({ sproutBackendUrl: sprout.baseUrl });
   handle = await newWebuiPage({ browser, url: vite.url });
@@ -152,13 +146,7 @@ test.describe("Preview pane with a fixture starter project (local dev server)", 
   }
 
   test.beforeAll(async () => {
-    // System Chrome fallback for dev machines without the Playwright download
-    // (AGENTS.md e2e convention).
-    try {
-      fixtureBrowser = await chromium.launch({ channel: "chrome" });
-    } catch {
-      fixtureBrowser = await chromium.launch();
-    }
+    fixtureBrowser = await launchBrowser();
 
     // The fixture starter project: a free dev port, a node dev server
     // serving a marker page, and a manifest naming that command + port.

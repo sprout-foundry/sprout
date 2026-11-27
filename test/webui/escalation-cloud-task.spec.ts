@@ -28,11 +28,11 @@
 //
 // Run: npx playwright test --project=webui test/webui/escalation-cloud-task.spec.ts
 
-import { test, expect, chromium, type Browser, type Page } from '@playwright/test';
-import { existsSync } from 'node:fs';
+import { test, expect, type Browser, type Page } from '@playwright/test';
 import { startSprout, type SproutHandle } from './fixtures/sprout';
 import { startViteDevServer, type ViteHandle } from './fixtures/vite';
 import { newWebuiPage, type WebUIPageHandle } from './fixtures/page';
+import { launchBrowser } from './fixtures/browser';
 import TESTIDS from './testids';
 
 let browser: Browser;
@@ -41,27 +41,8 @@ let vite: ViteHandle;
 let handle: WebUIPageHandle;
 let page: Page;
 
-// Where the machine has no Playwright browser download (the repo's dev
-// machines, and this sandbox, which ships only /usr/bin/chromium), the
-// two-step AGENTS.md chain has nothing left to fall back to. SPROUT_E2E_CHROMIUM
-// names that system browser; without it the chain stands as mandated.
-function systemChromiumPath(): string | undefined {
-  const fromEnv = process.env.SPROUT_E2E_CHROMIUM;
-  if (fromEnv) return fromEnv;
-  return existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined;
-}
-
 test.beforeAll(async () => {
-  const localChromium = systemChromiumPath();
-  browser = await chromium
-    .launch({ channel: 'chrome' })
-    .catch(() => chromium.launch())
-    .catch(() => {
-      if (!localChromium) {
-        throw new Error('no browser: no system Chrome, no Playwright download, and no SPROUT_E2E_CHROMIUM path');
-      }
-      return chromium.launch({ channel: 'chromium', executablePath: localChromium });
-    });
+  browser = await launchBrowser();
   sprout = await startSprout();
   vite = await startViteDevServer({ sproutBackendUrl: sprout.baseUrl });
   // Headless rAF throttling can freeze the toast's slide-in animation

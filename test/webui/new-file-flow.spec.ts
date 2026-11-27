@@ -20,13 +20,13 @@
 import {
   test,
   expect,
-  chromium,
   type Browser,
   type Page,
 } from "@playwright/test";
 import { startSprout, type SproutHandle } from "./fixtures/sprout";
 import { startViteDevServer, type ViteHandle } from "./fixtures/vite";
 import { newWebuiPage, type WebUIPageHandle } from "./fixtures/page";
+import { launchBrowser } from "./fixtures/browser";
 import TESTIDS from "./testids";
 
 let browser: Browser;
@@ -34,16 +34,6 @@ let sprout: SproutHandle;
 let vite: ViteHandle;
 let handle: WebUIPageHandle;
 let page: Page;
-
-// System Chrome is present on dev machines where the Playwright browser
-// download is absent; fall back to the bundled build when it is not.
-async function launchBrowser(): Promise<Browser> {
-  try {
-    return await chromium.launch({ channel: "chrome" });
-  } catch {
-    return await chromium.launch();
-  }
-}
 
 /** The modifier the hotkey resolver expects on this platform. */
 function mod(): "Meta" | "Control" {

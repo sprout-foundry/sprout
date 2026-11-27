@@ -71,12 +71,11 @@ It is added to your document for you, so do not copy any of it.
     `data-img` with a short key and a `data-label` saying what the photo
     should show, on a `media` panel whose icon stands in until a photo is
     in it:
-    `<div class="media media-wide" data-img="loaves" data-label="Photo of this week's loaves">`.
-    A slot is filled with a fitting photo or with the person's own, so a
-    page for something people choose partly by how it looks (food, animals,
-    places, rooms, things made or sold, events) has at least one photo slot,
-    most often in its first screen. Label a slot by what it shows ("A dog
-    on a lead in a park"), not by a name. The nav's `logo` is always the
+    `<div class="media media-wide" data-img="loaves" data-label="This week's loaves on the counter">`.
+    A slot is filled with a fitting photo or with the person's own. A page
+    for food, animals, places, rooms, things made or sold, or events has at
+    least one photo slot, in its first screen. Label a slot by what it shows
+    ("A dog on a lead in a park"), never by a person's or a place's name. The nav's `logo` is always the
     slot `logo`. At most six slots a page.
   - Imagery: beside its photos, the best picture is the business's
     own content laid out well (the timetable, the menu, the cakes and their

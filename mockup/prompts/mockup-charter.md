@@ -74,7 +74,8 @@ It is added to your document for you, so do not copy any of it.
     `<div class="media media-wide" data-img="loaves" data-label="Photo of this week's loaves">`.
     A slot is filled with a fitting photo or with the person's own. A page
     for food, animals, places, rooms, things made or sold, or events has at
-    least one photo slot, in its first screen. Label a slot as in the example,
+    least one photo slot: in its first screen, or, when the composition keeps
+    the first screen to type or content, in the section right after it. Label a slot as in the example,
     by its subject in plain words ("Photo of a dog on a lead"), never with a
     person's or a place's name. The nav's `logo` is always the
     slot `logo`. At most six slots a page.

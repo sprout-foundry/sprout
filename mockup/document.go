@@ -168,6 +168,17 @@ func todayLine(t time.Time) string {
 	return "Today is " + t.Format("Monday, 2 January 2006") + ". A date you make up is after today.\n\n"
 }
 
+// localeLine asks for the page in the locale's currency, date format,
+// spelling and places; empty for no locale.
+func localeLine(locale string) string {
+	if !localeRe.MatchString(locale) {
+		return ""
+	}
+	return "\n\nWrite for people in the " + locale + " locale: its currency, date and number formats, spelling, and places there, unless the plan says otherwise."
+}
+
+var localeRe = regexp.MustCompile(`^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$`)
+
 // wholeRequest is the request for a whole document: the plan (when
 // there is one) and, for a change, the current mockup and the change.
 func wholeRequest(planJSON []byte, current, note string) string {

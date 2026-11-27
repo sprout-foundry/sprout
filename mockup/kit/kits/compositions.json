@@ -1,7 +1,7 @@
 [
  {
   "id": "type",
-  "about": "Type-led, no picture: a left-aligned `display` headline of a few words spanning most of the width, a `lead`, the main action and one secondary; under it one row of three short real facts (`stat`s, or `chip`s for the offer)."
+  "about": "Type-led, no picture in the first screen: a left-aligned `display` headline of a few words spanning most of the width, a `lead`, the main action and one secondary; under it one row of three short real facts (`stat`s, or `chip`s for the offer)."
  },
  {
   "id": "content",

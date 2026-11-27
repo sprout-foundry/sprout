@@ -119,3 +119,11 @@ func TestWholeRequestSaysToday(t *testing.T) {
 		t.Fatalf("request does not start with today's date: %q", got)
 	}
 }
+
+func TestEditRequestSaysToday(t *testing.T) {
+	defer func(f func() time.Time) { now = f }(now)
+	now = func() time.Time { return time.Date(2026, 11, 27, 9, 0, 0, 0, time.UTC) }
+	if got := editRequest("<html></html>", "Move the date"); !strings.HasPrefix(got, "Today is Friday, 27 November 2026.") {
+		t.Fatalf("edit request does not start with today's date: %q", got)
+	}
+}

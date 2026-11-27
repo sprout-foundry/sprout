@@ -243,5 +243,5 @@ func brandLookRequest(notes string, editing bool) string {
 
 // editRequest is the request for edits to the current mockup.
 func editRequest(current, note string) string {
-	return "The current mockup:\n" + current + "\n\nThe change they asked for: " + note
+	return todayLine(now()) + "The current mockup:\n" + current + "\n\nThe change they asked for: " + note
 }

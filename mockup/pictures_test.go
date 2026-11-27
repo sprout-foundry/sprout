@@ -79,3 +79,31 @@ func TestPictures_RedrawKeepsRenamedSpots(t *testing.T) {
 		t.Errorf("a spot the redraw kept should leave the others be: %s", page)
 	}
 }
+
+// Sprout's picks are marked, kept through a redraw, and unmarked once the
+// person sets a picture.
+func TestApplyPicks(t *testing.T) {
+	page := `<section data-screen="home"><div data-img="hero" data-label="Hero photo"></div><div data-img="cakes" data-label="Cakes"></div></section>`
+	doc, c := Keyed(page, nil)
+	doc, c = ApplyPicks(doc, c, map[string]string{"hero": "stock:1", "cakes": "stock:2"})
+	for _, p := range c.Pictures {
+		if !p.Picked || p.Image == "" {
+			t.Fatalf("pick not marked: %+v", p)
+		}
+	}
+	_, again := Keyed(page, &c)
+	for _, p := range again.Pictures {
+		if !p.Picked {
+			t.Fatalf("a redraw dropped the mark: %+v", p)
+		}
+	}
+	_, mine := ApplyPictures(doc, c, map[string]string{"hero": "pic-9"})
+	for _, p := range mine.Pictures {
+		if p.Key == "hero" && (p.Picked || p.Image != "pic-9") {
+			t.Fatalf("the person's picture is marked as a pick: %+v", p)
+		}
+		if p.Key == "cakes" && !p.Picked {
+			t.Fatalf("another slot lost its mark: %+v", p)
+		}
+	}
+}

@@ -128,7 +128,7 @@ function writeSyncedCommit(devSpaceId: string, oid: string): void {
 
 /**
  * Enumerate what the push phase should carry: the browser's uncommitted
- * changes, plus every file its commits changed since the dev space last
+ * changes and new files, plus every file its commits changed since the dev space last
  * received them. That base is the commit this browser last pushed to the
  * dev space, else the branch's origin copy (what a fresh dev space clones).
  * With no base at all (never pushed, no origin copy) everything is sent, and
@@ -160,7 +160,7 @@ export async function collectTxnPushFiles(
       return { inputs: all, deletes: [], headOid };
     }
     const status = await gitStatus();
-    for (const file of [...status.staged, ...status.unstaged]) {
+    for (const file of [...status.staged, ...status.unstaged, ...status.untracked]) {
       if (file.status === 'deleted') removed.add(file.path);
       else send.add(file.path);
     }

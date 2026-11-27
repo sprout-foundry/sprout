@@ -17,9 +17,11 @@ type Picture struct {
 	Key     string `json:"key"`
 	Label   string `json:"label"`
 	Section string `json:"section,omitempty"`
-	// Image is the id of the person's picture in the slot; "" while the
-	// stand-in shows.
+	// Image is the id of the picture in the slot; "" while the stand-in
+	// shows.
 	Image string `json:"image,omitempty"`
+	// Picked says Sprout chose Image, until the person sets their own.
+	Picked bool `json:"picked,omitempty"`
 }
 
 const (
@@ -54,7 +56,7 @@ func pictureSlot(tok *nethtml.Token, section string, saved *Content) (Picture, b
 	if saved != nil {
 		for _, p := range saved.Pictures {
 			if p.Key == key {
-				pic.Image = p.Image
+				pic.Image, pic.Picked = p.Image, p.Picked && p.Image != ""
 			}
 		}
 	}
@@ -79,11 +81,21 @@ func removeAttr(t *nethtml.Token, name string) {
 // ApplyPictures puts the person's pictures in slots (slot key to picture
 // id; "" clears a slot) and returns the page and its content.
 func ApplyPictures(doc string, current Content, set map[string]string) (string, Content) {
+	return applyPictures(doc, current, set, false)
+}
+
+// ApplyPicks puts pictures Sprout chose in slots, marked as its picks until
+// the person sets their own.
+func ApplyPicks(doc string, current Content, set map[string]string) (string, Content) {
+	return applyPictures(doc, current, set, true)
+}
+
+func applyPictures(doc string, current Content, set map[string]string, picked bool) (string, Content) {
 	saved := current
 	saved.Pictures = append([]Picture(nil), current.Pictures...)
 	for i, p := range saved.Pictures {
 		if id, ok := set[p.Key]; ok {
-			saved.Pictures[i].Image = id
+			saved.Pictures[i].Image, saved.Pictures[i].Picked = id, picked && id != ""
 		}
 	}
 	return Keyed(doc, &saved)

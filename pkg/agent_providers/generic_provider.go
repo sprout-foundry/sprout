@@ -70,6 +70,13 @@ type GenericProvider struct {
 	// usageEstimateWarned reports estimated token counts once per provider
 	// instance (session), not on every response.
 	usageEstimateWarned atomic.Bool
+
+	// connectionCheckMu guards the two fields below. Only successes are
+	// cached — a failed check re-probes on every call, so the retry loop
+	// stays meaningful.
+	connectionCheckMu        sync.Mutex
+	connectionCheckedAt      time.Time
+	connectionCheckSucceeded bool
 }
 
 // HTTP error formatting helpers are in generic_provider_http_errors.go.
@@ -436,21 +443,74 @@ func (p *GenericProvider) executeChatRequest(client *http.Client, req *http.Requ
 	return nil, d, err
 }
 
-// CheckConnection tests provider connection with current model
+// connectionCheckTTL bounds how long a successful connection check is
+// reused within a process, so repeated agent/subagent creation does not
+// repeat the probe. Failures are never cached — the retry loop must keep
+// re-probing a transient blip.
+const connectionCheckTTL = 30 * time.Second
+
+// CheckConnection tests provider connection with current model.
+//
+// Prefer a non-generating check: when the provider's own /models endpoint
+// answers with a usable model list, that proves reachability without
+// spending a generation. Only when the endpoint has no model list falls
+// back to a chat probe — and that probe is bounded to max_tokens 1 with
+// thinking off, never an open-ended generation. The 30 s TTL reuses a
+// successful check across repeated creation while leaving retries free to
+// re-probe a failed one.
 func (p *GenericProvider) CheckConnection() error {
 	if err := p.ensureModel(); err != nil {
 		return agenterrors.NewNetwork("check connection: failed to ensure model", err)
 	}
 
-	// Send a minimal test request to verify the model works
+	p.connectionCheckMu.Lock()
+	if p.connectionCheckSucceeded && time.Since(p.connectionCheckedAt) < connectionCheckTTL {
+		p.connectionCheckMu.Unlock()
+		return nil
+	}
+	p.connectionCheckMu.Unlock()
+
+	err := p.checkConnectionFresh()
+	p.connectionCheckMu.Lock()
+	p.connectionCheckSucceeded = err == nil
+	if err == nil {
+		p.connectionCheckedAt = time.Now()
+	}
+	p.connectionCheckMu.Unlock()
+	return err
+}
+
+// checkConnectionFresh runs the actual probe: /models first, a bounded
+// chat request only when the endpoint yields no model list.
+func (p *GenericProvider) checkConnectionFresh() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	models, err := p.ListModels(ctx)
+	if err == nil && len(models) > 0 && p.ModelsFromEndpoint() {
+		return nil
+	}
+
+	// The endpoint has no model list (or none is cached): fall back to a
+	// bounded chat probe. The hint is restored on exit so a later
+	// max-token budget is unaffected.
+	p.maxTokensHintMu.Lock()
+	prevHint := p.maxTokensHint
+	p.maxTokensHint = 1
+	p.maxTokensHintMu.Unlock()
+	defer func() {
+		p.maxTokensHintMu.Lock()
+		p.maxTokensHint = prevHint
+		p.maxTokensHintMu.Unlock()
+	}()
+
 	testMessages := []api.Message{
 		{
 			Role:    "user",
 			Content: "Hi",
 		},
 	}
-
-	_, err := p.SendChatRequest(context.Background(), testMessages, nil, "", false)
+	_, err = p.SendChatRequest(ctx, testMessages, nil, "", true)
 	if err != nil {
 		return agenterrors.NewNetwork("check connection: test request failed", err)
 	}

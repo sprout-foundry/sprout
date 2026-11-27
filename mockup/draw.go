@@ -312,6 +312,7 @@ func (d *draw) finish(source, mode string) Result {
 	if d.look != nil {
 		source = kit.WithLook(source, *d.look)
 	}
+	source = fixWeekdays(source, now())
 	source, content := Keyed(source, d.saved)
 	html := WithContent(kit.Assemble(source), content)
 	screens := ScreenIDs(html)

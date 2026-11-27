@@ -58,9 +58,7 @@ test.beforeAll(async () => {
     .catch(() => chromium.launch())
     .catch(() => {
       if (!localChromium) {
-        throw new Error(
-          'no browser: no system Chrome, no Playwright download, and no SPROUT_E2E_CHROMIUM path',
-        );
+        throw new Error('no browser: no system Chrome, no Playwright download, and no SPROUT_E2E_CHROMIUM path');
       }
       return chromium.launch({ channel: 'chromium', executablePath: localChromium });
     });

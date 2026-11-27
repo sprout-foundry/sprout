@@ -233,9 +233,26 @@ test-coverage: prepare-grammars
 			tail -n 100 /tmp/sprout-test-coverage.log || true; \
 			exit $$status; \
 		fi; \
+		if grep -qaE "requires cgo|no such tool covdata|STATUS_DLL_INIT_FAILED" /tmp/sprout-test-coverage.log; then \
+			echo "ERROR: the Go toolchain cannot run this coverage run (see log)."; \
+			grep -aE "requires cgo|no such tool covdata|STATUS_DLL_INIT_FAILED" /tmp/sprout-test-coverage.log | head -10 || true; \
+			echo ""; \
+			echo "Last 100 lines of test log:"; \
+			tail -n 100 /tmp/sprout-test-coverage.log || true; \
+			exit $$status; \
+		fi; \
+		if grep -qaE "\[build failed\]|cannot find package" /tmp/sprout-test-coverage.log; then \
+			echo "ERROR: a package failed to build (build failure, not a coverage-tooling crash)."; \
+			echo "Failing packages and build errors:"; \
+			grep -aE "\[build failed\]|cannot find package" /tmp/sprout-test-coverage.log | head -40 || true; \
+			echo ""; \
+			echo "Last 100 lines of test log:"; \
+			tail -n 100 /tmp/sprout-test-coverage.log || true; \
+			exit $$status; \
+		fi; \
 		echo "ERROR: go test exited with status $$status, but no --- FAIL lines were found in the log."; \
-		echo "That means the run crashed outside a test (e.g. the coverage tooling: STATUS_DLL_INIT_FAILED"; \
-		echo "on Windows, or \"no such tool covdata\" on some Linux toolchains). A crashed run collects no"; \
+		echo "That means the run crashed outside a test (an unknown tooling or build issue — not a"; \
+		echo "go test test-failure, which would be reported above). A crashed run collects no"; \
 		echo "coverage data, so it cannot prove the coverage threshold — failing instead of passing."; \
 		echo "On Windows, use TEST_COVER=no (that skips coverage and still requires tests to pass)."; \
 		echo ""; \

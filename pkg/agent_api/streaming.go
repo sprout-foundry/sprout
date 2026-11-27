@@ -308,15 +308,14 @@ func (b *StreamingResponseBuilder) GetResponse() *ChatResponse {
 			}
 		}
 
-		// Handle case where reasoning models only provide reasoning_content
-		// Move reasoning_content to content field to avoid empty content (causes 502 errors)
-		if content == "" && reasoningContent != "" {
-			choice.Message.Content = reasoningContent
-			choice.Message.ReasoningContent = reasoningContent
-		} else {
-			choice.Message.Content = content
-			choice.Message.ReasoningContent = reasoningContent
-		}
+		// Content stays exactly what the model emitted. Reasoning-only turns
+		// (no content, no tool calls) have an empty Content: promoting the
+		// thinking trace into it would surface thinking as the answer, replay
+		// it as content on later requests, and pad context. Providers that
+		// reject empty content handle that at request-serialisation time
+		// (assistant + tool_calls -> null content, empty assistants dropped).
+		choice.Message.Content = content
+		choice.Message.ReasoningContent = reasoningContent
 		choice.FinishReason = b.finishReason
 
 		// Convert tool calls map to slice

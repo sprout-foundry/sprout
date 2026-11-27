@@ -282,6 +282,11 @@ func (ws *ReactWebServer) handleAPICommandExecute(w http.ResponseWriter, r *http
 					slog.Any("err", syncErr),
 				)
 			}
+			// Drop the cleared session's reattach replay buffer before
+			// publishing session_changed("clear"): a client reconnecting
+			// with ?reattach=<chat>&after_seq=<n> must not splice the old
+			// session's buffered chunks onto its fresh transcript.
+			ws.resetChatRunBuffer(clientID, chatID)
 			ws.mutex.RLock()
 			var summary map[string]interface{}
 			if ctx := ws.clientContexts[clientID]; ctx != nil {

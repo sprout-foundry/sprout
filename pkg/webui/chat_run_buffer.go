@@ -211,6 +211,35 @@ func (b *chatRunRingBuffer) Reset() {
 	b.curBytes = 0
 }
 
+// resetChatRunBuffer drops a chat's reattach run buffer and cancels any
+// pending TTL-reset timer so the timer cannot fire against the emptied
+// buffer. Used when a chat is cleared (/clear or the history clear path).
+// The buffer itself is reused (Reset) rather than replaced, so seq
+// numbering keeps increasing and a client deduplicating by seq never
+// mistakes a new run's events for the cleared session's. Returns nothing;
+// a missing chat is a no-op.
+func (ws *ReactWebServer) resetChatRunBuffer(clientID, chatID string) {
+	ws.mutex.RLock()
+	ctx := ws.clientContexts[clientID]
+	ws.mutex.RUnlock()
+	if ctx == nil {
+		return
+	}
+	cs := ctx.getChatSession(chatID)
+	if cs == nil {
+		return
+	}
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	if cs.runBufferResetTimer != nil {
+		cs.runBufferResetTimer.Stop()
+		cs.runBufferResetTimer = nil
+	}
+	if cs.runBuffer != nil {
+		cs.runBuffer.Reset()
+	}
+}
+
 // estimateEventCost approximates the byte size of a UIEvent for the
 // maxBytes cap. Doing the full JSON encode would double-cost CPU on
 // every publish, so we estimate based on the data payload's likely

@@ -3,6 +3,7 @@ package mockup
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestApplyEdits(t *testing.T) {
@@ -107,5 +108,14 @@ func TestMockupChartersAreEmbedded(t *testing.T) {
 	}
 	if c := editCharter(); !strings.Contains(c, "<<<FIND") || strings.HasPrefix(c, "charter-version:") {
 		t.Errorf("edit charter = %.80q", c)
+	}
+}
+
+func TestWholeRequestSaysToday(t *testing.T) {
+	defer func(f func() time.Time) { now = f }(now)
+	now = func() time.Time { return time.Date(2026, 11, 27, 9, 0, 0, 0, time.UTC) }
+	got := wholeRequest([]byte(`{"name":"Book club"}`), "", "")
+	if !strings.HasPrefix(got, "Today is Friday, 27 November 2026.") {
+		t.Fatalf("request does not start with today's date: %q", got)
 	}
 }

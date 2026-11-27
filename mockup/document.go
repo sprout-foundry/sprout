@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/mockup/kit"
 )
@@ -42,7 +43,7 @@ var (
 // is listed instead of the full catalogue, so the model names a palette
 // from it.
 func charter(shortlist []kit.Palette) string { return withKitCatalog(charterFile, shortlist) }
-func editCharter() string                   { return withKitCatalog(editFile, nil) }
+func editCharter() string                    { return withKitCatalog(editFile, nil) }
 
 // withKitCatalog returns the prompt with the kit's catalogue appended; when
 // a shortlist is given, the palette section lists only those palettes, so
@@ -158,10 +159,20 @@ func ChangeNote(change, part string) string {
 	return "On " + part + ": " + change
 }
 
+// now is the clock the requests read today's date from.
+var now = time.Now
+
+// todayLine tells the model the date, so a date it makes up for an event or
+// an opening is not already past.
+func todayLine(t time.Time) string {
+	return "Today is " + t.Format("Monday, 2 January 2006") + ". A date you make up is after today.\n\n"
+}
+
 // wholeRequest is the request for a whole document: the plan (when
 // there is one) and, for a change, the current mockup and the change.
 func wholeRequest(planJSON []byte, current, note string) string {
 	var b strings.Builder
+	b.WriteString(todayLine(now()))
 	if len(planJSON) > 0 {
 		b.WriteString("The agreed plan:\n")
 		b.Write(planJSON)

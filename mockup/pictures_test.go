@@ -107,3 +107,21 @@ func TestApplyPicks(t *testing.T) {
 		}
 	}
 }
+
+// A redraw that relabels a spot in other words still finds it by the key.
+func TestPictures_RedrawMatchesASpotByItsKey(t *testing.T) {
+	saved := Content{Pictures: []Picture{
+		{Key: "dog-walk", Label: "Photo of a happy client", Image: "img-2"},
+	}}
+	redraw := `<section data-screen="home">
+<div class="media" data-img="hero" data-label="Photo of a dog walk in the park"></div>
+<div class="media" data-img="van" data-label="Photo of the van"></div>
+</section>`
+	page, _ := Keyed(redraw, &saved)
+	if !strings.Contains(page, `data-img="dog-walk"`) || !strings.Contains(page, `data-img-id="img-2"`) {
+		t.Fatalf("the spot was not found by its key: %s", page)
+	}
+	if !strings.Contains(page, `data-img="van"`) {
+		t.Error("an unrelated new spot was renamed")
+	}
+}

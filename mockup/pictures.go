@@ -121,7 +121,8 @@ func pictureWords(label string) map[string]bool {
 
 // keepPictureKeys gives a picture spot a redraw renamed its old key back:
 // each saved spot holding the person's picture whose key the page no longer
-// has takes the new spot whose label shares the most words with its own, or
+// has takes the new spot whose label and key share the most words with its
+// own, or
 // the only new spot when there is just one. Spots the page kept are left be.
 func keepPictureKeys(doc string, saved *Content) string {
 	if saved == nil {
@@ -154,14 +155,14 @@ func keepPictureKeys(doc string, saved *Content) string {
 		if p.Image == "" || onPage[p.Key] || p.Key == LogoSlot {
 			continue
 		}
-		want := pictureWords(p.Label)
+		want := pictureWords(p.Label + " " + p.Key)
 		best, bestScore := "", 0
 		for _, c := range candidates {
 			if taken[c.key] {
 				continue
 			}
 			score := 0
-			for w := range pictureWords(c.label) {
+			for w := range pictureWords(c.label + " " + c.key) {
 				if want[w] {
 					score++
 				}

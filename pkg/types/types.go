@@ -31,11 +31,30 @@ type Choice struct {
 	Message struct {
 		Role             string         `json:"role"`
 		Content          string         `json:"content"`
+		Reasoning        string         `json:"reasoning,omitempty"`
 		ReasoningContent string         `json:"reasoning_content,omitempty"`
 		Images           []ImageData    `json:"images,omitempty"`
 		ToolCalls        []api.ToolCall `json:"tool_calls,omitempty"`
 	} `json:"message"`
 	FinishReason string `json:"finish_reason"`
+}
+
+// UnmarshalJSON decodes a Choice, then folds the `reasoning` field into
+// ReasoningContent when reasoning_content is absent — the same priority the
+// streaming builder uses (reasoning_content wins). vLLM 0.25+ returns the
+// newer OpenAI-compatible `reasoning` field for every reasoning parser, so a
+// server sending only `reasoning` must not lose the model's thinking.
+func (c *Choice) UnmarshalJSON(data []byte) error {
+	type ChoiceAlias Choice // avoids infinite recursion
+	var raw ChoiceAlias
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*c = Choice(raw)
+	if c.Message.ReasoningContent == "" && c.Message.Reasoning != "" {
+		c.Message.ReasoningContent = c.Message.Reasoning
+	}
+	return nil
 }
 
 // Usage represents token usage information

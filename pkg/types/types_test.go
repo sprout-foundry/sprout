@@ -307,6 +307,7 @@ func TestChatResponse_JSON_Roundtrip(t *testing.T) {
 				Message: struct {
 					Role             string         `json:"role"`
 					Content          string         `json:"content"`
+					Reasoning        string         `json:"reasoning,omitempty"`
 					ReasoningContent string         `json:"reasoning_content,omitempty"`
 					Images           []ImageData    `json:"images,omitempty"`
 					ToolCalls        []api.ToolCall `json:"tool_calls,omitempty"`
@@ -1560,5 +1561,47 @@ func TestChatResponse_JSON_MultipleChoices(t *testing.T) {
 	}
 	if decoded.Choices[2].FinishReason != "content_filter" {
 		t.Errorf("expected choice[2].finish_reason='content_filter', got %q", decoded.Choices[2].FinishReason)
+	}
+}
+
+// Choice's `reasoning` field (the newer OpenAI-compatible field vLLM 0.25+
+// returns) must fold into ReasoningContent, with reasoning_content winning
+// when both are present.
+func TestChatResponse_JSON_ReasoningFieldMergedIntoReasoningContent(t *testing.T) {
+	body := `{"id":"chatcmpl-1","object":"chat.completion","created":1700000000,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"final answer","reasoning":"the model was thinking"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3,"estimated_cost":0}}`
+	var resp ChatResponse
+	if err := json.Unmarshal([]byte(body), &resp); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if len(resp.Choices) != 1 {
+		t.Fatalf("expected 1 choice, got %d", len(resp.Choices))
+	}
+	msg := resp.Choices[0].Message
+	if msg.ReasoningContent == "" {
+		t.Error("expected ReasoningContent to be filled from `reasoning`")
+	}
+	if msg.ReasoningContent != "the model was thinking" {
+		t.Errorf("got ReasoningContent=%q, want %q", msg.ReasoningContent, "the model was thinking")
+	}
+	if msg.Content != "final answer" {
+		t.Errorf("Content changed: got %q, want %q", msg.Content, "final answer")
+	}
+}
+
+func TestChatResponse_JSON_ReasoningContentWinsOverReasoning(t *testing.T) {
+	body := `{"choices":[{"index":0,"message":{"role":"assistant","content":"final answer","reasoning_content":"the long-form thinking","reasoning":"short thinking"},"finish_reason":"stop"}]}`
+	var resp ChatResponse
+	if err := json.Unmarshal([]byte(body), &resp); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if len(resp.Choices) != 1 {
+		t.Fatalf("expected 1 choice, got %d", len(resp.Choices))
+	}
+	msg := resp.Choices[0].Message
+	if msg.ReasoningContent != "the long-form thinking" {
+		t.Errorf("got ReasoningContent=%q, want %q (reasoning_content must win)", msg.ReasoningContent, "the long-form thinking")
+	}
+	if msg.Content != "final answer" {
+		t.Errorf("Content changed: got %q, want %q", msg.Content, "final answer")
 	}
 }

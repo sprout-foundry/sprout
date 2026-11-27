@@ -365,6 +365,21 @@ describe('EscalationListener — ETH-2 txn action', () => {
     expect(vi.mocked(txnPush).mock.calls[0][2].files).toEqual([]);
   });
 
+  it('pushes new files that were never added to git', async () => {
+    gitStatus.mockResolvedValue({
+      staged: [],
+      unstaged: [],
+      untracked: [{ path: 'other.go', status: 'new', staged: false }],
+    });
+    renderListener();
+    fireTrigger();
+    await clickRunTxn();
+    await flush();
+
+    const manifest = vi.mocked(txnPush).mock.calls[0][2];
+    expect(manifest.files.map((f) => f.path)).toEqual(['other.go']);
+  });
+
   it('pushes what the browser committed since the dev space last received its work', async () => {
     gitStatus.mockResolvedValue({ staged: [], unstaged: [], untracked: [] });
     gitRemoteTrackingOid.mockResolvedValue('origin-commit');

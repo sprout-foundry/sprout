@@ -233,10 +233,15 @@ test-coverage: prepare-grammars
 			tail -n 100 /tmp/sprout-test-coverage.log || true; \
 			exit $$status; \
 		fi; \
-		echo "WARNING: go test exited with status $$status, but no test failures found in the log."; \
-		echo "This is typically a coverage-tooling crash (e.g. STATUS_DLL_INIT_FAILED on Windows,"; \
-		echo "or \"no such tool covdata\" on some Linux toolchains) that occurs AFTER all tests"; \
-		echo "pass. Proceeding with coverage report generation."; \
+		echo "ERROR: go test exited with status $$status, but no --- FAIL lines were found in the log."; \
+		echo "That means the run crashed outside a test (e.g. the coverage tooling: STATUS_DLL_INIT_FAILED"; \
+		echo "on Windows, or \"no such tool covdata\" on some Linux toolchains). A crashed run collects no"; \
+		echo "coverage data, so it cannot prove the coverage threshold — failing instead of passing."; \
+		echo "On Windows, use TEST_COVER=no (that skips coverage and still requires tests to pass)."; \
+		echo ""; \
+		echo "Last 100 lines of test log:"; \
+		tail -n 100 /tmp/sprout-test-coverage.log || true; \
+		exit $$status; \
 	fi; \
 	if [ "$(TEST_COVER)" = "no" ]; then \
 		echo ""; \
@@ -246,30 +251,25 @@ test-coverage: prepare-grammars
 	echo ""; \
 	echo "Generating coverage report..."; \
 	if [ ! -f /tmp/sprout-coverage.out ]; then \
-		echo "WARNING: Coverage file not found. Skipping coverage check."; \
-		total_coverage=100; \
-		min_coverage=0; \
-		echo "" > /tmp/sprout-coverage-func.txt; \
+		echo "ERROR: Coverage file /tmp/sprout-coverage.out not found after a successful test run."; \
+		echo "Coverage cannot be verified, so this run fails. Set TEST_COVER=no to skip coverage."; \
+		exit 1; \
 	elif ! go tool cover -func=/tmp/sprout-coverage.out > /tmp/sprout-coverage-func.txt 2>/dev/null; then \
-		echo "WARNING: Coverage file is corrupt or incomplete (go tool cover failed)."; \
+		echo "ERROR: Coverage file is corrupt or incomplete (go tool cover failed)."; \
 		echo "This can happen when go test crashes during coverage merge on some platforms."; \
-		echo "Skipping coverage check."; \
-		total_coverage=100; \
-		min_coverage=0; \
-		echo "" > /tmp/sprout-coverage-func.txt; \
+		echo "Coverage cannot be verified, so this run fails. Set TEST_COVER=no to skip coverage."; \
+		exit 1; \
 	else \
 		go tool cover -func=/tmp/sprout-coverage.out > /tmp/sprout-coverage-func.txt; \
 	fi; \
 	total_coverage=$$(awk "/^total:/ {gsub(/[\r%]/,\"\",\$$NF); print \$$NF}" /tmp/sprout-coverage-func.txt); \
 	if [ -z "$${total_coverage}" ]; then \
-		echo "WARNING: Failed to extract coverage information. Skipping coverage check."; \
-		total_coverage=100; \
-		min_coverage=0; \
+		echo "ERROR: Failed to extract coverage information from /tmp/sprout-coverage-func.txt."; \
+		exit 1; \
 	fi; \
 	if ! echo "$${total_coverage}" | grep -qE "^[0-9]+\.?[0-9]*$$"; then \
-		echo "WARNING: Invalid coverage value \"$${total_coverage}\". Skipping coverage check."; \
-		total_coverage=100; \
-		min_coverage=0; \
+		echo "ERROR: Invalid coverage value \"$${total_coverage}\"."; \
+		exit 1; \
 	fi; \
 	echo ""; \
 	echo "Total coverage: $${total_coverage}%"; \

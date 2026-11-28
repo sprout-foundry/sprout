@@ -220,7 +220,9 @@ test-coverage: prepare-grammars
 	done); \
 	cover_flag=""; \
 	[ "$(TEST_COVER)" = "no" ] || cover_flag="-coverprofile=/tmp/sprout-coverage.out"; \
-	go test $(TEST_RACE) -tags "browser grammar_blobs_external" $$test_pkgs -timeout=1200s -p $(TEST_P) -parallel $(TEST_PARALLEL) $$cover_flag > /tmp/sprout-test-coverage.log 2>&1; \
+	verbose_flag=""; \
+	[ "$(TEST_VERBOSE)" = "1" ] && verbose_flag="-v"; \
+	go test $(TEST_RACE) -tags "browser grammar_blobs_external" $$test_pkgs -timeout=1200s -p $(TEST_P) -parallel $(TEST_PARALLEL) $$cover_flag $$verbose_flag > /tmp/sprout-test-coverage.log 2>&1; \
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \

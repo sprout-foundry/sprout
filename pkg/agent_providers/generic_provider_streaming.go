@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -220,6 +221,31 @@ func (p *GenericProvider) handleStreamingResponse(ctx context.Context, resp *htt
 			decoded, decodeErr := decodeChatResponseWithCost(bytes.NewReader(body))
 			if decodeErr != nil {
 				return nil, decodeErr
+			}
+			if len(decoded.Choices) > 0 {
+				// The api.ChatResponse's message type carries only
+				// reasoning_content; vLLM 0.25+ (and other OpenAI-compatible
+				// servers) answer with the newer `reasoning` field instead.
+				// Probe the raw body and fill it in when reasoning_content is
+				// absent — the same priority the streaming builder uses.
+				var raw struct {
+					Choices []struct {
+						Message struct {
+							Reasoning        string `json:"reasoning"`
+							ReasoningContent string `json:"reasoning_content"`
+						} `json:"message"`
+					} `json:"choices"`
+				}
+				if json.Unmarshal(body, &raw) == nil && len(raw.Choices) > 0 {
+					msg := raw.Choices[0].Message
+					rc := msg.ReasoningContent
+					if rc == "" {
+						rc = msg.Reasoning
+					}
+					if rc != "" && decoded.Choices[0].Message.ReasoningContent == "" {
+						decoded.Choices[0].Message.ReasoningContent = rc
+					}
+				}
 			}
 			if callback != nil && len(decoded.Choices) > 0 {
 				choice := decoded.Choices[0]

@@ -545,7 +545,7 @@ func newCLIPathTestServer() *httptest.Server {
 // Returns an isolated config Manager, the httptest server, and a cleanup
 // func that restores the original factory state. MUST defer cleanup().
 // Env vars set: SPROUT_ALLOW_REAL_PROVIDER, SPROUT_SKIP_CONNECTION_CHECK,
-// SPROUT_MODEL_REGISTRY_URL=off, SPROUT_MODEL_REGISTRY_TIMEOUT=200ms.
+// SPROUT_MODEL_REGISTRY_URL=off, SPROUT_MODEL_REGISTRY_TIMEOUT=200ms, SPROUT_MODEL="".
 func cliPathTestEnv(t *testing.T, defaultContextLimit int) (manager *configuration.Manager, server *httptest.Server, cleanup func()) {
 	t.Helper()
 
@@ -559,6 +559,9 @@ func cliPathTestEnv(t *testing.T, defaultContextLimit int) (manager *configurati
 	// Disable the model registry fetch so GetModelContextLimit resolves through the config.
 	t.Setenv("SPROUT_MODEL_REGISTRY_URL", "off")
 	t.Setenv("SPROUT_MODEL_REGISTRY_TIMEOUT", "200ms")
+	// Pin SPROUT_MODEL out of resolution: it is step 4 in provider_resolution.go,
+	// outranking the config the test sets.
+	t.Setenv("SPROUT_MODEL", "")
 
 	// Write the provider config to a temp dir for syntactic validity proof.
 	configDir := t.TempDir()

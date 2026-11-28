@@ -145,10 +145,17 @@ test-cli-e2e: build
 	SPROUT_CLI_E2E=1 SPROUT_E2E_BIN=$(CURDIR)/sprout go test ./test/clie2e/ -count=1
 
 # WASM bridge tests - cmd/wasm is js/wasm only; Go's Node runner executes it.
+# The harness exports multi-KB SPROUT_* prompt strings (SPROUT_TASK_PROMPT and
+# friends); the Node wasm_exec.js runner copies argv+env into the WASM data
+# section and fails with "total length of command line and environment
+# variables exceeds limit". Those prompts are irrelevant to the bridge tests,
+# so strip them before running (SPROUT_WASM_AGENT_TIMEOUT is left intact -
+# it is a legitimate user override read by cmd/wasm).
 test-wasm:
 	@echo "Running WASM bridge tests..."
-	PATH="$$PATH:$$(go env GOROOT)/lib/wasm" GOOS=js GOARCH=wasm \
-		go test -p 1 -tags "grammar_blobs_external osusergo" ./cmd/wasm/
+	@(unset SPROUT_SYSTEM_PROMPT_CORE SPROUT_TASK_PROMPT SPROUT_TASK_PROMPT_GZ SPROUT_TOOL_ALLOWLIST; \
+		PATH="$$PATH:$$(go env GOROOT)/lib/wasm" GOOS=js GOARCH=wasm \
+		go test -p 1 -tags "grammar_blobs_external osusergo" ./cmd/wasm/)
 
 # Desktop Electron Smoke Tests - Run with Playwright under xvfb
 test-desktop-smoke:
@@ -213,7 +220,9 @@ test-coverage: prepare-grammars
 	done); \
 	cover_flag=""; \
 	[ "$(TEST_COVER)" = "no" ] || cover_flag="-coverprofile=/tmp/sprout-coverage.out"; \
-	go test $(TEST_RACE) -tags "browser grammar_blobs_external" $$test_pkgs -timeout=1200s -p $(TEST_P) -parallel $(TEST_PARALLEL) $$cover_flag > /tmp/sprout-test-coverage.log 2>&1; \
+	verbose_flag=""; \
+	[ "$(TEST_VERBOSE)" = "1" ] && verbose_flag="-v"; \
+	go test $(TEST_RACE) -tags "browser grammar_blobs_external" $$test_pkgs -timeout=1200s -p $(TEST_P) -parallel $(TEST_PARALLEL) $$cover_flag $$verbose_flag > /tmp/sprout-test-coverage.log 2>&1; \
 	status=$$?; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \
@@ -233,10 +242,41 @@ test-coverage: prepare-grammars
 			tail -n 100 /tmp/sprout-test-coverage.log || true; \
 			exit $$status; \
 		fi; \
-		echo "WARNING: go test exited with status $$status, but no test failures found in the log."; \
-		echo "This is typically a coverage-tooling crash (e.g. STATUS_DLL_INIT_FAILED on Windows,"; \
-		echo "or \"no such tool covdata\" on some Linux toolchains) that occurs AFTER all tests"; \
-		echo "pass. Proceeding with coverage report generation."; \
+		if grep -qaE "requires cgo|no such tool covdata|STATUS_DLL_INIT_FAILED" /tmp/sprout-test-coverage.log; then \
+			echo "ERROR: the Go toolchain cannot run this coverage run (see log)."; \
+			grep -aE "requires cgo|no such tool covdata|STATUS_DLL_INIT_FAILED" /tmp/sprout-test-coverage.log | head -10 || true; \
+			echo ""; \
+			echo "Last 100 lines of test log:"; \
+			tail -n 100 /tmp/sprout-test-coverage.log || true; \
+			exit $$status; \
+		fi; \
+		if grep -qaE "\[build failed\]|cannot find package" /tmp/sprout-test-coverage.log; then \
+			echo "ERROR: a package failed to build (build failure, not a coverage-tooling crash)."; \
+			echo "Failing packages and build errors:"; \
+			grep -aE "\[build failed\]|cannot find package" /tmp/sprout-test-coverage.log | head -40 || true; \
+			echo ""; \
+			echo "Last 100 lines of test log:"; \
+			tail -n 100 /tmp/sprout-test-coverage.log || true; \
+			exit $$status; \
+		fi; \
+		echo "ERROR: go test exited with status $$status, but no --- FAIL lines were found in the log."; \
+		echo "That means the run crashed outside a test (an unknown tooling or build issue — not a"; \
+		echo "go test test-failure, which would be reported above). A crashed run collects no"; \
+		echo "coverage data, so it cannot prove the coverage threshold — failing instead of passing."; \
+		echo "On Windows, use TEST_COVER=no (that skips coverage and still requires tests to pass)."; \
+		echo ""; \
+		echo "Failing packages and their exit status:"; \
+		grep -aE "^FAIL|^exit status|panic:|test killed|got SIGQUIT" /tmp/sprout-test-coverage.log | head -40 || true; \
+		echo ""; \
+		echo "Kernel OOM evidence (empty means the binary was not OOM-killed):"; \
+		sudo dmesg -T 2>/dev/null | grep -iE "out of memory|oom-kill|killed process" | tail -5 || true; \
+		echo ""; \
+		echo "Log lines that are neither ok-rows nor progress, first 30:"; \
+		grep -avE "^ok |^=== |^--- PASS|^--- SKIP|^    --- |^ Elapsed|^=== RUN|^[[:space:]]*$$" /tmp/sprout-test-coverage.log | head -30 || true; \
+		echo ""; \
+		echo "Last 100 lines of test log:"; \
+		tail -n 100 /tmp/sprout-test-coverage.log || true; \
+		exit $$status; \
 	fi; \
 	if [ "$(TEST_COVER)" = "no" ]; then \
 		echo ""; \
@@ -246,30 +286,25 @@ test-coverage: prepare-grammars
 	echo ""; \
 	echo "Generating coverage report..."; \
 	if [ ! -f /tmp/sprout-coverage.out ]; then \
-		echo "WARNING: Coverage file not found. Skipping coverage check."; \
-		total_coverage=100; \
-		min_coverage=0; \
-		echo "" > /tmp/sprout-coverage-func.txt; \
+		echo "ERROR: Coverage file /tmp/sprout-coverage.out not found after a successful test run."; \
+		echo "Coverage cannot be verified, so this run fails. Set TEST_COVER=no to skip coverage."; \
+		exit 1; \
 	elif ! go tool cover -func=/tmp/sprout-coverage.out > /tmp/sprout-coverage-func.txt 2>/dev/null; then \
-		echo "WARNING: Coverage file is corrupt or incomplete (go tool cover failed)."; \
+		echo "ERROR: Coverage file is corrupt or incomplete (go tool cover failed)."; \
 		echo "This can happen when go test crashes during coverage merge on some platforms."; \
-		echo "Skipping coverage check."; \
-		total_coverage=100; \
-		min_coverage=0; \
-		echo "" > /tmp/sprout-coverage-func.txt; \
+		echo "Coverage cannot be verified, so this run fails. Set TEST_COVER=no to skip coverage."; \
+		exit 1; \
 	else \
 		go tool cover -func=/tmp/sprout-coverage.out > /tmp/sprout-coverage-func.txt; \
 	fi; \
 	total_coverage=$$(awk "/^total:/ {gsub(/[\r%]/,\"\",\$$NF); print \$$NF}" /tmp/sprout-coverage-func.txt); \
 	if [ -z "$${total_coverage}" ]; then \
-		echo "WARNING: Failed to extract coverage information. Skipping coverage check."; \
-		total_coverage=100; \
-		min_coverage=0; \
+		echo "ERROR: Failed to extract coverage information from /tmp/sprout-coverage-func.txt."; \
+		exit 1; \
 	fi; \
 	if ! echo "$${total_coverage}" | grep -qE "^[0-9]+\.?[0-9]*$$"; then \
-		echo "WARNING: Invalid coverage value \"$${total_coverage}\". Skipping coverage check."; \
-		total_coverage=100; \
-		min_coverage=0; \
+		echo "ERROR: Invalid coverage value \"$${total_coverage}\"."; \
+		exit 1; \
 	fi; \
 	echo ""; \
 	echo "Total coverage: $${total_coverage}%"; \

@@ -22,8 +22,12 @@ func TestLMStudioConnectionNoAuth(t *testing.T) {
 			t.Fatalf("expected no authorization header for local LM Studio test, got %q", authHeader)
 		}
 
+		// LM Studio exposes no model-list endpoint — the backend probes
+		// (/get_model_info, /props, /v1/props, /models) 404 so CheckConnection
+		// falls back to the chat probe at "/".
 		if r.URL.Path != "/" {
-			t.Fatalf("expected request path /, got %s", r.URL.Path)
+			http.Error(w, "not found", http.StatusNotFound)
+			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")

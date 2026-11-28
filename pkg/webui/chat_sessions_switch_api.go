@@ -227,6 +227,10 @@ func (ws *ReactWebServer) handleAPIChatSessionClearHistory(w http.ResponseWriter
 			ctx2.CurrentSessionID = rotatedID
 		}
 		ws.mutex.Unlock()
+
+		// The session rotated, so the pre-clear reattach replay buffer is
+		// stale; reset it so a reconnecting client replays nothing.
+		ws.resetChatRunBuffer(clientID, chatID)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{

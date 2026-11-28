@@ -560,13 +560,10 @@ func TestStreamingResponseBuilder_EmptyContentHandling(t *testing.T) {
 
 	choice := response.Choices[0]
 
-	// Content should be populated with reasoning content to avoid empty content field
-	if choice.Message.Content == "" {
-		t.Error("Expected content to be populated from reasoning_content, but it was empty")
-	}
-
-	if choice.Message.Content != "The user is asking about..." {
-		t.Errorf("Expected content to be 'The user is asking about...', got: %s", choice.Message.Content)
+	// Content stays exactly what the model emitted — reasoning is never
+	// promoted into content. Reasoning-only turns leave content empty.
+	if choice.Message.Content != "" {
+		t.Errorf("Expected content to be empty, got: %s", choice.Message.Content)
 	}
 
 	if choice.Message.ReasoningContent != "The user is asking about..." {
@@ -738,7 +735,8 @@ func TestStreamingResponseBuilder_ZAIReasoningAndContent(t *testing.T) {
 
 // TestStreamingResponseBuilder_ReasoningOnlyContent tests the scenario where only reasoning
 // content is provided (no separate content chunks), which is common with reasoning models.
-// This validates the fallback behavior where reasoning is copied to the content field.
+// Content is never promoted from reasoning_content — the reasoning trace
+// stays in ReasoningContent and the assistant turn's Content stays empty.
 func TestStreamingResponseBuilder_ReasoningOnlyContent(t *testing.T) {
 	builder := NewStreamingResponseBuilder(nil)
 
@@ -802,20 +800,156 @@ func TestStreamingResponseBuilder_ReasoningOnlyContent(t *testing.T) {
 
 	choice := response.Choices[0]
 
-	// When only reasoning is provided, content should be populated from reasoning
-	// to avoid empty content field (which causes 502 errors)
-	expectedContent := "First reasoning step: Second reasoning step: the answer is 42."
-	if choice.Message.Content == "" {
-		t.Error("Expected content to be populated from reasoning_content, but it was empty")
-	}
-
-	if choice.Message.Content != expectedContent {
-		t.Errorf("Expected content '%s', got '%s'", expectedContent, choice.Message.Content)
+	// When only reasoning is provided, content stays empty — the reasoning
+	// is never promoted to content. The assistant turn remains an empty/
+	// truncated answer that is surfaced, not replayed as thinking-style prose.
+	expectedReasoning := "First reasoning step: Second reasoning step: the answer is 42."
+	if choice.Message.Content != "" {
+		t.Errorf("Expected content to stay empty, got '%s'", choice.Message.Content)
 	}
 
 	// Reasoning content should also be preserved
-	if choice.Message.ReasoningContent != expectedContent {
-		t.Errorf("Expected reasoning_content '%s', got '%s'", expectedContent, choice.Message.ReasoningContent)
+	if choice.Message.ReasoningContent != expectedReasoning {
+		t.Errorf("Expected reasoning_content '%s', got '%s'", expectedReasoning, choice.Message.ReasoningContent)
+	}
+}
+
+// TestStreamingResponseBuilder_ReasoningPlusToolCallsEmptyContent verifies the
+// normal agent turn: reasoning + tool call, no content. Content stays empty and
+// the reasoning trace is NOT copied into it — the assistant's visible content is
+// whatever the model emitted, which is empty when tool calls are present.
+func TestStreamingResponseBuilder_ReasoningPlusToolCallsEmptyContent(t *testing.T) {
+	builder := NewStreamingResponseBuilder(nil)
+
+	reasoningChunk := &StreamingChatResponse{
+		Choices: []StreamingChoice{{
+			Index: 0,
+			Delta: StreamingDelta{
+				ReasoningContent: "Let me check the file.",
+			},
+		}},
+	}
+	toolChunk := &StreamingChatResponse{
+		Choices: []StreamingChoice{{
+			Index: 0,
+			Delta: StreamingDelta{
+				ToolCalls: []StreamingToolCall{{
+					Index: 0,
+					ID:    "call_001",
+					Type:  "function",
+					Function: &StreamingToolCallFunction{
+						Name:      "read_file",
+						Arguments: `{"path":"main.go"}`,
+					},
+				}},
+			},
+		}},
+	}
+	if err := builder.ProcessChunk(reasoningChunk); err != nil {
+		t.Fatalf("ProcessChunk(reasoning): %v", err)
+	}
+	if err := builder.ProcessChunk(toolChunk); err != nil {
+		t.Fatalf("ProcessChunk(tool): %v", err)
+	}
+	finishReason := "tool_calls"
+	if err := builder.ProcessChunk(&StreamingChatResponse{
+		Choices: []StreamingChoice{{Index: 0, FinishReason: &finishReason}},
+	}); err != nil {
+		t.Fatalf("ProcessChunk(finish): %v", err)
+	}
+
+	response := builder.GetResponse()
+	if len(response.Choices) == 0 {
+		t.Fatal("Expected at least one choice in response")
+	}
+	choice := response.Choices[0]
+	if choice.Message.Content != "" {
+		t.Errorf("Expected content to stay empty on a tool-call turn, got '%s'", choice.Message.Content)
+	}
+	if choice.Message.ReasoningContent != "Let me check the file." {
+		t.Errorf("Expected reasoning preserved, got '%s'", choice.Message.ReasoningContent)
+	}
+	if len(choice.Message.ToolCalls) != 1 || choice.Message.ToolCalls[0].ID != "call_001" {
+		t.Errorf("Expected 1 tool call with ID call_001, got %#v", choice.Message.ToolCalls)
+	}
+}
+
+// TestStreamingResponseBuilder_ReasoningOnlyNotCopiedIntoContent verifies a
+// reasoning-only turn: no content, no tool calls. Reasoning is preserved in
+// ReasoningContent but never leaks into Content.
+func TestStreamingResponseBuilder_ReasoningOnlyNotCopiedIntoContent(t *testing.T) {
+	builder := NewStreamingResponseBuilder(nil)
+	if err := builder.ProcessChunk(&StreamingChatResponse{
+		Choices: []StreamingChoice{{
+			Index: 0,
+			Delta: StreamingDelta{
+				ReasoningContent: "thinking step one",
+			},
+		}},
+	}); err != nil {
+		t.Fatalf("ProcessChunk: %v", err)
+	}
+	if err := builder.ProcessChunk(&StreamingChatResponse{
+		Choices: []StreamingChoice{{
+			Index: 0,
+			Delta: StreamingDelta{
+				ReasoningContent: " thinking step two",
+			},
+		}},
+	}); err != nil {
+		t.Fatalf("ProcessChunk: %v", err)
+	}
+
+	response := builder.GetResponse()
+	if len(response.Choices) == 0 {
+		t.Fatal("Expected at least one choice in response")
+	}
+	choice := response.Choices[0]
+	if choice.Message.Content != "" {
+		t.Errorf("Expected content to stay empty, got '%s'", choice.Message.Content)
+	}
+	if choice.Message.ReasoningContent != "thinking step one thinking step two" {
+		t.Errorf("Expected reasoning preserved, got '%s'", choice.Message.ReasoningContent)
+	}
+	if len(choice.Message.ToolCalls) != 0 {
+		t.Errorf("Expected no tool calls, got %#v", choice.Message.ToolCalls)
+	}
+}
+
+// TestStreamingResponseBuilder_ReasoningOnlyHistoryReplaysNoContentText verifies
+// that the history replayed for a reasoning-only turn carries no reasoning text
+// — no content field replays the thinking trace.
+func TestStreamingResponseBuilder_ReasoningOnlyHistoryReplaysNoContentText(t *testing.T) {
+	builder := NewStreamingResponseBuilder(nil)
+	if err := builder.ProcessChunk(&StreamingChatResponse{
+		Choices: []StreamingChoice{{
+			Index: 0,
+			Delta: StreamingDelta{
+				ReasoningContent: "secret reasoning trace",
+			},
+		}},
+	}); err != nil {
+		t.Fatalf("ProcessChunk: %v", err)
+	}
+	finishReason := "stop"
+	if err := builder.ProcessChunk(&StreamingChatResponse{
+		Choices: []StreamingChoice{{Index: 0, FinishReason: &finishReason}},
+	}); err != nil {
+		t.Fatalf("ProcessChunk: %v", err)
+	}
+	choice := builder.GetResponse().Choices[0]
+
+	// Build the assistant history entry the way a caller replays it.
+	replayed := Message{Role: "assistant", Content: choice.Message.Content, ReasoningContent: choice.Message.ReasoningContent}
+	if replayed.Content != "" {
+		t.Errorf("Replayed history carries content: '%s'", replayed.Content)
+	}
+	if strings.Contains(replayed.Content, "secret reasoning trace") {
+		t.Errorf("Replayed history contains reasoning text: '%s'", replayed.Content)
+	}
+	// ReasoningContent is preserved as today — replayed via the dedicated field.
+	if replayed.ReasoningContent != "secret reasoning trace" {
+		t.Errorf("Expected reasoning preserved in replayed history, got '%s'", replayed.ReasoningContent)
 	}
 }
 

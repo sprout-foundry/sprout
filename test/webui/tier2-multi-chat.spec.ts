@@ -3,10 +3,11 @@
 // Tests that creating multiple chats keeps messages isolated per chat,
 // and that messages within each chat maintain insertion order.
 
-import { test, expect, chromium, type Browser, type Page } from '@playwright/test';
+import { test, expect, type Browser, type Page } from '@playwright/test';
 import { startSprout, type SproutHandle } from './fixtures/sprout';
 import { startViteDevServer, type ViteHandle } from './fixtures/vite';
 import { newWebuiPage, type WebUIPageHandle } from './fixtures/page';
+import { launchBrowser } from './fixtures/browser';
 import TESTIDS from './testids';
 
 let browser: Browser;
@@ -16,11 +17,7 @@ let handle: WebUIPageHandle;
 let page: Page;
 
 test.beforeAll(async () => {
-  try {
-    browser = await chromium.launch({ channel: 'chrome' });
-  } catch {
-    browser = await chromium.launch();
-  }
+  browser = await launchBrowser();
   sprout = await startSprout();
   vite = await startViteDevServer({ sproutBackendUrl: sprout.baseUrl });
   handle = await newWebuiPage({ browser, url: vite.url });

@@ -1,7 +1,8 @@
-import { test, expect, chromium, type Browser, type Page } from '@playwright/test';
+import { test, expect, type Browser, type Page } from '@playwright/test';
 import { startSprout, type SproutHandle } from './fixtures/sprout';
 import { startViteDevServer, type ViteHandle } from './fixtures/vite';
 import { newWebuiPage, type WebUIPageHandle } from './fixtures/page';
+import { launchBrowser } from './fixtures/browser';
 
 let browser: Browser;
 let sprout: SproutHandle;
@@ -11,11 +12,7 @@ let page: Page;
 
 test.beforeAll(async () => {
   // System Chrome fallback for dev machines without the Playwright download.
-  try {
-    browser = await chromium.launch({ channel: 'chrome' });
-  } catch {
-    browser = await chromium.launch();
-  }
+  browser = await launchBrowser();
   sprout = await startSprout();
   vite = await startViteDevServer({ sproutBackendUrl: sprout.baseUrl });
   handle = await newWebuiPage({ browser, url: vite.url });

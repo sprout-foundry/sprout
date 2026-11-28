@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // TestCommandExecuteClearRotatesAndNotifies pins the New Session button's
@@ -88,5 +90,73 @@ func TestCommandExecuteTargetsBodyChat(t *testing.T) {
 	}
 	if got := background.GetSessionID(); got == backgroundBefore {
 		t.Errorf("background chat session was not rotated (still %q)", got)
+	}
+}
+
+// bufferLen reports a chat session's buffered-event count (0 when unset).
+func bufferLen(cs *chatSession) int {
+	if cs == nil || cs.runBuffer == nil {
+		return 0
+	}
+	return cs.runBuffer.Len()
+}
+
+// TestCommandExecuteClearResetsRunBuffer pins the reattach contract: the
+// /clear path drops the chat's run buffer (and its TTL timer) before
+// publishing session_changed("clear"), so a client reconnecting with
+// ?reattach=<chat>&after_seq=<n> afterwards replays nothing.
+func TestCommandExecuteClearResetsRunBuffer(t *testing.T) {
+	ws := setupConcurrentTestServer(t)
+
+	clientID, chatID := testConcurrentClientID, defaultChatID
+	// Buffer a stream chunk and a query_completed — the latter schedules
+	// the TTL reset timer, so the test can also assert it is cancelled.
+	ws.appendChatEventToRunBuffer(clientID, chatID, events.EventTypeStreamChunk, map[string]interface{}{
+		"content": "old-session-chunk",
+	})
+	ws.appendChatEventToRunBuffer(clientID, chatID, events.EventTypeQueryCompleted, map[string]interface{}{
+		"ok": true,
+	})
+
+	cs := ws.lookupChatSession(clientID, chatID)
+	if cs == nil {
+		t.Fatal("chat session not found after buffering")
+	}
+	cs.mu.Lock()
+	if cs.runBuffer == nil || cs.runBuffer.Len() != 2 {
+		t.Fatalf("expected 2 buffered events, got %d", bufferLen(cs))
+	}
+	if cs.runBufferResetTimer == nil {
+		t.Fatal("expected the TTL reset timer to be scheduled by query_completed")
+	}
+	cs.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/command/execute", strings.NewReader(`{"command":"/clear"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(webClientIDHeader, clientID)
+	rec := httptest.NewRecorder()
+	ws.handleAPICommandExecute(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /clear, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	cs.mu.Lock()
+	if bufferLen(cs) != 0 {
+		t.Errorf("expected empty run buffer after /clear, got %d", bufferLen(cs))
+	}
+	if cs.runBufferResetTimer != nil {
+		t.Error("expected the TTL reset timer to be cancelled after /clear")
+	}
+	cs.mu.Unlock()
+
+	// A reattach after the clear replays nothing — only the restored frame.
+	msgs := ws.buildChatRunReplayMessages(clientID, chatID, 0)
+	if len(msgs) != 1 {
+		t.Errorf("expected only the chat_run_restored frame after clear, got %d messages", len(msgs))
+	}
+	for _, m := range msgs[1:] {
+		if m["type"] == events.EventTypeStreamChunk {
+			t.Errorf("replay contained a stream chunk from the cleared session: %v", m)
+		}
 	}
 }

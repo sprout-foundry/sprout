@@ -29,10 +29,18 @@ func snapshotProvidersDir(dir string) map[string]providerFileStamp {
 	return stamps
 }
 
-// providerLeaks lists files added or changed in dir since before.
+// providerLeaks lists files added or changed in dir since before. The api-keys
+// migration marker is excluded: MigrateEmbeddedAPIKeys writes it on the first
+// Load() of any machine that hasn't run sprout yet — a fresh CI runner, not a
+// test saving a custom provider. Ignoring it keeps the detector aimed at what
+// it exists for (test-written provider files) instead of failing unrelated
+// packages on a runner's first contact with the migration.
 func providerLeaks(dir string, before map[string]providerFileStamp) []string {
 	var leaked []string
 	for name, now := range snapshotProvidersDir(dir) {
+		if name == apiKeysMigratedMarker || name == configApiKeysMigratedMarker {
+			continue
+		}
 		was, existed := before[name]
 		if !existed || !was.modTime.Equal(now.modTime) || was.size != now.size {
 			leaked = append(leaked, name)
@@ -87,7 +95,9 @@ func IsolateGlobalConfigForTests() (finish func(code int) int) {
 			"[provider-leak] %d file(s) added or changed in the real providers dir %q during the test run: %v\n"+
 				"  A test saved a custom provider outside the test isolation. Remove them, and route the test through "+
 				"configuration.NewTestManager or a temp XDG_CONFIG_HOME/HOME.\n"+
-				"  (Custom providers change only on user action, so a sprout running alongside doesn't explain this.)\n",
+				"  (Custom providers change only on user action, so a sprout running alongside doesn't explain this.\n"+
+				"   A migration marker written by a concurrent package binary's Load() is expected on a fresh\n"+
+				"   runner and is exempted; any OTHER new file here came from a test.)\n",
 			len(leaked), realDir, leaked)
 		if code == 0 {
 			return 1

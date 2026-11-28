@@ -32,11 +32,12 @@ var (
 )
 
 // connCheckIdentity identifies a provider for the success cache: name +
-// endpoint (the fields that fully pin the HTTP backend).
+// endpoint + model. The check verifies a specific model works, so a model
+// switch must re-probe even on a recently-verified endpoint.
 func (p *GenericProvider) connCheckIdentity() string {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	return p.config.Name + "|" + p.config.Endpoint
+	return p.config.Name + "|" + p.config.Endpoint + "|" + p.model
 }
 
 func connCheckSucceededRecently(identity string) bool {
@@ -124,7 +125,10 @@ func (p *GenericProvider) checkViaModelsEndpoint() error {
 		return agenterrors.NewNetwork("check connection: models probe decode failed", err)
 	}
 
-	want := strings.TrimSpace(currentModel)
+	// Compare canonicalized IDs: the request path canonicalizes the model
+	// before sending, so an alias must match the catalog's form here too —
+	// otherwise alias configs always miss and fall through to the chat check.
+	want := p.canonicalizeModelID(strings.TrimSpace(currentModel))
 	for _, m := range modelsResponse.Data {
 		if strings.TrimSpace(m.ID) == want {
 			return nil

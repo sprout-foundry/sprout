@@ -218,3 +218,68 @@ func TestCheckConnectionBoundedChatReportsError(t *testing.T) {
 		t.Fatalf("expected a check-connection error, got: %v", err)
 	}
 }
+
+// A success cached for one model must not suppress the check for another
+// model on the same name + endpoint: the check verifies a specific model.
+func TestCheckConnectionCacheIsPerModel(t *testing.T) {
+	ResetConnCheckCacheForTests()
+	t.Cleanup(ResetConnCheckCacheForTests)
+
+	var modelsOK atomic.Bool
+	modelsOK.Store(true)
+	server := newConnCheckTestServer(&modelsOK)
+	defer server.Close()
+
+	p1 := newConnCheckTestProvider(t, server.Server)
+	if err := p1.CheckConnection(); err != nil {
+		t.Fatalf("expected connection check to succeed, got %v", err)
+	}
+	// Same provider identity, different model — must re-probe.
+	p2 := newConnCheckTestProvider(t, server.Server)
+	p2.mu.Lock()
+	p2.model = "other-model"
+	p2.mu.Unlock()
+	if err := p2.CheckConnection(); err != nil {
+		t.Fatalf("expected connection check for the new model to succeed, got %v", err)
+	}
+	if got := server.modelsCalls.Load(); got != 2 {
+		t.Fatalf("models probe calls = %d, want 2 (a model switch re-probes)", got)
+	}
+}
+
+// The /models probe must compare the model the request path will send, so a
+// canonicalizing alias still matches the catalog's ID and gets the
+// non-generating check instead of silently falling through to chat.
+func TestCheckConnectionModelsProbeCanonicalizesAlias(t *testing.T) {
+	ResetConnCheckCacheForTests()
+	t.Cleanup(ResetConnCheckCacheForTests)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/v1/models" {
+			_, _ = w.Write([]byte(`{"data":[{"id":"Vendor/Model-X"}]}`))
+			return
+		}
+		t.Errorf("chat endpoint hit; the models probe should have matched the alias")
+		_, _ = w.Write([]byte(assistantChatResponse))
+	}))
+	defer server.Close()
+
+	config := &ProviderConfig{
+		Name:     "conn-check-alias-test",
+		Endpoint: server.URL + "/v1/chat/completions",
+		Auth:     AuthConfig{Type: "none"},
+		Defaults: RequestDefaults{Model: "vendor/model-x"},
+		Models: ModelConfig{
+			DefaultContextLimit: 64000,
+			ModelInfo:           []ModelInfo{{ID: "Vendor/Model-X"}},
+		},
+	}
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+	if err := provider.CheckConnection(); err != nil {
+		t.Fatalf("expected connection check to succeed, got %v", err)
+	}
+}

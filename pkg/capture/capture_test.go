@@ -205,7 +205,7 @@ func diffScreenshots(t *testing.T, a, b []byte) {
 	if boundsA.Dx() != boundsB.Dx() || boundsA.Dy() != boundsB.Dy() {
 		t.Fatalf("screenshot size mismatch: %v vs %v", boundsA, boundsB)
 	}
-	var diffSum uint64
+	var diffSum int64
 	var diffPixels int
 	totalPixels := 0
 	for y := boundsA.Min.Y; y < boundsA.Max.Y; y++ {
@@ -214,7 +214,7 @@ func diffScreenshots(t *testing.T, a, b []byte) {
 			pbR, pbG, pbB, _ := imgB.At(x, y).RGBA()
 			// per-channel abs diff (0..65535), summed across r,g,b
 			d := abs(int(paR>>8)-int(pbR>>8)) + abs(int(paG>>8)-int(pbG>>8)) + abs(int(paB>>8)-int(pbB>>8))
-			diffSum += uint64(d)
+			diffSum += int64(d)
 			if d > 24 {
 				diffPixels++
 			}

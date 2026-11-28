@@ -655,7 +655,7 @@
         "id": "deepseek/deepseek-chat-v3-0324",
         "input_cost": 0.25,
         "name": "DeepSeek: DeepSeek V3 0324",
-        "output_cost": 1.0,
+        "output_cost": 1,
         "tags": [
           "tools",
           "structured_output"
@@ -781,13 +781,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.108,
+        "cached_input_cost": 0.21,
         "context_length": 1048576,
         "description": "DeepSeek V4 Pro is a large-scale Mixture-of-Experts model from DeepSeek with 1.6T total parameters and 49B activated parameters, supporting a 1M-token context window. It is designed for advanced reasoning, coding, and long-horizon agentic tasks.",
         "id": "deepseek/deepseek-v4-pro",
-        "input_cost": 1.28,
+        "input_cost": 0.69296,
         "name": "DeepSeek: DeepSeek V4 Pro",
-        "output_cost": 2.56,
+        "output_cost": 1.551,
         "tags": [
           "tools",
           "reasoning",
@@ -1445,7 +1445,7 @@
         "id": "meta-llama/llama-4-maverick",
         "input_cost": 0.35,
         "name": "Meta: Llama 4 Maverick",
-        "output_cost": 1.0,
+        "output_cost": 1,
         "tags": [
           "tools",
           "vision",
@@ -1931,7 +1931,7 @@
         "id": "moonshotai/kimi-k2.7-code",
         "input_cost": 0.6,
         "name": "MoonshotAI: Kimi K2.7 Code",
-        "output_cost": 3.0,
+        "output_cost": 3,
         "tags": [
           "tools",
           "vision",
@@ -1946,7 +1946,7 @@
         "id": "moonshotai/kimi-k3",
         "input_cost": 0.192,
         "name": "MoonshotAI: Kimi K3",
-        "output_cost": 16.0,
+        "output_cost": 16,
         "tags": [
           "tools",
           "vision",
@@ -3673,13 +3673,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.22,
+        "cached_input_cost": 0.3,
         "context_length": 262144,
         "description": "The Qwen3.5 series 397B-A17B native vision-language model is built on a hybrid architecture that integrates a linear attention mechanism with a sparse mixture-of-experts model, achieving higher inference efficiency. It delivers...",
         "id": "qwen/qwen3.5-397b-a17b",
-        "input_cost": 0.45,
+        "input_cost": 0.5,
         "name": "Qwen: Qwen3.5 397B A17B",
-        "output_cost": 3.0,
+        "output_cost": 3.6,
         "tags": [
           "tools",
           "vision",
@@ -3691,7 +3691,7 @@
         "context_length": 262144,
         "description": "Qwen3.5-9B is a multimodal foundation model from the Qwen3.5 family, designed to deliver strong reasoning, coding, and visual understanding in an efficient 9B-parameter architecture. It uses a unified vision-language design...",
         "id": "qwen/qwen3.5-9b",
-        "input_cost": 0.17,
+        "input_cost": 0.1,
         "name": "Qwen: Qwen3.5-9B",
         "output_cost": 0.25,
         "tags": [
@@ -3758,13 +3758,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.025,
+        "cached_input_cost": 0.035,
         "context_length": 262144,
         "description": "Qwen3.6-35B-A3B is an open-weight multimodal model from Alibaba Cloud with 35 billion total parameters and 3 billion active parameters per token. It uses a hybrid sparse mixture-of-experts architecture combining Gated...",
         "id": "qwen/qwen3.6-35b-a3b",
-        "input_cost": 0.05,
+        "input_cost": 0.1,
         "name": "Qwen: Qwen3.6 35B A3B",
-        "output_cost": 0.7,
+        "output_cost": 0.89,
         "tags": [
           "tools",
           "vision",
@@ -4254,13 +4254,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.025,
+        "cached_input_cost": 0.03,
         "context_length": 131072,
         "description": "GLM-4.5-Air is the lightweight variant of our latest flagship model family, also purpose-built for agent-centric applications. Like GLM-4.5, it adopts the Mixture-of-Experts (MoE) architecture but with a more compact parameter...",
         "id": "z-ai/glm-4.5-air",
-        "input_cost": 0.13,
+        "input_cost": 0.2,
         "name": "Z.ai: GLM 4.5 Air",
-        "output_cost": 0.85,
+        "output_cost": 1.1,
         "tags": [
           "tools",
           "reasoning"
@@ -4288,7 +4288,7 @@
         "id": "z-ai/glm-4.6",
         "input_cost": 0.5,
         "name": "Z.ai: GLM 4.6",
-        "output_cost": 2.0,
+        "output_cost": 2,
         "tags": [
           "tools",
           "reasoning",
@@ -4296,7 +4296,7 @@
         ]
       },
       {
-        "cached_input_cost": 0.055,
+        "cached_input_cost": 0.05,
         "context_length": 131072,
         "description": "GLM-4.6V is a large multimodal model designed for high-fidelity visual understanding and long-context reasoning across images, documents, and mixed media. It supports up to 128K tokens, processes complex page layouts...",
         "id": "z-ai/glm-4.6v",
@@ -4427,9 +4427,9 @@
         "context_length": 1000000,
         "description": "This model always redirects to the latest model in the Claude Fable family.",
         "id": "~anthropic/claude-fable-latest",
-        "input_cost": 8.0,
+        "input_cost": 8,
         "name": "Anthropic: Claude Fable Latest",
-        "output_cost": 40.0,
+        "output_cost": 40,
         "tags": [
           "tools",
           "vision",
@@ -5589,11 +5589,11 @@
         ]
       },
       {
-        "cached_input_cost": 0.01,
+        "cached_input_cost": 0.04,
         "context_length": 262144,
         "description": "NVIDIA Nemotron 3.5 Lightning is an open mixture-of-experts model from NVIDIA, with 3B active parameters out of 30B total. It is suited for high-throughput agentic workloads and specialized tasks that benefit from domain-specific customization.",
         "id": "nvidia/nemotron-3.5-lightning",
-        "input_cost": 0.05,
+        "input_cost": 0.07,
         "name": "NVIDIA: Nemotron 3.5 Lightning",
         "output_cost": 0.2,
         "tags": [
@@ -5715,13 +5715,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.059,
+        "cached_input_cost": 0.0175,
         "context_length": 1000000,
         "description": "Qwen3.8 27B is an open-weight dense vision-language model from Qwen. It is suited for coding, professional workflows, research, multimodal interaction, and long-running agent tasks, with flexible thinking that can be enabled or disabled.",
         "id": "qwen/qwen3.8-27b",
-        "input_cost": 0.06,
+        "input_cost": 0.035,
         "name": "Qwen: Qwen3.8 27B",
-        "output_cost": 1.96,
+        "output_cost": 1.5,
         "tags": [
           "tools",
           "vision",
@@ -5936,13 +5936,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.03,
+        "cached_input_cost": 0.02,
         "context_length": 1048576,
         "description": "GLM-5.3-Flash is Z.ai's first natively multimodal model, delivering frontier coding and agentic performance at flash-tier cost. With 320B total and 18B active parameters, it outperforms GLM-5.2 at one-tenth the price while approaching Claude Opus 4.8 on coding and agentic benchmarks.",
         "id": "z-ai/glm-5.3-flash",
-        "input_cost": 0.15,
+        "input_cost": 0.12,
         "name": "Z.ai: GLM 5.3 Flash",
-        "output_cost": 0.5,
+        "output_cost": 0.38,
         "tags": [
           "tools",
           "vision",
@@ -6612,9 +6612,9 @@
         "context_length": 1050000,
         "description": "This model always redirects to the latest model in the OpenAI GPT Astra family.",
         "id": "~openai/gpt-astra-latest",
-        "input_cost": 8.0,
+        "input_cost": 8,
         "name": "OpenAI GPT Astra Latest",
-        "output_cost": 40.0,
+        "output_cost": 40,
         "tags": [
           "tools",
           "vision",
@@ -6692,13 +6692,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.001,
+        "cached_input_cost": 0.01,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek Flash family.",
         "id": "~deepseek/deepseek-flash-latest",
-        "input_cost": 0.03,
+        "input_cost": 0.036,
         "name": "DeepSeek: DeepSeek Flash Latest",
-        "output_cost": 0.2,
+        "output_cost": 0.5,
         "tags": [
           "tools",
           "vision",
@@ -6713,7 +6713,7 @@
         "id": "~deepseek/deepseek-pro-latest",
         "input_cost": 0.0999,
         "name": "DeepSeek: DeepSeek Pro Latest",
-        "output_cost": 5.0,
+        "output_cost": 5,
         "tags": [
           "tools",
           "reasoning",
@@ -7605,13 +7605,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.001,
+        "cached_input_cost": 0.003,
         "context_length": 1048576,
         "description": "DeepSeek V4.1 Flash 1017 is the October 17, 2026 snapshot of DeepSeek V4.1 Flash, served by DeepSeek under the `deepseek-flash` API model name. V4.1 Flash is a sparse mixture-of-experts model from DeepSeek, and the first built on the company's Causal Encoder-Decoder (CED) architecture. It activates 8B parameters on input and 16B on output from a 552B-parameter backbone, an asymmetric split that keeps per-token compute low relative to the model's total size. Image understanding is native to the architecture, with visual and text embeddings trained jointly from the start of pre-training rather than added afterward as in the earlier experimental [V4 Flash Vision Exp](https://openrouter.ai/deepseek/deepseek-v4-flash-vision-exp).\n\nIt is suited for coding, terminal, and computer-use agents, along with long-horizon tasks that must run to completion across many steps and long-context analysis. Compressed KV caching cuts cache memory to roughly a quarter of the previous Flash generation, significantly reducing costs on agentic workloads. DeepSeek positions it as the cost-efficient tier of the V4.1 family and reports that it exceeds [V4 Pro](https://openrouter.ai/deepseek/deepseek-v4-pro-0813) on performance, speed, and task completion time.",
         "id": "deepseek/deepseek-v4.1-flash-1017",
-        "input_cost": 0.03,
+        "input_cost": 0.15,
         "name": "DeepSeek: DeepSeek V4.1 Flash 1017",
-        "output_cost": 0.2,
+        "output_cost": 0.6,
         "tags": [
           "tools",
           "vision",
@@ -8549,6 +8549,62 @@
         "input_cost": 0.075,
         "name": "Thinking Machines: Inkling 2 Mini",
         "output_cost": 0.3,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.02,
+        "context_length": 131072,
+        "description": "DeepSeek-TNG-R1T2-Chimera is the second-generation Chimera model from TNG Tech. It is a 671B-parameter mixture-of-experts text-generation model assembled from DeepSeek-AI's R1-0528, R1, and V3-0324 checkpoints with an Assembly-of-Experts merge, giving strong reasoning performance at roughly 20% higher throughput than the original R1.",
+        "id": "tngtech/deepseek-r1t2-chimera",
+        "input_cost": 1,
+        "name": "TNG: DeepSeek R1T2 Chimera",
+        "output_cost": 2.625,
+        "tags": [
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.001,
+        "context_length": 524288,
+        "description": "Solar Mini 4.5 is Upstage's compact language model, built on a proprietary mixture-of-experts architecture with 35B total and 3B active parameters and a 524K context window. It is a step up from Solar Mini 4 in agentic performance, aimed at agentic use cases where response speed and cost matter.",
+        "id": "upstage/solar-mini-4-5",
+        "input_cost": 0.01,
+        "name": "Upstage: Solar Mini 4.5 (Preview)",
+        "output_cost": 0.04,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.018,
+        "context_length": 524288,
+        "description": "Solar Pro 4 Contributor is the same Solar Pro 4 model from Upstage, offered at a lower rate in exchange for allowing Upstage to use interaction data to improve its models. It has a 524K context window and is built for long-horizon tasks and agentic workflows, with strong capabilities in office productivity, document-intensive work, and coding.",
+        "id": "upstage/solar-pro-4-contributor",
+        "input_cost": 0.09,
+        "name": "Upstage: Solar Pro 4 Contributor",
+        "output_cost": 0.36,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 1048576,
+        "description": "MiMo-V2.6-Flash-MOPD is an updated checkpoint of Xiaomi's MiMo-V2.6-Flash, a mixture-of-experts model with 309B total and 15B active parameters, a 1M-token context window, and native multimodal input. It adds a multi-teacher on-policy distillation pass on top of the RL checkpoint that reduces repeated tool calls in agentic workflows.",
+        "id": "xiaomi/mimo-v2.6-flash-mopd",
+        "input_cost": 0.5,
+        "name": "Xiaomi: MiMo-V2.6-Flash-MOPD",
+        "output_cost": 1,
         "tags": [
           "tools",
           "vision",

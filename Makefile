@@ -263,6 +263,9 @@ test-coverage: prepare-grammars
 		echo "coverage data, so it cannot prove the coverage threshold — failing instead of passing."; \
 		echo "On Windows, use TEST_COVER=no (that skips coverage and still requires tests to pass)."; \
 		echo ""; \
+		echo "Failing packages and their exit status:"; \
+		grep -aE "^FAIL|^exit status|panic:|test killed|got SIGQUIT" /tmp/sprout-test-coverage.log | head -40 || true; \
+		echo ""; \
 		echo "Last 100 lines of test log:"; \
 		tail -n 100 /tmp/sprout-test-coverage.log || true; \
 		exit $$status; \

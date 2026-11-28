@@ -269,8 +269,8 @@ test-coverage: prepare-grammars
 		echo "Kernel OOM evidence (empty means the binary was not OOM-killed):"; \
 		sudo dmesg -T 2>/dev/null | grep -iE "out of memory|oom-kill|killed process" | tail -5 || true; \
 		echo ""; \
-		echo "Log lines that are neither ok-rows nor progress (first 30):"; \
-		grep -avE "^ok |^=== |^--- PASS|^--- SKIP|^    --- |^ Elapsed|^=== RUN|^\s*$" /tmp/sprout-test-coverage.log | head -30 || true; \
+		echo "Log lines that are neither ok-rows nor progress, first 30:"; \
+		grep -avE "^ok |^=== |^--- PASS|^--- SKIP|^    --- |^ Elapsed|^=== RUN|^[[:space:]]*$$" /tmp/sprout-test-coverage.log | head -30 || true; \
 		echo ""; \
 		echo "Last 100 lines of test log:"; \
 		tail -n 100 /tmp/sprout-test-coverage.log || true; \

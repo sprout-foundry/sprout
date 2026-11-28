@@ -25,7 +25,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require github.com/sprout-foundry/seed v1.9.0
+require github.com/sprout-foundry/seed v1.10.0
 
 require github.com/odvcencio/gotreesitter v0.16.0
 
@@ -134,11 +134,6 @@ require (
 	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/sys v0.48.0
 )
-
-// The seed module is vendored at ./third_party/seed (see its README): it
-// is patched locally to pin the opening brief verbatim through every
-// compaction path. Replace the vendored copy once upstreamed.
-replace github.com/sprout-foundry/seed => ./third_party/seed
 
 // The mockup module lives in this repository (./mockup) and is released
 // on its own as mockup/v*, for the platform to draw with the same engine.

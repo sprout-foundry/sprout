@@ -420,16 +420,12 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// summarizer calls.
 	opts.CompactionArtifacts = CompactionArtifactBlock
 
-	// Model-aware compaction trigger fraction. seed's default (0.85) leaves only 15% of the
-	// context window for response + thinking + tool I/O, which thinking-budget models exhaust
-	// before emitting any user-visible text. computeCompactionTriggerFraction subtracts the
-	// reservation fractions so substitution fires earlier — by default at 0.70 instead of 0.85.
-	// rel.2: for a large window an absolute live-context ceiling (default 300K) may bind
-	// first, so compaction fires at min(window-share, ceiling) of the conversation — a 1M
-	// model is compacted at ~300K of live context, not ~734K.
-	opts.CompactionTriggerFraction = a.compactionTriggerFractionFor(a.getModelContextLimit())
-	opts.CompactionSettleMargin = compactionSettleMarginFor(opts.CompactionTriggerFraction)
-	opts.ContinuationCompaction = continuationCompactionFor(a.getModelContextLimit(), opts.CompactionTriggerFraction)
+	// When to compact and where to settle: seed's budget for this model's
+	// window (window share, the output floor's edge, the live-context ceiling).
+	budget := a.compactionBudgetFor(a.getModelContextLimit())
+	opts.CompactionTriggerFraction = budget.TriggerFraction
+	opts.CompactionSettleMargin = budget.SettleMargin
+	opts.ContinuationCompaction = budget.Continuation
 	opts.SubstitutionTargetFraction = 0.50
 
 	// When the project's starter manifest names a starter, its

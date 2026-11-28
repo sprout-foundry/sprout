@@ -136,10 +136,17 @@ func (p *GenericProvider) lookupModelReasoning(model string) *ReasoningSpec {
 // accepts only low, medium and xhigh (it refuses the request for any other),
 // and thinks at xhigh when none is sent, several times the output of medium
 // on every agent step; medium is the depth that holds up for agent work.
+// Inkling 2's chat template reads reasoning_effort, thinks at 0.9 ("high")
+// when none is sent — several times the output of medium on every agent step;
+// medium is the depth that holds up for agent work.
 func familyReasoningSpec(model string) *ReasoningSpec {
 	m := strings.ToLower(model)
 	if strings.Contains(m, "qwen3.8") {
 		return &ReasoningSpec{Param: "reasoning_effort", DefaultEffort: "medium", Levels: []string{"low", "medium", "xhigh"}}
+	}
+	if strings.Contains(m, "inkling") {
+		return &ReasoningSpec{Param: "reasoning_effort", DefaultEffort: "medium",
+			Levels: []string{"none", "minimal", "low", "medium", "high", "xhigh", "max"}}
 	}
 	return nil
 }

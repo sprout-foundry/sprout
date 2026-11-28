@@ -110,7 +110,7 @@ func (p *GenericProvider) checkViaModelsEndpoint() error {
 	if err != nil {
 		return agenterrors.NewNetwork("check connection: models probe failed", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return agenterrors.NewNetwork(fmt.Sprintf("check connection: models probe got HTTP %d", resp.StatusCode), nil)

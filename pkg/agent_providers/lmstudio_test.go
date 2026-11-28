@@ -22,6 +22,14 @@ func TestLMStudioConnectionNoAuth(t *testing.T) {
 			t.Fatalf("expected no authorization header for local LM Studio test, got %q", authHeader)
 		}
 
+		// The connection check prefers a non-generating GET /models probe.
+		// Fall back to the chat response for anything else.
+		if r.URL.Path == "/models" && r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":[{"id":"qwen3-coder:30b"}]}`))
+			return
+		}
+
 		if r.URL.Path != "/" {
 			t.Fatalf("expected request path /, got %s", r.URL.Path)
 		}

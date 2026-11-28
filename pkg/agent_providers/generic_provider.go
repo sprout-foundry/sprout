@@ -436,27 +436,6 @@ func (p *GenericProvider) executeChatRequest(client *http.Client, req *http.Requ
 	return nil, d, err
 }
 
-// CheckConnection tests provider connection with current model
-func (p *GenericProvider) CheckConnection() error {
-	if err := p.ensureModel(); err != nil {
-		return agenterrors.NewNetwork("check connection: failed to ensure model", err)
-	}
-
-	// Send a minimal test request to verify the model works
-	testMessages := []api.Message{
-		{
-			Role:    "user",
-			Content: "Hi",
-		},
-	}
-
-	_, err := p.SendChatRequest(context.Background(), testMessages, nil, "", false)
-	if err != nil {
-		return agenterrors.NewNetwork("check connection: test request failed", err)
-	}
-	return nil
-}
-
 // SetDebug enables or disables debug mode
 func (p *GenericProvider) SetDebug(debug bool) {
 	p.debug = debug

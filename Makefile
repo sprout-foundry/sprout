@@ -145,10 +145,17 @@ test-cli-e2e: build
 	SPROUT_CLI_E2E=1 SPROUT_E2E_BIN=$(CURDIR)/sprout go test ./test/clie2e/ -count=1
 
 # WASM bridge tests - cmd/wasm is js/wasm only; Go's Node runner executes it.
+# The harness exports multi-KB SPROUT_* prompt strings (SPROUT_TASK_PROMPT and
+# friends); the Node wasm_exec.js runner copies argv+env into the WASM data
+# section and fails with "total length of command line and environment
+# variables exceeds limit". Those prompts are irrelevant to the bridge tests,
+# so strip them before running (SPROUT_WASM_AGENT_TIMEOUT is left intact -
+# it is a legitimate user override read by cmd/wasm).
 test-wasm:
 	@echo "Running WASM bridge tests..."
-	PATH="$$PATH:$$(go env GOROOT)/lib/wasm" GOOS=js GOARCH=wasm \
-		go test -p 1 -tags "grammar_blobs_external osusergo" ./cmd/wasm/
+	@(unset SPROUT_SYSTEM_PROMPT_CORE SPROUT_TASK_PROMPT SPROUT_TASK_PROMPT_GZ SPROUT_TOOL_ALLOWLIST; \
+		PATH="$$PATH:$$(go env GOROOT)/lib/wasm" GOOS=js GOARCH=wasm \
+		go test -p 1 -tags "grammar_blobs_external osusergo" ./cmd/wasm/)
 
 # Desktop Electron Smoke Tests - Run with Playwright under xvfb
 test-desktop-smoke:

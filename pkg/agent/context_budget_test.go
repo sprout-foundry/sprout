@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	core "github.com/sprout-foundry/seed/core"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
@@ -450,44 +451,6 @@ func TestOnDeviceClientType(t *testing.T) {
 	}
 }
 
-// A compaction settles 30% below its trigger: a 0.70 trigger settles at 0.49
-// of the window, and a 300K ceiling on a 1M window (about 0.29) at about 0.20.
-func TestCompactionSettleMarginFor(t *testing.T) {
-	for _, tc := range []struct{ trigger, settle float64 }{{0.70, 0.49}, {0.29, 0.203}} {
-		got := tc.trigger - compactionSettleMarginFor(tc.trigger)
-		if got < tc.settle-0.001 || got > tc.settle+0.001 {
-			t.Errorf("trigger %.2f settles at %.3f, want %.3f", tc.trigger, got, tc.settle)
-		}
-	}
-}
-
-// A large window compacts to the 24K target with a 6K summary; a small one
-// scales both down, and one whose trigger leaves too little room keeps the
-// fallback alone.
-func TestContinuationCompactionFor(t *testing.T) {
-	if cc := continuationCompactionFor(262_144, 0.70); cc == nil || cc.TargetTokens != 24_000 || cc.SummaryTokens != 6_000 {
-		t.Errorf("262K window: %+v, want a 24K target and a 6K summary", cc)
-	}
-	if cc := continuationCompactionFor(32_000, 0.85); cc == nil || cc.TargetTokens != 13_600 || cc.SummaryTokens != 3_400 {
-		t.Errorf("32K window: %+v, want a 13.6K target and a 3.4K summary", cc)
-	}
-	if cc := continuationCompactionFor(16_000, 0.85); cc != nil {
-		t.Errorf("16K window: %+v, want none", cc)
-	}
-}
-
-// TestCompactionUnderestimateBound pins the relationship between the
-// no-overflow clamp bound and the documented worst-case underestimate of the
-// token estimate: bound == 1 - EstimationErrorPercent/100. If the estimator's
-// documented error band ever changes, this test forces a deliberate decision
-// about whether the trigger clamp moves with it.
-func TestCompactionUnderestimateBound(t *testing.T) {
-	want := float64(api.EstimationErrorPercent) / 100
-	if got := compactionUnderestimateBound(); math.Abs(got-want) > 1e-9 {
-		t.Fatalf("compactionUnderestimateBound = %v, want %v", got, want)
-	}
-}
-
 // TestCompactionTriggerClampedToNoOverflow is the regression test for the
 // anchor-invalidation trigger gap: right after a compaction pass the token
 // anchor is invalid, so the next trigger decision runs on the RAW heuristic,
@@ -535,6 +498,18 @@ func TestCompactionTriggerNoOverflowAtWorstCase(t *testing.T) {
 		worstCaseTrue := trigger / (1.0 - band)
 		if worstCaseTrue > 1.0+1e-9 {
 			t.Fatalf("profile %v: trigger %v, worst-case true size %v exceeds the window — proactive compaction under-reacts", f, trigger, worstCaseTrue)
+		}
+	}
+}
+
+// The agent's budget is seed's for its profile's trigger and its ceiling.
+func TestCompactionBudgetIsSeeds(t *testing.T) {
+	a := &Agent{}
+	for _, window := range []int{32_000, 128 * 1024, 262_144, 1_000_000} {
+		want := core.CompactionBudgetFor(window, a.contextProfile.CompactionTriggerFraction, a.compactionCeilingFor())
+		got := a.compactionBudgetFor(window)
+		if got.TriggerFraction != want.TriggerFraction || got.SettleMargin != want.SettleMargin {
+			t.Fatalf("window %d: budget %+v, want seed's %+v", window, got, want)
 		}
 	}
 }

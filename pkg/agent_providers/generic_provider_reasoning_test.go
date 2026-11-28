@@ -218,3 +218,31 @@ func TestApplyReasoningEffortQwen38Family(t *testing.T) {
 		t.Errorf("a model with no knob got %v", request)
 	}
 }
+
+// A self-hosted endpoint serving an uncatalogued Inkling 2 model has no
+// catalog entry: the family's own knob applies, at medium by default, and a
+// configured level it accepts passes through.
+func TestApplyReasoningEffortInklingFamily(t *testing.T) {
+	p, err := NewGenericProvider(&ProviderConfig{
+		Name:     "self-hosted",
+		Endpoint: "https://inference.example/v1/chat/completions",
+		Auth:     AuthConfig{Type: "bearer", EnvVar: "SELF_HOSTED_API_KEY"},
+		Models:   ModelConfig{DefaultContextLimit: 262144},
+	})
+	if err != nil {
+		t.Fatalf("provider: %v", err)
+	}
+	for _, c := range []struct{ configured, want string }{
+		{"", "medium"},
+		{"low", "low"},
+		{"medium", "medium"},
+		{"high", "high"},
+		{"max", "max"},
+	} {
+		request := map[string]interface{}{}
+		p.applyReasoningEffort("inkling-2-mini", c.configured, request)
+		if got := request["reasoning_effort"]; got != c.want {
+			t.Errorf("configured %q: reasoning_effort = %v, want %q", c.configured, got, c.want)
+		}
+	}
+}

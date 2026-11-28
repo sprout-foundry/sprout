@@ -66,14 +66,20 @@ It is added to your document for you, so do not copy any of it.
     numbers), `menu-item` (a name, a `<span class="leader">`, a `price`:
     for menus and price lists), `logo-row` (a row of names: press,
     partners, customers), `table`, `footer`.
-  - Pictures: no photos can be loaded, but the person can add their own.
-    Mark each picture a real business would show (the cakes, the stall, the
-    teacher, the room) as a slot: `data-img` with a short key and a
-    `data-label` saying what the photo should show, on a `media` panel whose
-    icon stands in until a photo is added:
+  - Pictures: mark each photo a real business would show (the cakes, the
+    stall, the dogs out on a walk, the teacher, the room) as a slot:
+    `data-img` with a short key and a `data-label` saying what the photo
+    should show, on a `media` panel whose icon stands in until a photo is
+    in it:
     `<div class="media media-wide" data-img="loaves" data-label="Photo of this week's loaves">`.
-    The nav's `logo` is always the slot `logo`. At most six slots a page.
-  - Imagery: the best picture is still the business's
+    A slot is filled with a fitting photo or with the person's own. A page
+    for food, animals, places, rooms, things made or sold, or events has at
+    least one photo slot: in its first screen, or, when the composition keeps
+    the first screen to type or content, in the section right after it. Label a slot as in the example,
+    by its subject in plain words ("Photo of a dog on a lead"), never with a
+    person's or a place's name. The nav's `logo` is always the
+    slot `logo`. At most six slots a page.
+  - Imagery: beside its photos, the best picture is the business's
     own content laid out well (the timetable, the menu, the cakes and their
     prices, the app's screen). Where an image is still wanted, use an art
     panel: a `<div class="media">` holding an icon that is exactly the
